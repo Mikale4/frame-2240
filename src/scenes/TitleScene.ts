@@ -133,6 +133,11 @@ export class TitleScene extends Phaser.Scene {
       if (n?.parentContainer) n.parentContainer.bringToTop(n);
     }
 
+    // The showcase is a rest pose, so stow the melee weapon exactly as the
+    // in-game rig does. Drawn together, the saber blade crosses straight
+    // through the rifle.
+    nodes.get('meleeWeapon')?.setVisible(false);
+
     root.setData('nodes', nodes);
     this.mechGroups.push(root);
 

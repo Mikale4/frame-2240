@@ -3,13 +3,14 @@
   "display_scale": 0.5,
   "logical_per_bu": 60.0,
   "tile": 320,
+  "tile_note": "Default tile. Parts that overrun it are rendered larger; see parts.<mech>.<part>.tile. px_per_bu is identical for every tile size, so only the transparent margin changes.",
   "ortho_scale": 2.6666666666666665,
   "outlines": true,
   "camera": {
     "azimuth_deg": 14.999999999999998,
     "elevation_deg": 9.0
   },
-  "note": "Every PNG is TILE x TILE with the part pivot at the exact centre; draw with origin 0.5,0.5 at the rig offset.",
+  "note": "Every PNG is square with the part pivot at the exact centre; draw with origin 0.5,0.5 at the rig offset.",
   "pivots_px": {
     "halcyon": {
       "core": [
@@ -124,6 +125,7 @@
     "halcyon": {
       "core": {
         "file": "halcyon_core.png",
+        "tile": 320,
         "dims_bu": [
           0.5526,
           0.4145,
@@ -137,6 +139,7 @@
       },
       "head": {
         "file": "halcyon_head.png",
+        "tile": 320,
         "dims_bu": [
           0.3624,
           0.265,
@@ -150,6 +153,7 @@
       },
       "backpack": {
         "file": "halcyon_backpack.png",
+        "tile": 320,
         "dims_bu": [
           0.4901,
           0.3835,
@@ -163,6 +167,7 @@
       },
       "lowerBody": {
         "file": "halcyon_lowerBody.png",
+        "tile": 320,
         "dims_bu": [
           0.6088,
           0.5112,
@@ -176,6 +181,7 @@
       },
       "leftArm": {
         "file": "halcyon_leftArm.png",
+        "tile": 320,
         "dims_bu": [
           0.6798,
           0.3634,
@@ -189,6 +195,7 @@
       },
       "subWeapon": {
         "file": "halcyon_subWeapon.png",
+        "tile": 320,
         "dims_bu": [
           0.4925,
           0.26,
@@ -202,6 +209,7 @@
       },
       "rightArm": {
         "file": "halcyon_rightArm.png",
+        "tile": 320,
         "dims_bu": [
           0.4693,
           0.3551,
@@ -215,6 +223,7 @@
       },
       "mainWeapon": {
         "file": "halcyon_mainWeapon.png",
+        "tile": 320,
         "dims_bu": [
           1.395,
           0.17,
@@ -228,6 +237,7 @@
       },
       "leftThruster": {
         "file": "halcyon_leftThruster.png",
+        "tile": 320,
         "dims_bu": [
           0.3325,
           0.27,
@@ -241,6 +251,7 @@
       },
       "rightThruster": {
         "file": "halcyon_rightThruster.png",
+        "tile": 320,
         "dims_bu": [
           0.3325,
           0.27,
@@ -254,6 +265,7 @@
       },
       "meleeWeapon": {
         "file": "halcyon_meleeWeapon.png",
+        "tile": 448,
         "dims_bu": [
           1.7,
           0.2079,
@@ -269,6 +281,7 @@
     "nocturne": {
       "core": {
         "file": "nocturne_core.png",
+        "tile": 320,
         "dims_bu": [
           0.5429,
           0.5482,
@@ -282,6 +295,7 @@
       },
       "head": {
         "file": "nocturne_head.png",
+        "tile": 320,
         "dims_bu": [
           0.3263,
           0.265,
@@ -295,6 +309,7 @@
       },
       "backpack": {
         "file": "nocturne_backpack.png",
+        "tile": 320,
         "dims_bu": [
           0.5166,
           0.5,
@@ -308,6 +323,7 @@
       },
       "lowerBody": {
         "file": "nocturne_lowerBody.png",
+        "tile": 320,
         "dims_bu": [
           0.6388,
           0.6832,
@@ -321,6 +337,7 @@
       },
       "leftArm": {
         "file": "nocturne_leftArm.png",
+        "tile": 320,
         "dims_bu": [
           0.6604,
           0.3684,
@@ -334,6 +351,7 @@
       },
       "subWeapon": {
         "file": "nocturne_subWeapon.png",
+        "tile": 320,
         "dims_bu": [
           0.655,
           0.36,
@@ -347,6 +365,7 @@
       },
       "rightArm": {
         "file": "nocturne_rightArm.png",
+        "tile": 320,
         "dims_bu": [
           0.4693,
           0.3551,
@@ -360,6 +379,7 @@
       },
       "mainWeapon": {
         "file": "nocturne_mainWeapon.png",
+        "tile": 320,
         "dims_bu": [
           1.69,
           0.34,
@@ -373,6 +393,7 @@
       },
       "leftThruster": {
         "file": "nocturne_leftThruster.png",
+        "tile": 320,
         "dims_bu": [
           0.635,
           0.385,
@@ -386,6 +407,7 @@
       },
       "rightThruster": {
         "file": "nocturne_rightThruster.png",
+        "tile": 320,
         "dims_bu": [
           0.635,
           0.385,
@@ -399,6 +421,7 @@
       },
       "meleeWeapon": {
         "file": "nocturne_meleeWeapon.png",
+        "tile": 448,
         "dims_bu": [
           1.7,
           0.2079,

@@ -550,3 +550,64 @@ SALVO / SWORD I–III.
 **Why.** The reference's own names (M.A.R.S., its 20 machine codes, its pilots and
 its five factions) are catalogued in the audit as *evidence*, never reused.
 Nothing from the reference folders ships in this project.
+
+---
+
+## 2026-07-30 — Session 2: rig rotation, saber verification
+
+### D31 — A rig part contributes only the rotation its ancestors have not
+
+**Decision.** `render/RigRotation.ts` owns the rule: a part whose ancestor chain
+already contains a `follow: 'turret'` part adds only its own authored offset.
+`MechRenderer` builds that inheritance map once per rig and applies it per frame.
+
+**Why.** Container rotations compound down the rig tree, which is the point — a
+sword held by an arm should swing with the arm. But every turret part was also
+adding the aim itself, so anything parented to an arm rotated twice. Measured in
+the running game: at aim −60° the right arm was correctly at −60° while
+`mainWeapon`, `subWeapon` and `meleeWeapon` were all at −120°, pointing back
+through the chassis. It had been wrong since the rig was introduced and was only
+obvious once the beam saber gave it a long, thin object to be wrong with.
+
+**Cost.** One extra pure module, and the rule now lives outside `MechRenderer` so
+it can be unit-tested — `src/tests/rig.test.ts` pins arm-held weapons to the aim
+at six angles, keeps the head's partial tracking, and asserts the melee spin is
+applied once. Those tests fail against the old behaviour.
+
+---
+
+### D32 — The saber bloom is measured off the modelled part, not off `aim`
+
+**Decision.** `BattleScene` reads the `meleeWeapon` part's real world transform
+(`MechRenderer.partWorld`, which returns position, angle and scale) and lays the
+additive streak along it, sized to the blade's lit section.
+
+**Why.** The bloom was positioned from `c.aim` with a fixed 58px offset and a
+198px span. That was wrong three ways at once: it ignored bank, it ignored the
+part's double rotation, and it was about twice the length of the blade, so the
+glow trailed off into empty space past the tip. Deriving it from the part means
+it cannot drift again if the rig or the model changes.
+
+**Note.** `partWorld` takes the angle from the matrix basis (`atan2(b, a)`) rather
+than Phaser's `matrix.rotation`, whose decomposition drops the sign on a mirrored
+rig — it reports +120° for a part actually drawn at −120°.
+
+---
+
+### D33 — Render tiles are sized per part, not fixed at 320px
+
+**Decision.** `build_mechs.py` projects each part's bounding box onto the camera
+axes and picks the smallest tile (multiple of 64) that contains it, holding
+`PX_PER_BU` constant by tracking `ortho_scale` to the tile. The chosen size is
+recorded per part in the manifest.
+
+**Why.** Parts are framed on their own pivot, so a 320px tile only reaches 160px
+from it. The beam saber is 1.7 BU of blade growing forward from a pivot at the
+emitter, and was being cut off flat mid-blade — verified from the PNG, whose
+alpha reached the last column still 9px thick. Only the two melee weapons need
+more; they now render at 448px and everything else is unchanged.
+
+**Cost.** Nothing at runtime: the pivot stays at the tile centre, so the game
+still draws every part at origin 0.5,0.5 and `PART_SCALE`, and a larger tile only
+adds transparent margin. A full rebuild is still deterministic — re-rendering all
+22 parts changed at most one byte-value of dither noise outside the two sabers.

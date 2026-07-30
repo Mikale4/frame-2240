@@ -4,6 +4,7 @@ import type { MechDef, RigPart } from '../mechs/MechDef';
 import { ActState, ProjKind } from '../combat/types';
 import { DEG, clamp, wrapAngle } from '../core/MathUtil';
 import { depthScaleAt, depthSortAt } from '../core/Depth';
+import { buildTurretInheritance, partLocalRotation, type RigPose } from './RigRotation';
 
 /** Blender renders parts at 2x the logical size; display them at half scale. */
 export const PART_SCALE = 0.5;
@@ -12,6 +13,15 @@ interface PartNode {
   def: RigPart;
   container: Phaser.GameObjects.Container;
   sprite: Phaser.GameObjects.Image;
+  /**
+   * True when an ancestor already follows the turret.
+   *
+   * Container rotations compound down the tree, so a weapon parented to an arm
+   * inherits the arm's aim for free. Re-applying it here would double-count:
+   * aiming 60deg up used to swing the rifle and saber a full 120deg, pointing
+   * them backwards through the mech at steep angles.
+   */
+  inheritsTurret: boolean;
 }
 
 /**
@@ -42,6 +52,8 @@ export class MechRenderer {
     this.root.add(this.bank);
 
     // Build every node first so parents exist before children attach.
+    const inherits = buildTurretInheritance(def.rig.parts);
+
     for (const part of def.rig.parts) {
       const key = `mech_${mechId}_${part.name}`;
       const container = scene.add.container(part.x, part.y);
@@ -50,7 +62,12 @@ export class MechRenderer {
       sprite.setScale(PART_SCALE);
       container.add(sprite);
       container.rotation = part.rotation * DEG;
-      this.nodes.set(part.name, { def: part, container, sprite });
+      this.nodes.set(part.name, {
+        def: part,
+        container,
+        sprite,
+        inheritsTurret: inherits.get(part.name) ?? false,
+      });
     }
 
     // Attach children to parents, roots to the bank container.
@@ -113,29 +130,9 @@ export class MechRenderer {
     const spinLocal = facing > 0 ? c.spin : -c.spin;
     const meleeing = c.attack?.kind === ProjKind.Melee;
 
+    const pose: RigPose = { turretRot, spin: spinLocal, thrust: c.thrust, meleeing };
     for (const node of this.nodes.values()) {
-      const p = node.def;
-      switch (p.follow) {
-        case 'chassis':
-          node.container.rotation = p.rotation * DEG;
-          break;
-        case 'turret': {
-          // Arms and head track the aim; during a sword swing the whole upper
-          // body spins with the blade instead.
-          let r = turretRot * (p.name === 'head' ? 0.55 : 1) + p.rotation * DEG;
-          if (meleeing && p.name !== 'head') r += spinLocal;
-          node.container.rotation = r;
-          break;
-        }
-        case 'thruster': {
-          // Thrusters splay outward under load and gimbal against the aim.
-          const splay = (p.name === 'leftThruster' ? -1 : 1) * c.thrust * 9 * DEG;
-          node.container.rotation = p.rotation * DEG + splay - turretRot * 0.12;
-          break;
-        }
-        default:
-          node.container.rotation = p.rotation * DEG;
-      }
+      node.container.rotation = partLocalRotation(node.def, node.inheritsTurret, pose);
     }
 
     // Damage flash: tint every part white briefly.
@@ -173,12 +170,26 @@ export class MechRenderer {
     if (node) node.container.setVisible(visible);
   }
 
-  /** World-space position of a part, for spawning muzzle/thruster effects. */
-  partWorld(name: string): { x: number; y: number } | null {
+  /**
+   * World-space transform of a part, for spawning muzzle/thruster effects and
+   * for laying glow over a modelled weapon.
+   *
+   * `angle` is taken from the matrix basis vectors rather than Phaser's
+   * `matrix.rotation`, whose decomposition drops the sign once the rig is
+   * mirrored (it reports +120deg for a part actually drawn at -120deg).
+   * `scale` folds in the facing mirror and the pseudo-3D depth scale, so
+   * callers can size effects to match what is on screen.
+   */
+  partWorld(name: string): { x: number; y: number; angle: number; scale: number } | null {
     const node = this.nodes.get(name);
     if (!node) return null;
     const m = node.container.getWorldTransformMatrix();
-    return { x: m.tx, y: m.ty };
+    return {
+      x: m.tx,
+      y: m.ty,
+      angle: Math.atan2(m.b, m.a),
+      scale: Math.hypot(m.a, m.b),
+    };
   }
 
   /** Sets the layer base; sync() adds the per-frame y ordering on top. */

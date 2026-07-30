@@ -29,6 +29,20 @@ const PROJ_STYLE: Record<number, { tex: string; scale: number; yMul: number; tra
 };
 
 /**
+ * Beam-saber bloom geometry, in logical pixels along the blade from the
+ * meleeWeapon pivot.
+ *
+ * From assets/sprites/mechs/manifest.json the melee weapon is 102 logical px
+ * long with its pivot at the tile centre, which sits 10.5px behind the pommel:
+ * hilt and emitter occupy the first ~25px and the lit blade runs from +15 out
+ * to +91.5. The bloom is sized to that lit section and overshoots it slightly,
+ * because fx_streak fades out at both ends.
+ */
+const BLADE_MID = 53;
+const BLADE_GLOW_LEN = 88;
+const BLADE_GLOW_THICK = 13;
+
+/**
  * The playable match.
  *
  * The scene owns a fixed 60Hz accumulator that drives `MatchSim` (which knows
@@ -460,23 +474,30 @@ export class BattleScene extends Phaser.Scene {
       r.setPartVisible('mainWeapon', !drawn);
 
       if (drawn) {
-        const dz = depthScaleAt(c.y);
-        const hand = r.partWorld('meleeWeapon') ?? { x: c.x, y: c.y };
-        // Blade runs ~102 logical px from the hilt; centre the bloom on it.
-        const mid = 58 * dz;
+        // Anchor the bloom to the modelled weapon's own transform, not to the
+        // aim vector: the part carries bank and any authored offset too, and
+        // reading it back means the glow cannot drift off the blade again.
+        const hand = r.partWorld('meleeWeapon');
+        const ax = hand ? hand.angle : c.aim;
+        const dz = hand ? hand.scale : depthScaleAt(c.y);
+        const hx = hand ? hand.x : c.x;
+        const hy = hand ? hand.y : c.y;
+
+        const mid = BLADE_MID * dz;
         bloom.setVisible(true);
-        bloom.setPosition(hand.x + Math.cos(c.aim) * mid, hand.y + Math.sin(c.aim) * mid);
-        bloom.setRotation(c.aim);
-        bloom.setScale(1.55 * dz, 0.30 * dz);
+        bloom.setPosition(hx + Math.cos(ax) * mid, hy + Math.sin(ax) * mid);
+        bloom.setRotation(ax);
+        // fx_streak is 128x24; scale it to the lit section of the blade.
+        bloom.setScale((BLADE_GLOW_LEN / 128) * dz, (BLADE_GLOW_THICK / 24) * dz);
         bloom.setTint(c.def.tint.glow);
         bloom.setAlpha(0.75);
         bloom.setDepth(depthSortAt(c.y, 31));
         if (Math.random() < 0.5) {
-          const tpos = Math.random();
+          const tpos = (Math.random() - 0.5) * BLADE_GLOW_LEN * dz;
           this.effects.thruster(
-            bloom.x + Math.cos(c.aim) * (tpos - 0.5) * 100,
-            bloom.y + Math.sin(c.aim) * (tpos - 0.5) * 100,
-            c.aim + Math.PI / 2,
+            bloom.x + Math.cos(ax) * tpos,
+            bloom.y + Math.sin(ax) * tpos,
+            ax + Math.PI / 2,
             0.3,
             c.def.tint.glow,
           );

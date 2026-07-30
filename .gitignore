@@ -7,3 +7,7 @@ Thumbs.db
 # Blender working files keep their .blend but not autosaves
 *.blend1
 *.blend2
+
+# Python bytecode from the Blender build scripts
+__pycache__/
+*.pyc

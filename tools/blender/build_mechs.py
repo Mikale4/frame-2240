@@ -46,8 +46,19 @@ from mathutils import Vector
 PX_PER_BU = 120.0
 DISPLAY_SCALE = 0.5
 LOGICAL_PER_BU = PX_PER_BU * DISPLAY_SCALE  # 60
-TILE = 320  # square render target per part (fits the long forward-held rifle)
+TILE = 320  # default square render target per part
 ORTHO_SCALE = TILE / PX_PER_BU  # 2.667 BU across the frame
+
+# A part is framed on its own pivot, so the tile only reaches TILE/2 px in each
+# direction. Long parts held away from their pivot overrun that: the beam saber
+# is 1.7 BU of blade growing forward from a pivot at the emitter, which the
+# 320px tile cut off flat mid-blade. Tiles are therefore sized per part from the
+# real bounding box. PX_PER_BU is held constant (ortho_scale tracks the tile), so
+# a bigger tile only adds transparent margin — the pivot stays at the centre and
+# the game still draws every part at origin 0.5,0.5 and PART_SCALE.
+TILE_STEP = 64  # round tile sizes up to this, to keep texture dimensions tidy
+TILE_MARGIN_PX = 14  # room for the Freestyle contour and any glow bleed
+TILE_MAX = 1024  # a part needing more than this is a modelling mistake
 
 # Shallow three-quarter side view, matching the reference art's viewing angle.
 CAM_AZIMUTH = math.radians(15.0)
@@ -1140,12 +1151,37 @@ def setup_camera():
 # ---------------------------------------------------------------- rendering
 
 
+def required_tile(obj, cam):
+    """
+    Smallest tile (px, multiple of TILE_STEP) that fully contains `obj` when it
+    is rendered centred on its own pivot.
+
+    The part's bounding-box corners are projected onto the camera's screen axes
+    and measured from the pivot, so the result covers the actual silhouette
+    rather than an axis-aligned guess.
+    """
+    basis = cam.matrix_world.to_3x3()
+    right = (basis @ Vector((1.0, 0.0, 0.0))).normalized()
+    up = (basis @ Vector((0.0, 1.0, 0.0))).normalized()
+
+    # bound_box is in local space; apply rotation/scale but not the location, as
+    # the part is moved to the origin for its render.
+    rot_scale = obj.matrix_world.to_3x3()
+    half_bu = 0.0
+    for corner in obj.bound_box:
+        v = rot_scale @ Vector(corner)
+        half_bu = max(half_bu, abs(v.dot(right)), abs(v.dot(up)))
+
+    need_px = 2.0 * half_bu * PX_PER_BU + 2.0 * TILE_MARGIN_PX
+    steps = math.ceil(need_px / TILE_STEP)
+    return max(TILE, min(TILE_MAX, steps * TILE_STEP))
+
+
 def render_parts(coll, out_dir, mech_id, manifest):
     """Renders each part centred on its own pivot to <out_dir>/<mech>_<part>.png."""
     os.makedirs(out_dir, exist_ok=True)
     scene = bpy.context.scene
-    scene.render.resolution_x = TILE
-    scene.render.resolution_y = TILE
+    cam = scene.camera
 
     mech_objs = {o.name: o for o in coll.objects if o.type == "MESH"}
     missing = [n for n in PART_ORDER if f"{mech_id}_{n}" not in mech_objs]
@@ -1160,12 +1196,19 @@ def render_parts(coll, out_dir, mech_id, manifest):
     for o in all_meshes:
         o.hide_render = True
 
+    saved_ortho = cam.data.ortho_scale
     try:
         for name in PART_ORDER:
             obj = mech_objs[f"{mech_id}_{name}"]
             saved_loc = tuple(obj.location)
             obj.location = (0.0, 0.0, 0.0)
             obj.hide_render = False
+
+            # Frame this part on its own, keeping PX_PER_BU fixed.
+            tile = required_tile(obj, cam)
+            scene.render.resolution_x = tile
+            scene.render.resolution_y = tile
+            cam.data.ortho_scale = tile / PX_PER_BU
 
             path = os.path.join(out_dir, f"{mech_id}_{name}.png")
             scene.render.filepath = path
@@ -1177,10 +1220,14 @@ def render_parts(coll, out_dir, mech_id, manifest):
             dims = tuple(round(v, 4) for v in obj.dimensions)
             manifest.setdefault(mech_id, {})[name] = {
                 "file": os.path.basename(path),
+                "tile": tile,
                 "dims_bu": dims,
                 "dims_logical_px": tuple(round(v * LOGICAL_PER_BU, 1) for v in dims),
             }
     finally:
+        cam.data.ortho_scale = saved_ortho
+        scene.render.resolution_x = TILE
+        scene.render.resolution_y = TILE
         for o in all_meshes:
             o.hide_render = saved_hide.get(o.name, False)
 
@@ -1252,13 +1299,16 @@ def build_all(project_root):
         "display_scale": DISPLAY_SCALE,
         "logical_per_bu": LOGICAL_PER_BU,
         "tile": TILE,
+        "tile_note": "Default tile. Parts that overrun it are rendered larger; "
+                     "see parts.<mech>.<part>.tile. px_per_bu is identical for "
+                     "every tile size, so only the transparent margin changes.",
         "ortho_scale": ORTHO_SCALE,
         "outlines": outlines,
         "camera": {
             "azimuth_deg": math.degrees(CAM_AZIMUTH),
             "elevation_deg": math.degrees(CAM_ELEVATION),
         },
-        "note": "Every PNG is TILE x TILE with the part pivot at the exact centre; "
+        "note": "Every PNG is square with the part pivot at the exact centre; "
                 "draw with origin 0.5,0.5 at the rig offset.",
         # World-space pivots in logical pixels. src/data/mechs.ts must mirror
         # these (child offsets there are relative to the parent).
