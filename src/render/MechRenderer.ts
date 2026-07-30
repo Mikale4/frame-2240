@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { Combatant } from '../combat/Combatant';
 import type { MechDef, RigPart } from '../mechs/MechDef';
-import { ActState, ProjKind } from '../combat/types';
+import { ActState } from '../combat/types';
 import { DEG, clamp, wrapAngle } from '../core/MathUtil';
 import { depthScaleAt, depthSortAt } from '../core/Depth';
 import { buildTurretInheritance, partLocalRotation, type RigPose } from './RigRotation';
@@ -128,9 +128,21 @@ export class MechRenderer {
 
     const turretRot = wrapAngle(aimLocal - bankLocal);
     const spinLocal = facing > 0 ? c.spin : -c.spin;
-    const meleeing = c.attack?.kind === ProjKind.Melee;
+    // The simulation says when an arm is carrying a swing. Testing the attack
+    // kind here missed the lock-on sequence entirely — it never sets `attack` —
+    // so the blade was held rigidly at the aim and dragged into the target.
+    const meleeing = c.swinging;
 
-    const pose: RigPose = { turretRot, spin: spinLocal, thrust: c.thrust, meleeing };
+    // Mirroring the root negates rotations, so the stride flips with facing too,
+    // keeping the leading leg the leading leg whichever way the mech walks.
+    const pose: RigPose = {
+      turretRot,
+      spin: spinLocal,
+      thrust: c.thrust,
+      meleeing,
+      walkPhase: facing > 0 ? c.walkPhase : -c.walkPhase,
+      stride: c.stride,
+    };
     for (const node of this.nodes.values()) {
       node.container.rotation = partLocalRotation(node.def, node.inheritsTurret, pose);
     }

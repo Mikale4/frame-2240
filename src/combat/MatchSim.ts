@@ -1,4 +1,4 @@
-import { ARENA_H, ARENA_W, GROUND_Y, ROUND_TIME_TICKS, TICK_HZ } from '../core/GameConfig';
+import { ARENA_H, ARENA_W, DECK_Y, ROUND_TIME_TICKS, TICK_HZ } from '../core/GameConfig';
 import { Rng } from '../core/Rng';
 import type { MechDef } from '../mechs/MechDef';
 import { Projectile, ProjectilePool, sweptHit } from '../projectiles/Projectile';
@@ -25,7 +25,7 @@ export interface MatchConfig {
   arenaH?: number;
   /** Intro ticks before control unlocks (the "FIGHT" banner). */
   introTicks?: number;
-  /** Arena floor. Defaults to GROUND_Y. */
+  /** Deck surface (where feet rest). Defaults to DECK_Y. */
   groundY?: number;
   /**
    * Training: the rival is a dummy. It takes damage and reacts to hits, but
@@ -98,11 +98,11 @@ export class MatchSim {
     });
     this.combatants = [this.player, this.enemy];
 
-    // Floor sits a chassis-radius above the arena bottom so a landed mech rests
-    // on the deck rather than clipping into it.
-    const floor = cfg.groundY ?? GROUND_Y;
+    // Each chassis rests at whatever body height puts its own soles on the deck,
+    // so both machines stand on the same drawn line.
+    const deck = cfg.groundY ?? DECK_Y;
     for (const c of this.combatants) {
-      c.groundY = Math.min(floor, this.arenaH - c.def.rig.hurtRadius);
+      c.groundY = Math.min(deck - c.def.rig.footOffset, this.arenaH - c.def.rig.hurtRadius);
     }
   }
 

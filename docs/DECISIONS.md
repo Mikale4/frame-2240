@@ -715,3 +715,80 @@ boxes, a back-heavy engine mass stepping down to a thin prow, swept vanes that
 break the hull silhouette, a slung cannon, layered plates with a visible lip, and
 a dark identity shade underneath so the top plates read as plates. Deliberately
 not a sphere or a cube with a gun.
+
+---
+
+## 2026-07-30 — Session 4: swing arcs, walking, the deck
+
+### D39 — Melee swings through an arc; it does not hold the blade out
+
+**Decision.** `MeleeProfile.arc` authors a wind-up angle, a sweep, and where the
+slash starts within the swing. `swingArcAngle()` turns that into an arm angle,
+and the renderer carries the arm through it. Alternate hits mirror.
+
+**Why.** The blade was being dragged into the target — a stab, repeated. The
+cause was specific: `MechRenderer` decided "is this mech swinging?" from
+`attack?.kind === Melee`, and the lock-on sequence never sets `attack`. So the
+arm tracked the aim rigidly while the chassis translated into the target.
+
+The 2005 reference animates this properly and the numbers are worth recording.
+Its arm helper (statedef 6200) drives an explicit angle: for ~12 ticks the
+command rises 5deg per tick to a raised position, then flips to a far-side angle
+200-235deg away, which the arm chases at a fixed 5deg/tick — so the visible
+motion is a continuous sweep, not a pose change. Four variants exist, mirrored,
+selected per swing. `fvar(10)` is even documented as
+`回転方向(0:0ff / -1:left / 1:right)` — rotation direction.
+
+**Shape kept, curve retuned.** The reference's command curve `k*time/(time+1)` is
+fast off the mark and eases out; ours decelerates the same way, so the blade is
+quickest exactly where the hit window is.
+
+**Per chassis.** HALCYON sweeps 202deg from a 74deg wind-up — a fast saber
+flurry. NOCTURNE winds higher (96deg) and sweeps less (168deg): heavy overhead
+chops. The claw still swings; it is not a thrust.
+
+---
+
+### D40 — Legs are separate parts, so mechs can walk
+
+**Decision.** `lowerBody` split into a pelvis plus `legNear`/`legFar`, each with
+its pivot at the hip. A walk cycle swings them in antiphase, driven from the
+simulation.
+
+**Why.** There was no walk animation at all — a grounded mech slid along the deck
+with its legs welded to its hips. One `lowerBody` sprite cannot walk, so this had
+to start in the art pipeline rather than the renderer.
+
+**Phase is distance, not time.** `walkPhase` advances by ground distance covered,
+so the stride matches the speed the machine is actually moving and the feet do
+not skate. `stride` eases 0..1 with speed, so starting and stopping settle
+instead of snapping, and at rest the legs hold a slightly splayed stance rather
+than collapsing into a single overlapping silhouette.
+
+**In the simulation, not the renderer**, so it stays deterministic and a replay
+reproduces the same pose.
+
+---
+
+### D41 — The deck is one world line, and every chassis stands on it
+
+**Decision.** `DECK_Y` is the world y of the deck *surface*. Each chassis carries
+a `footOffset` — the distance from its body centre to its soles, measured from
+the exported leg sprite — and rests at `DECK_Y - footOffset`.
+
+**Why.** The floor was a body-centre height with nothing drawn at it. Two
+problems followed: you could not see where the ground was, and because every
+chassis rested at the same *centre* height, a long-legged machine and a squat one
+could not both have their feet on the floor. HALCYON reaches 84px below its
+centre and NOCTURNE 72px; they now touch the same drawn line.
+
+**Drawn where it is.** `arena_near` already contained a hangar deck edge with a
+hazard lip; it was being placed at a *screen* offset, so the floor it implied
+slid around independently of the floor machines stood on. It is now world
+geometry, offset so its own lip row (measured at y=111 in the PNG) lands exactly
+on `DECK_Y`, and muted so the hazard diamonds stop out-shouting the machines.
+`GroundPlane` fills opaquely below it and draws the contact shadows.
+
+**Shadows are the altitude cue.** A shadow that tightens and darkens as a machine
+descends tells a player their height far better than judging themselves against a
+parallax backdrop.

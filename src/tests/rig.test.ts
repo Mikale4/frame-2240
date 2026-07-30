@@ -27,7 +27,14 @@ function worldRotation(
   return total;
 }
 
-const restPose: RigPose = { turretRot: 0, spin: 0, thrust: 0, meleeing: false };
+const restPose: RigPose = {
+  turretRot: 0,
+  spin: 0,
+  thrust: 0,
+  meleeing: false,
+  walkPhase: 0,
+  stride: 0,
+};
 const pose = (over: Partial<RigPose>): RigPose => ({ ...restPose, ...over });
 
 describe('rig turret inheritance', () => {

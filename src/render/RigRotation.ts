@@ -24,7 +24,19 @@ export interface RigPose {
   thrust: number;
   /** True while a melee attack is actually swinging. */
   meleeing: boolean;
+  /** Walk cycle phase in radians; one full stride per 2*PI. */
+  walkPhase: number;
+  /**
+   * How much stride to apply, 0..1. Scales with ground speed, so a mech that
+   * stops mid-step settles rather than freezing mid-stride.
+   */
+  stride: number;
 }
+
+/** Peak leg swing at full stride, in radians. */
+export const STRIDE_MAX = 26 * DEG;
+/** How far the legs splay apart when planted and still. */
+export const STANCE = 5 * DEG;
 
 /** The head tracks the aim only partly, so the cockpit reads as leading it. */
 export const HEAD_TRACKING = 0.55;
@@ -78,6 +90,16 @@ export function partLocalRotation(part: RigPart, inheritsTurret: boolean, pose: 
       // Thrusters splay outward under load and gimbal against the aim.
       const splay = (part.name === 'leftThruster' ? -1 : 1) * pose.thrust * 9 * DEG;
       return own + splay - pose.turretRot * 0.12;
+    }
+    case 'legNear':
+    case 'legFar': {
+      // The two legs stride half a cycle apart. At rest they settle into a
+      // slight splayed stance rather than snapping to a single overlapping pose,
+      // which would make the two leg sprites collapse into one silhouette.
+      const side = part.follow === 'legNear' ? 0 : Math.PI;
+      const swing = Math.sin(pose.walkPhase + side) * STRIDE_MAX * pose.stride;
+      const rest = (part.follow === 'legNear' ? 1 : -1) * STANCE * (1 - pose.stride);
+      return own + swing + rest;
     }
     default:
       return own;

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Babel Sword: Reignition - procedural multipart mech builder.
 
 Run inside Blender (the project drives it through the Blender MCP server):
@@ -54,7 +54,7 @@ ORTHO_SCALE = TILE / PX_PER_BU  # 2.667 BU across the frame
 # is 1.7 BU of blade growing forward from a pivot at the emitter, which the
 # 320px tile cut off flat mid-blade. Tiles are therefore sized per part from the
 # real bounding box. PX_PER_BU is held constant (ortho_scale tracks the tile), so
-# a bigger tile only adds transparent margin — the pivot stays at the centre and
+# a bigger tile only adds transparent margin â€” the pivot stays at the centre and
 # the game still draws every part at origin 0.5,0.5 and PART_SCALE.
 TILE_STEP = 64  # round tile sizes up to this, to keep texture dimensions tidy
 TILE_MARGIN_PX = 14  # room for the Freestyle contour and any glow bleed
@@ -77,6 +77,9 @@ PART_ORDER = [
     "head",
     "backpack",
     "lowerBody",
+    # Legs are separate parts so each can swing about its hip for a walk cycle.
+    "legNear",
+    "legFar",
     "leftArm",
     "subWeapon",
     "rightArm",
@@ -110,6 +113,9 @@ CHASSIS = {
             "head": (21, -7, -0.05),
             "backpack": (-26, -18, 0.05),
             "lowerBody": (-8, 26, 0.0),
+            # Hip line, 1.2 logical px below the lowerBody pivot (hip z = -0.02 BU).
+            "legNear": (-8, 27, -0.08),
+            "legFar": (-8, 27, 0.08),
             "leftArm": (-2, -2, 0.19),
             "subWeapon": (-5, -25, 0.19),
             "rightArm": (16, 6, -0.19),
@@ -133,6 +139,8 @@ CHASSIS = {
             "head": (23, -2, -0.05),
             "backpack": (-30, -14, 0.05),
             "lowerBody": (-10, 24, 0.0),
+            "legNear": (-10, 25, -0.10),
+            "legFar": (-10, 25, 0.10),
             "leftArm": (-4, 0, 0.22),
             "subWeapon": (-10, -26, 0.22),
             "rightArm": (18, 10, -0.22),
@@ -148,7 +156,7 @@ CHASSIS = {
 Palettes.
 
 Calibrated from the 2005 build's own .act palette files (chars/rs/pal/*.act,
-768-byte RGB tables) and from in-game screenshots — NOT from the roster portrait
+768-byte RGB tables) and from in-game screenshots â€” NOT from the roster portrait
 GIFs, which are rendered in a neutral placeholder palette and led an earlier pass
 badly astray. The real machines are vividly coloured: sampling 00-1.act yields
 #0090FF / #00DCFF with #FF5500, 01-1.act gives orange over teal, 20-1.act a green
@@ -637,7 +645,7 @@ def join_as(name, objs, pivot, coll):
 # --------------------------------------------------------------- drone build
 
 
-# The supporter is small — it must still read at roughly 40 logical px — so it
+# The supporter is small â€” it must still read at roughly 40 logical px â€” so it
 # is built as ONE joined object rather than a rig. A four-part rig on a 40px
 # sprite buys nothing: the whole drone turns to face its target, so rotating a
 # single sprite gives the same result as animating a hierarchy.
@@ -650,7 +658,7 @@ def build_drone(mech_id, palette_key=None):
 
     Design language follows the chassis: tapered wedges rather than boxes, a
     sharp forward prow, swept vanes, overlapping plates with a visible step, and
-    a glowing sensor. Deliberately NOT a sphere or a cube with a gun — the
+    a glowing sensor. Deliberately NOT a sphere or a cube with a gun â€” the
     reference's machines are all angles.
 
     Modelled nose-along +X, matching the parts convention, with the pivot at the
@@ -683,13 +691,13 @@ def build_drone(mech_id, palette_key=None):
     o.append(add_wedge("d_hull", (0.235, 0.185, L * 0.52), 0.26,
                        Vector((L * 0.06, 0, 0.0)),
                        (0, math.radians(90), 0), coll=coll, mat=M_HULL))
-    # Chisel prow, cranked down — the chassis noses do the same.
+    # Chisel prow, cranked down â€” the chassis noses do the same.
     o.append(add_wedge("d_prow", (0.10, 0.10, L * 0.22), 0.14,
                        Vector((L * 0.42, 0, -0.028)),
                        (0, math.radians(76), 0), coll=coll, mat=M_SUB))
 
     # ---- layered plates: a visible step along the spine and flank ----------
-    # A narrow near-white lip only — the identity colour has to hold the surface
+    # A narrow near-white lip only â€” the identity colour has to hold the surface
     # area, or the drone reads as a white toy with coloured bits.
     o.append(add_wedge("d_spine", (0.15, 0.075, 0.030), 0.48,
                        Vector((-L * 0.16, 0, 0.128)), coll=coll, mat=M_TRIM))
@@ -874,18 +882,24 @@ def build_mech(mech_id, palette_key=None):
 
     # ---- lower body: hips + two reverse-joint legs ------------------------
     piv = px(*P["lowerBody"])
-    o = []
+    pelvis = []
     lw = LEG["w"]
-    o.append(add_box("l_hips", (LEG["hip"], LEG["hip"] + 0.02, 0.24), piv + Vector((0, 0, 0.06)),
-                     coll=coll, mat=M_HULL))
-    o.append(add_box("l_skirt", (0.26, LEG["hip"] * 0.9, 0.12), piv + Vector((0.12, 0, -0.08)),
-                     (0, math.radians(14), 0), coll=coll, mat=M_SUB))
-    o.append(add_box("l_tail", (0.16, 0.24, 0.14), piv + Vector((-0.22, 0, 0.02)), coll=coll, mat=M_FRAME))
+    pelvis.append(add_box("l_hips", (LEG["hip"], LEG["hip"] + 0.02, 0.24), piv + Vector((0, 0, 0.06)),
+                          coll=coll, mat=M_HULL))
+    pelvis.append(add_box("l_skirt", (0.26, LEG["hip"] * 0.9, 0.12), piv + Vector((0.12, 0, -0.08)),
+                          (0, math.radians(14), 0), coll=coll, mat=M_SUB))
+    pelvis.append(add_box("l_tail", (0.16, 0.24, 0.14), piv + Vector((-0.22, 0, 0.02)),
+                          coll=coll, mat=M_FRAME))
 
     THIGH_A = math.radians(32)   # top forward, bottom swept back
     SHIN_A = math.radians(-36)   # knee back, foot forward
     spread = LEG["hip"] * 0.46
+    # Each leg is collected separately so it can be exported as its own part and
+    # swung about its hip for a walk cycle. `o` keeps only the pelvis.
+    legs = {0: [], 1: []}
+    hip_local = Vector((0.0, 0.0, -0.02))
     for side, (dy, mat_leg) in enumerate(((-spread, M_HULL), (spread, M_FAR))):
+        o = legs[side]
         hip = Vector((0.0, dy, -0.02))
         o.append(add_cyl(f"l_hub{side}", lw * 0.66, 0.10, piv + hip,
                          (math.radians(90), 0, 0), 14, coll=coll, mat=M_FRAME))
@@ -922,7 +936,13 @@ def build_mech(mech_id, palette_key=None):
                              coll=coll, mat=M_FRAME))
         o.append(add_box(f"l_heel{side}", (0.10, lw - 0.01, 0.05),
                          piv + ankle + Vector((-fw * 0.34, 0, -0.07)), coll=coll, mat=M_ACC))
-    parts["lowerBody"] = join_as(pn("lowerBody"), o, piv, coll)
+
+    # Pelvis and legs ship as three parts so the game can swing each leg about
+    # its own hip. A single lowerBody sprite cannot walk.
+    parts["lowerBody"] = join_as(pn("lowerBody"), pelvis, piv, coll)
+    hip_piv = piv + hip_local
+    parts["legNear"] = join_as(pn("legNear"), legs[0], hip_piv, coll)
+    parts["legFar"] = join_as(pn("legFar"), legs[1], hip_piv, coll)
 
     # ---- arms: big pauldron + disc hub + forward grip ---------------------
     for key, near in (("rightArm", True), ("leftArm", False)):

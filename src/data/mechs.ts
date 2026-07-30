@@ -1,4 +1,4 @@
-import { attack } from '../combat/AttackData';
+﻿import { attack } from '../combat/AttackData';
 import { BarrierResponse, ProjKind } from '../combat/types';
 import type { FlightDef, GaugeDef, BarrierDef, MechDef, MechRigDef } from '../mechs/MechDef';
 import { DEG } from '../core/MathUtil';
@@ -24,11 +24,17 @@ import { DEG } from '../core/MathUtil';
 const HALCYON_RIG: MechRigDef = {
   hurtRadius: 28,
   chassisHeight: 104,
+  // Hip at y=27 from the core, and halcyon_legNear.png reaches 57 logical px
+  // below its hip pivot.
+  footOffset: 84,
   parts: [
     { name: 'core', parent: null, x: 0, y: 0, rotation: 0, follow: 'chassis' },
     { name: 'head', parent: 'core', x: 21, y: -7, rotation: 0, follow: 'turret' },
     { name: 'backpack', parent: 'core', x: -26, y: -18, rotation: 0, follow: 'chassis' },
     { name: 'lowerBody', parent: 'core', x: -8, y: 26, rotation: 0, follow: 'chassis' },
+    // Legs hang off the pelvis at the hip line and stride in antiphase.
+    { name: 'legFar', parent: 'lowerBody', x: 0, y: 1, rotation: 0, follow: 'legFar' },
+    { name: 'legNear', parent: 'lowerBody', x: 0, y: 1, rotation: 0, follow: 'legNear' },
     { name: 'leftArm', parent: 'core', x: -2, y: -2, rotation: 0, follow: 'turret' },
     { name: 'subWeapon', parent: 'leftArm', x: -3, y: -23, rotation: 0, follow: 'turret' },
     { name: 'rightArm', parent: 'core', x: 16, y: 6, rotation: 0, follow: 'turret' },
@@ -43,7 +49,9 @@ const HALCYON_RIG: MechRigDef = {
     'leftThruster',
     'leftArm',
     'subWeapon',
+    'legFar',
     'lowerBody',
+    'legNear',
     'core',
     'head',
     'rightThruster',
@@ -62,11 +70,15 @@ const HALCYON_RIG: MechRigDef = {
 const NOCTURNE_RIG: MechRigDef = {
   hurtRadius: 31,
   chassisHeight: 100,
+  // Shorter, thicker legs: hip at y=25, reaching 47 logical px below it.
+  footOffset: 72,
   parts: [
     { name: 'core', parent: null, x: 0, y: 0, rotation: 0, follow: 'chassis' },
     { name: 'head', parent: 'core', x: 23, y: -2, rotation: 0, follow: 'turret' },
     { name: 'backpack', parent: 'core', x: -30, y: -14, rotation: 0, follow: 'chassis' },
     { name: 'lowerBody', parent: 'core', x: -10, y: 24, rotation: 0, follow: 'chassis' },
+    { name: 'legFar', parent: 'lowerBody', x: 0, y: 1, rotation: 0, follow: 'legFar' },
+    { name: 'legNear', parent: 'lowerBody', x: 0, y: 1, rotation: 0, follow: 'legNear' },
     { name: 'leftArm', parent: 'core', x: -4, y: 0, rotation: 0, follow: 'turret' },
     { name: 'subWeapon', parent: 'leftArm', x: -6, y: -26, rotation: 0, follow: 'turret' },
     { name: 'rightArm', parent: 'core', x: 18, y: 10, rotation: 0, follow: 'turret' },
@@ -80,7 +92,9 @@ const NOCTURNE_RIG: MechRigDef = {
     'leftThruster',
     'leftArm',
     'subWeapon',
+    'legFar',
     'lowerBody',
+    'legNear',
     'core',
     'head',
     'rightThruster',
@@ -93,7 +107,7 @@ const NOCTURNE_RIG: MechRigDef = {
 /**
  * Flight feel.
  *
- * Retuned after comparing against 2005 (which used `velset` — instantaneous)
+ * Retuned after comparing against 2005 (which used `velset` â€” instantaneous)
  * and the working Iron Babel build (an instant boost impulse plus heavy drag).
  * The original values here accelerated at 0.62 toward a 5.2 cap, i.e. ~8 ticks
  * to reach top speed, which reads as floaty next to either reference.
@@ -336,7 +350,7 @@ export const HALCYON: MechDef = {
 
   /**
    * Three-stage sword chain. Chaining requires the previous stage to have
-   * connected — the reference gated its follow-up on a hit-confirm variable.
+   * connected â€” the reference gated its follow-up on a hit-confirm variable.
    * Melee ignores barriers (the reference marked it "barrier-impossible").
    */
   melee: [
@@ -429,6 +443,10 @@ export const HALCYON: MechDef = {
     lockout: 62,
     swing: 9,
     gap: 4,
+    // Wide, fast saber arcs. The blade winds back over the shoulder and sweeps
+    // ~200deg through the target, alternating handedness each hit, so a six-hit
+    // chain reads as a flurry of slashes rather than one stroke on repeat.
+    arc: { windup: 74, sweep: 202, windupFrac: 0.34, alternate: true },
     damage: [26, 26, 30, 30, 34, 74],
     knock: [3, 3, 4, 4, 5, 13],
     finisherKnock: 15,
@@ -519,6 +537,10 @@ export const NOCTURNE: MechDef = {
     lockout: 82,
     swing: 14,
     gap: 6,
+    // Heavy overhead chops: a longer, higher wind-up and a shorter, blunter
+    // sweep than the saber. Still a swing â€” the claw comes down through the
+    // target rather than being shoved into it â€” but it reads as weight.
+    arc: { windup: 96, sweep: 168, windupFrac: 0.44, alternate: true },
     damage: [62, 70, 118],
     knock: [6, 8, 16],
     finisherKnock: 20,

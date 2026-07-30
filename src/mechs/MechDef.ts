@@ -109,6 +109,31 @@ export interface DefenceDef {
 }
 
 /**
+ * How the arm carries the blade through one swing, in degrees relative to the
+ * aim direction.
+ *
+ * Modelled on how the 2005 reference actually animated its close attack. Its
+ * arm helper (statedef 6200) drives an explicit arm angle: over the first ~12
+ * ticks the command rises by 5deg a tick to a raised position, then flips to a
+ * far-side angle roughly 200-235deg away, which the arm chases at a fixed rate.
+ * The reference carried four variants of this, mirrored, so consecutive swings
+ * alternate handedness.
+ *
+ * The point is that a swing is an *arc*. Without one the mech simply translates
+ * into its target with the blade held out, which reads as a repeated stab.
+ */
+export interface SwingArc {
+  /** Degrees the blade is raised above the aim before the slash begins. */
+  windup: number;
+  /** Degrees swept downward from the raised position through the follow-through. */
+  sweep: number;
+  /** Fraction of the swing spent winding up; the rest is the slash. */
+  windupFrac: number;
+  /** Mirror the arc on alternate hits, as the reference's variants did. */
+  alternate: boolean;
+}
+
+/**
  * Lock-on melee profile.
  *
  * Modelled on the working Iron Babel build's `meleeProfile`: melee is not a
@@ -138,6 +163,8 @@ export interface MeleeProfile {
   /** Ticks per swing, and the pause between swings. */
   swing: number;
   gap: number;
+  /** How the arm carries the blade through each swing. */
+  arc: SwingArc;
   /** Per-hit damage and knockback; the last entry is the finisher. */
   damage: number[];
   knock: number[];
@@ -193,8 +220,11 @@ export interface RigPart {
   x: number;
   y: number;
   rotation: number;
-  /** 'chassis' follows bank, 'turret' follows aim, 'thruster' reacts to accel. */
-  follow: 'chassis' | 'turret' | 'thruster' | 'fixed';
+  /**
+   * 'chassis' follows bank, 'turret' follows aim, 'thruster' reacts to accel,
+   * 'legNear'/'legFar' stride in antiphase while walking.
+   */
+  follow: 'chassis' | 'turret' | 'thruster' | 'legNear' | 'legFar' | 'fixed';
 }
 
 export interface MechRigDef {
@@ -204,6 +234,15 @@ export interface MechRigDef {
   hurtRadius: number;
   /** Height of the chassis in logical pixels, used for HUD and camera framing. */
   chassisHeight: number;
+  /**
+   * Distance from the body centre down to the soles, in logical pixels.
+   *
+   * Measured from the exported sprites: hip offset plus the leg's reach below
+   * its hip pivot. Subtracting this from `DECK_Y` gives the body height at which
+   * this chassis's feet touch the deck, so a tall walker and a squat one both
+   * stand *on* the floor rather than one hovering and one sunk into it.
+   */
+  footOffset: number;
 }
 
 export interface MechDef {

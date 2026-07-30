@@ -1,5 +1,14 @@
 import Phaser from 'phaser';
-import { ARENA_H, ARENA_W, VIEW_H, VIEW_W } from '../core/GameConfig';
+import { ARENA_H, ARENA_W, DECK_Y, VIEW_H, VIEW_W } from '../core/GameConfig';
+import { depthSortAt } from '../core/Depth';
+
+/**
+ * Row in arena_near.png where the deck surface becomes solid.
+ *
+ * Measured from the asset rather than eyeballed, so the drawn lip and DECK_Y
+ * cannot drift apart. Re-measure if the arena is re-rendered.
+ */
+const NEAR_LIP_ROW = 111;
 
 /**
  * The arena "CATHEDRAL YARD": a procedural sky gradient plus three tiling
@@ -38,8 +47,17 @@ export class Backdrop {
     this.mid.setOrigin(0, 0).setDepth(-80);
     this.mid.setTint(0x9aa8c8);
 
-    this.near = scene.add.tileSprite(0, 0, VIEW_W, 256, 'arena_near');
-    this.near.setOrigin(0, 0).setDepth(60);
+    // The near girder belongs to the deck, not to the camera. It used to be
+    // placed at a screen offset, which meant the "floor" it implied slid around
+    // independently of the floor machines actually stand on. It is now world
+    // geometry spanning the arena, pinned to the deck line, and drawn behind the
+    // machines so it reads as the deck's own structure rather than as a bar
+    // across the fight.
+    this.near = scene.add.tileSprite(0, 0, ARENA_W + 800, 256, 'arena_near');
+    this.near.setOrigin(0, 0).setDepth(depthSortAt(DECK_Y, 11));
+    // Muted: at full saturation the hazard diamonds along the lip pulled the eye
+    // harder than the machines did.
+    this.near.setTint(0x8d97bb);
 
     // ---- dust / debris field --------------------------------------------
     this.dust = scene.add.container(0, 0);
@@ -140,9 +158,11 @@ export class Backdrop {
     place(this.far, -110 + vFrac * 70, 0.06);
     this.far.tilePositionY = vFrac * 24;
     place(this.mid, -40 + vFrac * 130, 0.18);
-    // Anchored to the arena floor: diving brings the girder up into frame,
-    // climbing drops it away below the view.
-    place(this.near, VIEW_H - 210 + vFrac * 210, 0.62);
+    // World-anchored, and offset so the strip's own deck lip — the first fully
+    // opaque row of arena_near.png, measured at y=111 — lands exactly on DECK_Y.
+    // That is what makes the drawn floor and the simulated floor the same line.
+    this.near.setScale(1);
+    this.near.setPosition(-400, DECK_Y - NEAR_LIP_ROW);
 
     const span = VIEW_W + 40;
     for (const m of this.motes) {

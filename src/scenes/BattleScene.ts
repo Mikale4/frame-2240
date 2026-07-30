@@ -9,6 +9,7 @@ import { InputManager } from '../input/InputManager';
 import { MechRenderer, PART_SCALE } from '../render/MechRenderer';
 import { Effects } from '../render/Effects';
 import { Backdrop } from '../render/Backdrop';
+import { GroundPlane } from '../render/GroundPlane';
 import { TEX } from '../render/Textures';
 import { Hud } from '../ui/Hud';
 import { Menu, makeScrim, bigTitle, smallText } from '../ui/Menu';
@@ -58,6 +59,7 @@ export class BattleScene extends Phaser.Scene {
   private debug!: DebugOverlay;
   private effects!: Effects;
   private backdrop!: Backdrop;
+  private ground!: GroundPlane;
   private renderers: MechRenderer[] = [];
   private projSprites: Phaser.GameObjects.Image[] = [];
   /** One beam-sword sprite per combatant, shown only while swinging. */
@@ -120,6 +122,7 @@ export class BattleScene extends Phaser.Scene {
     this.input$.reset();
 
     this.backdrop = new Backdrop(this);
+    this.ground = new GroundPlane(this);
     this.effects = new Effects(this, 50);
 
     this.renderers = [
@@ -172,6 +175,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.worldObjects = [
       ...this.backdrop.objects,
+      ...this.ground.objects,
       ...this.renderers.map((r) => r.root),
       ...this.projSprites,
       ...this.blades,
@@ -555,6 +559,7 @@ export class BattleScene extends Phaser.Scene {
 
     // ---- backdrop --------------------------------------------------------
     this.backdrop.update(cam, dt);
+    this.ground.update(s.combatants);
 
     // ---- mechs -----------------------------------------------------------
     for (let i = 0; i < s.combatants.length; i++) {

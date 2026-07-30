@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { Combatant } from '../combat/Combatant';
 import { MatchSim } from '../combat/MatchSim';
 import { HALCYON, NOCTURNE } from '../data/mechs';
-import { GROUND_Y } from '../core/GameConfig';
+import { DECK_Y } from '../core/GameConfig';
 import {
   BarrierResponse,
   Btn,
@@ -19,7 +19,7 @@ const H = 1200;
 
 function make(def = HALCYON, x = 400, y = 600): Combatant {
   const c = new Combatant({ id: 0, team: Team.Player, def, x, y, facing: 1 });
-  c.groundY = GROUND_Y;
+  c.groundY = DECK_Y;
   return c;
 }
 
@@ -38,7 +38,7 @@ function run(c: Combatant, input: InputFrame, ticks: number, k: ReturnType<typeo
 }
 
 describe('FlyingMode', () => {
-  it('starts airborne — this is an aerial fighter first', () => {
+  it('starts airborne â€” this is an aerial fighter first', () => {
     expect(make().flying).toBe(true);
   });
 
@@ -61,7 +61,7 @@ describe('FlyingMode', () => {
     const k = ctx();
     c.step(press(Btn.Flight), null, W, H, k.spawns, k.events);
     run(c, emptyInput(), 200, k);
-    expect(c.y).toBeCloseTo(GROUND_Y, 3);
+    expect(c.y).toBeCloseTo(DECK_Y, 3);
     expect(c.vy).toBe(0);
     expect(c.grounded).toBe(true);
     expect(k.events.some((e) => e.t === 'land')).toBe(true);
@@ -73,7 +73,7 @@ describe('FlyingMode', () => {
     c.step(press(Btn.Flight), null, W, H, k.spawns, k.events);
     for (let i = 0; i < 400; i++) {
       c.step(emptyInput(), null, W, H, k.spawns, k.events);
-      expect(c.y).toBeLessThanOrEqual(GROUND_Y + 1e-6);
+      expect(c.y).toBeLessThanOrEqual(DECK_Y + 1e-6);
     }
   });
 
@@ -98,7 +98,7 @@ describe('FlyingMode', () => {
     run(c, emptyInput(), 150, k);
     const up = { ...emptyInput(), dy: -1 };
     run(c, up, 60, k);
-    expect(c.y).toBeCloseTo(GROUND_Y, 3);
+    expect(c.y).toBeCloseTo(DECK_Y, 3);
   });
 
   it('refuels boost faster on the deck', () => {

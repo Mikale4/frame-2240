@@ -28,10 +28,16 @@ export const ARENA_H = 1200;
 export const ROUND_TIME_TICKS = 99 * TICK_HZ;
 
 /**
- * Arena floor.
+ * World y of the deck surface — the line a landed machine's **feet** rest on.
+ *
+ * This is the single source of truth for where the floor is. A machine's own
+ * resting height is derived from it by subtracting that chassis's `footOffset`,
+ * so every mech's feet touch the same line no matter how tall its legs are.
+ * Previously the floor was expressed as a body-centre height with no drawn
+ * surface, which is why it was impossible to see where the ground actually was.
  *
  * The 2005 reference is not purely aerial: `var(20)` is a flight flag, statedef
  * 40 is take-off and 55 is landing, and `howto-en.html` lists FlyingMode ON/OFF
  * as a player toggle. Machines walk when grounded and fly when airborne.
  */
-export const GROUND_Y = ARENA_H - 96;
+export const DECK_Y = ARENA_H - 30;

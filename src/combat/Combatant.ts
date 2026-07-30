@@ -1,4 +1,4 @@
-import type { MechDef } from '../mechs/MechDef';
+﻿import type { MechDef, SwingArc } from '../mechs/MechDef';
 import type { AttackDef } from './AttackData';
 import { ATTACK_TOTAL } from './AttackData';
 import { CommandBuffer, MOTIONS, Sym, dirFrom } from './CommandBuffer';
@@ -24,7 +24,42 @@ import { Supporter } from './Supporter';
 /** Radians per tick a melee lunge may correct toward its target. */
 const MELEE_TRACK_RATE = 9 * DEG;
 
-/** Velocity retained per tick while an attack is committed — firing anchors you. */
+/**
+ * Arm angle at normalised swing progress `t`, in radians relative to the aim.
+ *
+ * Two phases, matching how the reference drove its arm helper: the arm winds
+ * back to `windup`, then sweeps `sweep` degrees through the target and past it.
+ * The slash decelerates â€” the reference's command curve was `k*time/(time+1)`,
+ * which is fast off the mark and eases into the follow-through â€” so the blade
+ * is quickest exactly where the hit lands.
+ *
+ * `hitIndex` mirrors alternate swings, so a chain reads as left, right, left
+ * rather than the same stroke repeated.
+ *
+ * Sign convention: positive `windup`/`sweep` are authored as "raised" and
+ * "sweeping downward", which is how you would describe the move out loud. Screen
+ * space has y pointing down, so the result is negated on the way out — a raised
+ * blade is a negative rotation.
+ */
+export function swingArcAngle(arc: SwingArc, t: number, hitIndex: number): number {
+  const k = clamp(t, 0, 1);
+  const dir = arc.alternate && hitIndex % 2 === 1 ? -1 : 1;
+  const wf = clamp(arc.windupFrac, 0.05, 0.95);
+
+  let deg: number;
+  if (k <= wf) {
+    // Wind back, easing out so the arm settles at the top of the swing.
+    const w = k / wf;
+    deg = arc.windup * (1 - (1 - w) * (1 - w));
+  } else {
+    // Slash through, decelerating into the follow-through.
+    const s = (k - wf) / (1 - wf);
+    deg = arc.windup - arc.sweep * (1 - Math.pow(1 - s, 2.4));
+  }
+  return -deg * DEG * dir;
+}
+
+/** Velocity retained per tick while an attack is committed â€” firing anchors you. */
 function moveScaleFor(kind: ProjKind): number {
   switch (kind) {
     case ProjKind.Beam:
@@ -70,10 +105,36 @@ export class Combatant implements FlightState {
   bank = 0;
   /** Weapon-mount aim angle (radians, world space). */
   aim = 0;
-  /** Melee sword spin, advanced 18deg/tick like the reference. */
+  /**
+   * Arm/blade angle relative to the aim, in radians.
+   *
+   * Named `spin` historically, when melee just rotated the blade continuously.
+   * It now carries an authored swing arc (see `MeleeProfile.arc`).
+   */
   spin = 0;
+  /**
+   * True while an arm swing is playing, so the renderer carries the arm through
+   * the arc. This is a separate flag rather than `attack?.kind === Melee`
+   * because the lock-on sequence never sets `attack` â€” which is exactly why the
+   * blade used to be dragged into the target instead of swung.
+   */
+  swinging = false;
+  /**
+   * Set by whichever melee path drove the arc this tick; folded into `swinging`
+   * at the end of the step and cleared. Two fields because `updateVisualAngles`
+   * runs last, so clearing the public flag there would blank it before the
+   * renderer ever sees it.
+   */
+  private swingDriven = false;
   /** Smoothed idle hover bob phase. */
   bobPhase = 0;
+  /**
+   * Walk cycle phase in radians, advanced by distance covered on the ground so
+   * the feet keep pace with the machine instead of scrubbing.
+   */
+  walkPhase = 0;
+  /** Stride weight 0..1, eased so stopping settles rather than snapping. */
+  stride = 0;
 
   life: number;
   energy: number;
@@ -155,7 +216,7 @@ export class Combatant implements FlightState {
    * The drone that carries this machine's sub-weapon.
    *
    * Owned here so it is created and discarded with its machine, but stepped by
-   * `MatchSim` after both chassis have moved — keeping it out of this class's
+   * `MatchSim` after both chassis have moved â€” keeping it out of this class's
    * branching step() is deliberate, because an early return in a hitstun or
    * attack branch is exactly how the melee lock-on once stopped updating.
    */
@@ -180,7 +241,7 @@ export class Combatant implements FlightState {
   /**
    * Orders the drone to fire `a`, spending a sub charge.
    *
-   * Returns false — and emits `assistDenied` — when the charge is missing or the
+   * Returns false â€” and emits `assistDenied` â€” when the charge is missing or the
    * drone is still busy, so the press is always answered with feedback instead
    * of being silently swallowed.
    */
@@ -518,8 +579,8 @@ export class Combatant implements FlightState {
       this.begin(d.lance);
       return;
     }
-    // Sub-weapon motion variant. The reference listed the sub shoot twice — as a
-    // plain button and as a quarter-circle — and both belong to the supporter.
+    // Sub-weapon motion variant. The reference listed the sub shoot twice â€” as a
+    // plain button and as a quarter-circle â€” and both belong to the supporter.
     if (this.cmd.matches(MOTIONS.salvo)) {
       if (this.orderAssist(d.salvo, events)) return;
     }
@@ -581,7 +642,7 @@ export class Combatant implements FlightState {
 
   /**
    * Opens a lock-on melee sequence. Requires a live target inside acquire range
-   * and enough energy for the opening plus a couple of swings — a sequence that
+   * and enough energy for the opening plus a couple of swings â€” a sequence that
    * fizzles immediately would just be a punish.
    */
   private startMeleeLock(target: Combatant | null, events: SimEvent[]): boolean {
@@ -648,10 +709,13 @@ export class Combatant implements FlightState {
     this.aim = Math.atan2(dy, dx);
     this.act = ActState.Attack;
     this.bladeTimer = Math.max(this.bladeTimer, 4);
-    this.spin += 14 * DEG;
 
     if (ml.phase === 'close') {
       ml.timer++;
+      // Carry the blade back into the wind-up while closing, so the swing is
+      // already loaded by the time the mech arrives.
+      this.swingDriven = true;
+      this.spin = swingArcAngle(p.arc, 0, ml.hitIndex) * Math.min(1, ml.timer / 8);
       // Thrust onto the target, lerping so it reads as a controlled approach.
       this.vx = lerp(this.vx, nx * p.thrust, p.tracking);
       this.vy = lerp(this.vy, ny * p.thrust, p.tracking);
@@ -666,6 +730,12 @@ export class Combatant implements FlightState {
 
     if (ml.phase === 'gap') {
       ml.timer++;
+      // Recover the arm from the follow-through back toward the next wind-up,
+      // so consecutive swings are joined by a real recovery rather than a snap.
+      this.swingDriven = true;
+      const from = swingArcAngle(p.arc, 1, ml.hitIndex);
+      const to = swingArcAngle(p.arc, 0, ml.hitIndex + 1);
+      this.spin = lerp(from, to, clamp(ml.timer / Math.max(1, p.gap), 0, 1));
       this.vx *= 0.86;
       this.vy *= 0.86;
       if (ml.timer >= p.gap) {
@@ -679,6 +749,12 @@ export class Combatant implements FlightState {
 
     // ---- swing --------------------------------------------------------
     ml.hitTimer++;
+
+    // Drive the arm through the authored arc. This is what makes the attack a
+    // slash: the hit window sits in the fast part of the sweep, so the blade is
+    // travelling through the target rather than being held against it.
+    this.swingDriven = true;
+    this.spin = swingArcAngle(p.arc, ml.hitTimer / Math.max(1, p.swing), ml.hitIndex);
 
     // Reposition to a point beside the target that shifts each hit, so the
     // sequence circles rather than bulldozing straight through.
@@ -894,7 +970,13 @@ export class Combatant implements FlightState {
       this.fire(a, target, spawns, events);
     }
 
-    if (a.kind === ProjKind.Melee) this.spin += 18 * DEG;
+    // A lone swing (no lock acquired) uses the same authored arc, so the button
+    // never produces a different-looking attack from the committed sequence.
+    if (a.kind === ProjKind.Melee) {
+      this.swingDriven = true;
+      const total = Math.max(1, a.startup + a.active);
+      this.spin = swingArcAngle(this.def.meleeLock.arc, this.attackTick / total, this.meleeCount - 1);
+    }
 
     if (this.autoFireTimer > 0) this.autoFireTimer--;
 
@@ -909,7 +991,7 @@ export class Combatant implements FlightState {
           // Hit-confirmed chain, exactly as the reference gated its follow-up.
           this.beginMelee(events, target);
         } else {
-          // Ending a chain — by finisher or by dropping it — locks melee out
+          // Ending a chain â€” by finisher or by dropping it â€” locks melee out
           // briefly, so sword pressure cannot be maintained indefinitely.
           this.meleeLockout = Math.max(
             this.meleeLockout,
@@ -972,7 +1054,7 @@ export class Combatant implements FlightState {
       });
     }
 
-    // Recoil pushes the chassis back along the aim axis — but only when the
+    // Recoil pushes the chassis back along the aim axis â€” but only when the
     // chassis itself fired. A drone's shot must not shove its owner around.
     if (a.recoil && !from) {
       this.vx -= Math.cos(aim) * a.recoil;
@@ -1013,6 +1095,33 @@ export class Combatant implements FlightState {
     if (this.dashTicks > 0) this.thrust = 1;
   }
 
+  /**
+   * Advances the walk cycle.
+   *
+   * Phase is driven by *distance travelled*, not by time, so the stride matches
+   * the speed the mech is actually moving and the feet do not skate. Airborne
+   * mechs unwind the stride and hold a neutral pose, since they are flying.
+   *
+   * Simulated rather than done in the renderer so it stays deterministic and a
+   * replay reproduces the same pose.
+   */
+  private updateWalk(): void {
+    const grounded = this.grounded && !this.flying;
+    const speed = grounded ? Math.abs(this.vx) : 0;
+    const want = grounded ? clamp(speed / Math.max(0.6, this.def.flight.walkSpeed), 0, 1) : 0;
+    // Ease toward the target so starting and stopping are not instantaneous.
+    this.stride += (want - this.stride) * 0.16;
+    if (this.stride < 0.002) this.stride = 0;
+
+    if (grounded) {
+      // One full stride per STRIDE_LENGTH px of ground covered.
+      const STRIDE_LENGTH = 46;
+      this.walkPhase += (speed / STRIDE_LENGTH) * Math.PI * 2 * Math.sign(this.vx || 1);
+      if (this.walkPhase > Math.PI * 4) this.walkPhase -= Math.PI * 4;
+      if (this.walkPhase < -Math.PI * 4) this.walkPhase += Math.PI * 4;
+    }
+  }
+
   /** Bank, hover-bob and spin. Simulated so replays stay bit-identical. */
   private updateVisualAngles(input: InputFrame): void {
     const f = this.def.flight;
@@ -1025,7 +1134,13 @@ export class Combatant implements FlightState {
     this.bank = approachAngle(this.bank, targetBank, f.bankRate);
 
     this.bobPhase += 0.055;
-    if (this.attack?.kind !== ProjKind.Melee && this.act !== ActState.Hitstun) {
+    this.updateWalk();
+    // Once nothing is driving the arc, the arm relaxes back to its rest angle.
+    // The latch is consumed here, so a sequence dropped mid-swing cannot leave
+    // the arm stuck out at the follow-through angle.
+    this.swinging = this.swingDriven;
+    this.swingDriven = false;
+    if (!this.swinging && this.act !== ActState.Hitstun) {
       this.spin *= 0.86;
       if (Math.abs(this.spin) < 0.01) this.spin = 0;
     }

@@ -29,6 +29,14 @@
         -8,
         26
       ],
+      "legNear": [
+        -8,
+        27
+      ],
+      "legFar": [
+        -8,
+        27
+      ],
       "leftArm": [
         -2,
         -2
@@ -74,6 +82,14 @@
       "lowerBody": [
         -10,
         24
+      ],
+      "legNear": [
+        -10,
+        25
+      ],
+      "legFar": [
+        -10,
+        25
       ],
       "leftArm": [
         -4,
@@ -169,14 +185,42 @@
         "file": "halcyon_lowerBody.png",
         "tile": 320,
         "dims_bu": [
+          0.5594,
+          0.38,
+          0.3485
+        ],
+        "dims_logical_px": [
+          33.6,
+          22.8,
+          20.9
+        ]
+      },
+      "legNear": {
+        "file": "halcyon_legNear.png",
+        "tile": 320,
+        "dims_bu": [
           0.6088,
-          0.5112,
-          1.1096
+          1.0086,
+          0.18
         ],
         "dims_logical_px": [
           36.5,
-          30.7,
-          66.6
+          60.5,
+          10.8
+        ]
+      },
+      "legFar": {
+        "file": "halcyon_legFar.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6088,
+          1.0086,
+          0.18
+        ],
+        "dims_logical_px": [
+          36.5,
+          60.5,
+          10.8
         ]
       },
       "leftArm": {
@@ -339,14 +383,42 @@
         "file": "nocturne_lowerBody.png",
         "tile": 320,
         "dims_bu": [
+          0.5594,
+          0.48,
+          0.3485
+        ],
+        "dims_logical_px": [
+          33.6,
+          28.8,
+          20.9
+        ]
+      },
+      "legNear": {
+        "file": "nocturne_legNear.png",
+        "tile": 320,
+        "dims_bu": [
           0.6388,
-          0.6832,
-          0.9277
+          0.8663,
+          0.26
         ],
         "dims_logical_px": [
           38.3,
-          41.0,
-          55.7
+          52.0,
+          15.6
+        ]
+      },
+      "legFar": {
+        "file": "nocturne_legFar.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6388,
+          0.8663,
+          0.26
+        ],
+        "dims_logical_px": [
+          38.3,
+          52.0,
+          15.6
         ]
       },
       "leftArm": {
