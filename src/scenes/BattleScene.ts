@@ -46,6 +46,8 @@ export class BattleScene extends Phaser.Scene {
   private backdrop!: Backdrop;
   private renderers: MechRenderer[] = [];
   private projSprites: Phaser.GameObjects.Image[] = [];
+  /** One beam-sword sprite per combatant, shown only while swinging. */
+  private blades: Phaser.GameObjects.Image[] = [];
 
   private accumulator = 0;
   private paused = false;
@@ -70,6 +72,7 @@ export class BattleScene extends Phaser.Scene {
     // GameObjects alive in these collections.
     this.pauseUi = undefined;
     this.projSprites = [];
+    this.blades = [];
     this.worldObjects = [];
     this.renderers = [];
 
@@ -82,6 +85,7 @@ export class BattleScene extends Phaser.Scene {
       seed: session.seed(),
       introTicks: 96,
       roundTicks: session.mode === 'training' ? 99 * 60 * 10 : undefined,
+      dummy: session.mode === 'training',
     });
 
     const aiSeed = session.seed() ^ 0x9e3779b9;
@@ -115,6 +119,14 @@ export class BattleScene extends Phaser.Scene {
       this.projSprites.push(img);
     }
 
+    for (let i = 0; i < 2; i++) {
+      const blade = this.add.image(0, 0, TEX.streak);
+      blade.setBlendMode(Phaser.BlendModes.ADD);
+      blade.setOrigin(0.5, 0.5);
+      blade.setVisible(false);
+      this.blades.push(blade);
+    }
+
     this.hud = new Hud(this, this.sim);
     this.debug = new DebugOverlay(this, this.sim, this.ai);
 
@@ -133,6 +145,7 @@ export class BattleScene extends Phaser.Scene {
       ...this.backdrop.objects,
       ...this.renderers.map((r) => r.root),
       ...this.projSprites,
+      ...this.blades,
       this.effects.container,
       ...this.debug.worldObjects,
     ];
@@ -261,8 +274,10 @@ export class BattleScene extends Phaser.Scene {
       playerInput = this.input$.read();
     }
 
+    // In training the rival is a dummy: it never acts, no matter what you do to
+    // it. Previously it woke up on the first hit, which is not a training mode.
     const enemyInput =
-      session.mode === 'training' && s.enemy.life > 0 && this.trainingIdle()
+      session.mode === 'training'
         ? emptyInput()
         : this.ai.think(s.enemy, s.player, s.activeProjectiles(), ARENA_W, ARENA_H);
 
@@ -283,11 +298,6 @@ export class BattleScene extends Phaser.Scene {
       session.lastEnemyLife = s.enemy.life;
       this.time.delayedCall(280, () => this.scene.start('Results'));
     }
-  }
-
-  /** Training keeps the rival passive until the player lands the first hit. */
-  private trainingIdle(): boolean {
-    return this.sim.enemy.life >= this.sim.enemy.def.gauges.maxLife;
   }
 
   private consumeEvents(): void {
@@ -436,6 +446,47 @@ export class BattleScene extends Phaser.Scene {
           const ang = speed > 0.2 ? Math.atan2(c.vy, c.vx) + Math.PI : c.aim + Math.PI;
           this.effects.thruster(w.x, w.y, ang, c.thrust, c.def.tint.thruster);
         }
+      }
+
+      // ---- beam sword -----------------------------------------------
+      // Melee is a sword, not the rifle. Stow the gun for the swing and extend
+      // a blade from the weapon hand: it ignites through startup and is at full
+      // length while the hit is live.
+      const blade = this.blades[i];
+      const atk = c.attack;
+      const swinging = c.alive && atk?.kind === ProjKind.Melee;
+      if (swinging && atk) {
+        const total = atk.startup + atk.active;
+        const ignite = clamp(c.attackTick / Math.max(1, atk.startup), 0, 1);
+        const live = c.attackTick > atk.startup && c.attackTick <= total;
+        const len = (0.35 + ignite * 0.65) * (live ? 1.12 : 1);
+        const hand = r.partWorld('rightArm') ?? { x: c.x, y: c.y };
+        const dz = depthScaleAt(c.y);
+        // Anchor at the hand and project outward so the blade reads as a long
+        // edge rather than a flash at the point of impact.
+        const reach = (atk.muzzleForward * 0.5 + len * 78) * dz;
+        blade.setVisible(true);
+        blade.setPosition(hand.x + Math.cos(c.aim) * reach, hand.y + Math.sin(c.aim) * reach);
+        blade.setRotation(c.aim);
+        blade.setScale(len * 2.9 * dz, (live ? 0.34 : 0.22) * dz);
+        blade.setTint(c.def.tint.glow);
+        blade.setAlpha(live ? 1 : 0.55 + ignite * 0.35);
+        blade.setDepth(depthSortAt(c.y, 30));
+        r.setPartVisible('mainWeapon', false);
+        // Sparks running along the edge while it is live.
+        if (live && Math.random() < 0.7) {
+          const t = Math.random();
+          this.effects.thruster(
+            blade.x + Math.cos(c.aim) * (t - 0.5) * 90,
+            blade.y + Math.sin(c.aim) * (t - 0.5) * 90,
+            c.aim + Math.PI / 2,
+            0.35,
+            c.def.tint.glow,
+          );
+        }
+      } else {
+        blade.setVisible(false);
+        r.setPartVisible('mainWeapon', true);
       }
 
       // Sustained barrier bubble and saturation aura.

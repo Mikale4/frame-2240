@@ -161,6 +161,58 @@ describe('match simulation', () => {
   });
 });
 
+describe('training dummy', () => {
+  it('gets back up instead of ending the session', () => {
+    const s = new MatchSim({
+      playerDef: HALCYON, enemyDef: NOCTURNE, introTicks: 1, dummy: true,
+    });
+    s.step(emptyInput(), emptyInput());
+    s.enemy.life = 0;
+    s.step(emptyInput(), emptyInput());
+
+    expect(s.dummyDowns).toBe(1);
+    expect(s.enemy.alive).toBe(true);
+    expect(s.enemy.life).toBe(NOCTURNE.gauges.maxLife);
+    expect(s.outcome).toBe('none');
+    expect(s.phase).toBe(MatchPhase.Fight);
+  });
+
+  it('respawns at a readable distance, inside the arena', () => {
+    const s = new MatchSim({
+      playerDef: HALCYON, enemyDef: NOCTURNE, introTicks: 1, dummy: true,
+    });
+    s.step(emptyInput(), emptyInput());
+    s.player.x = 200;
+    s.enemy.life = 0;
+    s.step(emptyInput(), emptyInput());
+    const gap = Math.abs(s.enemy.x - s.player.x);
+    expect(gap).toBeGreaterThan(200);
+    expect(s.enemy.x).toBeGreaterThanOrEqual(s.enemy.def.rig.hurtRadius);
+    expect(s.enemy.x).toBeLessThanOrEqual(2400 - s.enemy.def.rig.hurtRadius);
+  });
+
+  it('can be downed repeatedly', () => {
+    const s = new MatchSim({
+      playerDef: HALCYON, enemyDef: NOCTURNE, introTicks: 1, dummy: true,
+    });
+    s.step(emptyInput(), emptyInput());
+    for (let i = 0; i < 5; i++) {
+      s.enemy.life = 0;
+      s.step(emptyInput(), emptyInput());
+    }
+    expect(s.dummyDowns).toBe(5);
+    expect(s.outcome).toBe('none');
+  });
+
+  it('still lets a normal match end', () => {
+    const s = new MatchSim({ playerDef: HALCYON, enemyDef: NOCTURNE, introTicks: 1 });
+    s.step(emptyInput(), emptyInput());
+    s.enemy.life = 0;
+    s.step(emptyInput(), emptyInput());
+    expect(s.outcome).toBe('playerWin');
+  });
+});
+
 describe('projectiles', () => {
   it('does not tunnel through a target at high speed', () => {
     const p = new Projectile();

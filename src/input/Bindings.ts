@@ -10,6 +10,8 @@
  * unit-testable.
  */
 
+import { Btn } from '../combat/types';
+
 export type ActionId =
   | 'up'
   | 'down'
@@ -80,6 +82,26 @@ const CONFLICT_SCOPE: readonly ActionId[] = ACTION_ORDER;
 
 export const MAX_KEYS_PER_ACTION = 2;
 export const MAX_PADS_PER_ACTION = 2;
+
+/**
+ * Simulation button -> bindable action.
+ *
+ * Derived from data rather than hand-written in the input reader: a previous
+ * hand-written version silently omitted one button, so the control existed in
+ * the rebinding UI and did nothing in game. A completeness test over this table
+ * makes that impossible.
+ */
+export const BUTTON_ACTION: Readonly<Record<Btn, ActionId>> = {
+  [Btn.Main]: 'main',
+  [Btn.Heavy]: 'heavy',
+  [Btn.Sub]: 'sub',
+  [Btn.Melee]: 'melee',
+  [Btn.Boost]: 'boost',
+  [Btn.Barrier]: 'barrier',
+  [Btn.ModeCycle]: 'modeCycle',
+  [Btn.Lock]: 'lock',
+  [Btn.Flight]: 'flightToggle',
+};
 
 export const DEFAULT_BINDINGS: BindingMap = {
   up: { keys: ['KeyW', 'ArrowUp'], pads: [12] },

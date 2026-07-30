@@ -160,5 +160,12 @@ export interface MechDef {
   meleeRange: number;
 
   /** Palette used by the procedural fallback renderer and effects tinting. */
-  tint: { primary: number; secondary: number; accent: number; thruster: number };
+  /** `glow` matches the mech's emissive palette entry — beam blade, visor, tubes. */
+  tint: {
+    primary: number;
+    secondary: number;
+    accent: number;
+    thruster: number;
+    glow: number;
+  };
 }

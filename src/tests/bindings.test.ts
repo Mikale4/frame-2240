@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { BTN_COUNT, type Btn } from '../combat/types';
 import {
   ACTION_ORDER,
+  BUTTON_ACTION,
   DEFAULT_BINDINGS,
   MAX_KEYS_PER_ACTION,
   assignKey,
@@ -89,6 +91,46 @@ describe('default bindings', () => {
     b.main.pads.push(9);
     expect(a.main.keys).not.toContain('KeyZ');
     expect(a.main.pads).not.toContain(9);
+  });
+});
+
+describe('button coverage', () => {
+  /**
+   * Regression: Btn.Melee was added to the simulation and to the rebinding UI,
+   * but the input reader's hand-written mapping never got a line for it — so the
+   * control existed everywhere except where it mattered and melee did nothing.
+   * The reader is now driven by BUTTON_ACTION; these tests keep it complete.
+   */
+  it('maps every simulation button to an action', () => {
+    for (let b = 0; b < BTN_COUNT; b++) {
+      const action = BUTTON_ACTION[b as Btn];
+      expect(action, `Btn ${b} has no action mapping`).toBeDefined();
+      expect(ACTION_ORDER).toContain(action);
+    }
+  });
+
+  it('never maps two buttons to the same action', () => {
+    const seen = new Set<string>();
+    for (let b = 0; b < BTN_COUNT; b++) {
+      const a = BUTTON_ACTION[b as Btn];
+      expect(seen.has(a), `${a} mapped twice`).toBe(false);
+      seen.add(a);
+    }
+  });
+
+  it('gives every mapped action a working default', () => {
+    const d = defaultBindings();
+    for (let b = 0; b < BTN_COUNT; b++) {
+      const a = BUTTON_ACTION[b as Btn];
+      expect(d[a].keys.length + d[a].pads.length, `${a} has no default`).toBeGreaterThan(0);
+    }
+  });
+
+  it('binds melee to its own key, separate from the main gun', () => {
+    const d = defaultBindings();
+    expect(d.melee.keys.length).toBeGreaterThan(0);
+    for (const k of d.melee.keys) expect(d.main.keys).not.toContain(k);
+    for (const p of d.melee.pads) expect(d.main.pads).not.toContain(p);
   });
 });
 

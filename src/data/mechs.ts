@@ -402,7 +402,14 @@ export const HALCYON: MechDef = {
   // ~2x the chassis height. The 11-tick startup lunges ~81px and the arc itself
   // reaches 40px, so a swing started here closes and connects.
   meleeRange: 200,
-  tint: { primary: 0x9fd8ef, secondary: 0x2c4a63, accent: 0xffd166, thruster: 0x74d6ff },
+  // Mirrors PALETTES['halcyon'] in tools/blender/build_mechs.py.
+  tint: {
+    primary: 0x1a70db,
+    secondary: 0x0f4390,
+    accent: 0xff5c10,
+    thruster: 0x33e6ff,
+    glow: 0x33e6ff,
+  },
 };
 
 /** --------------------------------------------------------------- AV-13 NOCTURNE */
@@ -463,7 +470,14 @@ export const NOCTURNE: MechDef = {
     homing: 0.062,
   }),
 
-  tint: { primary: 0xe2809b, secondary: 0x3a1f33, accent: 0xffe08a, thruster: 0xff7ad9 },
+  // Mirrors PALETTES['nocturne'] in tools/blender/build_mechs.py.
+  tint: {
+    primary: 0xd12a19,
+    secondary: 0x85170f,
+    accent: 0x1aebdb,
+    thruster: 0xffc72e,
+    glow: 0xffc72e,
+  },
 };
 
 export const MECHS: Record<string, MechDef> = {

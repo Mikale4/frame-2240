@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Btn, emptyInput, type InputFrame } from '../combat/types';
 import { keyState } from './KeyState';
-import { loadBindings, type ActionId, type BindingMap } from './Bindings';
+import { BUTTON_ACTION, loadBindings, type ActionId, type BindingMap } from './Bindings';
 
 /**
  * Turns keyboard and gamepad state into the simulation's `InputFrame`.
@@ -139,14 +139,11 @@ export class InputManager {
       if (on) held |= 1 << b;
     };
 
-    set(Btn.Main, this.active('main', pad));
-    set(Btn.Heavy, this.active('heavy', pad));
-    set(Btn.Sub, this.active('sub', pad));
-    set(Btn.Boost, this.active('boost', pad));
-    set(Btn.Barrier, this.active('barrier', pad));
-    set(Btn.ModeCycle, this.active('modeCycle', pad));
-    set(Btn.Lock, this.active('lock', pad));
-    set(Btn.Flight, this.active('flightToggle', pad));
+    // Driven from the BUTTON_ACTION table so a new button cannot be added to the
+    // simulation and forgotten here.
+    for (const [btn, action] of Object.entries(BUTTON_ACTION)) {
+      set(Number(btn) as Btn, this.active(action, pad));
+    }
 
     f.held = held;
     f.pressed = held & ~this.prevHeld;

@@ -164,6 +164,12 @@ export class MechRenderer {
     }
   }
 
+  /** Hides/shows a single part, e.g. stowing the rifle during a sword swing. */
+  setPartVisible(name: string, visible: boolean): void {
+    const node = this.nodes.get(name);
+    if (node) node.container.setVisible(visible);
+  }
+
   /** World-space position of a part, for spawning muzzle/thruster effects. */
   partWorld(name: string): { x: number; y: number } | null {
     const node = this.nodes.get(name);

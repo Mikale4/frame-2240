@@ -4,6 +4,7 @@ import type { MechDef } from '../mechs/MechDef';
 import { Projectile, ProjectilePool, sweptHit } from '../projectiles/Projectile';
 import { Combatant } from './Combatant';
 import { clampToArena } from './FlightModel';
+import { clamp } from '../core/MathUtil';
 import {
   BarrierResponse,
   MatchPhase,
@@ -26,6 +27,11 @@ export interface MatchConfig {
   introTicks?: number;
   /** Arena floor. Defaults to GROUND_Y. */
   groundY?: number;
+  /**
+   * Training: the rival is a dummy. It takes damage and reacts to hits, but
+   * never acts, and it recovers instead of dying so practice is not interrupted.
+   */
+  dummy?: boolean;
 }
 
 export type MatchOutcome = 'none' | 'playerWin' | 'enemyWin' | 'draw';
@@ -60,12 +66,17 @@ export class MatchSim {
   private readonly arenaH: number;
   private readonly introTicks: number;
   private readonly roundTicks: number;
+  /** True when the rival is a training dummy. */
+  readonly dummy: boolean;
+  /** Counts dummy recoveries, so training can show how many you have downed. */
+  dummyDowns = 0;
 
   constructor(cfg: MatchConfig) {
     this.arenaW = cfg.arenaW ?? ARENA_W;
     this.arenaH = cfg.arenaH ?? ARENA_H;
     this.introTicks = cfg.introTicks ?? 90;
     this.roundTicks = cfg.roundTicks ?? ROUND_TIME_TICKS;
+    this.dummy = cfg.dummy ?? false;
     this.timeLeft = this.roundTicks;
     this.rng = new Rng(cfg.seed ?? 0x5eed1234);
 
@@ -305,6 +316,14 @@ export class MatchSim {
     }
     if (this.phase !== MatchPhase.Fight) return;
 
+    // A downed training dummy gets back up rather than ending the session.
+    if (this.dummy && !this.enemy.alive) {
+      this.dummyDowns++;
+      this.events.push({ t: 'explode', x: this.enemy.x, y: this.enemy.y, big: true });
+      this.reviveDummy();
+      return;
+    }
+
     const pDead = !this.player.alive;
     const eDead = !this.enemy.alive;
 
@@ -334,6 +353,37 @@ export class MatchSim {
       this.phase = MatchPhase.KO;
       this.koTimer = 0;
     }
+  }
+
+  /** Puts a downed training dummy back on its feet, ready for another pass. */
+  private reviveDummy(): void {
+    const e = this.enemy;
+    const g = e.def.gauges;
+    e.life = g.maxLife;
+    e.energy = g.maxEnergy;
+    e.barrier = g.maxBarrier;
+    e.boost = e.def.flight.maxBoost;
+    e.sat = 0;
+    e.satActive = false;
+    e.satTicks = 0;
+    e.hitstun = 0;
+    e.hitstop = 0;
+    e.guardBreakStun = 0;
+    e.invuln = 0;
+    e.attack = null;
+    e.vx = 0;
+    e.vy = 0;
+    e.spin = 0;
+    e.flying = true;
+    e.grounded = false;
+    // Reappear at a readable distance rather than on top of the player.
+    e.x = clamp(
+      this.player.x + (this.player.x < this.arenaW / 2 ? 380 : -380),
+      e.def.rig.hurtRadius,
+      this.arenaW - e.def.rig.hurtRadius,
+    );
+    e.y = this.arenaH * 0.5;
+    this.combo.set(e.id, 0);
   }
 
   /** Live projectiles, for the renderer. */
