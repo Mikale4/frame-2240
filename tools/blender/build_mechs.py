@@ -386,7 +386,7 @@ def _relink(obj, coll):
     coll.objects.link(obj)
 
 
-def add_box(name, size, loc, rot=(0, 0, 0), bevel=0.010, coll=None, mat=None):
+def add_box(name, size, loc, rot=(0, 0, 0), bevel=0.010, coll=None, mat=None, bevel_seg=2):
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc, rotation=rot)
     obj = active()
     obj.name = name
@@ -396,13 +396,60 @@ def add_box(name, size, loc, rot=(0, 0, 0), bevel=0.010, coll=None, mat=None):
     if bevel > 0:
         mod = obj.modifiers.new("bevel", "BEVEL")
         mod.width = bevel
-        mod.segments = 2
+        mod.segments = bevel_seg
         mod.limit_method = "ANGLE"
         mod.angle_limit = math.radians(40)
     _relink(obj, coll)
     if mat is not None:
         obj.data.materials.append(mat)
     return obj
+
+
+def along(base, angle, dist):
+    """Point `dist` down a limb whose axis is rotated `angle` about Y."""
+    return base + Vector((-dist * math.sin(angle), 0, -dist * math.cos(angle)))
+
+
+def bolt_row(prefix, count, start, step, radius, coll, mat, axis="Y"):
+    """A row of rivet heads. Cheap detail that reads well at sprite scale."""
+    rot = (math.radians(90), 0, 0) if axis == "Y" else (0, math.radians(90), 0)
+    out = []
+    for i in range(count):
+        out.append(
+            add_cyl(f"{prefix}{i}", radius, radius * 1.1,
+                    start + step * i, rot, 8, coll=coll, mat=mat)
+        )
+    return out
+
+
+def segmented_limb(prefix, hip, angle, length, width, depth, coll, shell, frame,
+                   segments=3, taper=0.94):
+    """
+    A limb built from stacked armour bands separated by recessed dark gaps.
+
+    The reference limbs are visibly segmented rather than smooth tubes, and that
+    banding is most of what makes them read as machinery at small size.
+
+    The gap is a *narrower* box, not a cylinder: a side-facing disc reads as a
+    hole punched through the limb and turns the leg into a string of beads.
+    """
+    out = []
+    seg_len = length / segments
+    for i in range(segments):
+        d = seg_len * (i + 0.5)
+        w = width * (taper ** i)
+        out.append(
+            add_box(f"{prefix}_seg{i}", (w + 0.02, depth * (taper ** i), seg_len * 0.80),
+                    along(hip, angle, d), (0, angle, 0), coll=coll, mat=shell)
+        )
+        if i < segments - 1:
+            gw = w * 0.86
+            out.append(
+                add_box(f"{prefix}_gap{i}", (gw, depth * (taper ** i) * 0.86, seg_len * 0.22),
+                        along(hip, angle, seg_len * (i + 1)), (0, angle, 0),
+                        bevel=0.006, coll=coll, mat=frame)
+            )
+    return out
 
 
 def add_cyl(name, radius, depth, loc, rot=(0, 0, 0), verts=16, coll=None,
@@ -508,6 +555,16 @@ def build_mech(mech_id, palette_key=None):
     for i, (gx, gz) in enumerate(((0.16, 0.16), (-0.06, 0.17), (-0.20, 0.13))):
         o.append(add_box(f"c_pan{i}", (0.10, hy * 0.6, 0.035),
                          piv + Vector((gx, 0, gz + 0.03)), R, coll=coll, mat=M_FRAME))
+    # Overlapping side plates with a visible step - the dominant reference motif.
+    for i, (px_, pz, pw) in enumerate(((0.20, 0.02, 0.20), (-0.02, -0.02, 0.24), (-0.22, 0.00, 0.18))):
+        o.append(add_box(f"c_plate{i}", (pw, 0.06, hz * 0.62),
+                         piv + Vector((px_, -hy * 0.52, pz)), R,
+                         bevel=0.018, bevel_seg=3, coll=coll, mat=M_SUB))
+    o += bolt_row("c_bolt", 4, piv + Vector((-0.22, -hy * 0.57, hz * 0.30)),
+                  Vector((0.14, 0, -0.03)), 0.014, coll, M_FRAME)
+    # Hydraulic actuator across the waist joint.
+    o.append(add_cyl("c_ram", 0.026, 0.26, piv + Vector((-0.16, -hy * 0.40, -hz * 0.42)),
+                     (0, math.radians(64), 0), 8, coll=coll, mat=M_FRAME))
     if spec["weapon"] == "gatling":
         # The heavy frame carries an ammo hopper feeding the rotary cannon.
         o.append(add_box("c_hopper", (0.26, hy * 0.5, 0.20), piv + Vector((0.10, -hy * 0.42, -0.22)),
@@ -523,6 +580,12 @@ def build_mech(mech_id, palette_key=None):
     o.append(add_box("h_jaw", (0.12, 0.16, 0.06), piv + Vector((0.06, 0, -0.10)), R, coll=coll, mat=M_FRAME))
     o.append(add_cyl("h_ant", 0.008, 0.22, piv + Vector((-0.08, 0.04, 0.19)),
                      (math.radians(14), 0, 0), 8, coll=coll, mat=M_FRAME))
+    # Sensor cluster: a small dish plus twin scopes beside the main optic.
+    o.append(add_cyl("h_dish", 0.045, 0.03, piv + Vector((0.02, -0.11, 0.09)),
+                     (0, math.radians(90), 0), 12, coll=coll, cone_r2=0.028, mat=M_FRAME))
+    for i, dz in enumerate((0.035, -0.035)):
+        o.append(add_cyl(f"h_scope{i}", 0.016, 0.07, piv + Vector((0.11, 0.08, dz)),
+                         (0, math.radians(90), 0), 8, coll=coll, mat=M_ACC))
     parts["head"] = join_as(pn("head"), o, piv, coll)
 
     # ---- backpack: layered dorsal block ----------------------------------
@@ -571,16 +634,18 @@ def build_mech(mech_id, palette_key=None):
         o.append(add_cyl(f"l_hub{side}", lw * 0.66, 0.10, piv + hip,
                          (math.radians(90), 0, 0), 14, coll=coll, mat=M_FRAME))
         tl = LEG["thigh"]
-        tc = hip + Vector((-(tl / 2) * math.sin(THIGH_A), 0, -(tl / 2) * math.cos(THIGH_A)))
-        o.append(add_box(f"l_thigh{side}", (lw + 0.02, lw + 0.01, tl), piv + tc, (0, THIGH_A, 0),
-                         coll=coll, mat=mat_leg))
+        o += segmented_limb(f"l_thigh{side}", piv + hip, THIGH_A, tl, lw, lw + 0.01,
+                            coll, mat_leg, M_FRAME, segments=3)
         knee = hip + Vector((-tl * math.sin(THIGH_A), 0, -tl * math.cos(THIGH_A)))
-        o.append(add_cyl(f"l_knee{side}", lw * 0.6, lw, piv + knee,
+        o.append(add_cyl(f"l_knee{side}", lw * 0.6, lw + 0.03, piv + knee,
                          (math.radians(90), 0, 0), 14, coll=coll, mat=M_FRAME))
+        o.append(add_box(f"l_kneecap{side}", (lw * 0.7, lw * 0.5, lw * 0.7),
+                         piv + along(knee, THIGH_A, -0.02) + Vector((lw * 0.42, 0, 0)),
+                         (0, THIGH_A, 0), coll=coll, mat=M_SUB))
         sl = LEG["shin"]
         sc = knee + Vector((-(sl / 2) * math.sin(SHIN_A), 0, -(sl / 2) * math.cos(SHIN_A)))
-        o.append(add_box(f"l_shin{side}", (lw, lw - 0.01, sl), piv + sc, (0, SHIN_A, 0),
-                         coll=coll, mat=mat_leg))
+        o += segmented_limb(f"l_shin{side}", piv + knee, SHIN_A, sl, lw - 0.01, lw - 0.01,
+                            coll, mat_leg, M_FRAME, segments=3)
         o.append(add_cyl(f"l_pist{side}", 0.028, sl * 0.62,
                          piv + sc + Vector((-lw * 0.72, 0, 0.02)), (0, SHIN_A, 0), 8,
                          coll=coll, mat=M_FRAME))
@@ -609,12 +674,21 @@ def build_mech(mech_id, palette_key=None):
         shell = M_HULL if near else M_FAR
         sgn = -1 if near else 1
         o = []
-        o.append(add_box(f"a_pauld_{key}", (0.28, 0.24, 0.32),
+        # Rounded pauldron: a heavy bevel reads as the curved shoulder shield the
+        # reference frames all carry, rather than a flat slab.
+        o.append(add_box(f"a_pauld_{key}", (0.28, 0.24, 0.34),
                          piv + Vector((-0.02, 0, 0.09)), (0, math.radians(10), 0),
-                         coll=coll, mat=shell))
+                         bevel=0.062, bevel_seg=4, coll=coll, mat=shell))
+        # Overlapping outer plate with a visible step, the reference's signature.
+        o.append(add_box(f"a_plate_{key}", (0.22, 0.09, 0.28),
+                         piv + Vector((0.01, sgn * 0.14, 0.10)), (0, math.radians(10), 0),
+                         bevel=0.03, bevel_seg=3, coll=coll, mat=M_SUB))
         o.append(add_box(f"a_lip_{key}", (0.30, 0.10, 0.10),
-                         piv + Vector((-0.01, sgn * 0.10, 0.23)), (0, math.radians(10), 0),
+                         piv + Vector((-0.01, sgn * 0.10, 0.24)), (0, math.radians(10), 0),
                          coll=coll, mat=M_SUB))
+        o += bolt_row(f"a_bolt_{key}", 3,
+                      piv + Vector((-0.09, sgn * 0.155, 0.20)), Vector((0.09, 0, -0.02)),
+                      0.016, coll, M_FRAME)
         # Disc hub: the roundel that appears on nearly every reference shoulder.
         o.append(add_cyl(f"a_hub_{key}", 0.105, 0.07, piv + Vector((-0.01, sgn * 0.13, 0.09)),
                          (math.radians(90), 0, 0), 18, coll=coll, mat=M_FRAME))
