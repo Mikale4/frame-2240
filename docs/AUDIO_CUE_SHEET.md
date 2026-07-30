@@ -9,11 +9,43 @@ Nothing in the game loads audio files yet. The current sounds are synthesised at
 runtime with WebAudio. When these files exist, the loader gets wired in and the
 procedural fallback stays as a safety net for anything missing.
 
+## Generating with the ElevenLabs MCP
+
+The server is configured in `.mcp.json` at the workspace root and exposes
+`text_to_sound_effects`. Three constraints come straight from that tool and they
+shape everything below:
+
+1. **Duration must be between 0.5 and 5 seconds.** Many cues here are shorter
+   than 0.5 s — `ui_move` wants 0.06 s. Generate those at **0.5 s** and trim the
+   tail in post; the Duration column is the *target after trimming*, not the
+   value to pass.
+2. **`loop: true` is supported**, which is what the two loop beds need. Pass it
+   for `thruster_loop` and `drone_hover` only.
+3. **Output filenames are auto-derived from the prompt text**, so files arrive
+   named after their description, not after the Name column. They have to be
+   renamed to the Name column afterwards — the game loads by name.
+
+Suggested call shape:
+
+```text
+text_to_sound_effects(
+  text: <the prompt from the table>,
+  duration_seconds: max(0.5, <duration>),
+  output_format: "mp3_44100_128",
+  output_directory: "Babel Sword Reignition/assets/audio",
+  loop: <only for the two loop beds>
+)
+```
+
+> **Cost.** Every call is a billed ElevenLabs API request. The full set is 63
+> calls. The priority subset at the bottom is 15.
+
 ## Format
 
-* **WAV 48 kHz mono** preferred (the loader will convert); MP3 or OGG fine.
+* **`mp3_44100_128`** is the right default. `pcm_44100` needs a Pro tier
+  subscription and the game does not need it.
 * **Trim silence** from the head — these are gameplay cues and any leading pad
-  reads as input lag.
+  reads as input lag. Trim the tail down to the target duration too.
 * **Normalise to about −6 dBFS peak**, except where noted. Relative loudness is
   handled in-game, so consistent peaks make mixing predictable.
 * **No reverb tails** on the short combat cues. The game layers many at once and
@@ -24,7 +56,7 @@ procedural fallback stays as a safety net for anything missing.
 
 ## Naming
 
-`assets/audio/<name>.wav`, exactly as in the Name column.
+`assets/audio/<name>.mp3`, exactly as in the Name column.
 
 ---
 
