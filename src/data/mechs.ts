@@ -103,6 +103,11 @@ const HALCYON_FLIGHT: FlightDef = {
   bankRate: 6 * DEG,
   bankMax: 26 * DEG,
   turretRate: 13 * DEG,
+  gravity: 0.52,
+  walkSpeed: 2.6,
+  groundFriction: 0.80,
+  takeoffImpulse: 6.0,
+  groundedBoostRegen: 2.6,
 };
 
 const NOCTURNE_FLIGHT: FlightDef = {
@@ -114,6 +119,10 @@ const NOCTURNE_FLIGHT: FlightDef = {
   dashSpeed: 14.5,
   bankMax: 22 * DEG,
   turretRate: 11 * DEG,
+  // Heavier frame: falls harder, walks slower, takes off less sharply.
+  gravity: 0.62,
+  walkSpeed: 2.2,
+  takeoffImpulse: 5.4,
 };
 
 const BASE_GAUGES: GaugeDef = {
@@ -157,6 +166,8 @@ export const HALCYON: MechDef = {
   flight: HALCYON_FLIGHT,
   gauges: BASE_GAUGES,
   barrier: BASE_BARRIER,
+  // Light frame: takes full damage, braces a little when planted.
+  defence: { mul: 1.0, groundedMul: 0.9 },
   rig: HALCYON_RIG,
 
   main: attack({
@@ -409,6 +420,8 @@ export const NOCTURNE: MechDef = {
   flight: NOCTURNE_FLIGHT,
   gauges: { ...BASE_GAUGES, maxLife: 1000, energyRegen: 2.9 },
   barrier: { ...BASE_BARRIER, cost: 34 },
+  // Heavy frame: thicker armour, and very hard to shift once planted.
+  defence: { mul: 0.82, groundedMul: 0.8 },
   rig: NOCTURNE_RIG,
   // Broader frame reaches slightly further with the claw.
   meleeRange: 210,

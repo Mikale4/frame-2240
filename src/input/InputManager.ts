@@ -146,6 +146,7 @@ export class InputManager {
     set(Btn.Barrier, this.active('barrier', pad));
     set(Btn.ModeCycle, this.active('modeCycle', pad));
     set(Btn.Lock, this.active('lock', pad));
+    set(Btn.Flight, this.active('flightToggle', pad));
 
     f.held = held;
     f.pressed = held & ~this.prevHeld;

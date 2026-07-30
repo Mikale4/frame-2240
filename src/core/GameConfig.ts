@@ -26,3 +26,12 @@ export const ARENA_H = 1200;
 
 /** Match rules. */
 export const ROUND_TIME_TICKS = 99 * TICK_HZ;
+
+/**
+ * Arena floor.
+ *
+ * The 2005 reference is not purely aerial: `var(20)` is a flight flag, statedef
+ * 40 is take-off and 55 is landing, and `howto-en.html` lists FlyingMode ON/OFF
+ * as a player toggle. Machines walk when grounded and fly when airborne.
+ */
+export const GROUND_Y = ARENA_H - 96;

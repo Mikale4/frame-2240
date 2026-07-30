@@ -289,9 +289,9 @@ export class RivalAI {
   private chooseAttack(self: Combatant, dist: number): Btn | null {
     const d = self.def;
 
-    // Melee range: commit to the sword chain.
+    // Melee range: commit to the sword chain on its own button.
     if (dist < d.meleeRange) {
-      return this.rng.chance(0.5 + this.skill * 0.45) ? Btn.Main : null;
+      return this.rng.chance(0.5 + this.skill * 0.45) ? Btn.Melee : null;
     }
 
     const roll = this.rng.next();

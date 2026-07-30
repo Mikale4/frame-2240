@@ -485,6 +485,61 @@ site has to thread it through.
 
 ---
 
+### D28 — Melee gets its own button
+
+**Decision.** `Btn.Melee` is a dedicated, rebindable button (default `U` / pad Y).
+The main gun always shoots, at any range.
+
+**Why.** The reference overloaded its main-gun button and switched on proximity
+(`var(31)`), and we copied that. In play it is worse than it sounds: a swing
+happens *to* you because you drifted into range, the changeover is invisible, and
+the trigger distance becomes a hidden tuning knob that has already caused one bug
+(see D22b). A separate button makes a swing a deliberate commitment, is far
+easier to learn, and is one more thing a player can rebind.
+
+**Consequences.** Melee no longer needs a target or a range check — the authored
+startup lunge is what closes distance, so a swing is available from anywhere and
+simply whiffs if it falls short. `meleeRange` survives as the distance at which
+the *AI* chooses to swing.
+
+---
+
+### D29 — Ground plane and FlyingMode
+
+**Decision.** An arena floor at `GROUND_Y`, plus a FlyingMode toggle. Flight is on
+by default; with it off the mech falls, walks, and rests on the deck.
+
+**Why.** The reference is not purely aerial: `var(20)` is a flight flag, statedef
+40 is take-off and 55 is landing, and `howto-en.html` lists FlyingMode ON/OFF as a
+player toggle with an automatic switch-on during a Level 2 shot. It was one of the
+larger gaps in the audit's function table.
+
+**Balance shape.** Grounded trades mobility for durability: you walk instead of
+fly, but brace better against damage (`DefenceDef.groundedMul`) and refuel boost
+much faster. That keeps the game an aerial fighter — the floor is somewhere you
+choose to visit, not somewhere you get stuck.
+
+**Two bugs this surfaced, both now regression-tested.** Chassis separation could
+shove a landed mech *through* the deck, and the flight step could not correct it
+while the mech was frozen in hitstop — so the floor is now enforced after
+separation. And the walk-speed cap was clamping the melee lunge, silently
+breaking a grounded swing's authored reach; lunging now bypasses the cap.
+
+---
+
+### D30 — Layered defence multipliers
+
+**Decision.** `DefenceDef { mul, groundedMul }` scales incoming damage per
+chassis.
+
+**Why.** The reference layered defence rather than using one flat stat: a base
+`defence = 50` in `cns.cns`, an arcade-mode `DefenceMulSet` in statedef -3, and
+per-tier multipliers selected by `var(30)` (0.55 / 0.85 / 0.65 / 0.75) in statedef
+8000. HALCYON takes full damage; NOCTURNE's heavier armour takes 0.82x, and both
+brace further when planted.
+
+---
+
 ### D23 — Original naming throughout
 
 **Decision.** Mechs **AV-07 HALCYON** and **AV-13 NOCTURNE**; pilots **NAIA

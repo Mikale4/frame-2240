@@ -251,8 +251,10 @@ export class Hud {
           : '#8f7ea8',
     );
 
-    this.lockText.setText(p.lockEnabled ? 'LOCK: ON  [E]' : 'LOCK: FREE AIM  [E]');
-    this.lockText.setColor(p.lockEnabled ? '#9fe0ff' : '#ffb060');
+    this.lockText.setText(
+      `${p.lockEnabled ? 'LOCK: ON' : 'LOCK: FREE AIM'}   ${p.flying ? 'FLIGHT: ON' : p.grounded ? 'FLIGHT: OFF (LANDED)' : 'FLIGHT: OFF'}`,
+    );
+    this.lockText.setColor(p.flying ? (p.lockEnabled ? '#9fe0ff' : '#ffb060') : '#8effc0');
 
     // Sub-weapon pips.
     for (let side = 0; side < 2; side++) {

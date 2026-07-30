@@ -21,6 +21,16 @@ export interface FlightState {
 export interface FlightIntent {
   dx: number;
   dy: number;
+  /** False when FlyingMode is off: gravity applies and movement is walking. */
+  flying?: boolean;
+  /** Arena floor, used only when `flying` is false. */
+  groundY?: number;
+  /**
+   * True while a melee lunge is driving the velocity. The walk cap must not
+   * apply then, or a grounded sword swing barely moves and the attack's
+   * authored reach silently stops working on the deck.
+   */
+  lunging?: boolean;
   /** Boost button held. With a direction this boosts; with none it air-brakes. */
   boost: boolean;
   /** A dash was requested this tick (tap + direction, or a double-tap). */
@@ -38,6 +48,10 @@ export interface FlightResult {
   boosting: boolean;
   /** True while air-braking. */
   braking: boolean;
+  /** True while resting on the floor with FlyingMode off. */
+  grounded: boolean;
+  /** True on the tick the mech touched down. */
+  landed: boolean;
 }
 
 /**
@@ -55,9 +69,52 @@ export function stepFlight(
   def: FlightDef,
   intent: FlightIntent,
 ): FlightResult {
-  const result: FlightResult = { dashStarted: false, boosting: false, braking: false };
+  const result: FlightResult = {
+    dashStarted: false,
+    boosting: false,
+    braking: false,
+    grounded: false,
+    landed: false,
+  };
 
   if (s.dashCooldown > 0) s.dashCooldown--;
+
+  // ---- grounded mode (FlyingMode off) -----------------------------------
+  // The reference is not purely aerial: with the flight flag clear a machine
+  // walks and is pulled down. Dash and boost stay available so ground movement
+  // is not a dead end.
+  if (intent.flying === false) {
+    const groundY = intent.groundY ?? Infinity;
+    const wasAirborne = s.y < groundY - 0.5;
+
+    if (!intent.lunging) {
+      s.vx += Math.sign(intent.dx) * def.accel;
+      const cap = def.walkSpeed * intent.speedScale;
+      if (Math.abs(s.vx) > cap) s.vx = Math.sign(s.vx) * cap;
+      if (intent.dx === 0) s.vx *= def.groundFriction;
+    }
+
+    s.vy += def.gravity;
+    s.x += s.vx;
+    s.y += s.vy;
+
+    if (s.y >= groundY) {
+      s.y = groundY;
+      if (s.vy > 0) s.vy = 0;
+      result.grounded = true;
+      result.landed = wasAirborne;
+      // Resting on the deck refuels the boost tank faster.
+      s.boostRegenTimer = 0;
+      s.boost = Math.min(def.maxBoost, s.boost + def.boostRegen * def.groundedBoostRegen);
+    } else if (s.boostRegenTimer > 0) {
+      s.boostRegenTimer--;
+    } else if (s.boost < def.maxBoost) {
+      s.boost = Math.min(def.maxBoost, s.boost + def.boostRegen);
+    }
+
+    if (Math.abs(s.vx) < 0.004) s.vx = 0;
+    return result;
+  }
 
   const hasDir = intent.dx !== 0 || intent.dy !== 0;
   // Normalise so diagonals are not faster (the reference divided by 1.414).

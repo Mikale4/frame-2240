@@ -91,6 +91,7 @@ export class DebugOverlay {
       `  stop ${c.hitstop} stun ${c.hitstun} inv ${c.invuln} gbrk ${c.guardBreakStun}`,
       `  dash ${c.dashTicks}/${c.dashCooldown} melee ${c.meleeCount}${c.meleeHitConfirmed ? ' CONFIRM' : ''}${c.meleeChainQueued ? ' QUEUED' : ''}`,
       `  sub ${c.subCharges}/${c.def.subCharges} lock ${c.lockEnabled ? 'on' : 'off'}`,
+      `  flight ${c.flying ? 'ON' : 'OFF'}${c.grounded ? ' GROUNDED' : ''} floor ${c.groundY.toFixed(0)}`,
     ].join('\n');
   }
 
@@ -137,6 +138,13 @@ export class DebugOverlay {
         const my = p.y + Math.sin(c.aim) * a.muzzleForward;
         g.strokeCircle(mx, my, a.projRadius);
         g.lineBetween(p.x, p.y, mx, my);
+      }
+
+      // Arena floor.
+      if (Number.isFinite(c.groundY)) {
+        g.lineStyle(1, 0x88ffaa, c.grounded ? 0.6 : 0.22);
+        const fy = toScreen(c.x, c.groundY).y;
+        g.lineBetween(p.x - 220, fy, p.x + 220, fy);
       }
 
       // Aim ray.

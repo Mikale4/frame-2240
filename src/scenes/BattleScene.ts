@@ -365,6 +365,22 @@ export class BattleScene extends Phaser.Scene {
           sfx.explode(ev.big);
           this.shake = Math.max(this.shake, ev.big ? 16 : 5);
           break;
+        case 'takeoff': {
+          const c = this.byId(ev.id);
+          this.effects.dash(ev.x, ev.y + 24, Math.PI / 2, c?.def.tint.thruster ?? 0x74d6ff);
+          sfx.dash();
+          break;
+        }
+        case 'land': {
+          const c = this.byId(ev.id);
+          // Dust kicked sideways along the deck.
+          for (const dir of [0, Math.PI]) {
+            this.effects.thruster(ev.x, ev.y + 20, dir, 0.8, c?.def.tint.accent ?? 0xffd166);
+          }
+          this.effects.guard(ev.x, ev.y + 22, 0xbfa88a);
+          this.shake = Math.max(this.shake, 2.4);
+          break;
+        }
         case 'ko':
           sfx.ko();
           this.hud.banner('K.O.', 110);

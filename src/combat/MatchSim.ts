@@ -1,4 +1,4 @@
-import { ARENA_H, ARENA_W, ROUND_TIME_TICKS, TICK_HZ } from '../core/GameConfig';
+import { ARENA_H, ARENA_W, GROUND_Y, ROUND_TIME_TICKS, TICK_HZ } from '../core/GameConfig';
 import { Rng } from '../core/Rng';
 import type { MechDef } from '../mechs/MechDef';
 import { Projectile, ProjectilePool, sweptHit } from '../projectiles/Projectile';
@@ -24,6 +24,8 @@ export interface MatchConfig {
   arenaH?: number;
   /** Intro ticks before control unlocks (the "FIGHT" banner). */
   introTicks?: number;
+  /** Arena floor. Defaults to GROUND_Y. */
+  groundY?: number;
 }
 
 export type MatchOutcome = 'none' | 'playerWin' | 'enemyWin' | 'draw';
@@ -84,6 +86,13 @@ export class MatchSim {
       facing: -1,
     });
     this.combatants = [this.player, this.enemy];
+
+    // Floor sits a chassis-radius above the arena bottom so a landed mech rests
+    // on the deck rather than clipping into it.
+    const floor = cfg.groundY ?? GROUND_Y;
+    for (const c of this.combatants) {
+      c.groundY = Math.min(floor, this.arenaH - c.def.rig.hurtRadius);
+    }
   }
 
   opponentOf(c: Combatant): Combatant {
@@ -269,6 +278,23 @@ export class MatchSim {
     // Separation can shove a mech through the arena wall, so re-clamp after.
     clampToArena(a, a.def.rig.hurtRadius, this.arenaW, this.arenaH, 0);
     clampToArena(b, b.def.rig.hurtRadius, this.arenaW, this.arenaH, 0);
+    this.enforceFloor();
+  }
+
+  /**
+   * Re-applies the arena floor to grounded mechs.
+   *
+   * Separation (and any other post-motion nudge) can push a landed mech below
+   * the deck. The flight step would normally correct it on the next tick, but
+   * not while the mech is frozen in hitstop — so it has to be enforced here.
+   */
+  private enforceFloor(): void {
+    for (const c of this.combatants) {
+      if (!c.flying && c.y > c.groundY) {
+        c.y = c.groundY;
+        if (c.vy > 0) c.vy = 0;
+      }
+    }
   }
 
   private checkEnd(): void {

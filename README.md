@@ -82,15 +82,23 @@ or unplugged mid-match.
 
 | Action | Keyboard | Gamepad |
 | --- | --- | --- |
-| Main gun — **melee at close range** | `J` | `A` |
-| Heavy shot | `K` | `X` or `Y` |
+| Main gun | `J` | `A` |
+| **Sword / melee** | `U` | `Y` |
+| Heavy shot | `K` | `X` |
 | Sub weapon (homing missiles) | `L` | `B` |
+| Flight mode on/off | `C` | R-stick click |
 | Scatter shot | `↓`, `→` + `J` | same motion |
 | Lance beam | `↓`, `←` + `K` | same motion |
 | Missile salvo | `↓`, `→` + `L` | same motion |
 
-Hold the main gun or heavy button to auto-fire. The main gun becomes a **sword
-attack** automatically when you are close enough.
+Hold the main gun button to auto-fire. **Melee has its own button** — a swing is
+always a deliberate commitment, and it lunges forward, so it stays useful from
+outside contact range rather than only firing when you happen to be close.
+
+**Flight mode.** You start airborne. Toggling flight off drops you to the deck,
+where you walk instead of fly, brace better against damage, and refuel boost
+faster — but you give up free movement. Taking off kicks you upward, and a heavy
+shot takes off automatically.
 
 ### Defence and meter
 

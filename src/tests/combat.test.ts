@@ -138,45 +138,36 @@ describe('melee chain', () => {
     return { a, b, k: ctx() };
   }
 
-  it('uses melee instead of the gun when the target is close', () => {
+  it('swings on the dedicated melee button', () => {
     const { a, b, k } = meleePair();
-    a.step(press(Btn.Main), b, W, H, k.spawns, k.events);
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
     expect(a.attack?.kind).toBe(ProjKind.Melee);
     expect(a.attack?.meleeStage).toBe(0);
   });
 
-  it('uses the gun when the target is far', () => {
-    const a = make(HALCYON, 500, 600, 0, Team.Player);
-    const b = make(NOCTURNE, 1400, 600, 1, Team.Enemy);
-    const k = ctx();
+  it('always fires the gun on the main button, even point blank', () => {
+    const { a, b, k } = meleePair();
     a.step(press(Btn.Main), b, W, H, k.spawns, k.events);
     expect(a.attack?.kind).toBe(ProjKind.Bullet);
   });
 
   /**
-   * Regression: the trigger range used to be derived from the hit radius, which
-   * made it 92px — narrower than the 96px-tall chassis. Visually touching mechs
-   * still fired the gun. It is now an explicit, generous per-mech value that the
-   * startup lunge closes.
+   * Melee is now a deliberate button rather than a proximity switch, so a swing
+   * must be available at any range - the startup lunge is what closes distance.
    */
-  it('switches to melee well before the chassis visually overlap', () => {
-    expect(HALCYON.meleeRange).toBeGreaterThanOrEqual(HALCYON.rig.chassisHeight * 1.5);
-
-    const swingsAt = (dist: number) => {
+  it('swings at any range, with no target required', () => {
+    for (const dist of [40, 120, 260, 800]) {
       const a = make(HALCYON, 1000, 600, 0, Team.Player);
       const b = make(NOCTURNE, 1000 + dist, 600, 1, Team.Enemy);
       const k = ctx();
-      a.step(press(Btn.Main), b, W, H, k.spawns, k.events);
-      return a.attack?.kind;
-    };
-
-    // Inside the range: sword. Just outside: gun.
-    expect(swingsAt(HALCYON.meleeRange - 10)).toBe(ProjKind.Melee);
-    expect(swingsAt(HALCYON.meleeRange + 10)).toBe(ProjKind.Bullet);
-    // The distances a player reads as "adjacent" must all swing.
-    for (const d of [60, 100, 140, 180]) {
-      expect(swingsAt(d)).toBe(ProjKind.Melee);
+      a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
+      expect(a.attack?.kind).toBe(ProjKind.Melee);
     }
+    // Even with no opponent at all.
+    const lone = make();
+    const k2 = ctx();
+    lone.step(press(Btn.Melee), null, W, H, k2.spawns, k2.events);
+    expect(lone.attack?.kind).toBe(ProjKind.Melee);
   });
 
   it('lunges far enough to cover the trigger range', () => {
@@ -189,9 +180,9 @@ describe('melee chain', () => {
   it('refuses to chain when the first stage whiffed', () => {
     const { a, b, k } = meleePair();
     const stage0 = HALCYON.melee[0];
-    a.step(press(Btn.Main), b, W, H, k.spawns, k.events);
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
     // Buffer a chain input inside the window but never confirm a hit.
-    run(a, press(Btn.Main), stage0.chainTo! - 1, b, k);
+    run(a, press(Btn.Melee), stage0.chainTo! - 1, b, k);
     expect(a.meleeChainQueued).toBe(true);
     run(a, emptyInput(), ATTACK_TOTAL(stage0) + 2, b, k);
     expect(a.attack).toBeNull();
@@ -201,11 +192,11 @@ describe('melee chain', () => {
   it('chains to stage two once the hit is confirmed', () => {
     const { a, b, k } = meleePair();
     const stage0 = HALCYON.melee[0];
-    a.step(press(Btn.Main), b, W, H, k.spawns, k.events);
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
     // Advance into the authored chain window before buffering the follow-up.
     run(a, emptyInput(), stage0.chainFrom!, b, k);
     a.confirmHit();
-    run(a, press(Btn.Main), 2, b, k);
+    run(a, press(Btn.Melee), 2, b, k);
     expect(a.meleeChainQueued).toBe(true);
     run(a, emptyInput(), ATTACK_TOTAL(stage0) + 2, b, k);
     expect(a.attack?.meleeStage).toBe(1);

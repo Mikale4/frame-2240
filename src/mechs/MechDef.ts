@@ -31,6 +31,17 @@ export interface FlightDef {
   bankMax: number;
   /** Radians per tick the weapon mounts slew toward the aim angle. */
   turretRate: number;
+
+  /** Downward acceleration applied while FlyingMode is off. */
+  gravity: number;
+  /** Horizontal speed cap while walking on the ground. */
+  walkSpeed: number;
+  /** Per-tick velocity multiplier applied by ground contact. */
+  groundFriction: number;
+  /** Upward impulse when taking off from the ground. */
+  takeoffImpulse: number;
+  /** Boost regen multiplier while grounded — resting refuels faster. */
+  groundedBoostRegen: number;
 }
 
 export interface GaugeDef {
@@ -70,6 +81,20 @@ export interface BarrierDef {
   radius: number;
 }
 
+/**
+ * Layered defence, mirroring the reference's `DefenceMulSet` tiers.
+ *
+ * 2005 selected a multiplier from `var(30)` (0.55 / 0.85 / 0.65 / 0.75) on top of
+ * the base `defence` stat, so incoming damage was scaled per chassis rather than
+ * being a single flat number.
+ */
+export interface DefenceDef {
+  /** Multiplier applied to all incoming damage. Lower = tougher. */
+  mul: number;
+  /** Extra multiplier while grounded — planted frames brace better. */
+  groundedMul: number;
+}
+
 /** One renderable part of the mech, mirroring the reference's helper-per-part build. */
 export interface RigPart {
   name: string;
@@ -106,6 +131,7 @@ export interface MechDef {
   flight: FlightDef;
   gauges: GaugeDef;
   barrier: BarrierDef;
+  defence: DefenceDef;
   rig: MechRigDef;
 
   main: AttackDef;

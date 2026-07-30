@@ -104,12 +104,23 @@ export class Combatant implements FlightState {
   subRecharge = 0;
 
   lockEnabled = true;
+  /**
+   * FlyingMode. The reference kept this as `var(20)` with a player toggle and an
+   * automatic switch-on during a Level 2 shot. Default on: this is an aerial
+   * fighter first, and the floor is a place you choose to visit.
+   */
+  flying = true;
+  /** True while resting on the arena floor. */
+  grounded = false;
   /** Thruster intensity 0..1, for the renderer. */
   thrust = 0;
   /** Set for one tick when a shot is fired, for muzzle flashes. */
   firedThisTick: ProjKind | null = null;
   /** Set by stepMotion when a dash begins, consumed by step() to emit an event. */
   private dashStartedThisTick = false;
+  private landedThisTick = false;
+  /** Arena floor for this combatant; set by MatchSim. */
+  groundY = Infinity;
 
   readonly cmd = new CommandBuffer();
 
@@ -233,6 +244,10 @@ export class Combatant implements FlightState {
     }
 
     this.stepMotion(input);
+    if (this.landedThisTick) {
+      this.landedThisTick = false;
+      events.push({ t: 'land', x: this.x, y: this.y, id: this.id });
+    }
     if (this.dashStartedThisTick) {
       this.dashStartedThisTick = false;
       events.push({
@@ -365,6 +380,16 @@ export class Combatant implements FlightState {
 
     if (isPressed(input, Btn.Lock)) this.lockEnabled = !this.lockEnabled;
 
+    // FlyingMode toggle. Taking off gives an upward kick so lift-off reads.
+    if (isPressed(input, Btn.Flight)) {
+      this.flying = !this.flying;
+      if (this.flying) {
+        this.vy -= this.def.flight.takeoffImpulse;
+        this.grounded = false;
+        events.push({ t: 'takeoff', x: this.x, y: this.y, id: this.id });
+      }
+    }
+
     // Saturation activation: Main + Heavy together on a full meter.
     if (
       !this.satActive &&
@@ -411,22 +436,33 @@ export class Combatant implements FlightState {
       return;
     }
 
-    // Heavy shot.
+    // Heavy shot. The reference switched FlyingMode on automatically for its
+    // Level 2 shot, so a heavy commitment always happens airborne.
     if (isPressed(input, Btn.Heavy) && this.energy >= d.heavy.energyCost) {
+      if (!this.flying) {
+        this.flying = true;
+        this.vy -= this.def.flight.takeoffImpulse * 0.6;
+        this.grounded = false;
+        events.push({ t: 'takeoff', x: this.x, y: this.y, id: this.id });
+      }
       this.begin(d.heavy);
       return;
     }
 
-    // Main button: melee when the target is close, otherwise the main gun.
-    // The reference bound both to the same button and switched on proximity.
-    const mainDown = isPressed(input, Btn.Main) || (isHeld(input, Btn.Main) && this.autoFireReady());
-    if (mainDown) {
-      if (target && target.alive && this.meleeInRange(target)) {
-        this.beginMelee(events);
-      } else if (this.energy >= d.main.energyCost) {
-        this.begin(d.main);
-      }
+    // Melee has its own button: a swing is always a deliberate commitment, never
+    // something that happens because you drifted into range. It lunges toward
+    // the aim, so it stays useful from outside contact distance.
+    if (isPressed(input, Btn.Melee)) {
+      this.beginMelee(events);
+      return;
     }
+
+    // Main gun, with hold-to-autofire as the reference offered.
+    const mainDown = isPressed(input, Btn.Main) || (isHeld(input, Btn.Main) && this.autoFireReady());
+    if (mainDown && this.energy >= d.main.energyCost) {
+      this.begin(d.main);
+    }
+    void target;
   }
 
   private autoFireTimer = 0;
@@ -544,7 +580,7 @@ export class Combatant implements FlightState {
       a.chainTo !== undefined &&
       this.attackTick >= a.chainFrom &&
       this.attackTick <= a.chainTo &&
-      isPressed(input, Btn.Main)
+      isPressed(input, Btn.Melee)
     ) {
       this.meleeChainQueued = true;
     }
@@ -640,10 +676,15 @@ export class Combatant implements FlightState {
       dash: !locked && !a && isPressed(input, Btn.Boost),
       speedScale: this.satSpeedScale,
       moveScale: a && a.kind !== ProjKind.Melee ? moveScaleFor(a.kind) : 1,
+      flying: this.flying,
+      groundY: this.groundY,
+      lunging: !!(a && a.lunge && this.attackTick <= a.startup + a.active),
     };
 
     const r = stepFlight(this, this.def.flight, intent);
     if (r.dashStarted) this.dashStartedThisTick = true;
+    this.grounded = r.grounded;
+    if (r.landed) this.landedThisTick = true;
     this.thrust = clamp(
       r.boosting ? 1 : r.braking ? 0.25 : Math.hypot(intent.dx, intent.dy) * 0.7,
       0,
@@ -691,9 +732,13 @@ export class Combatant implements FlightState {
       return 'ignored';
     }
 
+    // Layered defence, mirroring the reference's DefenceMulSet tiers.
+    const def = this.def.defence;
+    const dmg = p.damage * def.mul * (this.grounded ? def.groundedMul : 1);
+
     if (this.guarding && !piercing) {
       const b = this.def.barrier;
-      this.life -= p.damage * b.guardScale;
+      this.life -= dmg * b.guardScale;
       this.barrier = Math.max(0, this.barrier - p.guardDamage * 0.5);
       this.barrierRegenTimer = this.def.gauges.barrierRegenDelay;
       this.hitstop = Math.max(this.hitstop, Math.floor(p.hitstop * 0.6));
@@ -709,7 +754,7 @@ export class Combatant implements FlightState {
       return 'guarded';
     }
 
-    this.life = Math.max(0, this.life - p.damage);
+    this.life = Math.max(0, this.life - dmg);
     this.hitstop = Math.max(this.hitstop, p.hitstop);
     this.hitstun = Math.max(this.hitstun, p.hitstun);
     this.attack = null;

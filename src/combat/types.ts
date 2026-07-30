@@ -8,8 +8,16 @@ export const enum Btn {
   Barrier = 4,
   ModeCycle = 5,
   Lock = 6,
+  /** Toggles FlyingMode, as the reference's direction+A did. */
+  Flight = 7,
+  /**
+   * Dedicated melee. The reference overloaded its main-gun button and switched
+   * on proximity; a separate button is clearer to learn and to bind, and lets a
+   * player commit to a swing deliberately rather than having one happen.
+   */
+  Melee = 8,
 }
-export const BTN_COUNT = 7;
+export const BTN_COUNT = 9;
 
 /** One tick of player intent. `dx`/`dy` are in [-1, 1] (already 8-way snapped). */
 export interface InputFrame {
@@ -121,7 +129,9 @@ export type SimEvent =
   | { t: 'explode'; x: number; y: number; big: boolean }
   | { t: 'saturation'; id: number; mode: SatMode }
   | { t: 'modeCycle'; id: number; mode: SatMode }
-  | { t: 'ko'; id: number };
+  | { t: 'ko'; id: number }
+  | { t: 'takeoff'; x: number; y: number; id: number }
+  | { t: 'land'; x: number; y: number; id: number };
 
 export const enum MatchPhase {
   Intro = 0,

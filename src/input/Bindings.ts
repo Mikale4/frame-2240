@@ -18,10 +18,12 @@ export type ActionId =
   | 'main'
   | 'heavy'
   | 'sub'
+  | 'melee'
   | 'boost'
   | 'barrier'
   | 'modeCycle'
   | 'lock'
+  | 'flightToggle'
   | 'pause'
   | 'debugText'
   | 'debugHitboxes';
@@ -43,10 +45,12 @@ export const ACTION_ORDER: readonly ActionId[] = [
   'main',
   'heavy',
   'sub',
+  'melee',
   'boost',
   'barrier',
   'modeCycle',
   'lock',
+  'flightToggle',
   'pause',
   'debugText',
   'debugHitboxes',
@@ -57,13 +61,15 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   down: 'FLY DOWN',
   left: 'FLY LEFT',
   right: 'FLY RIGHT',
-  main: 'MAIN GUN / SWORD',
+  main: 'MAIN GUN',
   heavy: 'HEAVY SHOT',
   sub: 'SUB WEAPON',
+  melee: 'SWORD / MELEE',
   boost: 'BOOST / DASH / BRAKE',
   barrier: 'BARRIER / GUARD',
   modeCycle: 'CYCLE SAT MODE',
   lock: 'TOGGLE SOFT-LOCK',
+  flightToggle: 'FLIGHT MODE ON/OFF',
   pause: 'PAUSE',
   debugText: 'DEBUG READOUT',
   debugHitboxes: 'HITBOX VIEW',
@@ -81,12 +87,14 @@ export const DEFAULT_BINDINGS: BindingMap = {
   left: { keys: ['KeyA', 'ArrowLeft'], pads: [14] },
   right: { keys: ['KeyD', 'ArrowRight'], pads: [15] },
   main: { keys: ['KeyJ'], pads: [0] },
-  heavy: { keys: ['KeyK'], pads: [2, 3] },
+  heavy: { keys: ['KeyK'], pads: [2] },
   sub: { keys: ['KeyL'], pads: [1] },
+  melee: { keys: ['KeyU'], pads: [3] },
   boost: { keys: ['ShiftLeft', 'Space'], pads: [5, 7] },
   barrier: { keys: ['KeyF'], pads: [4, 6] },
   modeCycle: { keys: ['KeyQ', 'Tab'], pads: [8] },
   lock: { keys: ['KeyE'], pads: [10] },
+  flightToggle: { keys: ['KeyC'], pads: [11] },
   pause: { keys: ['Escape', 'KeyP'], pads: [9] },
   debugText: { keys: ['F1'], pads: [] },
   debugHitboxes: { keys: ['F2'], pads: [] },
