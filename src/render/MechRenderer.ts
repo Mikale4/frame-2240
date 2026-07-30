@@ -3,6 +3,7 @@ import type { Combatant } from '../combat/Combatant';
 import type { MechDef, RigPart } from '../mechs/MechDef';
 import { ActState, ProjKind } from '../combat/types';
 import { DEG, clamp, wrapAngle } from '../core/MathUtil';
+import { depthScaleAt, depthSortAt } from '../core/Depth';
 
 /** Blender renders parts at 2x the logical size; display them at half scale. */
 export const PART_SCALE = 0.5;
@@ -31,6 +32,8 @@ export class MechRenderer {
   private readonly def: MechDef;
   private flashTimer = 0;
   private hitFlash = 0;
+  /** Layer base; the y term in depthSortAt orders mechs within the layer. */
+  private depthBase = 20;
 
   constructor(scene: Phaser.Scene, def: MechDef, mechId: string) {
     this.def = def;
@@ -85,8 +88,13 @@ export class MechRenderer {
     this.root.setPosition(screenX, screenY);
     this.root.setVisible(c.alive || c.act === ActState.Dead);
 
+    // Pseudo-3D: machines higher in the arena read as further away. Presentation
+    // only - collision is deliberately depth-independent (see core/Depth.ts).
+    const depth = depthScaleAt(c.y);
     const facing = c.facing;
-    this.root.scaleX = facing;
+    this.root.scaleX = facing * depth;
+    this.root.scaleY = depth;
+    this.root.setDepth(depthSortAt(c.y, this.depthBase));
 
     // Mirroring the root negates rotations, so convert world angles into the
     // container's local space.
@@ -164,7 +172,9 @@ export class MechRenderer {
     return { x: m.tx, y: m.ty };
   }
 
+  /** Sets the layer base; sync() adds the per-frame y ordering on top. */
   setDepth(d: number): void {
+    this.depthBase = d;
     this.root.setDepth(d);
   }
 

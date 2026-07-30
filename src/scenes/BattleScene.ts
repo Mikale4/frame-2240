@@ -17,6 +17,7 @@ import { sfx } from '../audio/Sfx';
 import { MatchPhase, ProjKind, emptyInput, type InputFrame } from '../combat/types';
 import type { Combatant } from '../combat/Combatant';
 import { clamp } from '../core/MathUtil';
+import { depthScaleAt, depthSortAt } from '../core/Depth';
 
 /** Visual style per projectile kind. */
 const PROJ_STYLE: Record<number, { tex: string; scale: number; yMul: number; trail: number }> = {
@@ -456,9 +457,12 @@ export class BattleScene extends Phaser.Scene {
       img.setPosition(pr.x, pr.y);
       img.setRotation(pr.angle);
       const fade = pr.kind === ProjKind.Beam ? clamp(pr.life / 12, 0.15, 1) : 1;
-      img.setScale(style.scale, style.scale * style.yMul);
+      // Shots take the same depth scale as the mechs so they sit in the world.
+      const d = depthScaleAt(pr.y);
+      img.setScale(style.scale * d, style.scale * style.yMul * d);
       img.setAlpha(fade);
       img.setTint(tint);
+      img.setDepth(depthSortAt(pr.y, 40));
 
       // Trails: missiles smoke, everything else leaves a brief streak.
       if (style.trail > 0 && Math.random() < style.trail) {

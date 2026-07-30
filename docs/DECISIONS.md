@@ -457,6 +457,34 @@ fired the main gun in the running match.
 
 ---
 
+### D27 — Pseudo-3D depth scaling is presentation only
+
+**Decision.** Sprite scale is driven by arena Y — 0.82 at the top, 1.22 at the
+bottom — and render order sorts lower objects in front. Mechs, projectiles and
+effects all share the transform. Collision does **not** scale.
+
+**Why.** Ported from the 2005 reference, which kept
+
+```
+fvar(35) = (ScreenPos Y + 25) / 240.0 * 0.4 + 0.8
+```
+
+a ~1.5x span over its 240px field. It is most of why the reference arenas read as
+having depth rather than being a flat side-view plane.
+
+**Why collision stays flat.** The reference applied that factor to the drawing
+scale of its part helpers, so keeping it visual is the faithful reading. It is
+also the better design: altitude never changes how big a target you are, the
+arena-containment guarantees in the test suite stay provable, and the simulation
+stays trivially deterministic. Pinned by a test asserting identical dynamics for
+the same inputs run at two very different altitudes.
+
+**Placement.** `core/Depth.ts` is shared by the renderer and the effects layer,
+and `Effects.emit` applies it automatically from the particle's own Y so no call
+site has to thread it through.
+
+---
+
 ### D23 — Original naming throughout
 
 **Decision.** Mechs **AV-07 HALCYON** and **AV-13 NOCTURNE**; pilots **NAIA

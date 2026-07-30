@@ -229,8 +229,11 @@ export class Hud {
     this.gaugesFor('p', p, dt);
     this.gaugesFor('e', e, dt);
 
-    this.timerText.setText(String(s.secondsLeft).padStart(2, '0'));
-    this.timerText.setColor(s.secondsLeft <= 10 ? '#ff6a6a' : '#eaf2ff');
+    // Training runs on an effectively unlimited clock; a 3-digit countdown there
+    // is just noise, so show a dash instead.
+    const unlimited = s.secondsLeft > 199;
+    this.timerText.setText(unlimited ? '--' : String(s.secondsLeft).padStart(2, '0'));
+    this.timerText.setColor(!unlimited && s.secondsLeft <= 10 ? '#ff6a6a' : '#eaf2ff');
 
     const modeName = SAT_MODE_NAMES[p.satMode];
     this.satModeText.setText(

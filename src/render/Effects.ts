@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { TEX } from './Textures';
 import { ProjKind } from '../combat/types';
+import { depthScaleAt } from '../core/Depth';
 
 interface Particle {
   img: Phaser.GameObjects.Image;
@@ -81,15 +82,18 @@ export class Effects {
   }): void {
     const p = this.take();
     if (!p) return;
+    // Effects live in arena space alongside the mechs, so they take the same
+    // pseudo-3D depth scale automatically rather than every call site passing it.
+    const d = depthScaleAt(opts.y);
     p.active = true;
     p.life = opts.life;
     p.maxLife = opts.life;
-    p.vx = opts.vx ?? 0;
-    p.vy = opts.vy ?? 0;
+    p.vx = (opts.vx ?? 0) * d;
+    p.vy = (opts.vy ?? 0) * d;
     p.drag = opts.drag ?? 0.94;
     p.spin = opts.spin ?? 0;
-    p.scaleFrom = opts.scaleFrom;
-    p.scaleTo = opts.scaleTo ?? 0;
+    p.scaleFrom = opts.scaleFrom * d;
+    p.scaleTo = (opts.scaleTo ?? 0) * d;
     p.alphaFrom = opts.alpha ?? 1;
     p.fadePow = opts.fadePow ?? 1;
 
@@ -98,7 +102,7 @@ export class Effects {
     img.setPosition(opts.x, opts.y);
     img.setTint(opts.tint);
     img.setRotation(opts.rotation ?? 0);
-    img.setScale(opts.scaleFrom, opts.scaleFrom * (opts.scaleYMul ?? 1));
+    img.setScale(p.scaleFrom, p.scaleFrom * (opts.scaleYMul ?? 1));
     img.setAlpha(p.alphaFrom);
     img.setBlendMode(opts.blend ?? Phaser.BlendModes.ADD);
     img.setVisible(true);
