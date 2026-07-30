@@ -163,6 +163,12 @@ export class Sfx {
     this.tone({ type: 'square', from: 320, to: 190, dur: 0.13, gain: 0.09 });
   }
 
+  /** A status element takes hold: a short unsettled warble. */
+  status(): void {
+    this.tone({ type: 'sawtooth', from: 240, to: 620, dur: 0.20, gain: 0.10 });
+    this.burst({ dur: 0.18, gain: 0.06, freq: 1800, sweepTo: 700, q: 2.2 });
+  }
+
   melee(stage: number): void {
     const base = 700 + stage * 260;
     this.tone({ type: 'sawtooth', from: base, to: base * 0.35, dur: 0.13, gain: 0.16 });

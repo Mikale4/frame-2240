@@ -16,6 +16,7 @@ import { Menu, makeScrim, bigTitle, smallText } from '../ui/Menu';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { sfx } from '../audio/Sfx';
 import { MatchPhase, ProjKind, emptyInput, type InputFrame } from '../combat/types';
+import { ELEMENTS, type Element } from '../combat/Status';
 import type { Combatant } from '../combat/Combatant';
 import { clamp, wrapAngle } from '../core/MathUtil';
 import { depthScaleAt, depthSortAt } from '../core/Depth';
@@ -401,6 +402,15 @@ export class BattleScene extends Phaser.Scene {
           this.effects.absorb(ev.x, ev.y, c?.def.tint.glow ?? 0x7ce7ff);
           sfx.assist();
           if (ev.ownerId === s.player.id) this.hud.banner(c?.def.supporter.name ?? 'ASSIST', 34);
+          break;
+        }
+        case 'status': {
+          const d = ELEMENTS[ev.element as Element];
+          if (d) {
+            this.effects.saturation(ev.x, ev.y, d.tint);
+            sfx.status();
+            if (ev.victimId === s.enemy.id) this.hud.banner(d.name, 34);
+          }
           break;
         }
         case 'assistDenied': {

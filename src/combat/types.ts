@@ -106,6 +106,8 @@ export interface ProjectileSpawn {
   homing: number;
   /** Extra hits allowed before removal (beams/melee arcs pass through). */
   pierceCount: number;
+  /** Status element inflicted on a clean hit. Omitted or 0 = none. */
+  element?: number;
 }
 
 export const enum ProjKind {
@@ -130,6 +132,8 @@ export type SimEvent =
   | { t: 'assist'; x: number; y: number; angle: number; ownerId: number }
   /** The assist was requested but unavailable — no charge, or drone busy. */
   | { t: 'assistDenied'; x: number; y: number; ownerId: number }
+  /** A status element took hold on a machine. */
+  | { t: 'status'; x: number; y: number; victimId: number; element: number }
   | { t: 'explode'; x: number; y: number; big: boolean }
   | { t: 'saturation'; id: number; mode: SatMode }
   | { t: 'modeCycle'; id: number; mode: SatMode }

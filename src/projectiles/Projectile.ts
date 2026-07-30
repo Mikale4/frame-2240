@@ -1,4 +1,4 @@
-import { BarrierResponse, ProjKind, Team, type ProjectileSpawn } from '../combat/types';
+﻿import { BarrierResponse, ProjKind, Team, type ProjectileSpawn } from '../combat/types';
 import { approachAngle } from '../core/MathUtil';
 
 /** A live projectile. Pooled by ProjectilePool to keep the sim allocation-free. */
@@ -21,6 +21,8 @@ export class Projectile {
   knockback = 0;
   homing = 0;
   pierceLeft = 0;
+  /** Status element inflicted on a clean hit. */
+  element = 0;
   active = false;
   /** Ids already hit, so piercing shots do not multi-hit the same target. */
   readonly hitIds = new Set<number>();
@@ -49,6 +51,7 @@ export class Projectile {
     this.knockback = s.knockback;
     this.homing = s.homing;
     this.pierceLeft = s.pierceCount;
+    this.element = s.element ?? 0;
     this.active = true;
     this.hitIds.clear();
   }
@@ -98,6 +101,7 @@ export class Projectile {
       knockback: this.knockback,
       homing: this.homing,
       pierceCount: this.pierceLeft,
+      element: this.element,
     };
   }
 }

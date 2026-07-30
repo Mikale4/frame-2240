@@ -1,4 +1,5 @@
 import { BarrierResponse, ProjKind } from './types';
+import { Element } from './Status';
 
 /**
  * Frame data for one attack. Authored in ticks at 60Hz.
@@ -32,6 +33,11 @@ export interface AttackDef {
 
   kind: ProjKind;
   barrier: BarrierResponse;
+  /**
+   * Status element inflicted on a clean hit, mirroring the reference's `var(54)`
+   * (acid/poison, ice, fire, electric). `Element.None` for plain kinetic hits.
+   */
+  element?: Element;
 
   /** Projectile parameters. `count` > 1 spreads over `spreadRad`. */
   projSpeed: number;
@@ -75,6 +81,7 @@ export function attack(base: Partial<AttackDef> & Pick<AttackDef, 'id' | 'label'
     recoil: 0,
     kind: ProjKind.Bullet,
     barrier: BarrierResponse.Absorb,
+    element: Element.None,
     projSpeed: 12,
     projLife: 70,
     projRadius: 6,

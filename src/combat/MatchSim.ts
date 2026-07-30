@@ -3,6 +3,7 @@ import { Rng } from '../core/Rng';
 import type { MechDef } from '../mechs/MechDef';
 import { Projectile, ProjectilePool, sweptHit } from '../projectiles/Projectile';
 import { Combatant } from './Combatant';
+import { Element } from './Status';
 import { clampToArena } from './FlightModel';
 import { clamp } from '../core/MathUtil';
 import {
@@ -250,6 +251,17 @@ export class MatchSim {
                 attacker.vx -= ax * fin;
                 attacker.vy -= ay * fin;
               }
+            }
+            // Status elements only take hold on a clean hit — guarding or
+            // absorbing a shot also turns aside whatever it was carrying.
+            if (p.element !== Element.None && c.status.apply(p.element as Element)) {
+              this.events.push({
+                t: 'status',
+                x: c.x,
+                y: c.y,
+                victimId: c.id,
+                element: p.element,
+              });
             }
             this.combo.set(c.id, (this.combo.get(c.id) ?? 0) + 1);
             break;

@@ -792,3 +792,45 @@ on `DECK_Y`, and muted so the hazard diamonds stop out-shouting the machines.
 **Shadows are the altitude cue.** A shadow that tightens and darkens as a machine
 descends tells a player their height far better than judging themselves against a
 parallax backdrop.
+
+---
+
+### D42 — Status elements, from the reference's `var(54)`
+
+**Decision.** `combat/Status.ts` adds four elements — CORROSIVE, CRYO,
+INCENDIARY, SHOCK — carried one at a time per machine, applied by weapons on a
+clean hit, and shown by pulsing the machine in the element's colour.
+
+**Why.** The reference's variable legend documents
+`var(54): 状態B (酸/毒:1 氷:2 火:3 電:4)` — acid/poison, ice, fire, electric —
+and both its body and arm helpers react to it with a palette-shifted afterimage
+per element (`palbright = 0, 128, 0` for the green acid case). It was the largest
+single mechanic Reignition had no answer to at all.
+
+**What each does is ours.** The reference gives the elements an identity and a
+colour but keeps their effect inside its own state machine. Here: corrosive
+chips, cryo slows, incendiary burns harder over a shorter window, shock drains
+energy and stalls regen. One element at a time, as in the single `var(54)` — a
+different element replaces the current one, so switching damage type is a real
+decision instead of a way to stack every debuff.
+
+**Two guardrails.** Chip damage cannot land the killing blow — being finished by
+a burn seconds after the shooter disengaged reads as a bug, not a loss. And an
+element only takes hold on a clean hit: guarding or absorbing a shot also turns
+aside what it was carrying.
+
+**Identity per chassis.** HALCYON's lance inflicts SHOCK (disruption); NOCTURNE's
+missiles inflict INCENDIARY (attrition). Plain kinetic weapons stay elementless.
+
+---
+
+### D43 — The damage flash was six seconds long
+
+**Decision.** `MechRenderer.flashHit()` sets 0.18, not 6.
+
+**Why.** It was set to `6` and counted down with `dt` in *seconds*, so every hit
+white-flashed the machine for six real seconds, toggling every half second. It
+went unnoticed because hits land often enough to keep re-triggering it, and
+because nothing else needed to tint the mech. Adding status colours surfaced it
+immediately: an afflicted machine rendered solid white instead. The flash is now
+a ~0.18s flicker, which is what the comment always claimed it was.

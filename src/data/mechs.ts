@@ -2,6 +2,7 @@
 import { BarrierResponse, ProjKind } from '../combat/types';
 import type { FlightDef, GaugeDef, BarrierDef, MechDef, MechRigDef } from '../mechs/MechDef';
 import { DEG } from '../core/MathUtil';
+import { Element } from '../combat/Status';
 
 /**
  * Original mech roster for the vertical slice.
@@ -264,6 +265,9 @@ export const HALCYON: MechDef = {
     satGain: 50,
     recoil: 5.5,
     kind: ProjKind.Beam,
+    // HALCYON's identity element: the lance dumps charge into the target, so a
+    // clean hit stalls its energy economy rather than just hurting.
+    element: Element.Shock,
     projSpeed: 26,
     projLife: 40,
     projRadius: 13,
@@ -574,6 +578,9 @@ export const NOCTURNE: MechDef = {
     damage: 80,
     projCount: 2,
     homing: 0.052,
+    // WARDEN's warheads burn: NOCTURNE trades HALCYON's disruption for
+    // attrition, so its assist keeps hurting after it lands.
+    element: Element.Incendiary,
   }),
   salvo: attack({
     ...HALCYON.salvo,
@@ -583,6 +590,7 @@ export const NOCTURNE: MechDef = {
     projCount: 6,
     spreadRad: 54 * DEG,
     homing: 0.062,
+    element: Element.Incendiary,
   }),
 
   // Mirrors PALETTES['nocturne'] in tools/blender/build_mechs.py.

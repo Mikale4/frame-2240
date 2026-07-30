@@ -94,9 +94,15 @@ export class MechRenderer {
     return this.def.rig.chassisHeight;
   }
 
-  /** Flags a white damage flash for a few frames. */
+  /**
+   * Flags a white damage flash.
+   *
+   * In *seconds*, because `sync` counts it down with `dt`. It used to be set to
+   * `6` against a dt of ~0.017, i.e. a six-second white-out per hit — which also
+   * buried any other tint the machine was supposed to be showing.
+   */
   flashHit(): void {
-    this.hitFlash = 6;
+    this.hitFlash = 0.18;
   }
 
   /**
@@ -147,14 +153,30 @@ export class MechRenderer {
       node.container.rotation = partLocalRotation(node.def, node.inheritsTurret, pose);
     }
 
-    // Damage flash: tint every part white briefly.
+    // Damage flash: tint every part white briefly. A status affliction otherwise
+    // washes the machine in its element's colour, the way the reference
+    // palette-shifted an afterimage per element (see REFERENCE_AUDIT 4d.3).
+    const status = c.status.def;
     if (this.hitFlash > 0) {
       this.hitFlash -= dt;
-      const on = Math.floor(this.hitFlash * 2) % 2 === 0;
+      // Toggles roughly every other frame, so it reads as an impact flicker.
+      const on = Math.floor(this.hitFlash * 60) % 2 === 0;
       for (const n of this.nodes.values()) {
         if (on) n.sprite.setTintFill(0xffffff);
         else n.sprite.clearTint();
       }
+    } else if (status) {
+      // Pulsed rather than solid, so the machine's own colours still read
+      // through it — but strongly enough that the affliction is unmistakable.
+      const pulse = 0.5 + Math.sin(c.bobPhase * 3.1) * 0.5;
+      const tint = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.ValueToColor(0xffffff),
+        Phaser.Display.Color.ValueToColor(status.tint),
+        100,
+        Math.round(55 + pulse * 40),
+      );
+      const packed = Phaser.Display.Color.GetColor(tint.r, tint.g, tint.b);
+      for (const n of this.nodes.values()) n.sprite.setTint(packed);
     } else {
       for (const n of this.nodes.values()) n.sprite.clearTint();
     }

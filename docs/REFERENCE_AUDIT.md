@@ -533,6 +533,107 @@ full rate applies. Pressure denies charge; disengaging restores it.
 Nothing above is reused as data or code; the numbers are recorded as evidence
 for original tuning, exactly as in section 7.
 
+
+---
+
+## 4d. Fourth pass on 2005 — the variable legend
+
+The single most useful thing in the supplied 2005 material turned out to be the
+commented variable legend at the top of `chars/rs/st/sys.cns`. It is a written
+index of the whole battle system, and it is Shift-JIS — read as UTF-8 it is
+mojibake, which is why three earlier passes walked past it.
+
+### 4d.1 The legend
+
+Translated, with the entries that matter:
+
+| Var | Reference comment | Meaning |
+| --- | --- | --- |
+| `var(10)` | 状態取得 | state fetch |
+| `var(11)` | 射撃スイッチ (-1:off 0:stop / 200 / 400 / 1000) | shooting switch, by level |
+| `var(12)` | 追尾スイッチ (-1/-2/0-360°) | homing/tracking switch |
+| `var(17)` | ダッシュ・フラグ (0/1/2) | dash flag |
+| `var(20)` | 飛行モード | flight mode |
+| `var(21)` | ブスター(ジェット)パワー | booster power |
+| `var(25)` | スペシャル攻撃判定 | special-attack flag (shared with helpers) |
+| `var(26)` | チャージシステム カウンター | charge counter |
+| `var(27)` / `var(28)` | パワー消費量 / パワー量 | power spent / power held |
+| `var(30)` | 射撃時間(フレーム数) | shot duration in frames |
+| `var(31)` | 接近攻撃(距離判定) | close-attack range test |
+| `var(40)` | 集中ゲージ | saturation gauge |
+| `var(41)` | ソード連打計数 | sword repeat counter |
+| `var(49)` | 僚機の数 | **number of wingmen** |
+| `var(50)` | 勝利条件判定 (lose:-1, win:1) | victory condition |
+| `var(51)` | AI判定 (-1, 1-10) | AI role |
+| `var(53)` | 無敵状態A | invulnerability |
+| `var(54)` | 状態B (酸/毒:1 氷:2 火:3 電:4)×1000 | **status effects: acid/poison, ice, fire, electric** |
+| `var(57)` | 点数(ヒット数) | score / hit count |
+| `fvar(6)` | キャラ防御力 | defence multiplier |
+| `fvar(7)` / `fvar(8)` | 腕回転幅度 / 腕回転方向 | **arm rotation amplitude / direction** |
+| `fvar(9)` | 標的との角度 | angle to target |
+| `fvar(11)` | 重量級 | weight class |
+| `fvar(19)` | アーマー数 / 防弾数 | armour / shots absorbed |
+| `fvar(23)` | 被弾数 | hits taken |
+| `fvar(25)` | 反動スイッチ | recoil switch |
+| `fvar(28)` | ソード(打撃)命中数 | sword hits landed |
+
+### 4d.2 Arm rotation — the melee animation
+
+`fvar(7)`/`fvar(8)` (amplitude and direction) are the melee animation, and
+statedef 6200's close-attack block shows the actual drive. Four variants,
+selected by `var(25)`, each with a wind-up and a slash:
+
+```text
+; variant 0, statedef 210 (28 ticks) / 211 (21 ticks)
+trigger1 = Parent,StateNo = 210 && Parent,time < 12
+fvar(9) = 40 + Parent,time * 5              ; wind up: 40deg -> ~95deg
+trigger1 = Parent,StateNo = 210 && Parent,time = [12,28]
+fvar(9) = 45 - Parent,time * 200 / (time+1) ; slash: flips ~200deg to the far side
+```
+
+with the arm chasing the commanded angle at a fixed rate:
+
+```text
+trigger1 = fvar(9) >= fvar(2) + 5
+fvar(9) = Ifelse(fvar(9) > fvar(2) + 180, 1, -1) * 5   ; 5deg/tick, shorter way round
+```
+
+Variants 2 and 3 mirror the wind-up (`-40 - time*5`), so consecutive swings
+alternate handedness. This is implemented as `MeleeProfile.arc` (DECISIONS D39).
+
+### 4d.3 Status effects — still missing
+
+`var(54)` holds an element in thousands: **1 = acid/poison, 2 = ice, 3 = fire,
+4 = electric**. Both the body helper and the arm helper react to it with a
+palette-shifted afterimage, e.g.:
+
+```text
+[State 0] ; 酸/毒(緑)
+type = Afterimage
+trigger1 = Parent,var(54) && Parent,var(54)/1000 = 0
+palbright = 0, 128, 0
+```
+
+with further blocks for 氷(青) ice/blue and the remaining elements, and
+`var(53)` driving an invisibility flash for invulnerability. Reignition has no
+status-effect layer at all. This is the largest single mechanic still missing and
+is the recommended next one to build.
+
+### 4d.4 Remaining gaps, re-checked
+
+| 2005 function | Evidence | Reignition |
+| --- | --- | --- |
+| Arm swing arc on melee | `0.cns` 4673-4725, `fvar(7)/(8)` | **implemented** (D39) |
+| Walking on the ground | `var(20)`, statedef 40/55 | **implemented** (D40) |
+| Deck / floor as a real surface | stage type `var(22)`, screenshots | **implemented** (D41) |
+| Supporter firing the sub-shot | `howto-en.html`, `f-o.cns` | **implemented** (4c) |
+| Status effects (acid/ice/fire/electric) | `var(54)`, afterimage blocks | missing |
+| Armour / shots-absorbed stat | `fvar(19)` | missing |
+| Score / hit count | `var(57)`, `fvar(23)`, `fvar(27-28)` | missing |
+| Mission win conditions | `var(50)`, `sys.cns 7000/8100` | missing |
+| Boss / special AI roles | `var(51)` = 4, 7, 11 | missing |
+| Pilot portraits, stock icons | screenshots | missing |
+| Off-screen indicators | screenshots | missing |
 ---
 
 ## 5. 2011 and 2018/2020

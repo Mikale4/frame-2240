@@ -20,6 +20,7 @@ import {
 } from './types';
 import { DEG, approachAngle, clamp, angleDelta, lerp } from '../core/MathUtil';
 import { Supporter } from './Supporter';
+import { Element, StatusState } from './Status';
 
 /** Radians per tick a melee lunge may correct toward its target. */
 const MELEE_TRACK_RATE = 9 * DEG;
@@ -135,6 +136,14 @@ export class Combatant implements FlightState {
   walkPhase = 0;
   /** Stride weight 0..1, eased so stopping settles rather than snapping. */
   stride = 0;
+
+  /**
+   * Active status affliction, mirroring the reference's `var(54)`.
+   *
+   * Ticked in `tickTimers`, i.e. before the hitstun early-return, so a burn
+   * keeps burning while its victim is being combo'd.
+   */
+  readonly status = new StatusState();
 
   life: number;
   energy: number;
@@ -427,8 +436,23 @@ export class Combatant implements FlightState {
       }
     }
 
-    // Energy regen, boosted by Shoot saturation.
-    const regen = g.energyRegen * (this.satActive && this.satMode === SatMode.Shoot ? 2.2 : 1);
+    // ---- status affliction ------------------------------------------------
+    // Ticked here, ahead of the hitstun early-return, so a burn keeps burning
+    // while its victim is being combo'd.
+    const st = this.status.def;
+    const chip = this.status.step();
+    if (chip > 0) {
+      // Chip goes through the same defence multiplier as everything else, but
+      // deliberately cannot land the killing blow: being finished by a lingering
+      // burn seconds after the shooter disengaged reads as a bug, not a loss.
+      this.life = Math.max(1, this.life - chip * this.def.defence.mul);
+    }
+    if (st?.energyDrain) this.energy = Math.max(0, this.energy - st.energyDrain);
+
+    // Energy regen, boosted by Shoot saturation, suppressed by Shock.
+    const regen = st?.blocksEnergyRegen
+      ? 0
+      : g.energyRegen * (this.satActive && this.satMode === SatMode.Shoot ? 2.2 : 1);
     this.energy = Math.min(g.maxEnergy, this.energy + regen);
 
     // Barrier gauge regen after a delay.
@@ -820,6 +844,7 @@ export class Combatant implements FlightState {
           knockback: last ? knock + p.finisherKnock : knock,
           homing: 0,
           pierceCount: 0,
+          element: base.element ?? Element.None,
         });
         if (last) {
           // The finisher forcibly creates neutral again.
@@ -1051,6 +1076,7 @@ export class Combatant implements FlightState {
         knockback: a.knockback,
         homing,
         pierceCount: a.pierceCount,
+        element: a.element ?? Element.None,
       });
     }
 
@@ -1076,7 +1102,8 @@ export class Combatant implements FlightState {
       dy: locked ? 0 : input.dy,
       boost: !locked && isHeld(input, Btn.Boost),
       dash: !locked && !a && isPressed(input, Btn.Boost),
-      speedScale: this.satSpeedScale,
+      // Cryo bites here, so it slows flight, walking and boost alike.
+      speedScale: this.satSpeedScale * this.status.speedScale,
       moveScale: a && a.kind !== ProjKind.Melee ? moveScaleFor(a.kind) : 1,
       flying: this.flying,
       groundY: this.groundY,
