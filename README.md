@@ -52,8 +52,19 @@ web server.
 
 ## Controls
 
-Keyboard is primary; any standard gamepad works and can be plugged or unplugged
-mid-match.
+**Every control is remappable.** Pick `CONTROLS` on the title screen: arrows to
+choose an action, `ENTER` then press the key or pad button you want, `BACKSPACE`
+to unbind, `R` to restore defaults, `ESC` to close. Bindings save automatically
+and persist between sessions.
+
+Keys are stored by *physical position*, so a binding made on QWERTY stays on the
+same physical key on AZERTY/QWERTZ. Assigning a key that already belongs to
+another action moves it, so nothing is ever double-bound. Each action holds up to
+two keys and two pad buttons — which is how the defaults give you both WASD and
+the arrow keys.
+
+The defaults below are what you start with; any gamepad works and can be plugged
+or unplugged mid-match.
 
 ### Flight
 
@@ -97,6 +108,7 @@ attack** automatically when you are close enough.
 | --- | --- | --- |
 | Pause | `Esc` or `P` | `Start` |
 | Menus | Arrows / `W` `S`, `Enter` or `J` | D-pad, `A` |
+| Remap controls | Title → `CONTROLS` | — |
 | Debug readout | `F1` | — |
 | Hitbox / hurtbox view | `F2` | — |
 

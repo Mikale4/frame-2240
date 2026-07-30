@@ -3,6 +3,7 @@ import { GAME_SUBTITLE, GAME_TITLE, GAME_VERSION, VIEW_H, VIEW_W } from '../core
 import { DIFFICULTY_NAMES, MODE_LABELS, session, type MatchMode } from '../core/Session';
 import { InputManager } from '../input/InputManager';
 import { Menu, bigTitle, smallText } from '../ui/Menu';
+import { BindingsPanel } from '../ui/BindingsPanel';
 import { MECHS } from '../data/mechs';
 import { sfx } from '../audio/Sfx';
 import { PART_SCALE } from '../render/MechRenderer';
@@ -13,7 +14,7 @@ const MODES: MatchMode[] = ['vsCpu', 'aiVsAi', 'training'];
 export class TitleScene extends Phaser.Scene {
   private input$!: InputManager;
   private menu!: Menu;
-  private controls?: Phaser.GameObjects.Container;
+  private bindingsPanel?: BindingsPanel;
   private modeIdx = 0;
   private t = 0;
   private mechGroups: Phaser.GameObjects.Container[] = [];
@@ -158,47 +159,27 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private buildControls(): void {
-    const c = this.add.container(0, 0);
-    c.setDepth(1300);
-    const panel = this.add
-      .rectangle(VIEW_W / 2, VIEW_H / 2, 720, 430, 0x070b14, 0.95)
-      .setStrokeStyle(2, 0x3a4c66, 1);
-    c.add(panel);
-    c.add(bigTitle(this, 'CONTROLS', VIEW_H / 2 - 182, 26, '#ffd166', 1301));
-
-    const rows: Array<[string, string]> = [
-      ['MOVE (8-WAY FLIGHT)', 'W A S D  /  ARROWS  /  L-STICK'],
-      ['MAIN GUN  (melee up close)', 'J  /  PAD A'],
-      ['HEAVY SHOT', 'K  /  PAD X or Y'],
-      ['SUB WEAPON (missiles)', 'L  /  PAD B'],
-      ['BOOST (hold + dir)', 'SHIFT or SPACE  /  RB or RT'],
-      ['DASH (tap + dir)', 'SHIFT or SPACE  /  RB or RT'],
-      ['AIR BRAKE (hold, no dir)', 'SHIFT or SPACE  /  RB or RT'],
-      ['BARRIER / GUARD (hold)', 'F  /  PAD LB or LT'],
-      ['SATURATION  (full meter)', 'J + K  /  PAD A + X'],
-      ['CYCLE SAT MODE', 'Q or TAB  /  PAD SELECT'],
-      ['TOGGLE SOFT-LOCK', 'E  /  PAD R-STICK CLICK'],
-      ['MANUAL AIM', 'RIGHT STICK'],
-      ['SPREAD SHOT', 'DOWN, FORWARD + J'],
-      ['LANCE BEAM', 'DOWN, BACK + K'],
-      ['MISSILE SALVO', 'DOWN, FORWARD + L'],
-      ['PAUSE', 'ESC or P  /  PAD START'],
-      ['DEBUG TEXT / HITBOXES', 'F1  /  F2'],
-    ];
-    rows.forEach(([k, v], i) => {
-      const y = VIEW_H / 2 - 148 + i * 19;
-      c.add(smallText(this, k, VIEW_W / 2 - 330, y, 12, '#9fb4d0', [0, 0.5], 1301));
-      c.add(smallText(this, v, VIEW_W / 2 + 330, y, 12, '#ffd9a0', [1, 0.5], 1301));
+    this.bindingsPanel = new BindingsPanel(this, () => {
+      this.bindingsPanel?.setVisible(false);
     });
-    c.add(smallText(this, 'ESC / J to close', VIEW_W / 2, VIEW_H / 2 + 196, 12, '#63748c', [0.5, 0.5], 1301));
-
-    c.setVisible(false);
-    this.controls = c;
+    this.bindingsPanel.setVisible(false);
   }
 
   private toggleControls(): void {
-    if (!this.controls) return;
-    this.controls.setVisible(!this.controls.visible);
+    if (!this.bindingsPanel) return;
+    this.bindingsPanel.setVisible(!this.bindingsPanel.isOpen);
+  }
+
+  /** First connected pad, guarded; the bindings panel captures pad buttons too. */
+  private pad(): Phaser.Input.Gamepad.Gamepad | null {
+    try {
+      const gp = this.input.gamepad;
+      if (!gp || gp.total === 0) return null;
+      const p = gp.pad1 ?? gp.getPad(0) ?? null;
+      return p && p.connected ? p : null;
+    } catch {
+      return null;
+    }
   }
 
   private launch(): void {
@@ -217,11 +198,10 @@ export class TitleScene extends Phaser.Scene {
       m.rotation = Math.sin(this.t * 0.9 + i) * 0.02;
     });
 
-    if (this.controls?.visible) {
-      if (ui.cancel || ui.confirm) {
-        sfx.uiConfirm();
-        this.controls.setVisible(false);
-      }
+    // While the rebinding panel is open it owns all input: it reads key edges
+    // directly so that rebinding a menu key cannot also trigger the menu.
+    if (this.bindingsPanel?.isOpen) {
+      this.bindingsPanel.update(this.pad());
       return;
     }
 

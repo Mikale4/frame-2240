@@ -425,6 +425,38 @@ drift is at least visible; a generator would be better and is queued for M4.
 
 ---
 
+### D26 — Bindings are stored by physical key code, not character
+
+**Decision.** `KeyboardEvent.code` ('KeyW', 'ShiftLeft'), never `key`.
+
+**Why.** `code` is layout-independent: a binding made on QWERTY sits on the same
+physical key on AZERTY, which is the behaviour players expect from WASD-style
+schemes. It is also unambiguous to capture in a rebinding prompt, where `key`
+would vary with modifier state.
+
+**Consequences.** Phaser's keyboard plugin wants keys registered up-front by
+name, which cannot work when any key may become meaningful at runtime. Input now
+reads a single window-level tracker (`KeyState`) that also survives scene
+changes, clears held keys on blur/tab-hide so nothing sticks down, and exposes a
+"capture the next key" hook plus key-down edges for menus.
+
+**Safety.** Assigning a key removes it from every other action first, so one
+physical key can never drive two things. Stored bindings are merged over the
+defaults with per-field validation — anything malformed, unknown or over-length
+is discarded, so a corrupt entry cannot leave the game unplayable. Actions may
+be deliberately left unbound, and the panel warns when they are. Menu confirm
+and cancel keep fixed `ENTER`/`ESC` fallbacks so an over-enthusiastic unbind
+cannot trap the player.
+
+**Testing note.** 25 unit tests cover the model. Live verification had to lean on
+localStorage and actual gameplay rather than reading the module: a dynamic
+`import()` from the browser console resolves to a *different* module instance
+than the app's graph (Vite serves it under a `?t=` URL), so `getBindings()` read
+that way returns a stale second copy. The real proof was that a rebound key
+fired the main gun in the running match.
+
+---
+
 ### D23 — Original naming throughout
 
 **Decision.** Mechs **AV-07 HALCYON** and **AV-13 NOCTURNE**; pilots **NAIA
