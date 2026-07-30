@@ -123,6 +123,11 @@ export class DebugOverlay {
         g.strokeCircle(p.x, p.y, c.def.barrier.radius);
       }
 
+      // Melee trigger range: dashed-looking ring showing where the main-gun
+      // button switches to a sword swing.
+      g.lineStyle(1, 0xffaa33, 0.28);
+      g.strokeCircle(p.x, p.y, c.def.meleeRange);
+
       // Melee reach: yellow during startup, red while the hit is live.
       const a = c.attack;
       if (a && a.kind === ProjKind.Melee) {

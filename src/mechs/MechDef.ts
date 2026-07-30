@@ -124,6 +124,15 @@ export interface MechDef {
   lockCone: number;
   lockRange: number;
 
+  /**
+   * Centre-to-centre distance at which the main-gun button becomes a sword
+   * swing. Deliberately generous: the swing lunges forward during its startup
+   * (see AttackDef.lunge), exactly as the reference closed distance with
+   * `posadd` during its melee startup. Deriving this from the hit radius makes
+   * it smaller than the chassis itself and the melee feels broken.
+   */
+  meleeRange: number;
+
   /** Palette used by the procedural fallback renderer and effects tinting. */
   tint: { primary: number; secondary: number; accent: number; thruster: number };
 }

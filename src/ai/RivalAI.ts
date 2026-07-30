@@ -290,7 +290,7 @@ export class RivalAI {
     const d = self.def;
 
     // Melee range: commit to the sword chain.
-    if (dist < d.melee[0].projRadius + d.rig.hurtRadius + 18) {
+    if (dist < d.meleeRange) {
       return this.rng.chance(0.5 + this.skill * 0.45) ? Btn.Main : null;
     }
 

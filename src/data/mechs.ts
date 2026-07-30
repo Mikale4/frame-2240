@@ -12,20 +12,64 @@ import { DEG } from '../core/MathUtil';
  * barrier burst, a three-mode saturation meter).
  */
 
-const BASE_RIG: MechRigDef = {
-  hurtRadius: 26,
-  chassisHeight: 96,
+/**
+ * Rig offsets MUST mirror PIVOTS_PX in tools/blender/build_mechs.py, in the same
+ * logical pixels (1 Blender unit = 60 of them). Child offsets are relative to
+ * the parent, so e.g. mainWeapon = world(54,14) - rightArm(16,6) = (38,8).
+ *
+ * The anatomy is a hunched reverse-joint walker, not an upright humanoid: the
+ * cockpit pod sits forward and low, the hips trail behind and below, and the
+ * rifle is thrust well ahead of the chassis.
+ */
+const HALCYON_RIG: MechRigDef = {
+  hurtRadius: 28,
+  chassisHeight: 104,
   parts: [
     { name: 'core', parent: null, x: 0, y: 0, rotation: 0, follow: 'chassis' },
-    { name: 'head', parent: 'core', x: 4, y: -30, rotation: 0, follow: 'turret' },
-    { name: 'backpack', parent: 'core', x: -20, y: -6, rotation: 0, follow: 'chassis' },
-    { name: 'lowerBody', parent: 'core', x: 0, y: 22, rotation: 0, follow: 'chassis' },
-    { name: 'leftArm', parent: 'core', x: -8, y: -8, rotation: 0, follow: 'turret' },
-    { name: 'subWeapon', parent: 'leftArm', x: 18, y: -4, rotation: 0, follow: 'turret' },
-    { name: 'rightArm', parent: 'core', x: 10, y: -4, rotation: 0, follow: 'turret' },
-    { name: 'mainWeapon', parent: 'rightArm', x: 26, y: 2, rotation: 0, follow: 'turret' },
-    { name: 'leftThruster', parent: 'core', x: -16, y: 16, rotation: 0, follow: 'thruster' },
-    { name: 'rightThruster', parent: 'core', x: -10, y: 20, rotation: 0, follow: 'thruster' },
+    { name: 'head', parent: 'core', x: 21, y: -7, rotation: 0, follow: 'turret' },
+    { name: 'backpack', parent: 'core', x: -26, y: -18, rotation: 0, follow: 'chassis' },
+    { name: 'lowerBody', parent: 'core', x: -8, y: 26, rotation: 0, follow: 'chassis' },
+    { name: 'leftArm', parent: 'core', x: -2, y: -2, rotation: 0, follow: 'turret' },
+    { name: 'subWeapon', parent: 'leftArm', x: -3, y: -23, rotation: 0, follow: 'turret' },
+    { name: 'rightArm', parent: 'core', x: 16, y: 6, rotation: 0, follow: 'turret' },
+    { name: 'mainWeapon', parent: 'rightArm', x: 38, y: 8, rotation: 0, follow: 'turret' },
+    { name: 'leftThruster', parent: 'core', x: -36, y: 0, rotation: 0, follow: 'thruster' },
+    { name: 'rightThruster', parent: 'core', x: -32, y: 12, rotation: 0, follow: 'thruster' },
+  ],
+  drawOrder: [
+    'backpack',
+    'leftThruster',
+    'leftArm',
+    'subWeapon',
+    'lowerBody',
+    'core',
+    'head',
+    'rightThruster',
+    'rightArm',
+    'mainWeapon',
+  ],
+};
+
+/**
+ * NOCTURNE is a separate chassis, not a recolour: broader hull, shallower pitch,
+ * shorter//thicker legs, rotary cannon and a bigger missile rack. Its pivots
+ * therefore differ and must mirror CHASSIS['nocturne']['pivots'] in
+ * tools/blender/build_mechs.py.
+ */
+const NOCTURNE_RIG: MechRigDef = {
+  hurtRadius: 31,
+  chassisHeight: 100,
+  parts: [
+    { name: 'core', parent: null, x: 0, y: 0, rotation: 0, follow: 'chassis' },
+    { name: 'head', parent: 'core', x: 23, y: -2, rotation: 0, follow: 'turret' },
+    { name: 'backpack', parent: 'core', x: -30, y: -14, rotation: 0, follow: 'chassis' },
+    { name: 'lowerBody', parent: 'core', x: -10, y: 24, rotation: 0, follow: 'chassis' },
+    { name: 'leftArm', parent: 'core', x: -4, y: 0, rotation: 0, follow: 'turret' },
+    { name: 'subWeapon', parent: 'leftArm', x: -6, y: -26, rotation: 0, follow: 'turret' },
+    { name: 'rightArm', parent: 'core', x: 18, y: 10, rotation: 0, follow: 'turret' },
+    { name: 'mainWeapon', parent: 'rightArm', x: 40, y: 6, rotation: 0, follow: 'turret' },
+    { name: 'leftThruster', parent: 'core', x: -40, y: 4, rotation: 0, follow: 'thruster' },
+    { name: 'rightThruster', parent: 'core', x: -34, y: 16, rotation: 0, follow: 'thruster' },
   ],
   drawOrder: [
     'backpack',
@@ -113,7 +157,7 @@ export const HALCYON: MechDef = {
   flight: HALCYON_FLIGHT,
   gauges: BASE_GAUGES,
   barrier: BASE_BARRIER,
-  rig: BASE_RIG,
+  rig: HALCYON_RIG,
 
   main: attack({
     id: 'main',
@@ -283,7 +327,10 @@ export const HALCYON: MechDef = {
       projLife: 3,
       projRadius: 40,
       muzzleForward: 40,
-      lunge: 7.4,
+      // The reference lunged 4.2-5.0 px/tick in a 320-wide space; scaled to this
+      // project's 960-wide space that is ~13-15. It stops on contact rather than
+      // overshooting (see Combatant.stepAttack).
+      lunge: 13.2,
       chainFrom: 8,
       chainTo: 24,
       meleeStage: 0,
@@ -307,7 +354,7 @@ export const HALCYON: MechDef = {
       projLife: 3,
       projRadius: 40,
       muzzleForward: 40,
-      lunge: 8.2,
+      lunge: 14.5,
       chainFrom: 5,
       chainTo: 20,
       meleeStage: 1,
@@ -331,7 +378,7 @@ export const HALCYON: MechDef = {
       projLife: 4,
       projRadius: 46,
       muzzleForward: 44,
-      lunge: 9.0,
+      lunge: 15.5,
       meleeStage: 2,
       selfKnockback: 8.2,
     }),
@@ -341,6 +388,9 @@ export const HALCYON: MechDef = {
   subRechargeTicks: 150,
   lockCone: 75 * DEG,
   lockRange: 900,
+  // ~2x the chassis height. The 11-tick startup lunges ~81px and the arc itself
+  // reaches 40px, so a swing started here closes and connects.
+  meleeRange: 200,
   tint: { primary: 0x9fd8ef, secondary: 0x2c4a63, accent: 0xffd166, thruster: 0x74d6ff },
 };
 
@@ -359,6 +409,9 @@ export const NOCTURNE: MechDef = {
   flight: NOCTURNE_FLIGHT,
   gauges: { ...BASE_GAUGES, maxLife: 1000, energyRegen: 2.9 },
   barrier: { ...BASE_BARRIER, cost: 34 },
+  rig: NOCTURNE_RIG,
+  // Broader frame reaches slightly further with the claw.
+  meleeRange: 210,
 
   main: attack({
     ...HALCYON.main,

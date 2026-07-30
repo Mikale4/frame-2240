@@ -435,9 +435,10 @@ export class Combatant implements FlightState {
     return this.autoFireTimer <= 0;
   }
 
-  private meleeInRange(target: Combatant): boolean {
+  /** True when the main-gun button should swing instead of shoot. */
+  meleeInRange(target: Combatant): boolean {
     const dist = Math.hypot(target.x - this.x, target.y - this.y);
-    return dist <= this.def.melee[0].projRadius + this.def.rig.hurtRadius + 26;
+    return dist <= this.def.meleeRange;
   }
 
   private beginMelee(events: SimEvent[]): void {

@@ -153,6 +153,39 @@ describe('melee chain', () => {
     expect(a.attack?.kind).toBe(ProjKind.Bullet);
   });
 
+  /**
+   * Regression: the trigger range used to be derived from the hit radius, which
+   * made it 92px — narrower than the 96px-tall chassis. Visually touching mechs
+   * still fired the gun. It is now an explicit, generous per-mech value that the
+   * startup lunge closes.
+   */
+  it('switches to melee well before the chassis visually overlap', () => {
+    expect(HALCYON.meleeRange).toBeGreaterThanOrEqual(HALCYON.rig.chassisHeight * 1.5);
+
+    const swingsAt = (dist: number) => {
+      const a = make(HALCYON, 1000, 600, 0, Team.Player);
+      const b = make(NOCTURNE, 1000 + dist, 600, 1, Team.Enemy);
+      const k = ctx();
+      a.step(press(Btn.Main), b, W, H, k.spawns, k.events);
+      return a.attack?.kind;
+    };
+
+    // Inside the range: sword. Just outside: gun.
+    expect(swingsAt(HALCYON.meleeRange - 10)).toBe(ProjKind.Melee);
+    expect(swingsAt(HALCYON.meleeRange + 10)).toBe(ProjKind.Bullet);
+    // The distances a player reads as "adjacent" must all swing.
+    for (const d of [60, 100, 140, 180]) {
+      expect(swingsAt(d)).toBe(ProjKind.Melee);
+    }
+  });
+
+  it('lunges far enough to cover the trigger range', () => {
+    const m = HALCYON.melee[0];
+    const reach = m.lunge! * m.startup + m.projRadius + HALCYON.rig.hurtRadius;
+    // A swing started at max range must be able to reach the target.
+    expect(reach).toBeGreaterThanOrEqual(HALCYON.meleeRange);
+  });
+
   it('refuses to chain when the first stage whiffed', () => {
     const { a, b, k } = meleePair();
     const stage0 = HALCYON.melee[0];

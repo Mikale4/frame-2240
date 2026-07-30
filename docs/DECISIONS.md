@@ -334,6 +334,97 @@ nothing must fail loudly instead.
 
 ---
 
+### D22b — Melee trigger range is explicit data, not derived from the hit radius
+
+**Decision.** `MechDef.meleeRange` (200 for HALCYON, 210 for NOCTURNE) decides
+when the main-gun button swings instead of shooting.
+
+**Why.** It was previously computed as `melee hit radius + hurt radius + 26` =
+**92px** — narrower than the 104px-tall chassis. Two mechs that visually overlapped
+were still "too far apart" to swing, so melee felt broken. The reference solved
+the same problem by *lunging*: its melee startup ran `posadd 4.2-5.0 · cos(angle)`
+to close distance. Our lunge was under-scaled too (7.4 px/tick against the
+reference's 4.2-5.0 in a 320-wide space, which is ~13-15 in our 960-wide space).
+
+**Fix.** Generous explicit trigger range plus a correctly scaled lunge (13.2 /
+14.5 / 15.5 per chain stage). Pinned by tests asserting the range exceeds 1.5x
+the chassis height, that 60-180px all swing, and that lunge reach covers the
+trigger range.
+
+---
+
+### D23b — The mech designs were wrong, and why
+
+**What was wrong.** The first models were upright humanoid bipeds with a small
+rifle. Babel Sword's machines are nothing like that.
+
+**Why it happened.** The audit covered the `.cns`/`.cmd` *logic* and the gameplay
+screenshots, but never the mech art — the sprites live in binary `.sff` archives,
+so the modelling was done from imagination and defaulted to generic mecha. That
+is a research gap, not a tooling limit.
+
+**How it was found.** The 2018 build ships its documentation as HTML, and
+`data/bs1/howto/rs/mars1/p-*.gif` holds portrait art for all 20 machines. Those
+were assembled into a contact sheet **in the scratchpad, outside the project**,
+purely for study.
+
+**The actual design language.** Hunched, forward-pitched torso; reverse-joint
+("chicken walker") legs with the knee swept back onto wide splayed feet; an
+oversized weapon held forward that dominates the silhouette; a tiny cockpit pod
+rather than a head; a large rounded shoulder pauldron with a disc hub; a wide
+horizontal composition; near-monochrome armour with a single saturated accent;
+far-side limbs shaded distinctly darker for depth. The sprites are visibly 3D
+renders downsampled to pixel art — which means the Blender pipeline was already
+the right approach.
+
+**Result.** `build_mechs.py` was rebuilt to that anatomy, and the rig offsets in
+`data/mechs.ts` were re-authored to match.
+
+---
+
+### D24 — Procedural surface detail instead of flat albedo
+
+**Decision.** Armour materials are a node network: Pointiness-driven machined
+edge wear (also glossier there), a crossed Wave pair for panel seams in object
+space, and two Noise scales for grime and broad tonal drift.
+
+**Why.** Flat base colour is exactly what makes a model read as "clunky and
+unfinished". The reference sprites carry edge highlights, panel divisions and
+uneven tone. Doing it procedurally keeps the result original and ships no
+texture files.
+
+**Two calibration mistakes worth recording.** The seam ramp was initially
+authored with its stops reversed; with CONSTANT interpolation that yields
+isolated dots at the band crossings instead of a line grid. And the first
+working grid was far too dense — a part is only ~35 logical px on screen, so
+panel scale had to drop from 11/8 to 2.2/1.7 before it read as panelling rather
+than halftone.
+
+---
+
+### D25 — Each mech is a distinct chassis, not a palette swap
+
+**Decision.** `CHASSIS` in `build_mechs.py` drives hull mass, body pitch, leg
+length/thickness, weapon type, booster layout, shoulder pod and melee hardpoint
+per mech. Each mech gets its own rig in `data/mechs.ts`.
+
+**Why.** NOCTURNE began as a recolour of HALCYON, which reads as one machine in
+two colours. The reference roster is 20 visibly different frames.
+
+**The two frames now differ in.** HALCYON: slim hull, 24° pitch, long legs, a
+scoped drum-fed precision rifle, twin slim thruster bells, a compact 6-tube pod,
+and a folded beam edge for melee. NOCTURNE: broad hull with an ammo hopper, 15°
+pitch, short thick legs with extra shin plating, a six-barrel rotary cannon with
+a belt feed running back to the hull, one wide caged burner with exhaust stacks,
+a 12-cell missile rack, and a hydraulic breaching claw. Palettes are off-white
+versus gunmetal so the two read apart instantly in play.
+
+**Sync risk.** The Blender pivots and the TypeScript rigs are two copies of the
+same numbers. `manifest.json` now records `pivots_px` and the chassis spec so a
+drift is at least visible; a generator would be better and is queued for M4.
+
+---
+
 ### D23 — Original naming throughout
 
 **Decision.** Mechs **AV-07 HALCYON** and **AV-13 NOCTURNE**; pilots **NAIA
