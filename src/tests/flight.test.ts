@@ -33,6 +33,36 @@ describe('flight model', () => {
     expect(s.vx).toBeCloseTo(def.maxSpeed, 1);
   });
 
+  /**
+   * Feel guard. The 2005 reference set velocity directly (instant) and the
+   * working Iron Babel build applies an instant boost impulse; an earlier
+   * tuning here took ~8 ticks to reach top speed and read as floaty next to
+   * either. Reaching cap must stay snappy.
+   */
+  it('reaches top speed within a few ticks', () => {
+    const s = state();
+    let ticks = 0;
+    while (Math.abs(s.vx) < def.maxSpeed * 0.95 && ticks < 60) {
+      stepFlight(s, def, intent({ dx: 1 }));
+      ticks++;
+    }
+    expect(ticks).toBeLessThanOrEqual(4);
+  });
+
+  it('stops promptly when input is released', () => {
+    const s = state({ vx: def.maxSpeed });
+    for (let i = 0; i < 20; i++) stepFlight(s, def, intent());
+    // Coasting should bleed most of the speed inside a third of a second.
+    expect(Math.abs(s.vx)).toBeLessThan(def.maxSpeed * 0.35);
+  });
+
+  it('keeps the dash impulse cheap enough to use constantly', () => {
+    // A committed, expensive dash makes boosting a resource dump rather than a
+    // movement tool; both references treat the impulse as freely available.
+    expect(def.dashCost).toBeLessThanOrEqual(def.maxBoost * 0.15);
+    expect(def.dashCooldown).toBeLessThanOrEqual(10);
+  });
+
   it('does not make diagonals faster than cardinals', () => {
     const a = state();
     const b = state();

@@ -445,6 +445,61 @@ field added so each part can track the chassis, the aim, or thruster load).
 
 ---
 
+## 6b. Iron Babel (working build) — battle-system study
+
+A later, working build of the Iron Babel fan game was supplied separately
+(14.2 MB, 266 files, still a single 4.57 MB `IronBabel.html`). Unlike the copy in
+the reference folder, its combat actually runs. Studied for **mechanics only** —
+the monolithic architecture is still explicitly not to be copied, per CLAUDE.md.
+Extraction was to a scratchpad outside the project; nothing from it ships.
+
+### 6b.1 What its combat does
+
+| Mechanic | Evidence | Notes |
+| --- | --- | --- |
+| **Damage-scaled hitstun** | `hitstun = max(10, min(54, 8 + damage*1.15 + (strong?8:0)))` | Systemic rather than authored per attack, with a hard clamp |
+| **Post-hit invulnerability** | `target.inv = 2`, and `8` on a finisher | A couple of frames after every hit, stopping multi-hit lock |
+| **Both sides gain meter on a hit** | `target.sat += damage*.35; source.sat += damage*.45` | The victim gains too — a comeback valve |
+| **Melee lockout** | `player.meleeLockout = max(..., profile.lockout \|\| 66)`; `28` when a sequence breaks | Cooldown preventing endless sword pressure |
+| **Overheat** | `player.overheat = max(overheat, 34)` after a melee sequence | A second cost on top of energy |
+| **Lock-on melee** | `startLockOnMelee`, `meleeLock`, `nearestProjectileTarget`, reticle, `ml.phase`/`ml.maxLife` | The mech *homes* onto a locked target across a multi-swing sequence |
+| **Melee cooldown formula** | `cooldown = 18 + hits*(swing+gap) + 8` | Derived from the move profile rather than hand-set |
+| **Finisher shape** | `finishPush`, `finalLift`, attacker `vx = -face*max(5, finishPush*.28)`, `vy *= .45` | Launch plus attacker recoil, same shape as ours |
+| **Barrier as a deployed field** | `Trap({barrier:true, followOwner:true, w:124, h:96, damage:6, knock:11, life:70})`, `barrierCooldown = 150` | A damaging field that follows you, not just an invuln burst |
+| **Boost costs energy** | `boost = (satMode==="speed" && satActive ? 18.5 : 14.5) * mech.boost; spendEnergy(player, 16)` | Boost draws the *weapon* pool; Speed saturation raises it |
+| **Per-character move quirks** | `superArmor`, `teleport`, `barrier`, `dash` flags patched per character/family | Data-driven identity |
+| **Pull / stun-grab** | `pullToOwner`, `stunGrab`, `stunDuration`, `pullStrength` | A vacuum move class we have no equivalent of |
+| **Traps / mines** | `Trap` class with `armed`, `armTimer`, `life` | Deployables |
+| **Grappling hook** | `player.grapplingHook`, platform targeting | Terrain interaction |
+
+Its saturation is the same three-mode idea as 2005 (`satMode === "speed"`), which
+is good corroboration that the meter design in `docs/DECISIONS.md` D8 is right.
+
+### 6b.2 Adopted
+
+Three were clear improvements on what Reignition had and are now implemented:
+
+* **Melee lockout.** We had no cooldown at all, so sword pressure could be
+  maintained indefinitely. Now a finisher or a broken chain locks melee out.
+* **Post-hit invulnerability.** A brief window after every hit, so overlapping
+  multi-hit sources cannot chain-lock a mech.
+* **Meter on damage taken.** The victim now gains saturation from being hit, so
+  a losing pilot builds toward their overdrive.
+
+### 6b.3 Considered and deferred
+
+* **Damage-scaled hitstun** — attractive, but our hitstun is authored per attack
+  and is what the frame-data tests assert. Worth revisiting as a *floor* applied
+  on top of the authored value rather than a replacement.
+* **Homing lock-on melee** — likely the biggest remaining feel improvement, and
+  it matches 2005 too (which ran `posadd` toward the enemy during melee startup
+  with ±15/±10 deadzones). Ours lunges along the soft-locked aim without
+  correcting mid-swing.
+* **Overheat**, **deployable barrier field**, **pull/grab class**, **traps**,
+  **grappling hook** — all real content, all beyond the current slice's scope.
+
+---
+
 ## 7. Rights and originality
 
 * Reference folders are treated as read-only. Nothing in them was modified,

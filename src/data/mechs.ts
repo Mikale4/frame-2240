@@ -85,21 +85,33 @@ const NOCTURNE_RIG: MechRigDef = {
   ],
 };
 
+/**
+ * Flight feel.
+ *
+ * Retuned after comparing against 2005 (which used `velset` — instantaneous)
+ * and the working Iron Babel build (an instant boost impulse plus heavy drag).
+ * The original values here accelerated at 0.62 toward a 5.2 cap, i.e. ~8 ticks
+ * to reach top speed, which reads as floaty next to either reference.
+ *
+ * Now: acceleration reaches cap in ~3 ticks, drag is crisper so you stop when
+ * you let go, and the dash impulse is cheap and short-cooldown so boosting is a
+ * constantly available movement tool rather than a committed resource dump.
+ */
 const HALCYON_FLIGHT: FlightDef = {
-  accel: 0.62,
-  maxSpeed: 5.2,
-  coastDrag: 0.955,
-  brakeDrag: 0.84,
-  boostAccel: 0.95,
-  boostMaxSpeed: 9.0,
+  accel: 1.85,
+  maxSpeed: 5.6,
+  coastDrag: 0.93,
+  brakeDrag: 0.78,
+  boostAccel: 2.6,
+  boostMaxSpeed: 9.4,
   maxBoost: 100,
-  boostDrain: 0.55,
-  boostRegen: 0.78,
-  boostRegenDelay: 22,
-  dashSpeed: 16,
-  dashTicks: 10,
-  dashCost: 22,
-  dashCooldown: 16,
+  boostDrain: 0.5,
+  boostRegen: 0.9,
+  boostRegenDelay: 16,
+  dashSpeed: 15,
+  dashTicks: 7,
+  dashCost: 12,
+  dashCooldown: 6,
   bankRate: 6 * DEG,
   bankMax: 26 * DEG,
   turretRate: 13 * DEG,
@@ -112,11 +124,12 @@ const HALCYON_FLIGHT: FlightDef = {
 
 const NOCTURNE_FLIGHT: FlightDef = {
   ...HALCYON_FLIGHT,
-  accel: 0.55,
-  maxSpeed: 4.7,
-  boostAccel: 0.86,
-  boostMaxSpeed: 8.2,
-  dashSpeed: 14.5,
+  accel: 1.55,
+  maxSpeed: 5.0,
+  coastDrag: 0.945,
+  boostAccel: 2.2,
+  boostMaxSpeed: 8.6,
+  dashSpeed: 13.5,
   bankMax: 22 * DEG,
   turretRate: 11 * DEG,
   // Heavier frame: falls harder, walks slower, takes off less sharply.
@@ -138,6 +151,9 @@ const BASE_GAUGES: GaugeDef = {
   satPassive: 0.5,
   satOnAbsorb: 25,
   satDuration: 420,
+  satOnDamage: 0.30,
+  hitInvuln: 3,
+  meleeLockout: 34,
 };
 
 const BASE_BARRIER: BarrierDef = {

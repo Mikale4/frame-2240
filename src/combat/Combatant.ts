@@ -20,6 +20,9 @@ import {
 } from './types';
 import { DEG, approachAngle, clamp, angleDelta } from '../core/MathUtil';
 
+/** Radians per tick a melee lunge may correct toward its target. */
+const MELEE_TRACK_RATE = 9 * DEG;
+
 /** Velocity retained per tick while an attack is committed — firing anchors you. */
 function moveScaleFor(kind: ProjKind): number {
   switch (kind) {
@@ -89,6 +92,8 @@ export class Combatant implements FlightState {
   meleeCount = 0;
   meleeHitConfirmed = false;
   meleeChainQueued = false;
+  /** Ticks until melee is available again. Blocks endless sword pressure. */
+  meleeLockout = 0;
   /** Ticks left in which a new melee chain may be started from recovery. */
   meleeChainGrace = 0;
 
@@ -266,6 +271,7 @@ export class Combatant implements FlightState {
     const g = this.def.gauges;
 
     if (this.invuln > 0) this.invuln--;
+    if (this.meleeLockout > 0) this.meleeLockout--;
     if (this.barrierActiveTicks > 0) this.barrierActiveTicks--;
     if (this.meleeChainGrace > 0) {
       this.meleeChainGrace--;
@@ -452,8 +458,8 @@ export class Combatant implements FlightState {
     // Melee has its own button: a swing is always a deliberate commitment, never
     // something that happens because you drifted into range. It lunges toward
     // the aim, so it stays useful from outside contact distance.
-    if (isPressed(input, Btn.Melee)) {
-      this.beginMelee(events);
+    if (isPressed(input, Btn.Melee) && this.meleeLockout <= 0) {
+      this.beginMelee(events, target);
       return;
     }
 
@@ -477,7 +483,15 @@ export class Combatant implements FlightState {
     return dist <= this.def.meleeRange;
   }
 
-  private beginMelee(events: SimEvent[]): void {
+  private beginMelee(events: SimEvent[], target?: Combatant | null): void {
+    // Lock on: snap the aim to the target as the swing commits. The turret only
+    // slews ~13deg/tick, so a swing started while the mounts are still coming
+    // around would otherwise lunge along a stale angle - away from the enemy -
+    // and the in-flight tracking cannot correct that inside the startup window.
+    if (target && target.alive) {
+      this.aim = Math.atan2(target.y - this.y, target.x - this.x);
+      this.facing = target.x >= this.x ? 1 : -1;
+    }
     const stages = this.def.melee;
     const maxHits = this.maxMeleeHits;
     let next: AttackDef;
@@ -563,9 +577,17 @@ export class Combatant implements FlightState {
     const a = this.attack;
     if (!a) return;
 
-    // Melee lunges toward the target during startup.
+    // Melee homes onto the target for the duration of the swing rather than
+    // committing to a straight line at the moment of the press. The 2005
+    // reference did the same with `posadd` toward the enemy during startup, and
+    // it is most of why a sword feels like it connects instead of sliding past.
     if (a.lunge && this.attackTick < a.startup + a.active) {
-      const ang = this.aim;
+      let ang = this.aim;
+      if (target && target.alive) {
+        const want = Math.atan2(target.y - this.y, target.x - this.x);
+        // Track hard enough to correct, softly enough that it can still whiff.
+        ang = approachAngle(ang, want, MELEE_TRACK_RATE);
+      }
       this.vx = Math.cos(ang) * a.lunge;
       this.vy = Math.sin(ang) * a.lunge;
     }
@@ -603,8 +625,14 @@ export class Combatant implements FlightState {
       if (wasMelee) {
         if (this.meleeChainQueued && this.meleeHitConfirmed && !isFinisher) {
           // Hit-confirmed chain, exactly as the reference gated its follow-up.
-          this.beginMelee(events);
+          this.beginMelee(events, target);
         } else {
+          // Ending a chain — by finisher or by dropping it — locks melee out
+          // briefly, so sword pressure cannot be maintained indefinitely.
+          this.meleeLockout = Math.max(
+            this.meleeLockout,
+            isFinisher ? this.def.gauges.meleeLockout : Math.round(this.def.gauges.meleeLockout * 0.6),
+          );
           this.meleeCount = 0;
           this.meleeHitConfirmed = false;
           this.meleeChainQueued = false;
@@ -757,6 +785,14 @@ export class Combatant implements FlightState {
     this.life = Math.max(0, this.life - dmg);
     this.hitstop = Math.max(this.hitstop, p.hitstop);
     this.hitstun = Math.max(this.hitstun, p.hitstun);
+    // A brief window after every hit, so overlapping multi-hit sources cannot
+    // chain-lock a mech with no chance to respond.
+    this.invuln = Math.max(this.invuln, this.def.gauges.hitInvuln);
+    // Being hit builds the overdrive meter: a losing pilot fights back toward it.
+    this.sat = Math.min(
+      this.def.gauges.maxSaturation,
+      this.sat + dmg * this.def.gauges.satOnDamage,
+    );
     this.attack = null;
     this.guarding = false;
     this.meleeCount = 0;

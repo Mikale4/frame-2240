@@ -210,6 +210,51 @@ describe('melee chain', () => {
     expect(normal.maxMeleeHits).toBe(6);
   });
 
+  /**
+   * Regression: the swing committed along the slewed aim. Starting a swing while
+   * the mounts were still coming around lunged *away* from the enemy, and the
+   * in-flight tracking could not correct it inside the startup window.
+   */
+  it('locks on to the target as the swing commits', () => {
+    const a = make(HALCYON, 1000, 600, 0, Team.Player);
+    const b = make(NOCTURNE, 1150, 500, 1, Team.Enemy);
+    const k = ctx();
+    a.aim = Math.PI; // mounts pointing the wrong way
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
+    run(a, emptyInput(), 3, b, k);
+    // Now travelling toward the target, not away from it.
+    expect(a.vx).toBeGreaterThan(0);
+    expect(a.vy).toBeLessThan(0);
+  });
+
+  it('connects on an off-axis target', () => {
+    const a = make(HALCYON, 1000, 600, 0, Team.Player);
+    const b = make(NOCTURNE, 1150, 500, 1, Team.Enemy);
+    const k = ctx();
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
+    run(a, emptyInput(), HALCYON.melee[0].startup + 1, b, k);
+    const hit = k.spawns.find((s) => s.kind === ProjKind.Melee);
+    expect(hit).toBeDefined();
+    // The hit spawns close enough to the target to actually land.
+    const d = Math.hypot(hit!.x - b.x, hit!.y - b.y);
+    expect(d).toBeLessThan(hit!.radius + b.def.rig.hurtRadius);
+  });
+
+  it('locks melee out after a chain ends, blocking endless pressure', () => {
+    const { a, b, k } = meleePair();
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
+    run(a, emptyInput(), ATTACK_TOTAL(HALCYON.melee[0]) + 2, b, k);
+    expect(a.attack).toBeNull();
+    expect(a.meleeLockout).toBeGreaterThan(0);
+    // A fresh press during the lockout does nothing.
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
+    expect(a.attack).toBeNull();
+    // ...but works once it expires.
+    run(a, emptyInput(), a.meleeLockout + 1, b, k);
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
+    expect(a.attack?.kind).toBe(ProjKind.Melee);
+  });
+
   it('marks melee as barrier-piercing', () => {
     for (const m of HALCYON.melee) expect(m.barrier).toBe(BarrierResponse.Pierce);
   });

@@ -61,6 +61,19 @@ export interface GaugeDef {
   satOnAbsorb: number;
   /** Ticks a full saturation activation lasts. */
   satDuration: number;
+  /**
+   * Saturation granted per point of damage *taken*. A losing pilot builds
+   * toward their overdrive — a comeback valve the working Iron Babel build uses
+   * (`target.sat += damage * .35`).
+   */
+  satOnDamage: number;
+  /**
+   * Ticks of invulnerability granted immediately after any hit lands, so
+   * overlapping multi-hit sources cannot chain-lock a mech.
+   */
+  hitInvuln: number;
+  /** Ticks melee is locked out after a finisher or a broken chain. */
+  meleeLockout: number;
 }
 
 export interface BarrierDef {
