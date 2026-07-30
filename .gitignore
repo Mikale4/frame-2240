@@ -11,3 +11,7 @@ Thumbs.db
 # Python bytecode from the Blender build scripts
 __pycache__/
 *.pyc
+
+# Generated audio is large and regenerable; keep it out of history until the
+# final set is settled.
+assets/audio/*.mp3
