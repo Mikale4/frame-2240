@@ -421,6 +421,94 @@ def add_box(name, size, loc, rot=(0, 0, 0), bevel=0.005, coll=None, mat=None, be
     return obj
 
 
+def add_wedge(name, size, taper, loc, rot=(0, 0, 0), coll=None, mat=None,
+              bevel=0.005, spin=0.0):
+    """
+    A four-sided frustum: a tapered slab, wide at the base and narrower at the top.
+
+    This is the workhorse shape of the reference art. Building armour from
+    uniformly scaled cubes is what makes a mech read as blocky no matter how many
+    pieces you add; the reference's plates flare and narrow, so every silhouette
+    edge is a diagonal rather than a right angle.
+
+    `size` is (width, depth, height) at the BASE, `taper` the top/base ratio
+    (0.5 = strong wedge, 1.0 = a plain box). `spin` rotates about the part's own
+    axis before scaling, for plates that sit at an angle.
+    """
+    bpy.ops.mesh.primitive_cone_add(
+        vertices=4, radius1=1.0, radius2=max(0.001, taper), depth=1.0,
+        location=loc, rotation=rot,
+    )
+    obj = active()
+    obj.name = name
+    # vertices=4 puts corners on the axes; rotate 45deg so the FACES are axis
+    # aligned, then scale to the requested footprint.
+    import mathutils
+    obj.data.transform(mathutils.Matrix.Rotation(math.radians(45.0) + spin, 4, "Z"))
+    # A unit square inscribed in radius 1 has half-diagonal 1, so side = sqrt(2).
+    k = 1.0 / math.sqrt(2.0)
+    obj.scale = Vector((size[0] * k, size[1] * k, size[2]))
+    with override(obj, [obj]):
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    if bevel > 0:
+        mod = obj.modifiers.new("bevel", "BEVEL")
+        mod.width = bevel
+        mod.segments = 1
+        mod.limit_method = "ANGLE"
+        mod.angle_limit = math.radians(40)
+    _relink(obj, coll)
+    if mat is not None:
+        obj.data.materials.append(mat)
+    return obj
+
+
+def scatter_greebles(prefix, centre, extent, count, coll, mats, seed=0, scale=1.0):
+    """
+    Sprinkles small mechanical detail across a form.
+
+    The reference sprites are dense - each machine carries dozens of small vents,
+    blocks, pipes and caps. Formula-placed detail is not the same as hand-authored
+    detail, but raising the part count meaningfully narrows the gap in how
+    "designed" a surface reads at sprite scale.
+
+    Deterministic: driven by an integer hash of `seed`, so rebuilds are identical.
+    """
+    out = []
+    s = (seed * 1664525 + 1013904223) & 0xFFFFFFFF
+
+    def rnd():
+        nonlocal s
+        s = (s * 1664525 + 1013904223) & 0xFFFFFFFF
+        return ((s >> 8) & 0xFFFF) / 65535.0
+
+    for i in range(count):
+        ox = (rnd() - 0.5) * extent[0]
+        oy = (rnd() - 0.5) * extent[1]
+        oz = (rnd() - 0.5) * extent[2]
+        loc = centre + Vector((ox, oy, oz))
+        mat = mats[int(rnd() * len(mats)) % len(mats)]
+        kind = rnd()
+        yaw = (rnd() - 0.5) * 0.9
+        if kind < 0.45:
+            w = (0.020 + rnd() * 0.045) * scale
+            out.append(add_box(f"{prefix}_g{i}", (w * 2.4, w, w * 1.5), loc,
+                               (0, yaw, 0), bevel=0.003, coll=coll, mat=mat))
+        elif kind < 0.75:
+            r = (0.012 + rnd() * 0.020) * scale
+            out.append(add_cyl(f"{prefix}_g{i}", r, r * (1.6 + rnd() * 2.2), loc,
+                               (math.radians(90), 0, yaw), 8, coll=coll, mat=mat))
+        else:
+            w = (0.014 + rnd() * 0.026) * scale
+            out.append(add_wedge(f"{prefix}_g{i}", (w * 3.0, w, w * 2.0), 0.45, loc,
+                                 (0, math.radians(90) + yaw, 0), coll=coll, mat=mat))
+    return out
+
+
+def add_slab(name, size, loc, rot=(0, 0, 0), coll=None, mat=None):
+    """A thin armour shell laid over a base form. Kept crisp (tiny bevel)."""
+    return add_box(name, size, loc, rot, bevel=0.004, coll=coll, mat=mat)
+
+
 def along(base, angle, dist):
     """Point `dist` down a limb whose axis is rotated `angle` about Y."""
     return base + Vector((-dist * math.sin(angle), 0, -dist * math.cos(angle)))
@@ -454,16 +542,24 @@ def segmented_limb(prefix, hip, angle, length, width, depth, coll, shell, frame,
     for i in range(segments):
         d = seg_len * (i + 0.5)
         w = width * (taper ** i)
+        # Each band is itself a slight wedge, and the whole limb narrows toward
+        # the joint, so the leg silhouette is a series of diagonals.
         out.append(
-            add_box(f"{prefix}_seg{i}", (w + 0.02, depth * (taper ** i), seg_len * 0.80),
-                    along(hip, angle, d), (0, angle, 0), coll=coll, mat=shell)
+            add_wedge(f"{prefix}_seg{i}", (w + 0.03, depth * (taper ** i) + 0.01, seg_len * 0.80),
+                      0.60, along(hip, angle, d), (0, angle, 0), coll=coll, mat=shell)
+        )
+        # Thin outer armour shell over the outboard face.
+        out.append(
+            add_slab(f"{prefix}_shell{i}", (w * 0.52, depth * 0.30, seg_len * 0.62),
+                     along(hip, angle, d) + Vector((w * 0.44, 0, 0)), (0, angle, 0),
+                     coll=coll, mat=frame if i % 2 else shell)
         )
         if i < segments - 1:
-            gw = w * 0.86
+            gw = w * 0.84
             out.append(
-                add_box(f"{prefix}_gap{i}", (gw, depth * (taper ** i) * 0.86, seg_len * 0.22),
+                add_box(f"{prefix}_gap{i}", (gw, depth * (taper ** i) * 0.84, seg_len * 0.20),
                         along(hip, angle, seg_len * (i + 1)), (0, angle, 0),
-                        bevel=0.006, coll=coll, mat=frame)
+                        bevel=0.004, coll=coll, mat=frame)
             )
     return out
 
@@ -556,11 +652,15 @@ def build_mech(mech_id, palette_key=None):
     R = (0, PITCH, 0)
     hx, hy, hz = HULL
     o = []
-    o.append(add_box("c_hull", (hx, hy, hz), piv + Vector((0.02, 0, 0)), R, coll=coll, mat=M_HULL))
-    o.append(add_box("c_deck", (hx * 0.74, hy * 0.9, 0.10), piv + Vector((-0.03, 0, hz * 0.60)), R,
-                     coll=coll, mat=M_TRIM))
-    o.append(add_box("c_nose", (0.24, hy * 0.82, 0.24), piv + Vector((hx * 0.50, 0, -0.10)), R,
-                     coll=coll, mat=M_SUB))
+    # Hull as a wedge lying on its side: broad at the back, tapering to the nose.
+    o.append(add_wedge("c_hull", (hz, hy, hx), 0.62, piv + Vector((0.02, 0, 0)),
+                       (0, math.radians(90) + PITCH, 0), coll=coll, mat=M_HULL))
+    o.append(add_slab("c_deck", (hx * 0.70, hy * 0.86, 0.055),
+                      piv + Vector((-0.03, 0, hz * 0.56)), R, coll=coll, mat=M_TRIM))
+    # Chisel nose, angled down.
+    o.append(add_wedge("c_nose", (0.26, hy * 0.80, 0.30), 0.34,
+                       piv + Vector((hx * 0.50, 0, -0.08)),
+                       (0, math.radians(74), 0), coll=coll, mat=M_SUB))
     o.append(add_box("c_belly", (hx * 0.62, hy * 0.88, 0.12), piv + Vector((0.04, 0, -hz * 0.60)), R,
                      coll=coll, mat=M_SUB))
     o.append(add_box("c_collar", (0.18, hy + 0.02, hz * 0.94), piv + Vector((-hx * 0.48, 0, 0.06)),
@@ -586,6 +686,9 @@ def build_mech(mech_id, palette_key=None):
         # The heavy frame carries an ammo hopper feeding the rotary cannon.
         o.append(add_box("c_hopper", (0.26, hy * 0.5, 0.20), piv + Vector((0.10, -hy * 0.42, -0.22)),
                          R, coll=coll, mat=M_FRAME))
+    o += scatter_greebles("c_gr", piv + Vector((0.0, -hy * 0.50, 0.0)),
+                          (hx * 0.86, 0.06, hz * 0.86), 14, coll,
+                          [M_FRAME, M_SUB, M_ACC], seed=11)
     parts["core"] = join_as(pn("core"), o, piv, coll)
 
     # ---- head: small forward cockpit pod --------------------------------
@@ -631,6 +734,8 @@ def build_mech(mech_id, palette_key=None):
         for i, z in enumerate((0.06, -0.08)):
             o.append(add_box(f"b_grill{i}", (0.06, 0.40, 0.05),
                              piv + Vector((-0.22, 0, z)), coll=coll, mat=M_FRAME))
+    o += scatter_greebles("b_gr", piv + Vector((-0.06, -0.16, 0.02)), (0.30, 0.06, 0.34),
+                          10, coll, [M_FRAME, M_SUB, M_ACC], seed=23)
     parts["backpack"] = join_as(pn("backpack"), o, piv, coll)
 
     # ---- lower body: hips + two reverse-joint legs ------------------------
@@ -691,15 +796,25 @@ def build_mech(mech_id, palette_key=None):
         shell = M_HULL if near else M_FAR
         sgn = -1 if near else 1
         o = []
-        # Chamfered pauldron. A small two-segment bevel keeps the corners crisp;
-        # a heavy bevel reads as soft/rounded, which is not the reference look.
-        o.append(add_box(f"a_pauld_{key}", (0.28, 0.24, 0.34),
-                         piv + Vector((-0.02, 0, 0.09)), (0, math.radians(10), 0),
-                         bevel=0.022, bevel_seg=2, coll=coll, mat=shell))
-        # Overlapping outer plate with a visible step, the reference's signature.
-        o.append(add_box(f"a_plate_{key}", (0.22, 0.09, 0.28),
-                         piv + Vector((0.01, sgn * 0.14, 0.10)), (0, math.radians(10), 0),
-                         bevel=0.012, coll=coll, mat=M_SUB))
+        # Pauldron as a tapered scoop: wide at the shoulder, narrowing outward,
+        # tilted off-axis. This is the reference's signature shoulder, and it is
+        # what a plain box cannot express.
+        # A long sweeping scoop, roughly twice as long as it is wide and strongly
+        # tapered, angled back over the shoulder. Proportion carries as much of
+        # the reference read as the taper does.
+        o.append(add_wedge(f"a_pauld_{key}", (0.30, 0.28, 0.62), 0.30,
+                           piv + Vector((-0.09, 0, 0.18)),
+                           (math.radians(sgn * -8), math.radians(-32), 0),
+                           coll=coll, mat=shell))
+        # Thin outer shell laid over it, edge visible along the sweep.
+        o.append(add_wedge(f"a_shell_{key}", (0.20, 0.07, 0.54), 0.34,
+                           piv + Vector((-0.08, sgn * 0.155, 0.19)),
+                           (math.radians(sgn * -8), math.radians(-32), 0),
+                           coll=coll, mat=M_SUB))
+        # Sharp fin sweeping back off the shoulder.
+        o.append(add_wedge(f"a_fin_{key}", (0.10, 0.05, 0.26), 0.18,
+                           piv + Vector((-0.16, sgn * 0.08, 0.22)),
+                           (0, math.radians(-38), 0), coll=coll, mat=M_ACC))
         o.append(add_box(f"a_lip_{key}", (0.30, 0.10, 0.10),
                          piv + Vector((-0.01, sgn * 0.10, 0.24)), (0, math.radians(10), 0),
                          coll=coll, mat=M_SUB))
@@ -734,6 +849,9 @@ def build_mech(mech_id, palette_key=None):
                     o.append(add_box(f"a_tine_{key}{c}", (0.20, 0.035, 0.045),
                                      piv + Vector((0.40, 0.11, 0.05 - c * 0.06)),
                                      (0, math.radians(-8 + c * 8), 0), coll=coll, mat=M_ACC))
+        o += scatter_greebles(f"a_gr_{key}", piv + Vector((0.02, sgn * 0.15, 0.10)),
+                              (0.26, 0.05, 0.36), 8, coll,
+                              [M_FRAME, M_SUB, M_ACC], seed=31 + (0 if near else 7))
         parts[key] = join_as(pn(key), o, piv, coll)
 
     # ---- main weapon: oversized forward rifle -----------------------------
@@ -742,7 +860,9 @@ def build_mech(mech_id, palette_key=None):
     if spec["weapon"] == "rifle":
         # Long-barrel precision rifle: slim, scoped, drum-fed.
         o.append(add_box("w_recv", (0.36, 0.17, 0.24), piv, coll=coll, mat=M_SUB))
-        o.append(add_box("w_shroud", (0.40, 0.15, 0.16), piv + Vector((0.34, 0, 0.02)), coll=coll, mat=M_TRIM))
+        o.append(add_wedge("w_shroud", (0.18, 0.16, 0.46), 0.62,
+                           piv + Vector((0.34, 0, 0.02)), (0, math.radians(90), 0),
+                           coll=coll, mat=M_TRIM))
         o.append(add_cyl("w_barrel", 0.045, 0.78, piv + Vector((0.56, 0, 0.02)),
                          (0, math.radians(90), 0), 14, coll=coll, mat=M_FRAME))
         o.append(add_cyl("w_brake", 0.075, 0.12, piv + Vector((0.94, 0, 0.02)),
@@ -826,9 +946,11 @@ def build_mech(mech_id, palette_key=None):
         o = []
         if twin:
             # Interceptor: a pair of slim high-velocity bells.
-            o.append(add_box(f"t_house_{key}", (0.26, 0.22, 0.28), piv, coll=coll, mat=shell))
-            o.append(add_box(f"t_cowl_{key}", (0.10, 0.24, 0.30), piv + Vector((0.10, 0, 0.02)),
-                             coll=coll, mat=M_SUB))
+            o.append(add_wedge(f"t_house_{key}", (0.30, 0.24, 0.52), 0.40, piv,
+                               (0, math.radians(-90), 0), coll=coll, mat=shell))
+            o.append(add_wedge(f"t_cowl_{key}", (0.30, 0.26, 0.14), 0.46,
+                               piv + Vector((0.10, 0, 0.03)),
+                               (0, math.radians(-90), 0), coll=coll, mat=M_SUB))
             o.append(add_cyl(f"t_bell_{key}", 0.135, 0.28, piv + Vector((-0.24, 0, -0.01)),
                              (0, math.radians(90), 0), 18, coll=coll, cone_r2=0.085, mat=M_FRAME))
             o.append(add_cyl(f"t_inner_{key}", 0.10, 0.05, piv + Vector((-0.38, 0, -0.01)),
