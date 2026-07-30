@@ -1,0 +1,131 @@
+/** Shared simulation vocabulary. Nothing here may import Phaser. */
+
+export const enum Btn {
+  Main = 0,
+  Heavy = 1,
+  Sub = 2,
+  Boost = 3,
+  Barrier = 4,
+  ModeCycle = 5,
+  Lock = 6,
+}
+export const BTN_COUNT = 7;
+
+/** One tick of player intent. `dx`/`dy` are in [-1, 1] (already 8-way snapped). */
+export interface InputFrame {
+  dx: number;
+  dy: number;
+  /** Bitmask of buttons currently held. */
+  held: number;
+  /** Bitmask of buttons that went down on this tick. */
+  pressed: number;
+  /** Optional free-aim vector (mouse / right stick). Null means use soft-lock. */
+  aimX: number | null;
+  aimY: number | null;
+}
+
+export function emptyInput(): InputFrame {
+  return { dx: 0, dy: 0, held: 0, pressed: 0, aimX: null, aimY: null };
+}
+
+export function isHeld(f: InputFrame, b: Btn): boolean {
+  return (f.held & (1 << b)) !== 0;
+}
+
+export function isPressed(f: InputFrame, b: Btn): boolean {
+  return (f.pressed & (1 << b)) !== 0;
+}
+
+/** Saturation modes, mirroring the reference's three "concentration" types. */
+export const enum SatMode {
+  Shield = 0,
+  Shoot = 1,
+  Speed = 2,
+}
+export const SAT_MODE_COUNT = 3;
+export const SAT_MODE_NAMES: readonly string[] = ['SHIELD', 'SHOOT', 'SPEED'];
+
+/** High-level action the combatant is committed to. */
+export const enum ActState {
+  Free = 0,
+  Attack = 1,
+  Barrier = 2,
+  Hitstun = 3,
+  GuardHold = 4,
+  Downed = 5,
+  Dead = 6,
+}
+
+/** Phase inside an attack. Startup -> Active -> Recovery, as CLAUDE.md requires. */
+export const enum Phase {
+  Startup = 0,
+  Active = 1,
+  Recovery = 2,
+}
+
+export const enum Team {
+  Player = 0,
+  Enemy = 1,
+}
+
+/** How a projectile interacts with the defender's barrier. */
+export const enum BarrierResponse {
+  /** Absorbed and converted into saturation charge (standard shots). */
+  Absorb = 0,
+  /** Passes through a barrier entirely (the reference's melee "unblockable"). */
+  Pierce = 1,
+}
+
+export interface ProjectileSpawn {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  damage: number;
+  guardDamage: number;
+  /** Ticks before self-removal. */
+  life: number;
+  radius: number;
+  ownerId: number;
+  team: Team;
+  kind: ProjKind;
+  barrier: BarrierResponse;
+  /** Hitstop applied to both sides on connect. */
+  hitstop: number;
+  hitstun: number;
+  knockback: number;
+  /** Homing turn rate in radians/tick (0 = straight). */
+  homing: number;
+  /** Extra hits allowed before removal (beams/melee arcs pass through). */
+  pierceCount: number;
+}
+
+export const enum ProjKind {
+  Bullet = 0,
+  Heavy = 1,
+  Beam = 2,
+  Missile = 3,
+  Melee = 4,
+}
+
+/** Events the simulation emits for the renderer/audio. Cleared each tick. */
+export type SimEvent =
+  | { t: 'fire'; x: number; y: number; angle: number; kind: ProjKind; ownerId: number }
+  | { t: 'hit'; x: number; y: number; damage: number; ownerId: number; victimId: number; kind: ProjKind }
+  | { t: 'guard'; x: number; y: number; victimId: number }
+  | { t: 'absorb'; x: number; y: number; victimId: number; charge: number }
+  | { t: 'barrier'; x: number; y: number; id: number }
+  | { t: 'guardBreak'; x: number; y: number; id: number }
+  | { t: 'dash'; x: number; y: number; angle: number; id: number }
+  | { t: 'melee'; x: number; y: number; angle: number; id: number; stage: number }
+  | { t: 'explode'; x: number; y: number; big: boolean }
+  | { t: 'saturation'; id: number; mode: SatMode }
+  | { t: 'modeCycle'; id: number; mode: SatMode }
+  | { t: 'ko'; id: number };
+
+export const enum MatchPhase {
+  Intro = 0,
+  Fight = 1,
+  KO = 2,
+  Over = 3,
+}

@@ -1,0 +1,278 @@
+{
+  "px_per_bu": 120.0,
+  "display_scale": 0.5,
+  "logical_per_bu": 60.0,
+  "tile": 256,
+  "ortho_scale": 2.1333333333333333,
+  "camera": {
+    "azimuth_deg": 16.0,
+    "elevation_deg": 7.0
+  },
+  "note": "Every PNG is TILE x TILE with the part pivot at the exact centre; draw with origin 0.5,0.5 at the rig offset.",
+  "parts": {
+    "halcyon": {
+      "core": {
+        "file": "halcyon_core.png",
+        "dims_bu": [
+          0.3837,
+          0.395,
+          0.53
+        ],
+        "dims_logical_px": [
+          23.0,
+          23.7,
+          31.8
+        ]
+      },
+      "head": {
+        "file": "halcyon_head.png",
+        "dims_bu": [
+          0.185,
+          0.2075,
+          0.3997
+        ],
+        "dims_logical_px": [
+          11.1,
+          12.4,
+          24.0
+        ]
+      },
+      "backpack": {
+        "file": "halcyon_backpack.png",
+        "dims_bu": [
+          0.3344,
+          0.26,
+          0.44
+        ],
+        "dims_logical_px": [
+          20.1,
+          15.6,
+          26.4
+        ]
+      },
+      "lowerBody": {
+        "file": "halcyon_lowerBody.png",
+        "dims_bu": [
+          0.5434,
+          0.4,
+          0.725
+        ],
+        "dims_logical_px": [
+          32.6,
+          24.0,
+          43.5
+        ]
+      },
+      "leftArm": {
+        "file": "halcyon_leftArm.png",
+        "dims_bu": [
+          0.3804,
+          0.3,
+          0.3802
+        ],
+        "dims_logical_px": [
+          22.8,
+          18.0,
+          22.8
+        ]
+      },
+      "subWeapon": {
+        "file": "halcyon_subWeapon.png",
+        "dims_bu": [
+          0.315,
+          0.17,
+          0.22
+        ],
+        "dims_logical_px": [
+          18.9,
+          10.2,
+          13.2
+        ]
+      },
+      "rightArm": {
+        "file": "halcyon_rightArm.png",
+        "dims_bu": [
+          0.3804,
+          0.3,
+          0.3802
+        ],
+        "dims_logical_px": [
+          22.8,
+          18.0,
+          22.8
+        ]
+      },
+      "mainWeapon": {
+        "file": "halcyon_mainWeapon.png",
+        "dims_bu": [
+          0.68,
+          0.11,
+          0.3275
+        ],
+        "dims_logical_px": [
+          40.8,
+          6.6,
+          19.7
+        ]
+      },
+      "leftThruster": {
+        "file": "halcyon_leftThruster.png",
+        "dims_bu": [
+          0.2933,
+          0.2459,
+          0.5998
+        ],
+        "dims_logical_px": [
+          17.6,
+          14.8,
+          36.0
+        ]
+      },
+      "rightThruster": {
+        "file": "halcyon_rightThruster.png",
+        "dims_bu": [
+          0.2933,
+          0.2341,
+          0.5917
+        ],
+        "dims_logical_px": [
+          17.6,
+          14.0,
+          35.5
+        ]
+      }
+    },
+    "nocturne": {
+      "core": {
+        "file": "nocturne_core.png",
+        "dims_bu": [
+          0.3837,
+          0.395,
+          0.53
+        ],
+        "dims_logical_px": [
+          23.0,
+          23.7,
+          31.8
+        ]
+      },
+      "head": {
+        "file": "nocturne_head.png",
+        "dims_bu": [
+          0.185,
+          0.2075,
+          0.3997
+        ],
+        "dims_logical_px": [
+          11.1,
+          12.4,
+          24.0
+        ]
+      },
+      "backpack": {
+        "file": "nocturne_backpack.png",
+        "dims_bu": [
+          0.3344,
+          0.26,
+          0.44
+        ],
+        "dims_logical_px": [
+          20.1,
+          15.6,
+          26.4
+        ]
+      },
+      "lowerBody": {
+        "file": "nocturne_lowerBody.png",
+        "dims_bu": [
+          0.5434,
+          0.4,
+          0.725
+        ],
+        "dims_logical_px": [
+          32.6,
+          24.0,
+          43.5
+        ]
+      },
+      "leftArm": {
+        "file": "nocturne_leftArm.png",
+        "dims_bu": [
+          0.3804,
+          0.3,
+          0.3802
+        ],
+        "dims_logical_px": [
+          22.8,
+          18.0,
+          22.8
+        ]
+      },
+      "subWeapon": {
+        "file": "nocturne_subWeapon.png",
+        "dims_bu": [
+          0.315,
+          0.17,
+          0.22
+        ],
+        "dims_logical_px": [
+          18.9,
+          10.2,
+          13.2
+        ]
+      },
+      "rightArm": {
+        "file": "nocturne_rightArm.png",
+        "dims_bu": [
+          0.3804,
+          0.3,
+          0.3802
+        ],
+        "dims_logical_px": [
+          22.8,
+          18.0,
+          22.8
+        ]
+      },
+      "mainWeapon": {
+        "file": "nocturne_mainWeapon.png",
+        "dims_bu": [
+          0.68,
+          0.11,
+          0.3275
+        ],
+        "dims_logical_px": [
+          40.8,
+          6.6,
+          19.7
+        ]
+      },
+      "leftThruster": {
+        "file": "nocturne_leftThruster.png",
+        "dims_bu": [
+          0.2933,
+          0.2459,
+          0.5998
+        ],
+        "dims_logical_px": [
+          17.6,
+          14.8,
+          36.0
+        ]
+      },
+      "rightThruster": {
+        "file": "nocturne_rightThruster.png",
+        "dims_bu": [
+          0.2933,
+          0.2341,
+          0.5917
+        ],
+        "dims_logical_px": [
+          17.6,
+          14.0,
+          35.5
+        ]
+      }
+    }
+  }
+}

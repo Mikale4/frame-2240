@@ -1,0 +1,346 @@
+# Decision Log
+
+Append-only record of design and technical decisions, newest section last.
+Each entry states the decision, why, and what it cost.
+
+---
+
+## 2026-07-30 — Session 1: audit, core, art pipeline, vertical slice
+
+### D1 — The simulation must not import Phaser
+
+**Decision.** `core/`, `combat/`, `projectiles/`, `mechs/`, `data/` and `ai/`
+contain no Phaser reference. `MatchSim.step(playerInput, enemyInput)` is the only
+entry point.
+
+**Why.** It makes combat unit-testable in plain Node (70 tests run in ~1.5 s with
+no DOM), it keeps determinism auditable, and it means a replay, a second human
+and the AI all drive identical code.
+
+**Cost.** The renderer must mirror state every frame rather than owning it, and
+`SimEvent[]` has to carry everything the presentation needs.
+
+---
+
+### D2 — Acceleration-based flight, not the reference's `velset`
+
+**Decision.** Momentum-based flight: accelerate toward the input direction, light
+coast drag, a hard air brake, and a constant-velocity dash burst.
+
+**Why.** The 2005 reference sets velocity directly each tick (`velset` in
+`Statedef 0`), which is extremely snappy but has zero momentum. CLAUDE.md
+explicitly requires "momentum, braking, boost, quick dash, and recoil" and
+"acceleration, drag, air brake". Pure `velset` cannot express recoil or braking
+as anything the player feels.
+
+**How the reference's feel is preserved.** Acceleration is high (0.62 px/tick²
+against a 5.2 px/tick cap, so ~8 ticks to top speed), diagonals are normalised
+exactly as the reference divided by 1.414, and the dash remains an authored
+constant-velocity burst in the spirit of its `vel * 2.25`.
+
+**Cost.** Turning is slightly less instant than the original. Recorded as a
+deliberate divergence.
+
+---
+
+### D3 — Overspeed bleeds instead of hard-clamping
+
+**Decision.** The per-tick speed cap is `max(nominalCap, previousSpeed * 0.96)`.
+
+**Why.** The first implementation compared against `currentSpeed * 0.94` *after*
+acceleration, which created a feedback loop that settled at ~10 px/tick instead
+of the 5.2 cap — caught by `flight.test.ts › respects the speed cap`. But a naive
+hard clamp would instantly erase recoil and melee-launch impulses, killing the
+momentum D2 exists to provide.
+
+**Result.** Ordinary thrust tops out exactly at the cap; externally applied
+overspeed decays 4% per tick, so a launch reads as momentum.
+
+---
+
+### D4 — The Boost button does three jobs
+
+**Decision.** One button: tap + direction = dash, hold + direction = boost,
+hold with no direction = air brake. Barrier gets its own key.
+
+**Why.** The reference bound `A` alone to Barrier and `direction + A` to SpeedUp,
+proving one button can carry direction-dependent meaning. Air brake needed a home
+and "hold with no direction" is the natural free slot. Splitting Barrier onto its
+own key keeps the defensive option unambiguous under pressure, which matters more
+than exact key parity.
+
+**Cost.** A documented divergence from the original's `A`-only barrier.
+
+---
+
+### D5 — Melee is a hit-confirmed chain that ignores barriers
+
+**Decision.** Three stages (0 → 1 → 2). A chain input is only buffered inside an
+authored window, and the chain only advances if the previous stage actually
+connected. Melee carries `BarrierResponse.Pierce`. Speed saturation raises the
+hit cap from 3 to 6.
+
+**Why.** All four properties are in the reference: the chain window is
+`time = [14,26]` with `command = "x"`; the gate is `var(36)`, set only by
+`ProjHitTime(21)`/`ProjContactTime(21)`; the cap is `var(41) < 3` rising to
+`< 6` under `var(58) = 2`; and the projectile is tagged
+`attr = S, HP ; 防壁不能型` — "barrier-impossible type". Together they make
+melee the answer to a turtling opponent while keeping whiffs punishable.
+
+---
+
+### D6 — Barrier absorbs into the saturation meter, and can cancel for double cost
+
+**Decision.** A 6-tick action granting 36 ticks of invulnerability; absorbed
+shots add saturation charge; bursting out of guard or hitstun costs the normal
+price plus a penalty.
+
+**Why.** Straight from the reference. `Statedef 1200` grants `var(53) = 36`
+(commented `;(f)`, frames) and ends at `time > 6`; the hint sheet states blocked
+shots are "converted into the 集中 gauge"; and entering from `PrevStateNo = 151`
+(guard) or `5030` (hitstun) charges a second `PowerMax/4`.
+
+**Why it matters.** This is the mechanic that makes the game a *fighter* rather
+than a shooter: defence is an offensive investment, and escaping pressure is
+possible but expensive.
+
+---
+
+### D7 — Barrier gets its own gauge, separate from weapon energy
+
+**Decision.** Five gauges: life, boost, barrier, weapon energy, saturation.
+
+**Why.** The reference spent one `var(28)` "power" pool on both shots and
+barrier. CLAUDE.md requires a "barrier/guard resource and guard break" *and* lists
+five distinct HUD gauges. A shared pool cannot express guard break.
+
+**Cost.** More gauges to read; mitigated by making life and saturation long bars
+and the other three short.
+
+---
+
+### D8 — Saturation keeps three modes with the reference's asymmetries
+
+**Decision.** Shield / Shoot / Speed, cycled by a dedicated button, activated
+with Main+Heavy on a full meter. Shield drains at 2× rate.
+
+**Why.** The hint sheet enumerates exactly three (シールド / シュート / スピード)
+with concrete numbers, `0.cmd` cycles them with `var(58) = (var(58)+1)%3` on
+Start, activation is `command = "x" && command = "y"`, and Shield's faster drain
+is the reference's extra `var(40) = 5` when `var(58) = 0`. The published English
+name is "Saturation", which is where CLAUDE.md's term comes from.
+
+**Tuning taken from the sheet.** Shoot: damage ×1.5, projectile speed ×1.6,
+homing ×1.8, energy regen ×2.2 and an instant 50% refill. Speed: velocity ×1.75,
+melee cap 6, boost tank refilled. Shield: +24 ticks of invulnerability and an
+incoming-shot erase bubble.
+
+---
+
+### D9 — Firing anchors movement
+
+**Decision.** While an attack is committed, velocity is multiplied per tick:
+0.24 (beam), 0.55 (heavy), 0.76 (missile), 0.9 (bullet).
+
+**Why.** The reference does this explicitly with `velmul 0.2/fvar(10)` during
+charge states and `0.5/fvar(10)` during the release. It is what stops the game
+degenerating into strafing while holding fire, and it makes heavy weapons a real
+positional commitment.
+
+---
+
+### D10 — Mechs are data, following the reference's own architecture
+
+**Decision.** `MechDef` records in `data/mechs.ts`; no per-mech subclasses.
+
+**Why.** `chars/rs/` in the reference is *one* character shared by ~20 mechs,
+differentiated by `var(1)` with animations resolved as `61000 + var(1)*10`. That
+design shipped 20 machines off one state machine. Copying the shape means a new
+mech is data, not code.
+
+---
+
+### D11 — Rig = parent + offset + rotation + explicit draw order + a `follow` mode
+
+**Decision.** `MechRigDef` lists ten parts with `parent`, `x`, `y`, `rotation`,
+plus a `follow` field of `chassis | turret | thruster | fixed`, and a separate
+`drawOrder`.
+
+**Why.** Two sources converge. The reference builds mechs from one helper per part
+(head 6000, upper limbs 6200, arms 6300, backpack 6400, legs 6500/6510) and drives
+per-part angles in `fvar(1..5)`. Iron Babel's `light_exo.json` independently
+arrived at bones-plus-`drawOrder`, which is the cleanest 2D expression of it. The
+`follow` field is this project's addition: it is what lets arms and head track the
+target while the chassis banks with velocity, satisfying "multipart mechs with
+independent aiming, recoil, banking, and thrusters".
+
+**Rejected.** Iron Babel's monolithic 4.47 MB single-HTML architecture, per
+CLAUDE.md.
+
+---
+
+### D12 — Blender parts are rendered pivot-centred, one per PNG
+
+**Decision.** For each part: move its origin to the world origin, point an
+orthographic camera at the origin, render a 256×256 transparent PNG.
+
+**Why.** It guarantees the pivot is at the exact image centre, so the runtime can
+use `setOrigin(0.5, 0.5)` and place parts purely from rig offsets. The
+alternative — rendering parts in situ — would align only in the neutral pose and
+would break as soon as a part rotated.
+
+**Scale contract.** `PX_PER_BU = 120`, displayed at 0.5 → **1 Blender unit = 60
+logical pixels**, matching the units the rig offsets are authored in.
+
+---
+
+### D13 — `view_transform = 'Standard'` for all game art
+
+**Decision.** Override Blender's default view transform.
+
+**Why.** The first mech render came back washed out with every emissive detail
+clipped to flat white. Blender 4/5 default to a filmic/AgX grade, which is right
+for photographic renders and wrong for game sprites that need literal palette
+colours. Fixing the transform (and dropping emission strengths to ≤2.5) restored
+the palette.
+
+**Corollary.** The arena's first pass was also blown out — area-light power falls
+off with distance squared and the arena lights sit ~30 units out, so the
+mech-rig energies were ~10× too high at that range.
+
+---
+
+### D14 — A separate unzoomed camera for the HUD
+
+**Decision.** `BattleScene` adds `uiCam`; the main camera ignores UI objects and
+`uiCam` ignores world objects.
+
+**Why.** The camera zooms between 0.74 and 1.34 to keep both pilots framed.
+`setScrollFactor(0)` exempts an object from *scrolling* but **not** from zoom, so
+at zoom 1.3 the HUD scaled about the camera centre and the top gauges left the
+screen — visible in `renders/debug/shot_battle_melee.png` before the fix.
+
+**Knock-on.** The parallax backdrop could not stay on `scrollFactor(0)` either,
+because at zoom 0.74 a 960-wide layer covers only 710 px and leaves gaps. It is
+now positioned at `camera.worldView` and scaled by `1/zoom` every frame, which
+covers the view exactly at any zoom.
+
+---
+
+### D15 — Effects are procedural and deliberately restrained
+
+**Decision.** Generate glow/spark/ring/streak/slash/shard/hex textures on a
+canvas at boot; throttle thruster emission to every other call; keep glow scales
+small.
+
+**Why.** Procedural keeps every effect original and recolourable per mech at zero
+asset cost. The restraint is a bug fix: two nozzles per mech emitting an additive
+128 px glow every frame with a 7–14 frame life stacks ~28 sprites and completely
+erased the chassis. Effects now read as effects rather than as light bloom.
+
+---
+
+### D16 — Audio is synthesised, not sampled
+
+**Decision.** All 18 sounds come from Web Audio oscillators and filtered noise in
+`audio/Sfx.ts`.
+
+**Why.** Guarantees originality, ships no audio payload, and gives per-event
+parametric control (melee pitch rises with chain stage). The context is created
+lazily and unlocked on the first gesture, as browsers require.
+
+**Cost.** Less characterful than authored samples; revisit in M8.
+
+---
+
+### D17 — The CPU plays through the player's own input interface
+
+**Decision.** `RivalAI.think(...)` returns an `InputFrame`. It reads only
+positions, velocities, gauges and live projectiles — the things a player can see.
+
+**Why.** "Fair CPU behaviour" is a definition-of-done item. Emitting input frames
+makes cheating structurally impossible: the AI cannot exceed a speed cap, fire
+without energy, or act during hitstun, because it goes through `Combatant` like
+the player. Reaction delay scales from ~13 ticks at skill 1 to ~4 at skill 8,
+and eight levels mirror the reference's `ai_1`…`ai_8`.
+
+**Verified.** `match.test.ts` asserts `pressed ⊆ held` every tick over 600 ticks,
+that gauges never go negative over 1200 ticks, that the AI damages an idle
+opponent, and that a scripted aggressor can damage it.
+
+---
+
+### D18 — Attack frame 0 is consumed on the tick the attack starts
+
+**Decision.** `stepAttack` advances `attackTick` *before* evaluating the phase and
+firing, and the starting tick runs `stepAttack` immediately.
+
+**Why.** The first implementation did neither, so every attack ran a tick late and
+`phase` reported `Active` before the hit actually existed — an inconsistency that
+would have made all published frame data wrong by one. Caught by
+`combat.test.ts › walks startup → active → recovery`.
+
+**Semantics now.** `attackTick` is the 1-based frame number; an attack with
+`startup: 3` spawns its hit on frame 3.
+
+---
+
+### D19 — Phaser objects must survive their scene's shutdown
+
+**Decision.** `Menu` marks itself dead on the scene's `SHUTDOWN` and `DESTROY`
+events, and every public method early-returns when dead.
+
+**Why.** A scene shutdown destroys its game objects without going through
+`Menu.destroy()`, leaving `Text` instances with a null canvas context. Any later
+`refresh()` threw inside Phaser's `updateText`. A `destroyed` flag alone was not
+enough because nothing called `destroy()` on that path.
+
+---
+
+### D20 — `tsc` only type-checks `src/`
+
+**Decision.** `tsconfig.json` includes `src` only.
+
+**Why.** `vite.config.ts` uses Node builtins (`node:fs`, `node:path`, `Buffer`,
+`process`) for the dev screenshot sink and the build-output cleanup. Including it
+in the app's `tsconfig` demanded `@types/node`, and adding a dependency purely to
+type-check a file that Vite compiles through esbuild anyway is not worth it.
+
+---
+
+### D21 — Blender operators run under `temp_override`
+
+**Decision.** Every `bpy.ops.object.*` call in the build scripts is wrapped in
+`bpy.context.temp_override(object=…, active_object=…, selected_objects=…)`.
+
+**Why.** Driven over the MCP bridge — especially after any file open or reset —
+`bpy.context` has no area/region and `bpy.ops.object.join` fails its poll with
+"context is incorrect", even though selection and active object are correct.
+Supplying the objects explicitly makes the scripts work regardless of UI state,
+which also makes them usable in `blender --background`.
+
+---
+
+### D22 — Part objects are namespaced per mech
+
+**Decision.** Blender part objects are named `<mech>_<part>`; `render_parts`
+raises if any expected part is missing.
+
+**Why.** The second mech's `core` collided with the first's, so Blender renamed it
+`core.001`, the name lookup missed, and **all ten NOCTURNE sprites were silently
+never written** — surfaced only as ten Phaser load failures in the browser. The
+lesson is the guard, not just the rename: a pipeline that can silently produce
+nothing must fail loudly instead.
+
+---
+
+### D23 — Original naming throughout
+
+**Decision.** Mechs **AV-07 HALCYON** and **AV-13 NOCTURNE**; pilots **NAIA
+VESK** and **HALDEN ROOK**; factions **CONCORD SKYWARD** and **EMBERLINE PACT**;
+arena **CATHEDRAL YARD**; weapons VULCAN / BREAKER / LANCE / SCATTER / SEEKER /
+SALVO / SWORD I–III.
+
+**Why.** The reference's own names (M.A.R.S., its 20 machine codes, its pilots and
+its five factions) are catalogued in the audit as *evidence*, never reused.
+Nothing from the reference folders ships in this project.
