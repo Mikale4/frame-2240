@@ -108,6 +108,46 @@ export interface DefenceDef {
   groundedMul: number;
 }
 
+/**
+ * Lock-on melee profile.
+ *
+ * Modelled on the working Iron Babel build's `meleeProfile`: melee is not a
+ * manually re-pressed chain but a single committed sequence. One press acquires
+ * a target, thrusts onto it, then runs `hits` swings while repositioning around
+ * it, with escalating damage and a separating finisher.
+ */
+export interface MeleeProfile {
+  /** Display name, announced when the sequence opens. */
+  name: string;
+  /** Number of swings in the sequence. */
+  hits: number;
+  /** Approach speed while closing on the target. */
+  thrust: number;
+  /** Velocity lerp factor toward the desired position, 0..1. */
+  tracking: number;
+  /** Distance at which a swing connects. */
+  range: number;
+  /** Furthest a target may be to acquire a lock at all. */
+  acquireRange: number;
+  /** Energy to open the sequence. */
+  energy: number;
+  /** Energy per swing; the sequence fizzles if it cannot be paid. */
+  hitEnergy: number;
+  /** Ticks melee is locked out after the sequence ends. */
+  lockout: number;
+  /** Ticks per swing, and the pause between swings. */
+  swing: number;
+  gap: number;
+  /** Per-hit damage and knockback; the last entry is the finisher. */
+  damage: number[];
+  knock: number[];
+  /** Extra separation applied by the finisher. */
+  finisherKnock: number;
+  finalLift: number;
+  /** Ticks before the whole sequence gives up. */
+  maxLife: number;
+}
+
 /** One renderable part of the mech, mirroring the reference's helper-per-part build. */
 export interface RigPart {
   name: string;
@@ -153,7 +193,9 @@ export interface MechDef {
   spread: AttackDef;
   sub: AttackDef;
   salvo: AttackDef;
+  /** Frame data for a single swing's hit; the sequence is driven by `meleeLock`. */
   melee: AttackDef[];
+  meleeLock: MeleeProfile;
 
   /** Sub-weapon charge economy (the reference had its own charge indicator). */
   subCharges: number;

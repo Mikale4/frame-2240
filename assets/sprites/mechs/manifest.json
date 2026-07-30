@@ -44,6 +44,10 @@
         54,
         14
       ],
+      "meleeWeapon": [
+        44,
+        12
+      ],
       "leftThruster": [
         -36,
         0
@@ -85,6 +89,10 @@
       "mainWeapon": [
         58,
         16
+      ],
+      "meleeWeapon": [
+        48,
+        14
       ],
       "leftThruster": [
         -40,
@@ -243,6 +251,19 @@
           16.2,
           39.9
         ]
+      },
+      "meleeWeapon": {
+        "file": "halcyon_meleeWeapon.png",
+        "dims_bu": [
+          1.7,
+          0.2079,
+          0.2227
+        ],
+        "dims_logical_px": [
+          102.0,
+          12.5,
+          13.4
+        ]
       }
     },
     "nocturne": {
@@ -374,6 +395,19 @@
           38.1,
           23.1,
           25.2
+        ]
+      },
+      "meleeWeapon": {
+        "file": "nocturne_meleeWeapon.png",
+        "dims_bu": [
+          1.7,
+          0.2079,
+          0.2227
+        ],
+        "dims_logical_px": [
+          102.0,
+          12.5,
+          13.4
         ]
       }
     }

@@ -72,6 +72,8 @@ PART_ORDER = [
     "mainWeapon",
     "leftThruster",
     "rightThruster",
+    # Shown only during a melee sequence, in place of the stowed rifle.
+    "meleeWeapon",
 ]
 
 """
@@ -101,6 +103,7 @@ CHASSIS = {
             "subWeapon": (-5, -25, 0.19),
             "rightArm": (16, 6, -0.19),
             "mainWeapon": (54, 14, -0.19),
+            "meleeWeapon": (44, 12, -0.21),
             "leftThruster": (-36, 0, 0.17),
             "rightThruster": (-32, 12, -0.17),
         },
@@ -123,6 +126,7 @@ CHASSIS = {
             "subWeapon": (-10, -26, 0.22),
             "rightArm": (18, 10, -0.22),
             "mainWeapon": (58, 16, -0.22),
+            "meleeWeapon": (48, 14, -0.24),
             "leftThruster": (-40, 4, 0.14),
             "rightThruster": (-34, 16, -0.14),
         },
@@ -937,6 +941,44 @@ def build_mech(mech_id, palette_key=None):
         o.append(add_box("s_strut", (0.10, 0.08, 0.26), piv + Vector((-0.16, 0, -0.22)),
                          (0, math.radians(18), 0), coll=coll, mat=M_ACC))
     parts["subWeapon"] = join_as(pn("subWeapon"), o, piv, coll)
+
+    # ---- melee weapon: beam saber ------------------------------------------
+    # A real model, not a VFX streak: machined hilt, emitter shroud, then the
+    # blade built as three concentric layers - a white-hot core, a saturated
+    # inner sheath and a soft outer bloom - which is what reads as a beam blade
+    # in Gundam-style art rather than a glowing stick.
+    piv = px(*P["meleeWeapon"])
+    o = []
+    M_CORE = make_material(f"{mech_id}_beamcore", (1.0, 1.0, 1.0),
+                           emission=3.0, roughness=0.1, metallic=0.0, detail=False)
+    M_BEAM = make_material(f"{mech_id}_beam", pal["glow"],
+                           emission=2.4, roughness=0.15, metallic=0.0, detail=False)
+    blade_len = 1.28
+    # Hilt: gripped, ribbed, with a pommel.
+    o.append(add_box("m_grip", (0.19, 0.10, 0.10), piv, coll=coll, mat=M_FRAME))
+    for i in range(3):
+        o.append(add_cyl(f"m_rib{i}", 0.056, 0.018, piv + Vector((-0.05 + i * 0.05, 0, 0)),
+                         (0, math.radians(90), 0), 10, coll=coll, mat=M_SUB))
+    o.append(add_box("m_pommel", (0.06, 0.09, 0.09), piv + Vector((-0.13, 0, 0)),
+                     coll=coll, mat=M_HULL))
+    # Emitter: a flared shroud the blade springs from.
+    o.append(add_wedge("m_emitter", (0.15, 0.14, 0.16), 1.5, piv + Vector((0.15, 0, 0)),
+                       (0, math.radians(90), 0), coll=coll, mat=M_HULL))
+    o.append(add_cyl("m_lens", 0.052, 0.03, piv + Vector((0.23, 0, 0)),
+                     (0, math.radians(90), 0), 14, coll=coll, mat=M_CORE))
+    for i, dz in enumerate((0.075, -0.075)):
+        o.append(add_box(f"m_prong{i}", (0.10, 0.035, 0.035),
+                         piv + Vector((0.26, 0, dz)), coll=coll, mat=M_ACC))
+    # Blade: three concentric layers, tapering to a point.
+    o.append(add_cyl("m_bloom", 0.062, blade_len, piv + Vector((0.26 + blade_len / 2, 0, 0)),
+                     (0, math.radians(90), 0), 16, coll=coll, cone_r2=0.012, mat=M_BEAM))
+    o.append(add_cyl("m_sheath", 0.038, blade_len * 0.99,
+                     piv + Vector((0.26 + blade_len / 2, 0, 0)),
+                     (0, math.radians(90), 0), 16, coll=coll, cone_r2=0.008, mat=M_BEAM))
+    o.append(add_cyl("m_core", 0.017, blade_len * 0.985,
+                     piv + Vector((0.26 + blade_len / 2, 0, 0)),
+                     (0, math.radians(90), 0), 12, coll=coll, cone_r2=0.004, mat=M_CORE))
+    parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
 
     # ---- thrusters: rear-facing bells -------------------------------------
     twin = spec["booster"] == "twin"

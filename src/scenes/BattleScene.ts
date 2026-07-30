@@ -452,41 +452,37 @@ export class BattleScene extends Phaser.Scene {
       // Melee is a sword, not the rifle. Stow the gun for the swing and extend
       // a blade from the weapon hand: it ignites through startup and is at full
       // length while the hit is live.
-      const blade = this.blades[i];
-      const atk = c.attack;
-      const swinging = c.alive && atk?.kind === ProjKind.Melee;
-      if (swinging && atk) {
-        const total = atk.startup + atk.active;
-        const ignite = clamp(c.attackTick / Math.max(1, atk.startup), 0, 1);
-        const live = c.attackTick > atk.startup && c.attackTick <= total;
-        const len = (0.35 + ignite * 0.65) * (live ? 1.12 : 1);
-        const hand = r.partWorld('rightArm') ?? { x: c.x, y: c.y };
+      // The saber is a real part; the additive sprite is only a bloom layered
+      // over the modelled blade so it glows rather than being the blade itself.
+      const bloom = this.blades[i];
+      const drawn = c.alive && c.bladeTimer > 0;
+      r.setPartVisible('meleeWeapon', drawn);
+      r.setPartVisible('mainWeapon', !drawn);
+
+      if (drawn) {
         const dz = depthScaleAt(c.y);
-        // Anchor at the hand and project outward so the blade reads as a long
-        // edge rather than a flash at the point of impact.
-        const reach = (atk.muzzleForward * 0.5 + len * 78) * dz;
-        blade.setVisible(true);
-        blade.setPosition(hand.x + Math.cos(c.aim) * reach, hand.y + Math.sin(c.aim) * reach);
-        blade.setRotation(c.aim);
-        blade.setScale(len * 2.9 * dz, (live ? 0.34 : 0.22) * dz);
-        blade.setTint(c.def.tint.glow);
-        blade.setAlpha(live ? 1 : 0.55 + ignite * 0.35);
-        blade.setDepth(depthSortAt(c.y, 30));
-        r.setPartVisible('mainWeapon', false);
-        // Sparks running along the edge while it is live.
-        if (live && Math.random() < 0.7) {
-          const t = Math.random();
+        const hand = r.partWorld('meleeWeapon') ?? { x: c.x, y: c.y };
+        // Blade runs ~102 logical px from the hilt; centre the bloom on it.
+        const mid = 58 * dz;
+        bloom.setVisible(true);
+        bloom.setPosition(hand.x + Math.cos(c.aim) * mid, hand.y + Math.sin(c.aim) * mid);
+        bloom.setRotation(c.aim);
+        bloom.setScale(1.55 * dz, 0.30 * dz);
+        bloom.setTint(c.def.tint.glow);
+        bloom.setAlpha(0.75);
+        bloom.setDepth(depthSortAt(c.y, 31));
+        if (Math.random() < 0.5) {
+          const tpos = Math.random();
           this.effects.thruster(
-            blade.x + Math.cos(c.aim) * (t - 0.5) * 90,
-            blade.y + Math.sin(c.aim) * (t - 0.5) * 90,
+            bloom.x + Math.cos(c.aim) * (tpos - 0.5) * 100,
+            bloom.y + Math.sin(c.aim) * (tpos - 0.5) * 100,
             c.aim + Math.PI / 2,
-            0.35,
+            0.3,
             c.def.tint.glow,
           );
         }
       } else {
-        blade.setVisible(false);
-        r.setPartVisible('mainWeapon', true);
+        bloom.setVisible(false);
       }
 
       // Sustained barrier bubble and saturation aura.

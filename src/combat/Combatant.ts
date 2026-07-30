@@ -18,7 +18,7 @@ import {
   type ProjectileSpawn,
   type SimEvent,
 } from './types';
-import { DEG, approachAngle, clamp, angleDelta } from '../core/MathUtil';
+import { DEG, approachAngle, clamp, angleDelta, lerp } from '../core/MathUtil';
 
 /** Radians per tick a melee lunge may correct toward its target. */
 const MELEE_TRACK_RATE = 9 * DEG;
@@ -94,6 +94,27 @@ export class Combatant implements FlightState {
   meleeChainQueued = false;
   /** Ticks until melee is available again. Blocks endless sword pressure. */
   meleeLockout = 0;
+
+  /**
+   * Active lock-on melee sequence, or null.
+   *
+   * One press commits the whole sequence: close on the target, then run `hits`
+   * swings while repositioning around it. Modelled on the working Iron Babel
+   * build's `meleeLock` rather than our old manually re-pressed chain.
+   */
+  meleeLock: {
+    phase: 'close' | 'swing' | 'gap';
+    timer: number;
+    hitIndex: number;
+    hitTimer: number;
+    hitDone: boolean;
+    life: number;
+  } | null = null;
+
+  /** Ticks the beam blade stays lit, so it persists across the swing gaps. */
+  bladeTimer = 0;
+  /** Set for one tick when a sequence opens, for the move-name banner. */
+  announced: string | null = null;
   /** Ticks left in which a new melee chain may be started from recovery. */
   meleeChainGrace = 0;
 
@@ -231,9 +252,23 @@ export class Combatant implements FlightState {
     this.cmd.push(input, this.facing);
 
     if (this.hitstun > 0 || this.guardBreakStun > 0) {
+      // Taking a hit drops an in-progress lock-on sequence. This has to happen
+      // here: the stun branch returns before the melee step ever runs.
+      if (this.meleeLock) this.endMeleeLock(false);
       this.stepStunned(input, events);
       clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH);
       return;
+    }
+
+    // A lock-on melee sequence owns the mech until it finishes or breaks.
+    if (this.meleeLock) {
+      if (this.stepMeleeLock(target, spawns, events)) {
+        this.x += this.vx;
+        this.y += this.vy;
+        clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH);
+        this.updateVisualAngles(input);
+        return;
+      }
     }
 
     this.updateFacingAndAim(input, target);
@@ -272,6 +307,7 @@ export class Combatant implements FlightState {
 
     if (this.invuln > 0) this.invuln--;
     if (this.meleeLockout > 0) this.meleeLockout--;
+    if (this.bladeTimer > 0) this.bladeTimer--;
     if (this.barrierActiveTicks > 0) this.barrierActiveTicks--;
     if (this.meleeChainGrace > 0) {
       this.meleeChainGrace--;
@@ -459,6 +495,9 @@ export class Combatant implements FlightState {
     // something that happens because you drifted into range. It lunges toward
     // the aim, so it stays useful from outside contact distance.
     if (isPressed(input, Btn.Melee) && this.meleeLockout <= 0) {
+      if (this.startMeleeLock(target, events)) return;
+      // No lock available (no target, out of range, or not enough energy):
+      // still throw a single swing so the button is never dead.
       this.beginMelee(events, target);
       return;
     }
@@ -481,6 +520,192 @@ export class Combatant implements FlightState {
   meleeInRange(target: Combatant): boolean {
     const dist = Math.hypot(target.x - this.x, target.y - this.y);
     return dist <= this.def.meleeRange;
+  }
+
+  /**
+   * Opens a lock-on melee sequence. Requires a live target inside acquire range
+   * and enough energy for the opening plus a couple of swings — a sequence that
+   * fizzles immediately would just be a punish.
+   */
+  private startMeleeLock(target: Combatant | null, events: SimEvent[]): boolean {
+    const p = this.def.meleeLock;
+    if (this.meleeLock || this.attack || this.hitstun > 0 || this.meleeLockout > 0) return false;
+    if (!target || !target.alive) return false;
+
+    const dist = Math.hypot(target.x - this.x, target.y - this.y);
+    if (dist > p.acquireRange) return false;
+    if (this.energy < p.energy + Math.min(p.hitEnergy * 2, 40)) return false;
+
+    this.energy -= p.energy;
+    this.sat = Math.min(this.def.gauges.maxSaturation, this.sat + 4 + p.hits * 0.35);
+    this.aim = Math.atan2(target.y - this.y, target.x - this.x);
+    this.facing = target.x >= this.x ? 1 : -1;
+    this.invuln = Math.max(this.invuln, 2);
+    this.meleeLock = {
+      phase: 'close',
+      timer: 0,
+      hitIndex: 0,
+      hitTimer: 0,
+      hitDone: false,
+      life: p.maxLife,
+    };
+    this.bladeTimer = Math.max(this.bladeTimer, p.swing + p.gap + 6);
+    this.announced = p.name;
+    events.push({ t: 'melee', x: this.x, y: this.y, angle: this.aim, id: this.id, stage: 0 });
+    return true;
+  }
+
+  /** Ends the sequence and applies the cooldown. */
+  private endMeleeLock(full: boolean): void {
+    const p = this.def.meleeLock;
+    this.meleeLock = null;
+    this.meleeLockout = Math.max(this.meleeLockout, full ? p.lockout : Math.round(p.lockout * 0.45));
+  }
+
+  /**
+   * Advances an active sequence. Returns true while it owns the mech, so the
+   * normal action/flight path stands down.
+   */
+  private stepMeleeLock(
+    target: Combatant | null,
+    spawns: ProjectileSpawn[],
+    events: SimEvent[],
+  ): boolean {
+    const ml = this.meleeLock;
+    if (!ml) return false;
+    const p = this.def.meleeLock;
+
+    ml.life--;
+    // Losing the target, being hit, or running out of time all drop the lock.
+    if (!target || !target.alive || this.hitstun > 0 || ml.life <= 0) {
+      this.endMeleeLock(false);
+      return false;
+    }
+
+    const dx = target.x - this.x;
+    const dy = target.y - this.y;
+    const dist = Math.max(1, Math.hypot(dx, dy));
+    const nx = dx / dist;
+    const ny = dy / dist;
+    this.facing = dx >= 0 ? 1 : -1;
+    this.aim = Math.atan2(dy, dx);
+    this.act = ActState.Attack;
+    this.bladeTimer = Math.max(this.bladeTimer, 4);
+    this.spin += 14 * DEG;
+
+    if (ml.phase === 'close') {
+      ml.timer++;
+      // Thrust onto the target, lerping so it reads as a controlled approach.
+      this.vx = lerp(this.vx, nx * p.thrust, p.tracking);
+      this.vy = lerp(this.vy, ny * p.thrust, p.tracking);
+      if (dist <= p.range || ml.timer > 22) {
+        ml.phase = 'swing';
+        ml.timer = 0;
+        ml.hitTimer = 0;
+        ml.hitDone = false;
+      }
+      return true;
+    }
+
+    if (ml.phase === 'gap') {
+      ml.timer++;
+      this.vx *= 0.86;
+      this.vy *= 0.86;
+      if (ml.timer >= p.gap) {
+        ml.phase = 'swing';
+        ml.timer = 0;
+        ml.hitTimer = 0;
+        ml.hitDone = false;
+      }
+      return true;
+    }
+
+    // ---- swing --------------------------------------------------------
+    ml.hitTimer++;
+
+    // Reposition to a point beside the target that shifts each hit, so the
+    // sequence circles rather than bulldozing straight through.
+    const side = this.facing * (42 + Math.min(24, ml.hitIndex * 3));
+    const wantX = target.x - side;
+    const wantY = target.y - 12 + Math.sin((ml.hitIndex + 1) * 1.7) * 10;
+    this.vx = lerp(
+      this.vx,
+      clamp(wantX - this.x, -p.thrust * 0.74, p.thrust * 0.74),
+      p.tracking * 0.74,
+    );
+    this.vy = lerp(
+      this.vy,
+      clamp(wantY - this.y, -p.thrust * 0.62, p.thrust * 0.62),
+      p.tracking * 0.72,
+    );
+
+    if (ml.hitTimer === 1) {
+      // Each swing is paid for. Running dry fizzles the sequence.
+      if (this.energy < p.hitEnergy) {
+        this.endMeleeLock(true);
+        return false;
+      }
+      this.energy -= p.hitEnergy;
+      this.bladeTimer = Math.max(this.bladeTimer, p.swing + p.gap + 5);
+      events.push({
+        t: 'melee',
+        x: this.x,
+        y: this.y,
+        angle: this.aim,
+        id: this.id,
+        stage: ml.hitIndex,
+      });
+    }
+
+    const activeStart = Math.max(2, Math.floor(p.swing * 0.34));
+    const activeEnd = Math.max(activeStart + 1, Math.floor(p.swing * 0.72));
+    if (!ml.hitDone && ml.hitTimer >= activeStart && ml.hitTimer <= activeEnd) {
+      // Generous connect check: the sequence has already committed, so a swing
+      // that visually reaches should land.
+      if (dist < p.range + 54) {
+        ml.hitDone = true;
+        const last = ml.hitIndex >= p.hits - 1;
+        const base = this.def.melee[Math.min(ml.hitIndex, this.def.melee.length - 1)];
+        const dmg = p.damage[Math.min(ml.hitIndex, p.damage.length - 1)];
+        const knock = p.knock[Math.min(ml.hitIndex, p.knock.length - 1)];
+        const m = this.muzzle(base);
+        spawns.push({
+          x: m.x,
+          y: m.y,
+          vx: nx * 0.001,
+          vy: ny * 0.001,
+          damage: dmg * this.satShootScale,
+          guardDamage: dmg * 0.5,
+          life: 2,
+          radius: p.range,
+          ownerId: this.id,
+          team: this.team,
+          kind: ProjKind.Melee,
+          barrier: BarrierResponse.Pierce,
+          hitstop: last ? 14 : 7,
+          hitstun: last ? 30 : 14,
+          knockback: last ? knock + p.finisherKnock : knock,
+          homing: 0,
+          pierceCount: 0,
+        });
+        if (last) {
+          // The finisher forcibly creates neutral again.
+          this.vx = -nx * p.finisherKnock * 0.28;
+          this.vy = -ny * p.finisherKnock * 0.28 - p.finalLift * 0.4;
+        }
+      }
+    }
+
+    if (ml.hitTimer >= p.swing) {
+      ml.hitIndex++;
+      if (ml.hitIndex >= p.hits) {
+        this.endMeleeLock(true);
+        return false;
+      }
+      ml.phase = 'gap';
+      ml.timer = 0;
+    }
+    return true;
   }
 
   private beginMelee(events: SimEvent[], target?: Combatant | null): void {

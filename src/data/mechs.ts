@@ -33,6 +33,8 @@ const HALCYON_RIG: MechRigDef = {
     { name: 'subWeapon', parent: 'leftArm', x: -3, y: -23, rotation: 0, follow: 'turret' },
     { name: 'rightArm', parent: 'core', x: 16, y: 6, rotation: 0, follow: 'turret' },
     { name: 'mainWeapon', parent: 'rightArm', x: 38, y: 8, rotation: 0, follow: 'turret' },
+    // Beam saber: hidden until a melee sequence, when the rifle is stowed.
+    { name: 'meleeWeapon', parent: 'rightArm', x: 28, y: 6, rotation: 0, follow: 'turret' },
     { name: 'leftThruster', parent: 'core', x: -36, y: 0, rotation: 0, follow: 'thruster' },
     { name: 'rightThruster', parent: 'core', x: -32, y: 12, rotation: 0, follow: 'thruster' },
   ],
@@ -47,6 +49,7 @@ const HALCYON_RIG: MechRigDef = {
     'rightThruster',
     'rightArm',
     'mainWeapon',
+    'meleeWeapon',
   ],
 };
 
@@ -68,6 +71,7 @@ const NOCTURNE_RIG: MechRigDef = {
     { name: 'subWeapon', parent: 'leftArm', x: -6, y: -26, rotation: 0, follow: 'turret' },
     { name: 'rightArm', parent: 'core', x: 18, y: 10, rotation: 0, follow: 'turret' },
     { name: 'mainWeapon', parent: 'rightArm', x: 40, y: 6, rotation: 0, follow: 'turret' },
+    { name: 'meleeWeapon', parent: 'rightArm', x: 30, y: 4, rotation: 0, follow: 'turret' },
     { name: 'leftThruster', parent: 'core', x: -40, y: 4, rotation: 0, follow: 'thruster' },
     { name: 'rightThruster', parent: 'core', x: -34, y: 16, rotation: 0, follow: 'thruster' },
   ],
@@ -82,6 +86,7 @@ const NOCTURNE_RIG: MechRigDef = {
     'rightThruster',
     'rightArm',
     'mainWeapon',
+    'meleeWeapon',
   ],
 };
 
@@ -411,6 +416,26 @@ export const HALCYON: MechDef = {
     }),
   ],
 
+  // Fast six-hit saber chain: light frame, tight tracking, cheap swings.
+  meleeLock: {
+    name: 'HALCYON SABER SIX',
+    hits: 6,
+    thrust: 17,
+    tracking: 0.30,
+    range: 78,
+    acquireRange: 460,
+    energy: 90,
+    hitEnergy: 14,
+    lockout: 62,
+    swing: 9,
+    gap: 4,
+    damage: [26, 26, 30, 30, 34, 74],
+    knock: [3, 3, 4, 4, 5, 13],
+    finisherKnock: 15,
+    finalLift: 8.5,
+    maxLife: 150,
+  },
+
   subCharges: 2,
   subRechargeTicks: 150,
   lockCone: 75 * DEG,
@@ -448,6 +473,25 @@ export const NOCTURNE: MechDef = {
   rig: NOCTURNE_RIG,
   // Broader frame reaches slightly further with the claw.
   meleeRange: 210,
+  // Heavy three-hit siege chain: slower, longer reach, far harder per swing.
+  meleeLock: {
+    name: 'NOCTURNE SIEGE CLAW',
+    hits: 3,
+    thrust: 13,
+    tracking: 0.16,
+    range: 96,
+    acquireRange: 430,
+    energy: 110,
+    hitEnergy: 20,
+    lockout: 82,
+    swing: 14,
+    gap: 6,
+    damage: [62, 70, 118],
+    knock: [6, 8, 16],
+    finisherKnock: 20,
+    finalLift: 7.8,
+    maxLife: 150,
+  },
 
   main: attack({
     ...HALCYON.main,

@@ -141,8 +141,8 @@ describe('melee chain', () => {
   it('swings on the dedicated melee button', () => {
     const { a, b, k } = meleePair();
     a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
-    expect(a.attack?.kind).toBe(ProjKind.Melee);
-    expect(a.attack?.meleeStage).toBe(0);
+    // With a valid target this opens the lock-on sequence.
+    expect(a.meleeLock).not.toBeNull();
   });
 
   it('always fires the gun on the main button, even point blank', () => {
@@ -155,18 +155,20 @@ describe('melee chain', () => {
    * Melee is now a deliberate button rather than a proximity switch, so a swing
    * must be available at any range - the startup lunge is what closes distance.
    */
-  it('swings at any range, with no target required', () => {
-    for (const dist of [40, 120, 260, 800]) {
+  it('always does something on the melee button', () => {
+    // Inside acquire range it locks on; outside, or with no opponent at all, it
+    // falls back to a single swing. The button is never dead.
+    for (const dist of [40, 120, 260, 400]) {
       const a = make(HALCYON, 1000, 600, 0, Team.Player);
       const b = make(NOCTURNE, 1000 + dist, 600, 1, Team.Enemy);
       const k = ctx();
       a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
-      expect(a.attack?.kind).toBe(ProjKind.Melee);
+      expect(a.meleeLock).not.toBeNull();
     }
-    // Even with no opponent at all.
     const lone = make();
     const k2 = ctx();
     lone.step(press(Btn.Melee), null, W, H, k2.spawns, k2.events);
+    expect(lone.meleeLock).toBeNull();
     expect(lone.attack?.kind).toBe(ProjKind.Melee);
   });
 
@@ -177,82 +179,119 @@ describe('melee chain', () => {
     expect(reach).toBeGreaterThanOrEqual(HALCYON.meleeRange);
   });
 
-  it('refuses to chain when the first stage whiffed', () => {
+  /**
+   * Melee is a committed lock-on sequence, not a manually re-pressed chain:
+   * one press acquires the target and runs the whole thing.
+   */
+  it('opens a lock-on sequence on a valid target', () => {
     const { a, b, k } = meleePair();
-    const stage0 = HALCYON.melee[0];
     a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
-    // Buffer a chain input inside the window but never confirm a hit.
-    run(a, press(Btn.Melee), stage0.chainTo! - 1, b, k);
-    expect(a.meleeChainQueued).toBe(true);
-    run(a, emptyInput(), ATTACK_TOTAL(stage0) + 2, b, k);
-    expect(a.attack).toBeNull();
-    expect(a.meleeCount).toBe(0);
+    expect(a.meleeLock).not.toBeNull();
+    expect(a.announced).toBe(HALCYON.meleeLock.name);
+    // The opening cost is paid up front.
+    expect(a.energy).toBeLessThanOrEqual(HALCYON.gauges.maxEnergy - HALCYON.meleeLock.energy);
   });
 
-  it('chains to stage two once the hit is confirmed', () => {
+  it('runs every swing from a single press', () => {
     const { a, b, k } = meleePair();
-    const stage0 = HALCYON.melee[0];
+    const p = HALCYON.meleeLock;
     a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
-    // Advance into the authored chain window before buffering the follow-up.
-    run(a, emptyInput(), stage0.chainFrom!, b, k);
-    a.confirmHit();
-    run(a, press(Btn.Melee), 2, b, k);
-    expect(a.meleeChainQueued).toBe(true);
-    run(a, emptyInput(), ATTACK_TOTAL(stage0) + 2, b, k);
-    expect(a.attack?.meleeStage).toBe(1);
+    // Never press again; the sequence drives itself.
+    run(a, emptyInput(), p.maxLife + 10, b, k);
+    const hits = k.spawns.filter((s) => s.kind === ProjKind.Melee);
+    expect(hits.length).toBe(p.hits);
+    expect(a.meleeLock).toBeNull();
   });
 
-  it('reaches three hits normally and six under Speed saturation', () => {
-    const normal = make();
-    expect(normal.maxMeleeHits).toBe(3);
-    normal.satActive = true;
-    normal.satMode = SatMode.Speed;
-    expect(normal.maxMeleeHits).toBe(6);
+  it('escalates damage across the sequence and hits hardest last', () => {
+    const { a, b, k } = meleePair();
+    const p = HALCYON.meleeLock;
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
+    run(a, emptyInput(), p.maxLife + 10, b, k);
+    const hits = k.spawns.filter((s) => s.kind === ProjKind.Melee);
+    expect(hits.at(-1)!.damage).toBeGreaterThan(hits[0].damage);
+    // The finisher separates: biggest knockback of the sequence.
+    expect(hits.at(-1)!.knockback).toBeGreaterThan(hits[0].knockback);
+  });
+
+  it('refuses to lock on beyond acquire range, but still swings', () => {
+    const a = make(HALCYON, 200, 600, 0, Team.Player);
+    const b = make(NOCTURNE, 200 + HALCYON.meleeLock.acquireRange + 200, 600, 1, Team.Enemy);
+    const k = ctx();
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
+    expect(a.meleeLock).toBeNull();
+    // The button is never dead — it falls back to a single swing.
+    expect(a.attack?.kind).toBe(ProjKind.Melee);
+  });
+
+  it('fizzles when energy runs out mid-sequence', () => {
+    // A frame with no regen, so the swing costs genuinely bite.
+    const starved = {
+      ...HALCYON,
+      gauges: { ...HALCYON.gauges, energyRegen: 0 },
+    };
+    const a = new Combatant({ id: 0, team: Team.Player, def: starved, x: 500, y: 600, facing: 1 });
+    const b = make(NOCTURNE, 560, 600, 1, Team.Enemy);
+    const k = ctx();
+    const p = starved.meleeLock;
+    a.energy = p.energy + p.hitEnergy * 2 + 1;
+
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
+    expect(a.meleeLock).not.toBeNull();
+    // Stop as soon as it ends, so the lockout has not ticked away yet.
+    let guard = 0;
+    while (a.meleeLock && guard++ < 400) {
+      a.step(emptyInput(), b, W, H, k.spawns, k.events);
+    }
+    const hits = k.spawns.filter((s) => s.kind === ProjKind.Melee);
+    expect(hits.length).toBeLessThan(p.hits);
+    expect(a.meleeLockout).toBeGreaterThan(0);
+  });
+
+  it('drops the lock when the pilot is hit', () => {
+    const { a, b, k } = meleePair();
+    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
+    expect(a.meleeLock).not.toBeNull();
+    a.hitstun = 20;
+    a.step(emptyInput(), b, W, H, k.spawns, k.events);
+    expect(a.meleeLock).toBeNull();
   });
 
   /**
-   * Regression: the swing committed along the slewed aim. Starting a swing while
-   * the mounts were still coming around lunged *away* from the enemy, and the
-   * in-flight tracking could not correct it inside the startup window.
+   * Regression: the swing used to commit along the slewed aim, so starting one
+   * while the mounts were still coming around lunged *away* from the enemy.
    */
-  it('locks on to the target as the swing commits', () => {
+  it('locks on to the target as the sequence commits', () => {
     const a = make(HALCYON, 1000, 600, 0, Team.Player);
     const b = make(NOCTURNE, 1150, 500, 1, Team.Enemy);
     const k = ctx();
     a.aim = Math.PI; // mounts pointing the wrong way
     a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
     run(a, emptyInput(), 3, b, k);
-    // Now travelling toward the target, not away from it.
     expect(a.vx).toBeGreaterThan(0);
     expect(a.vy).toBeLessThan(0);
   });
 
-  it('connects on an off-axis target', () => {
-    const a = make(HALCYON, 1000, 600, 0, Team.Player);
-    const b = make(NOCTURNE, 1150, 500, 1, Team.Enemy);
-    const k = ctx();
-    a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
-    run(a, emptyInput(), HALCYON.melee[0].startup + 1, b, k);
-    const hit = k.spawns.find((s) => s.kind === ProjKind.Melee);
-    expect(hit).toBeDefined();
-    // The hit spawns close enough to the target to actually land.
-    const d = Math.hypot(hit!.x - b.x, hit!.y - b.y);
-    expect(d).toBeLessThan(hit!.radius + b.def.rig.hurtRadius);
-  });
-
-  it('locks melee out after a chain ends, blocking endless pressure', () => {
+  it('locks melee out after the sequence, blocking endless pressure', () => {
     const { a, b, k } = meleePair();
     a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
-    run(a, emptyInput(), ATTACK_TOTAL(HALCYON.melee[0]) + 2, b, k);
-    expect(a.attack).toBeNull();
+    // Step only until the sequence actually ends, so the lockout is still live.
+    let guard = 0;
+    while (a.meleeLock && guard++ < 400) {
+      a.step(emptyInput(), b, W, H, k.spawns, k.events);
+    }
     expect(a.meleeLockout).toBeGreaterThan(0);
-    // A fresh press during the lockout does nothing.
     a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
-    expect(a.attack).toBeNull();
-    // ...but works once it expires.
-    run(a, emptyInput(), a.meleeLockout + 1, b, k);
+    expect(a.meleeLock).toBeNull();
+  });
+
+  it('keeps the blade lit across the swing gaps', () => {
+    const { a, b, k } = meleePair();
     a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
-    expect(a.attack?.kind).toBe(ProjKind.Melee);
+    for (let i = 0; i < 30; i++) {
+      a.step(emptyInput(), b, W, H, k.spawns, k.events);
+      if (a.meleeLock) expect(a.bladeTimer).toBeGreaterThan(0);
+    }
   });
 
   it('marks melee as barrier-piercing', () => {

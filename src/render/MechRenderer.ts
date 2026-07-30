@@ -60,6 +60,9 @@ export class MechRenderer {
       (parent ? parent.container : this.bank).add(node.container);
     }
 
+    // The saber is stowed until a melee sequence lights it.
+    this.setPartVisible('meleeWeapon', false);
+
     // Apply the authored draw order by re-sorting siblings within each parent.
     const order = def.rig.drawOrder;
     for (const name of order) {
