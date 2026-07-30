@@ -31,19 +31,24 @@ Suggested call shape:
 text_to_sound_effects(
   text: <the prompt from the table>,
   duration_seconds: max(0.5, <duration>),
-  output_format: "mp3_44100_128",
+  output_format: "mp3_44100_192",
   output_directory: "Babel Sword Reignition/assets/audio",
   loop: <only for the two loop beds>
 )
 ```
 
-> **Cost.** Every call is a billed ElevenLabs API request. The full set is 63
-> calls. The priority subset at the bottom is 15.
+> **Cost.** Every call spends ElevenLabs credits from the account's plan quota.
+> The full set is 63 calls; the priority subset at the bottom is 15. The
+> published per-generation credit cost could not be confirmed from the docs, so
+> **generate one cue first, read the remaining balance, and extrapolate** before
+> committing to a full run.
 
 ## Format
 
-* **`mp3_44100_128`** is the right default. `pcm_44100` needs a Pro tier
-  subscription and the game does not need it.
+* **`mp3_44100_192`** — the highest bitrate the account tier allows. 192 kbps
+  needs Creator tier or above, which this account has. `pcm_44100` would need
+  Pro, and the game does not need it: these are short, heavily-layered combat
+  cues, not music.
 * **Trim silence** from the head — these are gameplay cues and any leading pad
   reads as input lag. Trim the tail down to the target duration too.
 * **Normalise to about −6 dBFS peak**, except where noted. Relative loudness is
