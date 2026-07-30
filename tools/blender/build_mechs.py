@@ -57,7 +57,9 @@ CAM_DIST = 9.0
 # Dark contour lines. The reference sprites read crisply at ~100px because of
 # hard edge contrast; Freestyle reproduces that.
 USE_OUTLINES = True
-OUTLINE_THICKNESS = 1.7
+# The reference sprites are hard-edged pixel art with a crisp dark contour on
+# every part. Thin, near-black, and applied to creases as well as silhouettes.
+OUTLINE_THICKNESS = 2.1
 
 PART_ORDER = [
     "core",
@@ -127,29 +129,43 @@ CHASSIS = {
     },
 }
 
-# The reference roster is near-monochrome: an off-white armour shell, a mid-grey
-# for far-side limbs (which is what sells the depth), dark frame joints, and a
-# single saturated accent used only on small chips. Faction identity lives in the
-# accent, not in the body colour.
+"""
+Palettes.
+
+Calibrated from the 2005 build's own .act palette files (chars/rs/pal/*.act,
+768-byte RGB tables) and from in-game screenshots — NOT from the roster portrait
+GIFs, which are rendered in a neutral placeholder palette and led an earlier pass
+badly astray. The real machines are vividly coloured: sampling 00-1.act yields
+#0090FF / #00DCFF with #FF5500, 01-1.act gives orange over teal, 20-1.act a green
+and teal ramp. (#FF00FF is MUGEN's transparency key, not a body colour.)
+
+Each mech therefore gets a bold identity hue, a darker far-side variant of that
+same hue for depth, near-white highlight plating, dark joints, and a contrasting
+accent. Values are linear-ish sRGB fed straight to Base Color.
+"""
 PALETTES = {
+    # Azure interceptor with hot orange trim.
+    # `secondary` is a DARKER shade of the identity hue, not white: the identity
+    # colour has to dominate the surface area or the mech reads as a white robot
+    # with coloured bits. `trim` is the near-white, used only on small pieces.
     "halcyon": {
-        "primary": (0.78, 0.80, 0.83),   # off-white armour
-        "far": (0.44, 0.47, 0.53),       # far-side limbs, deliberately darker
-        "secondary": (0.30, 0.33, 0.39),  # under-armour plating
-        "frame": (0.11, 0.12, 0.15),     # joints, pistons, barrel
-        "accent": (0.30, 1.00, 0.42),    # small chips only
-        "glow": (0.42, 0.86, 1.00),
+        "primary": (0.10, 0.44, 0.86),
+        "far": (0.05, 0.20, 0.44),
+        "secondary": (0.06, 0.26, 0.56),
+        "trim": (0.84, 0.89, 0.94),
+        "frame": (0.10, 0.12, 0.17),
+        "accent": (1.00, 0.36, 0.06),
+        "glow": (0.20, 0.90, 1.00),
     },
-    # The rival runs a dark gunmetal scheme. The reference kept the whole roster
-    # near-monochrome and separated the two fighters with per-player palettes;
-    # this does the same job and keeps the two readable apart mid-fight.
+    # Crimson assault frame with cyan trim - maximum separation from HALCYON.
     "nocturne": {
-        "primary": (0.30, 0.28, 0.33),
-        "far": (0.17, 0.16, 0.20),
-        "secondary": (0.20, 0.18, 0.23),
-        "frame": (0.09, 0.08, 0.10),
-        "accent": (1.00, 0.30, 0.48),
-        "glow": (1.00, 0.46, 0.84),
+        "primary": (0.82, 0.16, 0.10),
+        "far": (0.38, 0.07, 0.05),
+        "secondary": (0.52, 0.09, 0.06),
+        "trim": (0.88, 0.84, 0.80),
+        "frame": (0.12, 0.09, 0.09),
+        "accent": (0.10, 0.92, 0.86),
+        "glow": (1.00, 0.78, 0.18),
     },
 }
 
@@ -386,7 +402,7 @@ def _relink(obj, coll):
     coll.objects.link(obj)
 
 
-def add_box(name, size, loc, rot=(0, 0, 0), bevel=0.010, coll=None, mat=None, bevel_seg=2):
+def add_box(name, size, loc, rot=(0, 0, 0), bevel=0.005, coll=None, mat=None, bevel_seg=1):
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc, rotation=rot)
     obj = active()
     obj.name = name
@@ -525,6 +541,7 @@ def build_mech(mech_id, palette_key=None):
     M_HULL = make_material(f"{mech_id}_hull", pal["primary"], roughness=0.44)
     M_FAR = make_material(f"{mech_id}_far", pal["far"], roughness=0.5)
     M_SUB = make_material(f"{mech_id}_sub", pal["secondary"], roughness=0.5)
+    M_TRIM = make_material(f"{mech_id}_trim", pal["trim"], roughness=0.40)
     M_FRAME = make_material(f"{mech_id}_frame", pal["frame"], roughness=0.62, metallic=0.7)
     M_ACC = make_material(f"{mech_id}_accent", pal["accent"], emission=1.1, roughness=0.35)
     M_GLOW = make_material(f"{mech_id}_glow", pal["glow"], emission=2.1, roughness=0.2, metallic=0.0)
@@ -541,7 +558,7 @@ def build_mech(mech_id, palette_key=None):
     o = []
     o.append(add_box("c_hull", (hx, hy, hz), piv + Vector((0.02, 0, 0)), R, coll=coll, mat=M_HULL))
     o.append(add_box("c_deck", (hx * 0.74, hy * 0.9, 0.10), piv + Vector((-0.03, 0, hz * 0.60)), R,
-                     coll=coll, mat=M_HULL))
+                     coll=coll, mat=M_TRIM))
     o.append(add_box("c_nose", (0.24, hy * 0.82, 0.24), piv + Vector((hx * 0.50, 0, -0.10)), R,
                      coll=coll, mat=M_SUB))
     o.append(add_box("c_belly", (hx * 0.62, hy * 0.88, 0.12), piv + Vector((0.04, 0, -hz * 0.60)), R,
@@ -594,7 +611,7 @@ def build_mech(mech_id, palette_key=None):
     if spec["booster"] == "twin":
         # Interceptor: tall, finned, antenna-topped.
         o.append(add_box("b_main", (0.30, 0.34, 0.36), piv, R, coll=coll, mat=M_SUB))
-        o.append(add_box("b_lid", (0.26, 0.30, 0.08), piv + Vector((0.0, 0, 0.22)), R, coll=coll, mat=M_HULL))
+        o.append(add_box("b_lid", (0.26, 0.30, 0.08), piv + Vector((0.0, 0, 0.22)), R, coll=coll, mat=M_TRIM))
         o.append(add_box("b_spine", (0.10, 0.20, 0.38), piv + Vector((-0.17, 0, -0.02)), coll=coll, mat=M_FRAME))
         for i, z in enumerate((0.12, 0.0, -0.12)):
             o.append(add_box(f"b_fin{i}", (0.18, 0.05, 0.035),
@@ -605,7 +622,7 @@ def build_mech(mech_id, palette_key=None):
     else:
         # Assault: a wide radiator block with stacked exhaust chimneys.
         o.append(add_box("b_main", (0.40, 0.46, 0.30), piv, R, coll=coll, mat=M_SUB))
-        o.append(add_box("b_armor", (0.34, 0.50, 0.10), piv + Vector((0.0, 0, 0.19)), R, coll=coll, mat=M_HULL))
+        o.append(add_box("b_armor", (0.34, 0.50, 0.10), piv + Vector((0.0, 0, 0.19)), R, coll=coll, mat=M_TRIM))
         for i, dy in enumerate((-0.16, 0.16)):
             o.append(add_cyl(f"b_stack{i}", 0.055, 0.30, piv + Vector((-0.14, dy, 0.24)),
                              (0, math.radians(-12), 0), 12, coll=coll, mat=M_FRAME))
@@ -674,15 +691,15 @@ def build_mech(mech_id, palette_key=None):
         shell = M_HULL if near else M_FAR
         sgn = -1 if near else 1
         o = []
-        # Rounded pauldron: a heavy bevel reads as the curved shoulder shield the
-        # reference frames all carry, rather than a flat slab.
+        # Chamfered pauldron. A small two-segment bevel keeps the corners crisp;
+        # a heavy bevel reads as soft/rounded, which is not the reference look.
         o.append(add_box(f"a_pauld_{key}", (0.28, 0.24, 0.34),
                          piv + Vector((-0.02, 0, 0.09)), (0, math.radians(10), 0),
-                         bevel=0.062, bevel_seg=4, coll=coll, mat=shell))
+                         bevel=0.022, bevel_seg=2, coll=coll, mat=shell))
         # Overlapping outer plate with a visible step, the reference's signature.
         o.append(add_box(f"a_plate_{key}", (0.22, 0.09, 0.28),
                          piv + Vector((0.01, sgn * 0.14, 0.10)), (0, math.radians(10), 0),
-                         bevel=0.03, bevel_seg=3, coll=coll, mat=M_SUB))
+                         bevel=0.012, coll=coll, mat=M_SUB))
         o.append(add_box(f"a_lip_{key}", (0.30, 0.10, 0.10),
                          piv + Vector((-0.01, sgn * 0.10, 0.24)), (0, math.radians(10), 0),
                          coll=coll, mat=M_SUB))
@@ -725,7 +742,7 @@ def build_mech(mech_id, palette_key=None):
     if spec["weapon"] == "rifle":
         # Long-barrel precision rifle: slim, scoped, drum-fed.
         o.append(add_box("w_recv", (0.36, 0.17, 0.24), piv, coll=coll, mat=M_SUB))
-        o.append(add_box("w_shroud", (0.40, 0.15, 0.16), piv + Vector((0.34, 0, 0.02)), coll=coll, mat=M_HULL))
+        o.append(add_box("w_shroud", (0.40, 0.15, 0.16), piv + Vector((0.34, 0, 0.02)), coll=coll, mat=M_TRIM))
         o.append(add_cyl("w_barrel", 0.045, 0.78, piv + Vector((0.56, 0, 0.02)),
                          (0, math.radians(90), 0), 14, coll=coll, mat=M_FRAME))
         o.append(add_cyl("w_brake", 0.075, 0.12, piv + Vector((0.94, 0, 0.02)),
@@ -896,8 +913,10 @@ def setup_world_and_lights():
     nt.nodes.clear()
     out = nt.nodes.new("ShaderNodeOutputWorld")
     bg = nt.nodes.new("ShaderNodeBackground")
-    bg.inputs["Color"].default_value = (0.20, 0.23, 0.30, 1.0)
-    bg.inputs["Strength"].default_value = 0.75
+    # Low ambient: the reference art has genuinely dark undersides, and a bright
+    # world flattens the forms into soft plastic.
+    bg.inputs["Color"].default_value = (0.16, 0.19, 0.26, 1.0)
+    bg.inputs["Strength"].default_value = 0.40
     nt.links.new(bg.outputs[0], out.inputs[0])
     scene.world = world
 
@@ -923,12 +942,12 @@ def setup_world_and_lights():
         obj.rotation_euler = d.to_track_quat("-Z", "Y").to_euler()
         return obj
 
-    # Strong top-left key with a tight fill: the reference art has a clear
-    # light-from-above-left read with dark undersides.
-    lamp("BSR_key", "AREA", (-3.0, -3.2, 4.2), 1100.0, (1.0, 0.98, 0.94), size=3.4)
-    lamp("BSR_fill", "AREA", (3.8, -2.6, 0.2), 190.0, (0.66, 0.76, 0.95), size=5.0)
-    lamp("BSR_rim", "AREA", (1.2, 3.8, 2.4), 380.0, (1.00, 0.80, 0.62), size=3.0)
-    lamp("BSR_bounce", "AREA", (0.0, -1.6, -3.4), 90.0, (0.50, 0.60, 0.85), size=5.0)
+    # Hard, small key for crisp terminators; minimal fill so shadowed planes stay
+    # genuinely dark; a tight rim to separate the silhouette from the arena.
+    lamp("BSR_key", "AREA", (-2.6, -3.0, 4.0), 1500.0, (1.0, 0.97, 0.92), size=1.4)
+    lamp("BSR_fill", "AREA", (3.8, -2.6, 0.2), 120.0, (0.58, 0.70, 0.95), size=5.0)
+    lamp("BSR_rim", "AREA", (1.0, 3.6, 2.6), 460.0, (1.00, 0.82, 0.66), size=1.8)
+    lamp("BSR_bounce", "AREA", (0.0, -1.4, -3.4), 55.0, (0.45, 0.55, 0.85), size=5.0)
 
 
 def setup_camera():

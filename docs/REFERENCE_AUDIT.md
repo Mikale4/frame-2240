@@ -290,6 +290,118 @@ arms, weapons, thruster packs).
 
 ---
 
+## 4b. Second pass on 2005 — corrections and newly found functions
+
+A later review, prompted by in-game screenshots, corrected one wrong conclusion
+and surfaced several functions the first audit missed.
+
+### 4b.1 Correction: the roster is NOT near-monochrome
+
+The first audit inferred an off-white, near-monochrome palette from the 2018
+documentation portraits (`data/bs1/howto/rs/mars1/p-*.gif`). **Those portraits
+are rendered in a neutral placeholder palette.** In-game the machines are vividly
+coloured.
+
+Verified against the 2005 build's own palette files — `chars/rs/pal/*.act`, 56 of
+them, each a plain 768-byte RGB table:
+
+| Palette | Sampled identity colours |
+| --- | --- |
+| `00-1.act` | `#0090FF` `#00DCFF` `#007DFF` with `#FF5500` / `#FF0000` |
+| `01-1.act` | `#FF5000` `#BE3500` over `#00CECE` `#009E9E`, plus `#55F600` |
+| `10-1.act` | `#1200A3` deep blue with `#00FFFF` |
+| `20-1.act` | `#00B13A` `#008A57` `#00706B` green-teal ramp |
+| `30-1.act` | `#0000E1` … `#000089` pure blue ramp |
+
+`#FF00FF` appears in every palette as MUGEN's transparency key, not a body
+colour. Two `.act` files per mech (`-1`, `-2`) give each machine a player-1 and
+player-2 scheme.
+
+**Lesson recorded:** derive colour from the palette files or gameplay captures,
+never from documentation renders.
+
+### 4b.2 The HUD is custom, not MUGEN's
+
+`data/fight.def` **disables the entire stock lifebar system**: every element is
+`anim = -1` and positioned at `999, 999` (off-screen), including `[Lifebar]`,
+`[Powerbar]`, `[Face]` and `[Name]`.
+
+The HUD visible in-game — twin life bars, a second power bar, a labelled
+**SHIELD** gauge, pilot portraits, the large timer — is therefore drawn entirely
+by the character's own states via `Explod`. Example, from `Statedef 8000`:
+
+```
+[State 0] ; face
+	type = Explod
+	anim = 36100 + Root,var(24)      ; var(24) = pilot id
+	postype = Left
+	pos = Ifelse(TeamSide = 1, 18, 302), 236
+	scale = 0.5, 0.5
+	ontop = 1
+```
+
+This is why the layout has three bars per player, which stock MUGEN cannot do.
+
+### 4b.3 Newly found: sprites scale with screen height (pseudo-3D depth)
+
+`Statedef 8000` maintains:
+
+```
+fvar(35) = (ScreenPos Y + 25) / 240.0 * 0.4 + 0.8
+```
+
+A scale factor driven by **vertical screen position**: ~`0.8` at the top of the
+240px play field, ~`1.2` at the bottom. Mechs higher up read as further away.
+This is a core part of why the reference arenas feel like they have depth rather
+than being flat side-view planes.
+
+**Not yet implemented in Reignition.** This is the single largest presentation
+gap and is queued as the next milestone.
+
+### 4b.4 Newly found: per-tier defence multipliers
+
+Also in `Statedef 8000`, `var(30)` selects a defence multiplier applied through
+`DefenceMulSet`:
+
+| `var(30)` | `fvar(6)` |
+| --- | --- |
+| 4 | 0.55 |
+| 3 | 0.85 |
+| 2 | 0.65 |
+| 1 | 0.75 |
+
+Combined with `[Data] defence = 50` in `cns.cns` and the arcade-mode
+`DefenceMulSet` in `Statedef -3`, defence is layered rather than a single stat.
+
+### 4b.5 Gap analysis — 2005 functions vs. Reignition
+
+| Function | Evidence | Status |
+| --- | --- | --- |
+| 8-direction free flight, normalised diagonals | `sys.cns Statedef 0` | implemented |
+| Dash ×2.25 costing boost, unguardable | `sys.cns`, `howto-en.html` | implemented |
+| Firing anchors movement (`velmul`) | `sys.cns` | implemented |
+| Tiered shots Lv1/Lv2/Lv3 + motion variants | `0.cmd` | implemented |
+| Hold-to-autofire | `0.cmd` `/x` `/y` | implemented |
+| Sub-weapon on its own charge | `0.cmd`, `howto-en.html` | implemented |
+| Hit-confirmed melee chain, barrier-piercing | `0.cns 210/211` | implemented |
+| Barrier burst, 36f invuln, absorb→meter | `0.cns 1200`, hint sheet | implemented |
+| Barrier cancel penalty from guard/hitstun | `0.cns 1200` | implemented |
+| Saturation, 3 modes, Start to cycle | `0.cmd`, hint sheet | implemented |
+| Per-part aim/bank/spin angles | `sys.cns fvar(1..5)` | implemented |
+| Eight AI tiers | `0.cmd ai_1..ai_8` | implemented |
+| Timeout resolved by remaining life | `howto-en.html` | implemented |
+| **Y-position sprite scaling** | `1.cns fvar(35)` | **missing** |
+| **Custom Explod-drawn HUD w/ portraits** | `fight.def` all disabled | partial (no portraits) |
+| **Ground plane + landing/takeoff states** | `sys.cns 40 / 55`, `var(20)` | missing (flight only) |
+| **FlyingMode ON/OFF toggle** | `howto-en.html` | missing |
+| **Layered defence multipliers** | `1.cns var(30)`, `-3` | missing |
+| **Supporter/drone firing the sub-shot** | `howto-en.html` HUD list | missing |
+| **Mission win conditions (escort, waves)** | `sys.cns 7000/8100, var(50)` | missing |
+| **Boss / special AI roles** | `var(51)` = 4, 7, 11 | missing |
+| **Stock/round icons** | screenshots | missing |
+
+---
+
 ## 5. 2011 and 2018/2020
 
 * **2011** is a transitional MUGEN 1.0 build. Its value is content evolution:
