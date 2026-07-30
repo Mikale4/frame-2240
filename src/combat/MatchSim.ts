@@ -142,12 +142,36 @@ export class MatchSim {
     this.player.step(pIn, this.enemy, this.arenaW, this.arenaH, this.spawnQueue, this.events);
     this.enemy.step(eIn, this.player, this.arenaW, this.arenaH, this.spawnQueue, this.events);
 
+    this.stepSupporters();
+
     for (const s of this.spawnQueue) this.projectiles.spawn(s);
     this.stepProjectiles();
     this.resolveCollisions();
     this.applyShieldSweep();
     this.pushApart();
     this.checkEnd();
+  }
+
+  /**
+   * Advances both supporter drones.
+   *
+   * Deliberately driven from here rather than from inside `Combatant.step`: that
+   * method returns early through several branches (hitstop, hitstun, committed
+   * attacks), and a state machine hidden behind one of those early returns is
+   * precisely how the melee lock-on once stopped cancelling on hit. Stepping the
+   * drones at the top level means no combatant branch can skip them.
+   *
+   * Runs after both chassis have moved, so each drone chases this tick's owner
+   * position, and before the spawn queue is drained, so an assist shot fired
+   * this tick becomes a live projectile on the same tick as any other.
+   */
+  private stepSupporters(): void {
+    for (const c of this.combatants) {
+      const target = this.opponentOf(c);
+      c.supporter.step(c, target, this.spawnQueue, this.events, (a, x, y, angle, spawns, events) =>
+        c.fireFromSupporter(a, x, y, angle, spawns, events),
+      );
+    }
   }
 
   private stepProjectiles(): void {
@@ -383,6 +407,9 @@ export class MatchSim {
       this.arenaW - e.def.rig.hurtRadius,
     );
     e.y = this.arenaH * 0.5;
+    // The drone teleports with its machine rather than flying the whole arena
+    // back, and drops any order it was holding when the dummy went down.
+    e.supporter.reset(e);
     this.combo.set(e.id, 0);
   }
 

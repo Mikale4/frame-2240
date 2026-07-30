@@ -148,6 +148,44 @@ export interface MeleeProfile {
   maxLife: number;
 }
 
+/**
+ * The supporter drone that carries the sub-weapon.
+ *
+ * The 2005 reference lists it as its own screen element — "2) supporter - sub
+ * shoot" — flying beside the machine with its own charge gauge drawn on it
+ * (see docs/REFERENCE_AUDIT.md 4c). It is a real entity there, not a muzzle on
+ * the chassis, and it trails behind the owner's facing at a distance that scales
+ * with the chassis weight.
+ *
+ * The projectile itself is described by the owner's `sub`/`salvo` `AttackDef`,
+ * so per-chassis spread and speed stay in one place.
+ */
+export interface SupporterDef {
+  /** Display name, announced when the assist is ordered. */
+  name: string;
+  /** Rest offset from the owner: behind its facing, and below it. */
+  followBack: number;
+  followDown: number;
+  /** Spring pull toward the rest offset, per tick. */
+  followAccel: number;
+  /** Per-tick velocity multiplier; damps the spring. */
+  followDamp: number;
+  /** Speed cap while catching up, so it never teleports. */
+  maxSpeed: number;
+  /** Radians per tick the drone slews toward its firing angle. */
+  turretRate: number;
+  /** Ticks between the order and the shot leaving the drone. */
+  windup: number;
+  /** Ticks the drone holds the firing pose afterwards. */
+  recover: number;
+  /** Ticks before it will accept another order. */
+  cooldown: number;
+  /** Distance from the drone's centre that the shot leaves. */
+  muzzleForward: number;
+  /** Drawn size / effect scale. The drone is not hittable. */
+  radius: number;
+}
+
 /** One renderable part of the mech, mirroring the reference's helper-per-part build. */
 export interface RigPart {
   name: string;
@@ -200,6 +238,8 @@ export interface MechDef {
   /** Sub-weapon charge economy (the reference had its own charge indicator). */
   subCharges: number;
   subRechargeTicks: number;
+  /** The drone that actually fires `sub` and `salvo`. */
+  supporter: SupporterDef;
 
   /** Soft-lock cone half-angle in radians and max range. */
   lockCone: number;

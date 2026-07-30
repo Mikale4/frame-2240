@@ -47,6 +47,9 @@ export class BootScene extends Phaser.Scene {
       for (const part of def.rig.parts) {
         this.load.image(`mech_${def.id}_${part.name}`, `sprites/mechs/${def.id}_${part.name}.png`);
       }
+      // The supporter drone is a single sprite, not a rig: it is ~50 logical px
+      // and turns as a whole, so a part hierarchy would buy nothing.
+      this.load.image(`mech_${def.id}_drone`, `sprites/mechs/${def.id}_drone.png`);
     }
 
     // Arena parallax layers.

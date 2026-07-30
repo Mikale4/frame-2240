@@ -152,6 +152,17 @@ export class Sfx {
     this.burst({ dur: 0.16, gain: 0.16, freq: 500, sweepTo: 3200, q: 0.9 });
   }
 
+  /** Order acknowledged: a short rising two-note chirp from the drone. */
+  assist(): void {
+    this.tone({ type: 'square', from: 880, to: 1320, dur: 0.07, gain: 0.09 });
+    this.tone({ type: 'sine', from: 1760, to: 2100, dur: 0.10, gain: 0.06 });
+  }
+
+  /** Refused: a flat, obviously-negative buzz, so a dead press is never silent. */
+  assistDenied(): void {
+    this.tone({ type: 'square', from: 320, to: 190, dur: 0.13, gain: 0.09 });
+  }
+
   melee(stage: number): void {
     const base = 700 + stage * 260;
     this.tone({ type: 'sawtooth', from: base, to: base * 0.35, dur: 0.13, gain: 0.16 });

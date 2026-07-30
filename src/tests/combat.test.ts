@@ -112,8 +112,15 @@ describe('attack state machine', () => {
   it('spreads multi-shot attacks across distinct angles', () => {
     const c = make();
     const k = ctx();
-    run(c, press(Btn.Sub), HALCYON.sub.startup + 1, null, k);
-    expect(k.spawns.length).toBe(HALCYON.sub.projCount);
+    // SCATTER is the chassis's own multi-shot: down, then forward + main.
+    // (The sub-weapon is no longer fired by the chassis — the drone carries it,
+    // and its spread is covered in supporter.test.ts.)
+    c.step({ ...emptyInput(), dx: 0, dy: 1 }, null, W, H, k.spawns, k.events);
+    c.step({ ...emptyInput(), dx: 1, dy: 0, held: 1 << Btn.Main, pressed: 1 << Btn.Main }, null, W, H, k.spawns, k.events);
+    expect(c.attack?.id).toBe('spread');
+
+    run(c, emptyInput(), HALCYON.spread.startup, null, k);
+    expect(k.spawns.length).toBe(HALCYON.spread.projCount);
     const angles = k.spawns.map((s) => Math.atan2(s.vy, s.vx));
     expect(new Set(angles.map((a) => a.toFixed(4))).size).toBe(angles.length);
   });

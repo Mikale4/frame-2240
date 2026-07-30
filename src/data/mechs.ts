@@ -438,6 +438,23 @@ export const HALCYON: MechDef = {
 
   subCharges: 2,
   subRechargeTicks: 150,
+  // ARBITER: the light escort drone. Sits close, turns fast, fires quickly.
+  // The reference scaled its helper's stand-off distance by the chassis weight
+  // class, so the lighter frame keeps its supporter tucked in.
+  supporter: {
+    name: 'ARBITER',
+    followBack: 70,
+    followDown: 58,
+    followAccel: 0.055,
+    followDamp: 0.86,
+    maxSpeed: 15,
+    turretRate: 7 * DEG,
+    windup: 10,
+    recover: 8,
+    cooldown: 22,
+    muzzleForward: 18,
+    radius: 15,
+  },
   lockCone: 75 * DEG,
   lockRange: 900,
   // ~2x the chassis height. The 11-tick startup lunges ~81px and the arc itself
@@ -471,6 +488,22 @@ export const NOCTURNE: MechDef = {
   // Heavy frame: thicker armour, and very hard to shift once planted.
   defence: { mul: 0.82, groundedMul: 0.8 },
   rig: NOCTURNE_RIG,
+  // WARDEN: the heavy frame's drone stands further off and is slower to bring
+  // to bear, but its volley is the harder one.
+  supporter: {
+    name: 'WARDEN',
+    followBack: 94,
+    followDown: 66,
+    followAccel: 0.042,
+    followDamp: 0.88,
+    maxSpeed: 12.5,
+    turretRate: 5 * DEG,
+    windup: 14,
+    recover: 11,
+    cooldown: 30,
+    muzzleForward: 21,
+    radius: 18,
+  },
   // Broader frame reaches slightly further with the claw.
   meleeRange: 210,
   // Heavy three-hit siege chain: slower, longer reach, far harder per swing.

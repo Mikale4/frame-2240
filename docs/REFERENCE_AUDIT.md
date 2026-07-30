@@ -395,10 +395,143 @@ Combined with `[Data] defence = 50` in `cns.cns` and the arcade-mode
 | **Ground plane + landing/takeoff states** | `sys.cns 40 / 55`, `var(20)` | missing (flight only) |
 | **FlyingMode ON/OFF toggle** | `howto-en.html` | missing |
 | **Layered defence multipliers** | `1.cns var(30)`, `-3` | missing |
-| **Supporter/drone firing the sub-shot** | `howto-en.html` HUD list | missing |
+| **Supporter/drone firing the sub-shot** | `howto-en.html` HUD list | **implemented** — see 4c |
 | **Mission win conditions (escort, waves)** | `sys.cns 7000/8100, var(50)` | missing |
 | **Boss / special AI roles** | `var(51)` = 4, 7, 11 | missing |
 | **Stock/round icons** | screenshots | missing |
+
+
+---
+
+## 4c. Third pass on 2005 — the supporter
+
+Prompted by the supporter/assist milestone. Everything below is read from the
+supplied 2005 files; nothing is copied. The `.cns` files are Shift-JIS, so the
+Japanese comments only decode with codepage 932 — read as UTF-8 they are
+mojibake, which is why earlier passes missed most of this.
+
+### 4c.1 The supporter is a first-class HUD element
+
+`howto-en.html` labels the seven screen elements, and two of them are the
+supporter:
+
+```text
+1) player - main shoot
+2) supporter - sub shoot
+3) jet power indicator
+4) sub shoot charge indicator
+5) timer
+6) life indicator
+7) power charge indicator
+```
+
+The labelled screenshot (`data/howto/bg2.gif`) places them. Marker **2** sits on
+a small machine flying just below and behind the player machine — clearly a
+separate, smaller entity, not a weapon on the chassis. Marker **4** points at a
+short green bar drawn *next to the supporter itself*, in world space, not in the
+corner HUD. So the reference tells the player whether the assist is ready by
+drawing the gauge on the helper.
+
+### 4c.2 Where the supporter lives in the state machine
+
+`chars/rs/st/f-o.cns` opens with the comment `サポーター射撃` — "supporter
+shooting". It holds one state block per chassis (`110000`, `110010`, `110020`,
+`110030`, `110050`, commented `A-00`…`A-05`), each with the same four sections:
+`初期化` (init), `派生射撃` (derived shots), `派生角度` (derived angles),
+`速度` (speed).
+
+`0.cns` spawns it:
+
+```text
+type = Helper
+trigger1 = RoundState = 2 && var(9) = 0 && var(11)
+ID = 10000
+stateno = 110000 + var(9) * 10
+```
+
+`var(9)` is the machine type, so the chassis selects its own supporter shot.
+`var(11)` is documented in the variable legend as
+`射撃スイッチ` — the shooting switch — and is cleared again immediately after
+firing, so it is a one-shot edge, not a held state.
+
+### 4c.3 Shot shape
+
+Inside state `110000` the supporter spawns two further helpers (`10001`,
+`10002`) and offsets their angles:
+
+```text
+fvar(1) = -40      ; helper 10001
+fvar(1) = +40      ; helper 10002
+fvar(20) = Ifelse(var(25), 3.4, 5.0)
+```
+
+So the assist is a **1-or-3-way spread at ±40°**, travelling 3.4–5.0 units per
+tick in the reference's 320-wide space. The narrower spread fires faster.
+
+### 4c.4 Follow offset
+
+A helper positions itself off its parent with:
+
+```text
+fvar(17) = Parent,Pos X - 20 * Parent,fvar(11) * Parent,facing
+fvar(18) = Parent,Pos Y - Parent,var(9) - 20 * Parent,fvar(11)
+```
+
+`fvar(11)` is the weight class (`重量級`, 1.0 / 1.5 / 2.0). The supporter
+therefore trails **behind the owner's facing and offset vertically, at a
+distance that scales with how heavy the chassis is** — a heavier machine keeps
+its helper further out.
+
+### 4c.5 The supporter mirrors its owner
+
+`sys.cns` repeatedly copies root state down into the helper:
+
+```text
+triggerall = IsHelper(112233)
+var(22) = Root,var(22)     ; stage / gravity type
+var(20) = Root,var(20)     ; flight mode
+sysvar(4) = Root,sysvar(4)
+```
+
+The helper is not an independent actor. It inherits flight mode and stage state
+from the machine it serves.
+
+### 4c.6 Charge behaviour
+
+`var(26)` is the `チャージシステム カウンター` — charge counter. Its rule is
+worth copying because it shapes the pacing:
+
+```text
+; charge is cancelled outright while acting
+triggerall = var(26) > 0
+trigger1 = StateNo = [200,2100]
+var(26) = 0
+
+; otherwise it counts up, and the gain ramps in
+trigger1 = var(26) = [1,30]
+var(28) = Floor(var(26) / 10.0)     ; ramp-in over 30 ticks
+trigger1 = var(26) > 30
+var(28) = Floor(50 * (var(28)/PowerMax + 0.1))   ; steady rate
+```
+
+Charging only happens while the machine is *not* in an action state, any action
+resets the counter to zero, and there is a deliberate ~30-tick ramp before the
+full rate applies. Pressure denies charge; disengaging restores it.
+
+### 4c.7 What this justifies in Reignition
+
+| Reference finding | Reignition decision |
+| --- | --- |
+| Supporter is a visible separate entity (HUD 2) | A real simulated entity with its own position, not an effect on the chassis |
+| Its gauge is drawn on it (HUD 4) | Readiness ring drawn at the drone, not a sixth corner gauge |
+| Trails behind facing, offset scaled by weight | Follow offset scaled per chassis |
+| Inherits flight mode from the owner | Follows the owner's depth/ground state; not independently targetable |
+| Fires 1-or-3 way at ±40°, 3.4–5.0 u/tick | Per-chassis spread and speed, retuned to this game's scale |
+| `var(11)` cleared right after firing | Assist fires on the pressed edge, never on hold |
+| Charge zeroed by acting, ramps in over 30 ticks | Charge pauses while the owner attacks, and ramps back in |
+
+Nothing above is reused as data or code; the numbers are recorded as evidence
+for original tuning, exactly as in section 7.
 
 ---
 

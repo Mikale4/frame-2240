@@ -126,6 +126,10 @@ export type SimEvent =
   | { t: 'guardBreak'; x: number; y: number; id: number }
   | { t: 'dash'; x: number; y: number; angle: number; id: number }
   | { t: 'melee'; x: number; y: number; angle: number; id: number; stage: number }
+  /** The supporter drone accepted an order and is winding up. */
+  | { t: 'assist'; x: number; y: number; angle: number; ownerId: number }
+  /** The assist was requested but unavailable — no charge, or drone busy. */
+  | { t: 'assistDenied'; x: number; y: number; ownerId: number }
   | { t: 'explode'; x: number; y: number; big: boolean }
   | { t: 'saturation'; id: number; mode: SatMode }
   | { t: 'modeCycle'; id: number; mode: SatMode }

@@ -276,6 +276,20 @@
           12.5,
           13.4
         ]
+      },
+      "drone": {
+        "file": "halcyon_drone.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3268,
+          0.4879,
+          0.8387
+        ],
+        "dims_logical_px": [
+          19.6,
+          29.3,
+          50.3
+        ]
       }
     },
     "nocturne": {
@@ -431,6 +445,20 @@
           102.0,
           12.5,
           13.4
+        ]
+      },
+      "drone": {
+        "file": "nocturne_drone.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3268,
+          0.4879,
+          0.8387
+        ],
+        "dims_logical_px": [
+          19.6,
+          29.3,
+          50.3
         ]
       }
     }

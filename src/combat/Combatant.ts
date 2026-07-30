@@ -19,6 +19,7 @@ import {
   type SimEvent,
 } from './types';
 import { DEG, approachAngle, clamp, angleDelta, lerp } from '../core/MathUtil';
+import { Supporter } from './Supporter';
 
 /** Radians per tick a melee lunge may correct toward its target. */
 const MELEE_TRACK_RATE = 9 * DEG;
@@ -150,6 +151,16 @@ export class Combatant implements FlightState {
 
   readonly cmd = new CommandBuffer();
 
+  /**
+   * The drone that carries this machine's sub-weapon.
+   *
+   * Owned here so it is created and discarded with its machine, but stepped by
+   * `MatchSim` after both chassis have moved — keeping it out of this class's
+   * branching step() is deliberate, because an early return in a hitstun or
+   * attack branch is exactly how the melee lock-on once stopped updating.
+   */
+  readonly supporter: Supporter;
+
   constructor(init: CombatantInit) {
     this.id = init.id;
     this.team = init.team;
@@ -163,6 +174,44 @@ export class Combatant implements FlightState {
     this.barrier = init.def.gauges.maxBarrier;
     this.boost = init.def.flight.maxBoost;
     this.subCharges = init.def.subCharges;
+    this.supporter = new Supporter(init.def.supporter, this);
+  }
+
+  /**
+   * Orders the drone to fire `a`, spending a sub charge.
+   *
+   * Returns false — and emits `assistDenied` — when the charge is missing or the
+   * drone is still busy, so the press is always answered with feedback instead
+   * of being silently swallowed.
+   */
+  private orderAssist(a: AttackDef, events: SimEvent[]): boolean {
+    const cost = a.subCost ?? 1;
+    const s = this.supporter;
+    if (this.subCharges < cost || !s.ready) {
+      events.push({ t: 'assistDenied', x: s.x, y: s.y, ownerId: this.id });
+      return false;
+    }
+    this.subCharges -= cost;
+    s.order(a);
+    events.push({ t: 'assist', x: s.x, y: s.y, angle: s.aim, ownerId: this.id });
+    return true;
+  }
+
+  /**
+   * Fires one of this machine's attacks from the drone's muzzle.
+   *
+   * Routed through the same `fire()` the chassis uses, so the shot inherits
+   * saturation scaling and emits the same events; only the origin differs.
+   */
+  fireFromSupporter(
+    a: AttackDef,
+    x: number,
+    y: number,
+    angle: number,
+    spawns: ProjectileSpawn[],
+    events: SimEvent[],
+  ): void {
+    this.fire(a, null, spawns, events, { x, y, angle });
   }
 
   get alive(): boolean {
@@ -329,8 +378,14 @@ export class Combatant implements FlightState {
     }
 
     // Sub-weapon charge economy.
+    //
+    // The reference zeroed its charge counter outright whenever the machine was
+    // in an action state, so pressure denies the assist and disengaging restores
+    // it. Here the counter merely stalls rather than resetting: losing a whole
+    // 150-tick charge to a single vulcan shot punishes ordinary play far harder
+    // than the reference did, where the counter refilled far faster.
     if (this.subCharges < this.def.subCharges) {
-      this.subRecharge++;
+      if (!this.attack) this.subRecharge++;
       if (this.subRecharge >= this.def.subRechargeTicks) {
         this.subRecharge = 0;
         this.subCharges++;
@@ -463,18 +518,20 @@ export class Combatant implements FlightState {
       this.begin(d.lance);
       return;
     }
-    if (this.cmd.matches(MOTIONS.salvo) && this.subCharges >= (d.salvo.subCost ?? 1)) {
-      this.begin(d.salvo);
-      return;
+    // Sub-weapon motion variant. The reference listed the sub shoot twice — as a
+    // plain button and as a quarter-circle — and both belong to the supporter.
+    if (this.cmd.matches(MOTIONS.salvo)) {
+      if (this.orderAssist(d.salvo, events)) return;
     }
     if (this.cmd.matches(MOTIONS.spread) && this.energy >= d.spread.energyCost) {
       this.begin(d.spread);
       return;
     }
 
-    // Sub weapon.
-    if (isPressed(input, Btn.Sub) && this.subCharges >= (d.sub.subCost ?? 1)) {
-      this.begin(d.sub);
+    // Sub weapon: the drone carries it, so the chassis only gives the order and
+    // stays free to keep flying and shooting.
+    if (isPressed(input, Btn.Sub)) {
+      this.orderAssist(d.sub, events);
       return;
     }
 
@@ -866,13 +923,22 @@ export class Combatant implements FlightState {
     }
   }
 
+  /**
+   * Spawns an attack's projectiles.
+   *
+   * `from` overrides the muzzle when the supporter drone is firing on this
+   * machine's behalf: the shot then leaves the drone's own coordinates and along
+   * the drone's own angle, and the chassis takes no recoil for it.
+   */
   private fire(
     a: AttackDef,
     target: Combatant | null,
     spawns: ProjectileSpawn[],
     events: SimEvent[],
+    from?: { x: number; y: number; angle: number },
   ): void {
-    const m = this.muzzle(a);
+    const m = from ?? this.muzzle(a);
+    const aim = from ? from.angle : this.aim;
     const speed = a.projSpeed * this.satProjSpeedScale;
     const dmgScale = this.satShootScale;
     const homing = a.homing * (this.satActive && this.satMode === SatMode.Shoot ? 1.8 : 1);
@@ -882,12 +948,12 @@ export class Combatant implements FlightState {
 
     for (let i = 0; i < n; i++) {
       const off = n === 1 ? 0 : (i - half) * (a.spreadRad / Math.max(1, n - 1)) * 2;
-      const ang = this.aim + off;
+      const ang = aim + off;
       // Beams stack along the axis instead of fanning out.
       const along = a.kind === ProjKind.Beam ? i * a.projRadius * 1.6 : 0;
       spawns.push({
-        x: m.x + Math.cos(this.aim) * along,
-        y: m.y + Math.sin(this.aim) * along,
+        x: m.x + Math.cos(aim) * along,
+        y: m.y + Math.sin(aim) * along,
         vx: Math.cos(ang) * speed,
         vy: Math.sin(ang) * speed,
         damage: a.damage * dmgScale,
@@ -906,15 +972,16 @@ export class Combatant implements FlightState {
       });
     }
 
-    // Recoil pushes the chassis back along the aim axis.
-    if (a.recoil) {
-      this.vx -= Math.cos(this.aim) * a.recoil;
-      this.vy -= Math.sin(this.aim) * a.recoil;
+    // Recoil pushes the chassis back along the aim axis — but only when the
+    // chassis itself fired. A drone's shot must not shove its owner around.
+    if (a.recoil && !from) {
+      this.vx -= Math.cos(aim) * a.recoil;
+      this.vy -= Math.sin(aim) * a.recoil;
     }
 
     this.sat = Math.min(this.def.gauges.maxSaturation, this.sat + (this.satActive ? 0 : a.satGain));
     this.firedThisTick = a.kind;
-    events.push({ t: 'fire', x: m.x, y: m.y, angle: this.aim, kind: a.kind, ownerId: this.id });
+    events.push({ t: 'fire', x: m.x, y: m.y, angle: aim, kind: a.kind, ownerId: this.id });
     void target;
   }
 

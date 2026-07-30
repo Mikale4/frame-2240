@@ -634,6 +634,125 @@ def join_as(name, objs, pivot, coll):
     return obj
 
 
+# --------------------------------------------------------------- drone build
+
+
+# The supporter is small — it must still read at roughly 40 logical px — so it
+# is built as ONE joined object rather than a rig. A four-part rig on a 40px
+# sprite buys nothing: the whole drone turns to face its target, so rotating a
+# single sprite gives the same result as animating a hierarchy.
+DRONE_LENGTH_BU = 0.72  # ~43 logical px nose to tail
+
+
+def build_drone(mech_id, palette_key=None):
+    """
+    Builds one supporter drone into MECH_<ID>, named `<mech_id>_drone`.
+
+    Design language follows the chassis: tapered wedges rather than boxes, a
+    sharp forward prow, swept vanes, overlapping plates with a visible step, and
+    a glowing sensor. Deliberately NOT a sphere or a cube with a gun — the
+    reference's machines are all angles.
+
+    Modelled nose-along +X, matching the parts convention, with the pivot at the
+    hull centre so the game can rotate it about its own middle.
+    """
+    pal = PALETTES[palette_key or mech_id]
+    coll = ensure_collection(f"MECH_{mech_id.upper()}")
+
+    M_HULL = make_material(f"{mech_id}_hull", pal["primary"], roughness=0.44)
+    M_FAR = make_material(f"{mech_id}_far", pal["far"], roughness=0.5)
+    M_SUB = make_material(f"{mech_id}_sub", pal["secondary"], roughness=0.5)
+    M_TRIM = make_material(f"{mech_id}_trim", pal["trim"], roughness=0.40)
+    M_FRAME = make_material(f"{mech_id}_frame", pal["frame"], roughness=0.62, metallic=0.7)
+    M_ACC = make_material(f"{mech_id}_accent", pal["accent"], emission=1.1, roughness=0.35)
+    M_GLOW = make_material(f"{mech_id}_glow", pal["glow"], emission=2.1, roughness=0.2, metallic=0.0)
+
+    L = DRONE_LENGTH_BU
+    o = []
+
+    # ---- engine block: the heavy mass, at the tail -------------------------
+    # Massing the drone back-heavy stops it reading as a paper dart: the
+    # silhouette steps down from a deep tail to a thin nose.
+    o.append(add_wedge("d_block", (0.30, 0.24, 0.26), 0.66,
+                       Vector((-L * 0.30, 0, 0.005)),
+                       (0, math.radians(90), 0), coll=coll, mat=M_HULL))
+    o.append(add_box("d_blockcap", (0.055, 0.21, 0.235),
+                     Vector((-L * 0.44, 0, 0.005)), coll=coll, mat=M_FRAME))
+
+    # ---- forward hull: tapers hard from the block to the nose --------------
+    o.append(add_wedge("d_hull", (0.235, 0.185, L * 0.52), 0.26,
+                       Vector((L * 0.06, 0, 0.0)),
+                       (0, math.radians(90), 0), coll=coll, mat=M_HULL))
+    # Chisel prow, cranked down — the chassis noses do the same.
+    o.append(add_wedge("d_prow", (0.10, 0.10, L * 0.22), 0.14,
+                       Vector((L * 0.42, 0, -0.028)),
+                       (0, math.radians(76), 0), coll=coll, mat=M_SUB))
+
+    # ---- layered plates: a visible step along the spine and flank ----------
+    # A narrow near-white lip only — the identity colour has to hold the surface
+    # area, or the drone reads as a white toy with coloured bits.
+    o.append(add_wedge("d_spine", (0.15, 0.075, 0.030), 0.48,
+                       Vector((-L * 0.16, 0, 0.128)), coll=coll, mat=M_TRIM))
+    o.append(add_wedge("d_shoulder", (0.24, 0.20, 0.05), 0.62,
+                       Vector((-L * 0.10, 0, 0.095)), coll=coll, mat=M_SUB))
+    # Dark identity shade underneath: the underside must fall away in shadow so
+    # the top plates read as plates.
+    o.append(add_box("d_belly", (L * 0.46, 0.15, 0.045),
+                     Vector((-L * 0.05, 0, -0.098)), coll=coll, mat=M_FAR))
+    o.append(add_wedge("d_keel", (0.22, 0.16, 0.07), 0.55,
+                       Vector((-L * 0.24, 0, -0.075)), coll=coll, mat=M_FAR))
+
+    # ---- sensor housing: a raised, angled cowl with a glowing slit ---------
+    o.append(add_wedge("d_cowl", (0.13, 0.13, 0.075), 0.42,
+                       Vector((L * 0.20, 0, 0.075)),
+                       (0, math.radians(70), 0), coll=coll, mat=M_SUB))
+    o.append(add_box("d_eye", (0.055, 0.075, 0.022),
+                     Vector((L * 0.255, 0, 0.070)), (0, math.radians(-16), 0),
+                     coll=coll, mat=M_GLOW))
+
+    # ---- swept vanes: they must break the hull silhouette to read ----------
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_wedge(f"d_vane{i}", (0.30, 0.030, 0.26), 0.14,
+                           Vector((-L * 0.30, sy * 0.115, 0.075)),
+                           (math.radians(sy * 34), 0, math.radians(-sy * 20)),
+                           coll=coll, mat=M_HULL))
+        o.append(add_box(f"d_vanetip{i}", (0.04, 0.026, 0.045),
+                         Vector((-L * 0.42, sy * 0.165, 0.155)),
+                         (math.radians(sy * 34), 0, 0), coll=coll, mat=M_ACC))
+        # Lower canard, forward, to give the nose some width.
+        o.append(add_wedge(f"d_fin{i}", (0.15, 0.026, 0.13), 0.20,
+                           Vector((L * 0.10, sy * 0.085, -0.055)),
+                           (math.radians(sy * 62), 0, math.radians(-sy * 12)),
+                           coll=coll, mat=M_SUB))
+
+    # ---- cannon: slung under the nose, thick enough to read at 50px --------
+    o.append(add_box("d_breech", (0.115, 0.10, 0.09),
+                     Vector((L * 0.10, 0, -0.075)), coll=coll, mat=M_FRAME))
+    o.append(add_cyl("d_barrel", 0.040, L * 0.40, Vector((L * 0.30, 0, -0.075)),
+                     (0, math.radians(90), 0), verts=10, coll=coll, mat=M_FRAME))
+    o.append(add_wedge("d_muzzle", (0.095, 0.095, 0.085), 0.55,
+                       Vector((L * 0.50, 0, -0.075)),
+                       (0, math.radians(90), 0), coll=coll, mat=M_TRIM))
+    o.append(add_box("d_feed", (0.075, 0.13, 0.055),
+                     Vector((L * 0.02, 0, -0.070)), coll=coll, mat=M_SUB))
+
+    # ---- thruster ---------------------------------------------------------
+    o.append(add_cyl("d_bell", 0.085, 0.11, Vector((-L * 0.52, 0, 0.005)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M_FRAME))
+    o.append(add_cyl("d_flame", 0.058, 0.030, Vector((-L * 0.585, 0, 0.005)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M_GLOW))
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_box(f"d_vent{i}", (0.075, 0.030, 0.030),
+                         Vector((-L * 0.20, sy * 0.10, 0.045)), coll=coll, mat=M_ACC))
+
+    # Greebles keep the surface from reading as a handful of clean shapes.
+    o.extend(scatter_greebles("d_g", Vector((-L * 0.10, 0, 0)),
+                              Vector((L * 0.30, 0.085, 0.085)), 9, coll,
+                              [M_FRAME, M_SUB, M_ACC], seed=77, scale=0.45))
+
+    return join_as(f"{mech_id}_drone", o, Vector((0, 0, 0)), coll)
+
+
 # ---------------------------------------------------------------- mech build
 
 
@@ -1184,7 +1303,10 @@ def render_parts(coll, out_dir, mech_id, manifest):
     cam = scene.camera
 
     mech_objs = {o.name: o for o in coll.objects if o.type == "MESH"}
-    missing = [n for n in PART_ORDER if f"{mech_id}_{n}" not in mech_objs]
+    # The drone lives in the same collection but is not part of the rig; it is
+    # rendered alongside so it shares the camera, lighting and outline settings.
+    wanted = list(PART_ORDER) + ["drone"]
+    missing = [n for n in wanted if f"{mech_id}_{n}" not in mech_objs]
     if missing:
         raise RuntimeError(
             f"{mech_id}: missing part objects {missing}. "
@@ -1198,7 +1320,7 @@ def render_parts(coll, out_dir, mech_id, manifest):
 
     saved_ortho = cam.data.ortho_scale
     try:
-        for name in PART_ORDER:
+        for name in wanted:
             obj = mech_objs[f"{mech_id}_{name}"]
             saved_loc = tuple(obj.location)
             obj.location = (0.0, 0.0, 0.0)
@@ -1240,7 +1362,9 @@ def render_assembled(coll, out_path, ortho=4.0):
     prev_x, prev_y = scene.render.resolution_x, scene.render.resolution_y
 
     all_meshes = [o for o in bpy.data.objects if o.type == "MESH"]
-    members = set(o.name for o in coll.objects)
+    # The drone shares the collection but sits at the origin, which would drop it
+    # through the middle of the assembled chassis. It gets its own preview.
+    members = set(o.name for o in coll.objects if not o.name.endswith("_drone"))
     saved = {o.name: o.hide_render for o in all_meshes}
     for o in all_meshes:
         o.hide_render = o.name not in members
@@ -1287,6 +1411,7 @@ def build_all(project_root):
     built = {}
     for mech_id in ("halcyon", "nocturne"):
         coll, _parts = build_mech(mech_id)
+        build_drone(mech_id)
         built[mech_id] = coll
         render_parts(coll, sprites, mech_id, manifest)
         render_assembled(coll, os.path.join(debug, f"{mech_id}_assembled.png"))

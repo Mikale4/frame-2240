@@ -611,3 +611,107 @@ more; they now render at 448px and everything else is unchanged.
 still draws every part at origin 0.5,0.5 and `PART_SCALE`, and a larger tile only
 adds transparent margin. A full rebuild is still deterministic — re-rendering all
 22 parts changed at most one byte-value of dither noise outside the two sabers.
+
+---
+
+## 2026-07-30 — Session 3: the supporter drone
+
+### D34 — The sub-weapon belongs to a drone, not to the chassis
+
+**Decision.** Each machine is escorted by a persistent supporter drone
+(`combat/Supporter.ts`). The assist button no longer starts a chassis attack: it
+issues an *order*. The drone acknowledges, slews onto the target, and the shot
+leaves its own muzzle. HALCYON is escorted by ARBITER, NOCTURNE by WARDEN.
+
+**Why.** This is what the reference does. `howto-en.html` lists the supporter as
+its own screen element — "2) supporter - sub shoot" — and the state file
+`f-o.cns` is headed サポーター射撃, "supporter shooting". The labelled screenshot
+shows a small machine flying below and behind the player. Firing sub-weapons out
+of the chassis was a simplification the audit had already flagged as a gap.
+
+**How it feels.** Because the drone does the work, the chassis is not locked into
+an attack: you keep flying and shooting while the assist goes out. That is the
+point of an assist, and it is the main reason this is not just a reskin of the
+old sub-weapon.
+
+**Cost.** One more entity in the simulation, and `fire()` grew an optional origin
+so a shot can leave somewhere other than the chassis muzzle. Recoil is suppressed
+for drone-fired shots — a drone's missile must not shove its owner around.
+
+---
+
+### D35 — The drone is invulnerable, persistent, and stepped from MatchSim
+
+**Decision.** The supporter cannot be targeted or damaged, it lives for the whole
+match, and `MatchSim.step` advances it rather than `Combatant.step`.
+
+**Why, per point.**
+
+*Invulnerable.* The reference draws a **charge** gauge on the supporter (HUD
+element 4), never a life bar, and nothing in the supplied material describes
+destroying one. Making it hittable would mean inventing a destruction and respawn
+system with no evidence behind it, and would put a second collidable body in
+front of every shot the player tries to land.
+
+*Persistent.* The reference spawns its helper at `RoundState = 2` and keeps it for
+the round.
+
+*Stepped from `MatchSim`.* `Combatant.step` returns early through several
+branches — hitstop, hitstun, a committed attack, an active melee lock. A state
+machine hidden behind one of those returns is exactly how the melee lock-on once
+stopped cancelling when hit. Driving the drones at the top level means no
+combatant branch can skip them. They step after both chassis have moved (so each
+drone chases this tick's position) and before the spawn queue drains (so an
+assist shot becomes a live projectile on the same tick as any other).
+
+---
+
+### D36 — Readiness is drawn on the drone, and shows the real constraint
+
+**Decision.** A short bar under each drone, not a sixth gauge in the corner. It
+shows whichever of the two gates the player is actually waiting on: the drone's
+own cooldown, or the slow sub-charge economy.
+
+**Why.** The reference put its "sub shoot charge indicator" beside the supporter
+in world space rather than in the HUD, which keeps the player's eye in the fight.
+Showing only the drone's cooldown would have been actively misleading — that
+clears in ~22 ticks while a spent charge takes 150, so the bar would have read
+full while nothing happened.
+
+A ring was tried first and rejected: at gameplay distance it read as noise around
+the chassis rather than as a gauge.
+
+**Also.** A refused order emits `assistDenied`, with a flat negative tone and a
+spark. A button that silently does nothing is indistinguishable from a bug.
+
+---
+
+### D37 — Sub charges stall while attacking rather than resetting
+
+**Decision.** The sub-charge timer stops advancing while the machine is in an
+attack, but does not reset.
+
+**Why.** The reference zeroed its charge counter outright whenever the machine was
+in an action state, so pressure denies the assist and disengaging restores it —
+a good rule worth keeping. But its counter refilled far faster than this game's
+150-tick charge; losing a whole charge to one vulcan shot would punish ordinary
+play far harder than the reference ever did. Stalling keeps the intent and the
+pacing.
+
+---
+
+### D38 — The drone is one sprite, not a rig
+
+**Decision.** `build_drone` joins the whole drone into a single object and the
+game rotates one sprite.
+
+**Why.** It is ~50 logical px long and turns as a whole to face its target. A part
+hierarchy would produce identical pixels for more moving parts. The chassis rigs
+exist because arms, head and weapons track independently; nothing on the drone
+does.
+
+**Art.** It follows the same language as the chassis — tapered wedges rather than
+boxes, a back-heavy engine mass stepping down to a thin prow, swept vanes that
+break the hull silhouette, a slung cannon, layered plates with a visible lip, and
+a dark identity shade underneath so the top plates read as plates. Deliberately
+not a sphere or a cube with a gun.

@@ -85,11 +85,11 @@ or unplugged mid-match.
 | Main gun | `J` | `A` |
 | **Sword / melee** | `U` | `Y` |
 | Heavy shot | `K` | `X` |
-| Sub weapon (homing missiles) | `L` | `B` |
+| **Assist — order the drone to fire** | `L` | `B` |
 | Flight mode on/off | `C` | R-stick click |
 | Scatter shot | `↓`, `→` + `J` | same motion |
 | Lance beam | `↓`, `←` + `K` | same motion |
-| Missile salvo | `↓`, `→` + `L` | same motion |
+| Drone salvo | `↓`, `→` + `L` | same motion |
 
 Hold the main gun button to auto-fire. **Melee has its own button** — a swing is
 always a deliberate commitment, and it lunges forward, so it stays useful from
@@ -99,6 +99,16 @@ outside contact range rather than only firing when you happen to be close.
 where you walk instead of fly, brace better against damage, and refuel boost
 faster — but you give up free movement. Taking off kicks you upward, and a heavy
 shot takes off automatically.
+
+**Your supporter drone.** You do not carry the sub-weapon — a small drone flying
+in formation does. HALCYON is escorted by **ARBITER**, NOCTURNE by **WARDEN**.
+The assist button is an *order*: the drone acknowledges, swings onto the target
+and fires from its own guns, while your chassis stays free to keep flying and
+shooting. The short bar under the drone is its readiness — it fills while the
+drone recovers and while a sub charge rebuilds, and lights up when the assist is
+armed. Ordering an assist you cannot pay for answers with a refusal tone rather
+than doing nothing. The drone cannot be shot down, and it is back on station for
+every rematch.
 
 ### Defence and meter
 
@@ -234,11 +244,16 @@ exec(open(r"<project>/tools/blender/build_arena.py").read())
 build_arena(r"<project>")
 ```
 
-Mechs render as ten separate pivot-centred parts each — core, head, left/right
-arm, main/sub weapon, lower body, backpack, left/right thruster. The scale
-contract is 120 render px per Blender unit displayed at 0.5, i.e. **1 Blender
-unit = 60 logical game pixels**, which is the unit the rig offsets in
-`src/data/mechs.ts` use.
+Mechs render as eleven separate pivot-centred parts each — core, head, left/right
+arm, main/sub/melee weapon, lower body, backpack, left/right thruster — plus a
+single-sprite supporter drone. The scale contract is 120 render px per Blender
+unit displayed at 0.5, i.e. **1 Blender unit = 60 logical game pixels**, which is
+the unit the rig offsets in `src/data/mechs.ts` use.
+
+Each part is framed on its own pivot, so tile size is chosen per part from the
+projected bounding box rather than fixed: most parts fit 320px, the beam sabers
+need 448px. `px_per_bu` is identical at every tile size, so a larger tile only
+adds transparent margin and the game still draws every part at origin 0.5,0.5.
 
 ### Capturing what the game actually drew
 

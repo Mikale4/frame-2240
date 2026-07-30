@@ -6,7 +6,7 @@ import { MECHS } from '../data/mechs';
 import { RivalAI } from '../ai/RivalAI';
 import { Rng } from '../core/Rng';
 import { InputManager } from '../input/InputManager';
-import { MechRenderer } from '../render/MechRenderer';
+import { MechRenderer, PART_SCALE } from '../render/MechRenderer';
 import { Effects } from '../render/Effects';
 import { Backdrop } from '../render/Backdrop';
 import { TEX } from '../render/Textures';
@@ -16,7 +16,7 @@ import { DebugOverlay } from '../debug/DebugOverlay';
 import { sfx } from '../audio/Sfx';
 import { MatchPhase, ProjKind, emptyInput, type InputFrame } from '../combat/types';
 import type { Combatant } from '../combat/Combatant';
-import { clamp } from '../core/MathUtil';
+import { clamp, wrapAngle } from '../core/MathUtil';
 import { depthScaleAt, depthSortAt } from '../core/Depth';
 
 /** Visual style per projectile kind. */
@@ -62,6 +62,9 @@ export class BattleScene extends Phaser.Scene {
   private projSprites: Phaser.GameObjects.Image[] = [];
   /** One beam-sword sprite per combatant, shown only while swinging. */
   private blades: Phaser.GameObjects.Image[] = [];
+  /** One supporter drone sprite per combatant, plus its readiness ring. */
+  private drones: Phaser.GameObjects.Image[] = [];
+  private droneRings: Phaser.GameObjects.Graphics[] = [];
 
   private accumulator = 0;
   private paused = false;
@@ -87,6 +90,8 @@ export class BattleScene extends Phaser.Scene {
     this.pauseUi = undefined;
     this.projSprites = [];
     this.blades = [];
+    this.drones = [];
+    this.droneRings = [];
     this.worldObjects = [];
     this.renderers = [];
 
@@ -141,6 +146,16 @@ export class BattleScene extends Phaser.Scene {
       this.blades.push(blade);
     }
 
+    // Supporter drones. Drawn one layer under the mechs so a machine never
+    // disappears behind its own escort.
+    for (const def of [playerDef, enemyDef]) {
+      const drone = this.add.image(0, 0, `mech_${def.id}_drone`);
+      drone.setOrigin(0.5, 0.5);
+      drone.setScale(PART_SCALE);
+      this.drones.push(drone);
+      this.droneRings.push(this.add.graphics());
+    }
+
     this.hud = new Hud(this, this.sim);
     this.debug = new DebugOverlay(this, this.sim, this.ai);
 
@@ -160,6 +175,8 @@ export class BattleScene extends Phaser.Scene {
       ...this.renderers.map((r) => r.root),
       ...this.projSprites,
       ...this.blades,
+      ...this.drones,
+      ...this.droneRings,
       this.effects.container,
       ...this.debug.worldObjects,
     ];
@@ -373,6 +390,21 @@ export class BattleScene extends Phaser.Scene {
           sfx.melee(ev.stage);
           break;
         }
+        case 'assist': {
+          // The drone lights up and braces before the shot leaves it, so the
+          // order reads as an order rather than as a shot from nowhere.
+          const c = this.byId(ev.ownerId);
+          this.effects.absorb(ev.x, ev.y, c?.def.tint.glow ?? 0x7ce7ff);
+          sfx.assist();
+          if (ev.ownerId === s.player.id) this.hud.banner(c?.def.supporter.name ?? 'ASSIST', 34);
+          break;
+        }
+        case 'assistDenied': {
+          // Refusals have to be audible, or a dead button feels like a bug.
+          this.effects.guard(ev.x, ev.y, 0x8494ad);
+          sfx.assistDenied();
+          break;
+        }
         case 'saturation': {
           const c = this.byId(ev.id);
           if (c) this.effects.saturation(c.x, c.y, c.def.tint.thruster);
@@ -415,6 +447,85 @@ export class BattleScene extends Phaser.Scene {
 
   private byId(id: number): Combatant | undefined {
     return this.sim.combatants.find((c) => c.id === id);
+  }
+
+  /**
+   * Draws one supporter drone and its readiness ring.
+   *
+   * The ring is drawn on the drone rather than added as a sixth corner gauge,
+   * which is what the 2005 reference did — its "sub shoot charge indicator" is a
+   * bar sitting next to the supporter itself, not in the HUD (REFERENCE_AUDIT
+   * 4c.1). Keeping it here also means the player's eye never has to leave the
+   * fight to know whether the assist is up.
+   */
+  private drawDrone(i: number, c: Combatant): void {
+    const sprite = this.drones[i];
+    const ring = this.droneRings[i];
+    const s = c.supporter;
+
+    // The drone leaves with its machine. Nothing to draw for a wreck.
+    if (!c.alive) {
+      sprite.setVisible(false);
+      ring.setVisible(false);
+      return;
+    }
+
+    const dz = depthScaleAt(s.y);
+    sprite.setVisible(true);
+    sprite.setPosition(s.x, s.y);
+    // Modelled nose-along +x; mirror rather than spin past vertical so the
+    // drone never flies upside down.
+    sprite.setScale(PART_SCALE * dz * s.facing, PART_SCALE * dz);
+    sprite.setRotation(s.facing > 0 ? s.aim : wrapAngle(Math.PI - s.aim));
+    // A layer under the mechs, so an escort never hides its own machine.
+    sprite.setDepth(depthSortAt(s.y, 18));
+
+    // Thruster plume trailing the drone whenever it is working to keep up.
+    const speed = Math.hypot(s.vx, s.vy);
+    if (speed > 1.2 && Math.random() < 0.5) {
+      const back = s.aim + Math.PI;
+      this.effects.thruster(
+        s.x + Math.cos(back) * 16 * dz,
+        s.y + Math.sin(back) * 16 * dz,
+        Math.atan2(s.vy, s.vx) + Math.PI,
+        Math.min(1, speed / 8),
+        c.def.tint.thruster,
+      );
+    }
+
+    // Readiness bar, drawn on the drone itself.
+    //
+    // A bar rather than a ring, and here rather than in the corner, because that
+    // is what the reference did: its "sub shoot charge indicator" is a short bar
+    // sitting beside the supporter. A ring read as noise around the chassis at
+    // gameplay distance; a bar is the same shape as every other gauge the player
+    // already knows.
+    // Two things gate the assist: the drone's own cooldown (fast) and the sub
+    // charge economy (slow). The bar has to show whichever the player is
+    // actually waiting on, or it reads full while nothing happens.
+    const ready = c.subCharges > 0 && s.ready;
+    const frac = ready
+      ? 1
+      : c.subCharges > 0
+        ? s.readyFraction
+        : clamp(c.subRecharge / Math.max(1, c.def.subRechargeTicks), 0, 1);
+    const w = 26 * dz;
+    const h = 3 * dz;
+    const by = s.y + 20 * dz;
+    ring.setVisible(true);
+    ring.setDepth(depthSortAt(s.y, 19));
+    ring.clear();
+    ring.fillStyle(0x0a0f18, 0.75);
+    ring.fillRect(s.x - w / 2 - 1, by - 1, w + 2, h + 2);
+    if (ready) {
+      ring.fillStyle(c.def.tint.glow, 0.95);
+      ring.fillRect(s.x - w / 2, by, w, h);
+    } else {
+      ring.fillStyle(0x2b3346, 0.9);
+      ring.fillRect(s.x - w / 2, by, w, h);
+      ring.fillStyle(c.def.tint.accent, 0.95);
+      ring.fillRect(s.x - w / 2, by, w * frac, h);
+    }
   }
 
   // ------------------------------------------------------------------ render
@@ -505,6 +616,9 @@ export class BattleScene extends Phaser.Scene {
       } else {
         bloom.setVisible(false);
       }
+
+      // ---- supporter drone -------------------------------------------
+      this.drawDrone(i, c);
 
       // Sustained barrier bubble and saturation aura.
       if (c.invuln > 0) {
