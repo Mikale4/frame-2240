@@ -62,6 +62,15 @@ export class BattleScene extends Phaser.Scene {
     this.finished = false;
     this.paused = false;
     this.accumulator = 0;
+    this.shake = 0;
+    // Phaser reuses the scene instance across restarts, so class-field
+    // initialisers do NOT run again. Anything accumulated here must be reset
+    // explicitly or a rematch would keep the previous match's destroyed
+    // GameObjects alive in these collections.
+    this.pauseUi = undefined;
+    this.projSprites = [];
+    this.worldObjects = [];
+    this.renderers = [];
 
     const playerDef = MECHS[session.playerMech];
     const enemyDef = MECHS[session.enemyMech];

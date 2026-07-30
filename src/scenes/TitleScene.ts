@@ -26,6 +26,10 @@ export class TitleScene extends Phaser.Scene {
     this.input$ = new InputManager(this);
     this.input$.reset();
     this.modeIdx = Math.max(0, MODES.indexOf(session.mode));
+    // Field initialisers do not re-run on a scene restart, so clear this or
+    // returning to the title would animate the previous visit's dead containers.
+    this.mechGroups = [];
+    this.t = 0;
 
     // ---- background ------------------------------------------------------
     const g = this.add.graphics();
