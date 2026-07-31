@@ -61,7 +61,7 @@ export const MUSIC_CUES: MusicCueDef[] = [
   { name: 'theme_nocturne', present: true },
   { name: 'theme_vesper', present: true },
   { name: 'theme_terramoth', present: true },
-  { name: 'theme_cirrus', present: false },
+  { name: 'theme_cirrus', present: true },
   { name: 'theme_obelisk', present: false },
   { name: 'theme_pyre', present: false },
   { name: 'theme_nulltide', present: false },
