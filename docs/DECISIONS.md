@@ -1438,3 +1438,108 @@ roster. `playstyles.test.ts` pins the spread so this cannot silently regress.
 table. VESPER's screens — it leans far forward on a long leash and dodges *less*,
 which looks like a mistake and is the point: every shot spent on the drone is one
 not spent on a marksman who needs to hold still.
+
+## D65 — Desperation: saturation opened from the brink
+
+A burst opened at or below a third of a life bar runs in a **desperation** form
+with its mode's effect dramatically escalated.
+
+The meter charges off damage *taken*, so the pilot most likely to be holding a
+full bar is the one being beaten — and until now that bar bought them exactly the
+same burst it bought the pilot who was winning. A comeback mechanic only the
+loser can reach is the point, not an oversight. The threshold lines up with
+things the game already dramatises: the HUD ring turns amber under a third, and
+the `hurt` banter fires there.
+
+| Mode | Desperation form |
+| --- | --- |
+| SHIELD | **Total invulnerability** until the meter empties. Not 95 % off, not "except lances" — checked ahead of every scaling branch, so gunfire, melee, pierce and status chip all stop dead. |
+| SHOOT | Projectiles ×1.85 faster *on top of* the ordinary Shoot scaling, and each individual shot has a 1-in-3 chance of being doubled. |
+| SPEED | Melee lock reach ×9 (past the width of the viewport), dash distance ×1.9, and **melee deals true damage** — bypassing chassis defence, drone armour, grounded bracing, guards and Shield saturation alike. |
+
+**Latched at activation, not read live.** Otherwise it is a passive that switches
+on whenever a pilot dips low, rather than a property of the decision to spend the
+meter while losing. `desperation.test.ts` pins that distinction directly.
+
+**The extra-shot roll is per projectile and comes from the match RNG.** Per
+projectile because the roster's volleys already differ in width and a per-volley
+roll would pay the widest kit the most; from the match RNG because this is
+gameplay and a replay has to reproduce it — the opposite of the music roll (D60),
+which must *not* touch that stream. Measured across 12 seeds: 1.15–1.55× the
+shots of an ordinary burst, which is the 1.33 the odds predict.
+
+Measuring it needed care. The obvious test — count what is still in the air —
+reads the **speed** buff as *fewer* projectiles, because faster shots clear the
+arena sooner. Counting spawns is the only honest measure.
+
+## D66 — Desperation resolves the saturation-preference problem from D64
+
+D64 had to defang per-pilot `satPreference` because SHOOT was strictly the
+strongest burst, so any pilot told to prefer another mode was told to lose.
+
+Desperation changes that arithmetic where it matters. At or below the threshold
+every mode is enormous, so **below that line a pilot now takes their own
+preferred burst outright**; above it, a preference still only widens the window
+its mode already wins in. CIRRUS takes SPEED on the brink because that is exactly
+where SPEED stops being the worse trade and becomes a comeback — and because
+taking it is what Mira Holloway would do.
+
+Re-measured after the change, both slots played: roster spread **0.555 at HARD**
+and **0.579 at EXTREME**, against the 0.555 baseline from before playstyles
+existed. The escalation did not unbalance the roster.
+
+## D67 — Weapons are locked on, unconditionally
+
+Aim used to be gated on `inLockCone` — inside `lockRange` **and** within a facing
+cone — and when that failed it fell through to `Math.atan2(input.dy, input.dx)`:
+**the direction of travel.** A mech strafing while firing pointed its guns along
+its own movement and shot at empty air. It read as the weapons being broken, and
+it was the single most visible defect in the game.
+
+There is no distance at which "aim at nothing" is the better answer, so there is
+no longer a range check. `inLockCone` is deleted.
+
+**The enemy drone is a valid aim target.** It is permanently deployed since D63,
+so it is a real part of the fight. The pilot stays the default and the drone is
+only taken when it is `DRONE_LOCK_EDGE` (90 px) *closer* — without that margin
+the escort would steal the lock every time it drifted forward and there would be
+stretches where shooting the pilot was impossible.
+
+**This changes nothing about the projectiles.** They still fly straight from the
+muzzle at the angle the mounts were pointing. Only the drone's own shots home.
+
+## D68 — The camera frames the fight instead of guessing at it
+
+Two bugs, one cause: the zoom was a curve fitted to a feeling rather than to the
+viewport. `1.34 - dist / 2400`, clamped at 0.74, with `dist` a single hypot.
+
+* A **purely vertical** separation barely zoomed out at all, because one hypot
+  cannot tell the two axes apart.
+* The **0.74 floor** could frame about half the arena's width, so at wide
+  separation a pilot was simply lost off the edge.
+
+Now it solves for the zoom that actually fits both machines plus a margin, on
+each axis independently, and takes the tighter. `CAM_ZOOM_MIN` is 0.34 — low
+enough to frame the whole 2400×1200 arena in a 960×540 viewport — so there is no
+separation at which a pilot can leave the screen.
+
+**The velocity lead is clamped, not removed.** Leading the action is what makes
+the camera feel like it is following a fight, but on its own it shoved a pilot
+out of frame whenever one accelerated hard. The lead is applied and then bounded
+to the window where both machines remain visible.
+
+**The HUD band is reserved.** Framing solves against the 372 px below the HUD
+rather than the full 540, and the view is pushed down by half the band.
+"On screen but behind your own life bar" is the other half of *barely being seen*.
+
+Two things caught only by measuring the rendered result:
+
+* **`setBounds` silently overrode all of it.** Phaser clamps scroll to the camera
+  bounds, and below ~0.45 zoom the view is larger than the arena, so the clamp
+  re-centred the camera and put a pilot back under the HUD however carefully the
+  focus had been solved. The framing clamp does not need the help; the bounds are
+  gone.
+* **The HUD shift compounded.** `cam.midPoint.y` already carries the previous
+  frame's shift, so lerping against it and shifting again walked the view off the
+  bottom of the arena within a second. The smoothing now runs in un-shifted
+  space: undo, lerp, re-apply.

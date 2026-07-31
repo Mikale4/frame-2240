@@ -152,9 +152,46 @@ describe('saturation preference is a lean, not an override', () => {
     expect(modeAt('cirrus', 0.9, 300)).toBe(SatMode.Speed);
     expect(modeAt('halcyon', 0.9, 300)).toBe(SatMode.Shoot);
   });
+});
 
-  it('drops to SHIELD when badly hurt whatever the pilot prefers', () => {
-    for (const m of ROSTER) expect(modeAt(m.id, 0.1, 700), m.id).toBe(SatMode.Shield);
+/**
+ * Below a third of a life bar every mode's desperation form is enormous, so the
+ * reason a preference had to be defanged above that line does not apply below
+ * it. This is the one place a pilot gets to play their own game outright — and
+ * it is the moment their characterisation should be loudest.
+ */
+describe('desperation lets a pilot play their own game', () => {
+  const modeAt = (mech: string, lifeFrac: number, dist: number): SatMode => {
+    const def = ROSTER.find((m) => m.id === mech)!;
+    const s = new MatchSim({ playerDef: def, enemyDef: def, seed: 7, introTicks: 1 });
+    const ai = new RivalAI({ difficulty: Difficulty.Hard }, new Rng(7));
+    s.player.life = def.gauges.maxLife * lifeFrac;
+    return (ai as unknown as { chooseSatMode(c: unknown, d: number): SatMode }).chooseSatMode(
+      s.player,
+      dist,
+    );
+  };
+
+  it('gives every pilot their own preferred burst on the brink', () => {
+    for (const m of ROSTER) {
+      expect(modeAt(m.id, 0.2, 700), m.id).toBe(PLAYSTYLES[m.id].satPreference);
+    }
+  });
+
+  it('lets CIRRUS take SPEED on the brink, at any range', () => {
+    // The example the design is built around: Mira Holloway takes the risky
+    // close-range option precisely when it is most dangerous, because at a third
+    // of a hull SPEED stops being the worse trade and becomes a comeback.
+    for (const dist of [80, 400, 900, 1600]) {
+      expect(modeAt('cirrus', 0.25, dist)).toBe(SatMode.Speed);
+    }
+  });
+
+  it('is a cliff, not a slope — the threshold is where the buff is', () => {
+    // Just above: OBELISK's ordinary widened window still applies.
+    expect(modeAt('cirrus', 0.4, 900)).toBe(SatMode.Shoot);
+    // Just below: her own mode.
+    expect(modeAt('cirrus', 0.33, 900)).toBe(SatMode.Speed);
   });
 });
 

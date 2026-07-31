@@ -34,6 +34,32 @@ import { depthScaleAt, depthSortAt } from '../core/Depth';
 
 
 /**
+ * Camera framing.
+ *
+ * `CAM_ZOOM_MIN` is low enough to fit the **whole arena** — 2400x1200 against a
+ * 960x540 viewport needs 0.34 horizontally and 0.36 vertically once the margins
+ * are counted — so there is no separation at which a pilot can be pushed off
+ * screen. That was the bug: the old floor of 0.74 could frame about half the
+ * arena's width and simply lost whoever was furthest out.
+ */
+const CAM_ZOOM_MIN = 0.34;
+const CAM_ZOOM_MAX = 1.34;
+/** Clearance kept around each pilot when solving the zoom, in world px. */
+const CAM_MARGIN_X = 190;
+const CAM_MARGIN_Y = 150;
+/** Clearance kept around each pilot when clamping the focus point. */
+const CAM_EDGE = 96;
+/**
+ * Screen height across the top that the HUD occupies.
+ *
+ * Framing solves against the band *below* this rather than the whole viewport,
+ * and the view is then pushed down by half of it. Without that, a pilot at the
+ * top of the arena is technically on screen and practically invisible behind
+ * their own life bar — which is the other half of "barely being seen".
+ */
+const CAM_HUD_BAND = 168;
+
+/**
  * Beam-saber bloom geometry, in logical pixels along the blade from the
  * meleeWeapon pivot.
  *
@@ -237,7 +263,12 @@ export class BattleScene extends Phaser.Scene {
 
     this.debug = new DebugOverlay(this, this.sim, this.ai);
 
-    this.cameras.main.setBounds(0, 0, ARENA_W, ARENA_H);
+    // **No bounds.** Phaser clamps scroll to the camera bounds, and once the
+    // zoom drops below ~0.45 the view is taller and wider than the arena — so
+    // the clamp silently overrode the framing and shoved a pilot back under the
+    // HUD however carefully the centre had been solved. The framing clamp in
+    // `render()` is what keeps the pair on screen, and it does not need help.
+    this.cameras.main.removeBounds();
     this.cameras.main.setZoom(1);
     this.cameras.main.centerOn(ARENA_W / 2, ARENA_H / 2);
 
@@ -899,17 +930,68 @@ export class BattleScene extends Phaser.Scene {
     // ---- camera ----------------------------------------------------------
     const p = s.player;
     const e = s.enemy;
+    const cam = this.cameras.main;
     const midX = (p.x + e.x) / 2;
     const midY = (p.y + e.y) / 2;
-    const dist = Math.hypot(e.x - p.x, e.y - p.y);
-    // Pull back as the pilots separate, so both stay framed.
-    const targetZoom = clamp(1.34 - dist / 2400, 0.74, 1.34);
-    const cam = this.cameras.main;
+
+    // ---- zoom: solve for the framing rather than guess at it ---------------
+    //
+    // This used to be `1.34 - dist / 2400` clamped at 0.74, which is a curve
+    // fitted to a feeling rather than to the viewport. It framed the common case
+    // and lost pilots at the edges: separation was measured as a single hypot,
+    // so a purely vertical split barely zoomed out at all, and the 0.74 floor
+    // could not fit the arena's width however far apart the two got.
+    //
+    // Now it computes the zoom that actually fits both machines plus a margin,
+    // on each axis independently, and takes the tighter of the two.
+    const spanX = Math.abs(e.x - p.x) + CAM_MARGIN_X * 2;
+    const spanY = Math.abs(e.y - p.y) + CAM_MARGIN_Y * 2;
+    // Solved against the clear band under the HUD, not the whole viewport.
+    const usableH = VIEW_H - CAM_HUD_BAND;
+    const fit = Math.min(VIEW_W / spanX, usableH / spanY);
+    const targetZoom = clamp(fit, CAM_ZOOM_MIN, CAM_ZOOM_MAX);
     cam.setZoom(Phaser.Math.Linear(cam.zoom, targetZoom, 0.06));
 
-    const focusX = Phaser.Math.Linear(cam.midPoint.x, midX + (p.vx + e.vx) * 4, 0.11);
-    const focusY = Phaser.Math.Linear(cam.midPoint.y, midY + (p.vy + e.vy) * 3, 0.11);
-    cam.centerOn(focusX, focusY);
+    // ---- focus: lead the action, but never at the cost of framing ---------
+    //
+    // The velocity lead is what makes the camera feel like it is following a
+    // fight rather than tracking a midpoint, but on its own it could shove a
+    // pilot out of frame — a fast mech pulled the view off its own opponent.
+    // So the lead is applied first and then clamped to the window in which both
+    // machines are still visible.
+    const half = (v: number) => v / (2 * cam.zoom);
+    const halfW = half(VIEW_W);
+    const halfH = half(usableH);
+
+    const bound = (lo: number, hi: number, want: number, mid: number, halfSpan: number): number => {
+      // Furthest the centre may sit and still keep both inside, per side.
+      const min = hi - halfSpan;
+      const max = lo + halfSpan;
+      // When they cannot both fit — only reachable at the zoom floor — hold the
+      // midpoint, so the pair stays centred and neither is favoured.
+      if (min > max) return mid;
+      return clamp(want, min, max);
+    };
+
+    // The camera centre sits *above* the focus by half the reserved band, which
+    // pushes the world down into the clear area. The smoothing has to run in
+    // un-shifted space: `cam.midPoint.y` already carries last frame's shift, so
+    // lerping against it and shifting again compounds every frame and walks the
+    // view off the bottom of the arena. Undo it, lerp, re-apply.
+    const hudShift = CAM_HUD_BAND / (2 * cam.zoom);
+    const wantX = midX + (p.vx + e.vx) * 4;
+    const wantY = midY + (p.vy + e.vy) * 3;
+    const focusX = Phaser.Math.Linear(
+      cam.midPoint.x,
+      bound(Math.min(p.x, e.x) - CAM_EDGE, Math.max(p.x, e.x) + CAM_EDGE, wantX, midX, halfW),
+      0.11,
+    );
+    const focusY = Phaser.Math.Linear(
+      cam.midPoint.y + hudShift,
+      bound(Math.min(p.y, e.y) - CAM_EDGE, Math.max(p.y, e.y) + CAM_EDGE, wantY, midY, halfH),
+      0.11,
+    );
+    cam.centerOn(focusX, focusY - hudShift);
 
     if (this.shake > 0.05) {
       cam.shake(90, this.shake * 0.0007, true);

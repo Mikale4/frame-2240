@@ -104,6 +104,7 @@ export class MatchSim {
       x: this.arenaW * 0.32,
       y: this.arenaH * 0.5,
       facing: 1,
+      rng: this.rng,
     });
     this.enemy = new Combatant({
       id: 1,
@@ -112,6 +113,7 @@ export class MatchSim {
       x: this.arenaW * 0.68,
       y: this.arenaH * 0.5,
       facing: -1,
+      rng: this.rng,
     });
     this.combatants = [this.player, this.enemy];
 

@@ -6,6 +6,7 @@ import type { Projectile } from '../projectiles/Projectile';
 import type { Rng } from '../core/Rng';
 import { Difficulty } from '../core/Session';
 import { clamp } from '../core/MathUtil';
+import { DESPERATION_LIFE } from '../combat/Combatant';
 
 /**
  * Rival CPU behaviour.
@@ -1005,8 +1006,19 @@ export class RivalAI {
     // to prefer something else was being told to lose. Nudging the thresholds
     // keeps the characterisation legible and costs almost nothing: measured at
     // 0.585 spread against 0.555 for no playstyles at all.
-    const shieldAt = pref === SatMode.Shield ? 0.5 : 0.35;
-    if (lifeFrac < shieldAt) return SatMode.Shield;
+    // **At or below the desperation threshold, play your own game.**
+    //
+    // Every mode's desperation form is enormous — total invulnerability, doubled
+    // shots at speed, or a sword that reaches across the arena and ignores every
+    // defence — so the reason a preference had to be defanged above this line
+    // simply does not apply below it. CIRRUS takes SPEED on the brink because
+    // that is where SPEED stops being the worse trade and starts being a
+    // comeback, and because taking it is exactly what Mira Holloway would do.
+    if (lifeFrac <= DESPERATION_LIFE) return pref;
+
+    // Above it, a preference only widens the window its mode already wins in;
+    // see the ablation in D64 for why it may not do more than that.
+    if (pref === SatMode.Shield && lifeFrac < 0.5) return SatMode.Shield;
     const speedAt = pref === SatMode.Speed ? 340 : 220;
     if (dist < speedAt) return SatMode.Speed;
     return SatMode.Shoot;

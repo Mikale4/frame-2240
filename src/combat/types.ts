@@ -116,6 +116,15 @@ export interface ProjectileSpawn {
   homing: number;
   /** Extra hits allowed before removal (beams/melee arcs pass through). */
   pierceCount: number;
+  /**
+   * Ignores every damage reduction on the way in — chassis defence, drone
+   * armour passives, guards, and Shield saturation alike.
+   *
+   * Set only by melee inside a desperate Speed burst. It exists because that
+   * burst's promise is "your sword answers anything", and a sword that still
+   * gave up 70 % to a Shield bubble would not be answering it.
+   */
+  trueDamage?: boolean;
   /** Status element inflicted on a clean hit. Omitted or 0 = none. */
   element?: number;
 

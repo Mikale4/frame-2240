@@ -19,8 +19,9 @@ import {
   type ProjectileSpawn,
   type SimEvent,
 } from './types';
-import { DEG, approachAngle, clamp, angleDelta, lerp } from '../core/MathUtil';
+import { DEG, approachAngle, clamp, lerp } from '../core/MathUtil';
 import { Supporter } from './Supporter';
+import { Rng } from '../core/Rng';
 import { Element, StatusState } from './Status';
 
 /** Radians per tick a melee lunge may correct toward its target. */
@@ -87,6 +88,45 @@ const SHIELD_TAKEN = {
   /** Burn, acid and the rest of the status damage — 95 % off. */
   chip: 0.05,
 } as const;
+
+/**
+ * Life fraction at or below which a saturation burst opens in its **desperation**
+ * form, with the mode's effect dramatically escalated.
+ *
+ * The meter charges off damage taken, so the pilot most likely to be holding a
+ * full bar is the one being beaten — and until this existed, that bar bought
+ * them exactly the same burst it bought the pilot who was winning. A comeback
+ * mechanic that only the loser can reach is the point, not an oversight.
+ *
+ * Chosen to line up with the thresholds already in the game: the HUD ring turns
+ * amber under a third, and `hurt` banter fires there too, so the moment a pilot
+ * becomes dangerous is a moment the game was already dramatising.
+ */
+export const DESPERATION_LIFE = 1 / 3;
+
+/**
+ * How much closer the enemy drone must be than its owner before the weapon
+ * mounts prefer it.
+ *
+ * A margin rather than a plain "nearest", because the escort spends much of its
+ * time drifting forward of its pilot. Without this it would steal the lock
+ * whenever it happened to lead, and there would be stretches of a match where
+ * shooting the pilot was simply not possible.
+ */
+const DRONE_LOCK_EDGE = 90;
+
+/**
+ * Desperation multipliers. Deliberately large — these are last stands, and a
+ * subtle last stand is not worth the mechanic.
+ */
+/** Melee lock reach, ×. Puts it past the width of the viewport. */
+const DESPERATE_MELEE_RANGE = 9;
+/** Dash speed, ×, on top of the Speed burst's own thrust scaling. */
+export const DESPERATE_DASH = 1.9;
+/** Projectile speed, ×, on top of the Shoot burst's own scaling. */
+export const DESPERATE_PROJ_SPEED = 1.85;
+/** Chance that each shot fired inside a desperate Shoot burst is doubled. */
+export const DESPERATE_EXTRA_SHOT = 1 / 3;
 
 /**
  * Ticks the pilot is helpless after a saturation burst burns out.
@@ -226,12 +266,23 @@ export interface CombatantInit {
   x: number;
   y: number;
   facing: 1 | -1;
+  /**
+   * The match's generator.
+   *
+   * Shared with `MatchSim` on purpose: the desperate Shoot burst rolls for an
+   * extra projectile, and that is *gameplay*, so it must come out of the same
+   * seeded stream a replay reproduces. Music rolls are the opposite case and
+   * take their own source — see `MusicBank.pickBattleCue`.
+   */
+  rng?: Rng;
 }
 
 export class Combatant implements FlightState {
   readonly id: number;
   readonly team: Team;
   readonly def: MechDef;
+  /** Shared match RNG; see `CombatantInit.rng`. */
+  private readonly rng: Rng;
 
   x = 0;
   y = 0;
@@ -301,6 +352,8 @@ export class Combatant implements FlightState {
   satActive = false;
   satMode: SatMode = SatMode.Shield;
   satTicks = 0;
+  /** True when this burst opened at or below `DESPERATION_LIFE`. */
+  satDesperate = false;
   /** Ticks of helplessness left after a burst ended. See SAT_BURNOUT_TICKS. */
   satBurnout = 0;
   /**
@@ -432,6 +485,9 @@ export class Combatant implements FlightState {
     this.id = init.id;
     this.team = init.team;
     this.def = init.def;
+    // Falls back to its own generator so a Combatant built in isolation (tests,
+    // tools) still works; MatchSim always passes the match's.
+    this.rng = init.rng ?? new Rng(0x5eed0001 + init.id);
     this.x = init.x;
     this.y = init.y;
     this.facing = init.facing;
@@ -548,7 +604,11 @@ export class Combatant implements FlightState {
     return this.speedActive ? 1 + 0.85 * this.satPower : 1;
   }
   get satProjSpeedScale(): number {
-    return this.shootActive ? 1 + 0.6 * this.satPower : 1;
+    if (!this.shootActive) return 1;
+    // A desperate Shoot burst stacks on top of the ordinary one, so the shots
+    // are not merely faster than normal — they are faster than a Shoot burst,
+    // which is the comparison a player actually has in their head.
+    return (1 + 0.6 * this.satPower) * (this.satDesperate ? DESPERATE_PROJ_SPEED : 1);
   }
   /** Swings in a button-chain. Speed saturation adds three, as it does to a lock-on. */
   get maxMeleeHits(): number {
@@ -576,6 +636,41 @@ export class Combatant implements FlightState {
   }
   get speedActive(): boolean {
     return this.satActive && this.satMode === SatMode.Speed;
+  }
+
+  // ---- desperation ---------------------------------------------------------
+
+  /**
+   * A burst opened from the brink runs in its desperation form.
+   *
+   * Latched at activation rather than read live, so the buff belongs to the
+   * *decision* to spend the meter while losing. Healing back over the threshold
+   * mid-burst is impossible today, but tying it to a live check would also mean a
+   * pilot who dipped under 33 % for one tick got a comeback mechanic by accident.
+   *
+   * This is deliberately a losing-player's tool. The meter charges off damage
+   * taken, so the pilot most likely to have a full bar is the one being beaten —
+   * and until now that bar bought them the same burst it bought the winner.
+   */
+  get desperateShield(): boolean {
+    return this.shieldActive && this.satDesperate;
+  }
+  get desperateShoot(): boolean {
+    return this.shootActive && this.satDesperate;
+  }
+  get desperateSpeed(): boolean {
+    return this.speedActive && this.satDesperate;
+  }
+
+  /**
+   * Melee reach, including the Speed burst's desperation extension.
+   *
+   * "Across the screen" is meant literally: `DESPERATE_MELEE_RANGE` puts the
+   * lock-on past the width of the viewport, so a cornered pilot can answer a
+   * sniper who has been holding the far side of the arena.
+   */
+  get effectiveMeleeRange(): number {
+    return this.desperateSpeed ? this.def.meleeRange * DESPERATE_MELEE_RANGE : this.def.meleeRange;
   }
 
   /**
@@ -839,6 +934,7 @@ export class Combatant implements FlightState {
       this.sat = Math.max(0, (this.satTicks / g.satDuration) * g.maxSaturation);
       if (this.satTicks <= 0) {
         this.satActive = false;
+        this.satDesperate = false;
         this.sat = 0;
         this.burnOut(events);
       }
@@ -945,11 +1041,12 @@ export class Combatant implements FlightState {
     }
 
     let desired: number;
+    const lockAt = this.lockTarget(target);
     if (input.aimX !== null && input.aimY !== null && (input.aimX !== 0 || input.aimY !== 0)) {
       // Manual aim always wins.
       desired = Math.atan2(input.aimY, input.aimX);
-    } else if (this.lockEnabled && target && target.alive && this.inLockCone(target)) {
-      desired = Math.atan2(target.y - this.y, target.x - this.x);
+    } else if (lockAt) {
+      desired = Math.atan2(lockAt.y - this.y, lockAt.x - this.x);
     } else if (input.dx !== 0 || input.dy !== 0) {
       desired = Math.atan2(input.dy, input.dx);
     } else {
@@ -960,14 +1057,40 @@ export class Combatant implements FlightState {
     this.aim = approachAngle(this.aim, desired, this.def.flight.turretRate);
   }
 
-  private inLockCone(target: Combatant): boolean {
-    const dx = target.x - this.x;
-    const dy = target.y - this.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist > this.def.lockRange) return false;
-    const facingAngle = this.facing > 0 ? 0 : Math.PI;
-    return Math.abs(angleDelta(facingAngle, Math.atan2(dy, dx))) <= this.def.lockCone;
+  /**
+   * What the weapon mounts are pointed at, or null to fall back to the heading.
+   *
+   * **Lock is unconditional.** It used to be gated on `inLockCone` — inside
+   * `lockRange` *and* within a facing cone — and when that failed the aim fell
+   * through to the movement direction. The result was the bug this replaced: a
+   * mech strafing while firing pointed its guns along its own travel and shot at
+   * empty air, which is not a thing any pilot would do and read as the weapons
+   * being broken. There is no range at which "aim at nothing" is the better
+   * answer, so there is no longer a range check.
+   *
+   * **The enemy drone is a valid target.** It is permanently deployed now, so it
+   * is a real thing in the fight rather than an occasional visitor. The mech
+   * stays the default and the drone is only taken when it is `DRONE_LOCK_EDGE`
+   * closer — without that margin the escort would steal the lock every time it
+   * drifted forward, and you could never shoot the pilot behind it.
+   *
+   * This changes nothing about the projectiles: they still fly straight from the
+   * muzzle. Only the drone's own shots home.
+   */
+  private lockTarget(target: Combatant | null): { x: number; y: number } | null {
+    if (!this.lockEnabled) return null;
+    const mech = target && target.alive ? target : null;
+    const drone = target && target.supporter.hittable ? target.supporter : null;
+    if (!mech) return drone ? { x: drone.x, y: drone.y } : null;
+    if (!drone) return { x: mech.x, y: mech.y };
+
+    const toMech = Math.hypot(mech.x - this.x, mech.y - this.y);
+    const toDrone = Math.hypot(drone.x - this.x, drone.y - this.y);
+    return toDrone < toMech - DRONE_LOCK_EDGE
+      ? { x: drone.x, y: drone.y }
+      : { x: mech.x, y: mech.y };
   }
+
 
   // ------------------------------------------------------------- action start
 
@@ -1133,7 +1256,7 @@ export class Combatant implements FlightState {
   /** True when the main-gun button should swing instead of shoot. */
   meleeInRange(target: Combatant): boolean {
     const dist = Math.hypot(target.x - this.x, target.y - this.y);
-    return dist <= this.def.meleeRange;
+    return dist <= this.effectiveMeleeRange;
   }
 
   /**
@@ -1147,7 +1270,8 @@ export class Combatant implements FlightState {
     if (!target || !target.alive) return false;
 
     const dist = Math.hypot(target.x - this.x, target.y - this.y);
-    if (dist > p.acquireRange) return false;
+    // Desperate Speed reaches across the arena; see `effectiveMeleeRange`.
+    if (dist > p.acquireRange * (this.desperateSpeed ? DESPERATE_MELEE_RANGE : 1)) return false;
     if (!this.energyFree && this.energy < p.energy + Math.min(p.hitEnergy * 2, 40)) return false;
 
     if (!this.energyFree) this.energy -= p.energy;
@@ -1325,6 +1449,7 @@ export class Combatant implements FlightState {
           homing: 0,
           pierceCount: 0,
           element: base.element ?? Element.None,
+          trueDamage: this.desperateSpeed,
         });
         if (last) {
           // The finisher forcibly creates neutral again.
@@ -1446,6 +1571,8 @@ export class Combatant implements FlightState {
   private activateSaturation(power: number, events: SimEvent[]): void {
     this.satActive = true;
     this.satPower = power;
+    // Latched now, so the buff belongs to the decision to spend while losing.
+    this.satDesperate = this.life / this.def.gauges.maxLife <= DESPERATION_LIFE;
     this.satPartial = power < 1;
     this.satTicks = Math.max(30, Math.round(this.def.gauges.satDuration * power));
     this.invuln = Math.max(this.invuln, 20);
@@ -1680,7 +1807,32 @@ export class Combatant implements FlightState {
         // as they were before families existed.
         speedMin: sp * PROJ_SPEED_MIN,
         speedMax: sp * PROJ_SPEED_MAX,
+        // A lone swing has to bypass defences exactly as the lock sequence does,
+        // or the burst's promise would hold only for the committed chain.
+        trueDamage: this.desperateSpeed && a.kind === ProjKind.Melee,
       });
+
+      // Desperate Shoot: every individual projectile gets its own roll to be
+      // doubled, so a five-round spread averages six or seven rather than
+      // sometimes ten and sometimes five. Rolled per shot rather than per
+      // volley on purpose — the volleys already differ in size across the
+      // roster, and a per-volley roll would pay the widest kit the most.
+      //
+      // Drawn from the match's seeded generator, because this is gameplay and a
+      // replay has to reproduce it exactly.
+      if (this.desperateShoot && this.rng.chance(DESPERATE_EXTRA_SHOT)) {
+        const twin = { ...spawns[spawns.length - 1] };
+        // Nudged off its twin so the pair reads as two shots rather than one
+        // brighter one, and fanned very slightly so they separate downrange.
+        const jitter = 0.045;
+        const s2 = Math.hypot(twin.vx, twin.vy) || 1;
+        const a2 = Math.atan2(twin.vy, twin.vx) + jitter;
+        twin.vx = Math.cos(a2) * s2;
+        twin.vy = Math.sin(a2) * s2;
+        twin.x -= sin * a.projRadius * 1.1;
+        twin.y += cos * a.projRadius * 1.1;
+        spawns.push(twin);
+      }
     }
 
     // Recoil pushes the chassis back along the aim axis — but only when the
@@ -1712,6 +1864,11 @@ export class Combatant implements FlightState {
       // Cryo bites here, so it slows flight, walking and boost alike.
       speedScale: this.satSpeedScale * this.status.speedScale,
       boostSpeedScale: this.satThrustScale * this.status.speedScale,
+      // A desperate Speed burst extends the dash specifically, so closing the
+      // yard in one move is the thing that changed — not the top speed you
+      // cruise at, which would just make the mech hard to place.
+      dashSpeedScale:
+        this.satThrustScale * this.status.speedScale * (this.desperateSpeed ? DESPERATE_DASH : 1),
       boostFree: this.boostFree,
       // Firing anchors you, but never so much that a simultaneous dash fizzles:
       // the dash impulse is the whole point of allowing the overlap.
@@ -1812,6 +1969,16 @@ export class Combatant implements FlightState {
       return 'repelled';
     }
 
+    // A desperate Shield burst is total. Not 95 % off, not "except lances" —
+    // nothing lands until the meter runs out.
+    //
+    // Checked ahead of every scaling branch precisely so it needs no exceptions:
+    // gunfire, melee, lances and status chip all stop here. It is the strongest
+    // defensive state in the game and it is meant to be, because a pilot only
+    // reaches it by having already been beaten down to a third of their hull.
+    // The burnout waiting at the far end is what it costs.
+    if (this.desperateShield) return 'absorbed';
+
     // Barrier-burst invulnerability. Absorbing a shot feeds the meter, which is
     // the reference's core defensive loop.
     if (this.invuln > 0) {
@@ -1820,6 +1987,24 @@ export class Combatant implements FlightState {
         return 'absorbed';
       }
       return 'ignored';
+    }
+
+    // True damage bypasses the entire ladder below — chassis defence, the drone
+    // armour passive, the grounded bracing bonus, guards and Shield saturation.
+    // Only a desperate Speed burst's melee sets it, and the point is that it
+    // cannot be answered by hiding: everything else in `takeHit` is a way of
+    // taking less, and this is the one thing that ignores all of them.
+    if (p.trueDamage) {
+      if (isMelee) this.meleeHitsTaken++;
+      this.life = Math.max(0, this.life - p.damage);
+      this.hitstop = Math.max(this.hitstop, p.hitstop);
+      this.hitstun = Math.max(this.hitstun, p.hitstun);
+      this.invuln = Math.max(this.invuln, this.def.gauges.hitInvuln);
+      this.guarding = false;
+      const l0 = Math.hypot(p.vx, p.vy) || 1;
+      this.vx += (p.vx / l0) * p.knockback;
+      this.vy += (p.vy / l0) * p.knockback;
+      return 'hit';
     }
 
     // Layered defence, mirroring the reference's DefenceMulSet tiers, with the

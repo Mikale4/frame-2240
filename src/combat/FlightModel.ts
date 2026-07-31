@@ -48,6 +48,11 @@ export interface FlightIntent {
    * `speedScale` when omitted, which is the pre-split behaviour.
    */
   boostSpeedScale?: number;
+  /**
+   * Multiplier on dash speed alone, and therefore on the distance one dash
+   * covers. Defaults to `boostSpeedScale`, which is the pre-split behaviour.
+   */
+  dashSpeedScale?: number;
   /** Multiplier applied to velocity each tick, e.g. firing anchor. */
   moveScale: number;
   /**
@@ -174,7 +179,9 @@ export function stepFlight(
   // ---- Dash sustain -----------------------------------------------------
   if (s.dashTicks > 0) {
     s.dashTicks--;
-    const speed = def.dashSpeed * thrustScale;
+    // Dash gets its own scale so a burst can extend the *dash* without also
+    // raising the sustained boost cap; falls back to the thrust scale.
+    const speed = def.dashSpeed * (intent.dashSpeedScale ?? thrustScale);
     s.vx = s.dashDirX * speed;
     s.vy = s.dashDirY * speed;
     s.x += s.vx;
