@@ -423,6 +423,162 @@ export class Effects {
     this.emit({ key: TEX.glow, x, y, life: 22, scaleFrom: 2.4, scaleTo: 0.2, tint, alpha: 1 });
   }
 
+  /**
+   * The activation burst, one recipe per saturation mode.
+   *
+   * The three modes now do genuinely different things, so they must not open
+   * with the same puff of rings — the flash is the only moment the player is
+   * told which one they committed to, and it has to be readable in the half
+   * second before the fight resumes. Each is built from a different *shape*
+   * rather than a different colour, since colour is already spoken for by the
+   * chassis palette:
+   *
+   * - Shield: hex plating slamming inward onto the mech, then a held dome.
+   * - Shoot: a cross of muzzle spikes and a hard white core — a weapon lighting.
+   * - Speed: horizontal streaks tearing past, biased along the facing.
+   */
+  saturationBurst(x: number, y: number, mode: number, tint: number, facing: number): void {
+    // A white core flash under every mode, so all three read as "something big
+    // just happened" before they read as which one.
+    this.emit({ key: TEX.glow, x, y, life: 16, scaleFrom: 3.6, scaleTo: 0.3, tint: 0xffffff, alpha: 1, fadePow: 1.6 });
+
+    if (mode === 0) {
+      // ---- SHIELD: plating converging inward, then a standing dome ----------
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        const r = 120;
+        this.emit({
+          key: TEX.hex,
+          x: x + Math.cos(a) * r,
+          y: y + Math.sin(a) * r * 0.7,
+          life: 20,
+          scaleFrom: 0.9,
+          scaleTo: 0.25,
+          tint,
+          alpha: 0.95,
+          // Inward: the plates fly on to the mech rather than off it.
+          vx: -Math.cos(a) * 6.4,
+          vy: -Math.sin(a) * 4.6,
+          spin: (i % 2 ? 1 : -1) * 0.12,
+          drag: 0.9,
+        });
+      }
+      for (let i = 0; i < 3; i++) {
+        this.emit({
+          key: TEX.ring,
+          x,
+          y,
+          life: 30 + i * 10,
+          scaleFrom: 3.0 + i * 0.5,
+          scaleTo: 1.5,
+          tint: i === 1 ? 0xffffff : tint,
+          alpha: 0.7,
+          fadePow: 2.2,
+        });
+      }
+      this.emit({ key: TEX.hex, x, y, life: 44, scaleFrom: 0.4, scaleTo: 2.9, tint, alpha: 0.8, fadePow: 2.4 });
+      return;
+    }
+
+    if (mode === 1) {
+      // ---- SHOOT: a cross of muzzle spikes and a hard core ------------------
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        this.emit({
+          key: TEX.streak,
+          x,
+          y,
+          life: 18,
+          scaleFrom: 2.6,
+          scaleTo: 0.2,
+          tint: 0xffffff,
+          alpha: 1,
+          rotation: a,
+          scaleYMul: 0.16,
+          fadePow: 1.8,
+        });
+      }
+      for (let i = 0; i < 22; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = 4 + Math.random() * 9;
+        this.emit({
+          key: TEX.spark,
+          x,
+          y,
+          life: 18 + Math.random() * 18,
+          scaleFrom: 0.75,
+          scaleTo: 0.05,
+          tint: i % 3 === 0 ? 0xffffff : tint,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp * 0.7,
+          drag: 0.9,
+        });
+      }
+      this.emit({ key: TEX.ring, x, y, life: 24, scaleFrom: 0.2, scaleTo: 3.4, tint, alpha: 0.9, fadePow: 1.5 });
+      return;
+    }
+
+    // ---- SPEED: streaks tearing past, biased along the facing ---------------
+    for (let i = 0; i < 16; i++) {
+      const oy = (Math.random() - 0.5) * 96;
+      const back = -facing;
+      this.emit({
+        key: TEX.streak,
+        x: x + (Math.random() - 0.5) * 40,
+        y: y + oy,
+        life: 16 + Math.random() * 12,
+        scaleFrom: 1.4 + Math.random() * 1.6,
+        scaleTo: 0.1,
+        tint: i % 4 === 0 ? 0xffffff : tint,
+        alpha: 0.95,
+        vx: back * (7 + Math.random() * 12),
+        vy: oy * 0.012,
+        scaleYMul: 0.1,
+        drag: 0.95,
+        fadePow: 1.4,
+      });
+    }
+    for (let i = 0; i < 2; i++) {
+      this.emit({
+        key: TEX.ring,
+        x,
+        y,
+        life: 22 + i * 8,
+        scaleFrom: 0.2,
+        scaleTo: 2.6 + i,
+        tint,
+        alpha: 0.75,
+        scaleYMul: 0.55,
+        fadePow: 1.9,
+      });
+    }
+  }
+
+  /**
+   * The burst running dry. Deliberately ugly next to the activation: sparks
+   * falling out of the machine rather than energy pouring into it.
+   */
+  satBurnout(x: number, y: number): void {
+    this.emit({ key: TEX.glow, x, y, life: 24, scaleFrom: 2.2, scaleTo: 0.1, tint: 0x6a7080, alpha: 0.9 });
+    this.emit({ key: TEX.ring, x, y, life: 26, scaleFrom: 2.4, scaleTo: 0.4, tint: 0x99a2b5, alpha: 0.6, fadePow: 2 });
+    for (let i = 0; i < 16; i++) {
+      const a = Math.random() * Math.PI * 2;
+      this.emit({
+        key: TEX.spark,
+        x,
+        y,
+        life: 26 + Math.random() * 22,
+        scaleFrom: 0.6,
+        scaleTo: 0.05,
+        tint: i % 3 === 0 ? 0xffd9a0 : 0x8a90a0,
+        vx: Math.cos(a) * (1.5 + Math.random() * 3),
+        // Falls rather than radiates: the machine is venting, not firing.
+        vy: Math.abs(Math.sin(a)) * (2 + Math.random() * 3),
+        drag: 0.97,
+      });
+    }
+  }
+
   /** Aura sustained while a saturation mode is active. */
   satAura(x: number, y: number, tint: number): void {
     this.emit({

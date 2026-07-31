@@ -267,6 +267,20 @@ export class Sfx {
     this.tone({ type: 'square', from: 500, to: 60, dur: 0.4, gain: 0.18 });
   }
 
+  /**
+   * A saturation burst running dry: a reactor spinning down.
+   *
+   * Borrows the guard-break sample, which is already the right shape — a sharp
+   * failure collapsing into nothing — under a synthesised descending tone that
+   * plays regardless, so the burnout is distinguishable from an actual guard
+   * break by ear even when the sample set is present.
+   */
+  satBurnout(): void {
+    this.tone({ type: 'sawtooth', from: 420, to: 55, dur: 0.55, gain: 0.16 });
+    if (this.play('guard_break')) return;
+    this.burst({ dur: 0.5, gain: 0.2, freq: 1400, sweepTo: 90, q: 0.7 });
+  }
+
   dash(): void {
     if (this.play('dash')) return;
     this.burst({ dur: 0.16, gain: 0.16, freq: 500, sweepTo: 3200, q: 0.9 });

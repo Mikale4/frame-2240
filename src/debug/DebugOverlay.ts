@@ -90,7 +90,7 @@ export class DebugOverlay {
       `  sat ${c.sat.toFixed(0)}/${c.def.gauges.maxSaturation} ${c.satActive ? `ACTIVE:${SAT_MODE_NAMES[c.satMode]} ${c.satTicks}t` : SAT_MODE_NAMES[c.satMode]}`,
       `  atk ${atk}`,
       `  aim ${((c.aim * 180) / Math.PI).toFixed(0)}deg bank ${((c.bank * 180) / Math.PI).toFixed(0)}deg face ${c.facing > 0 ? 'R' : 'L'}`,
-      `  stop ${c.hitstop} stun ${c.hitstun} inv ${c.invuln} gbrk ${c.guardBreakStun}`,
+      `  stop ${c.hitstop} stun ${c.hitstun} inv ${c.invuln} gbrk ${c.guardBreakStun} burn ${c.satBurnout}${c.guarding ? ' GUARD' : ''}${c.coAttack ? ` twin:${c.coAttack.id}` : ''}`,
       `  dash ${c.dashTicks}/${c.dashCooldown} melee ${c.meleeCount}${c.meleeHitConfirmed ? ' CONFIRM' : ''}${c.meleeChainQueued ? ' QUEUED' : ''}`,
       `  sub ${c.subCharges}/${c.def.subCharges}  drone ${DRONE_MODE_NAMES[c.supporter.mode]} ${c.supporter.life.toFixed(0)}/${c.def.supporter.maxLife}${c.dronePassive ? ` [${c.dronePassive.name}]` : ''}`,
       `  flight ${c.flying ? 'ON' : 'OFF'}${c.grounded ? ' GROUNDED' : ''} floor ${c.groundY.toFixed(0)}`,

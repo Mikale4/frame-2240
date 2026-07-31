@@ -420,17 +420,19 @@ describe('saturation', () => {
     expect(c.satMode).toBe(SatMode.Shield);
   });
 
+  // Activation is Boost + Barrier; see saturation.test.ts for why it moved off
+  // the weapon buttons.
   it('requires a full meter to activate', () => {
     const c = make();
     const k = ctx();
     c.sat = 10;
-    c.step(press(Btn.Main, Btn.Heavy), null, W, H, k.spawns, k.events);
+    c.step(press(Btn.Boost, Btn.Barrier), null, W, H, k.spawns, k.events);
     expect(c.satActive).toBe(false);
 
     const full = make();
     full.sat = HALCYON.gauges.maxSaturation;
     const k2 = ctx();
-    full.step(press(Btn.Main, Btn.Heavy), null, W, H, k2.spawns, k2.events);
+    full.step(press(Btn.Boost, Btn.Barrier), null, W, H, k2.spawns, k2.events);
     expect(full.satActive).toBe(true);
     expect(k2.events.some((e) => e.t === 'saturation')).toBe(true);
   });
@@ -440,12 +442,18 @@ describe('saturation', () => {
     c.satActive = true;
 
     c.satMode = SatMode.Speed;
-    expect(c.satSpeedScale).toBeCloseTo(1.75);
+    // Base movement rises a little; the thrusters are the headline.
+    expect(c.satSpeedScale).toBeCloseTo(1.25);
+    expect(c.satThrustScale).toBeCloseTo(1.85);
+    expect(c.satThrustScale).toBeGreaterThan(c.satSpeedScale);
     expect(c.satShootScale).toBeCloseTo(1);
 
     c.satMode = SatMode.Shoot;
     expect(c.satShootScale).toBeCloseTo(1.5);
     expect(c.satProjSpeedScale).toBeCloseTo(1.6);
+    // Speed's movement bonus does not leak into the other modes.
+    expect(c.satSpeedScale).toBeCloseTo(1);
+    expect(c.satThrustScale).toBeCloseTo(1);
 
     c.satMode = SatMode.Shield;
     expect(c.shieldActive).toBe(true);
@@ -473,7 +481,7 @@ describe('saturation', () => {
     c.satMode = SatMode.Speed;
     c.boost = 5;
     const k = ctx();
-    c.step(press(Btn.Main, Btn.Heavy), null, W, H, k.spawns, k.events);
+    c.step(press(Btn.Boost, Btn.Barrier), null, W, H, k.spawns, k.events);
     expect(c.boost).toBe(HALCYON.flight.maxBoost);
   });
 

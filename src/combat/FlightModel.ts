@@ -35,10 +35,26 @@ export interface FlightIntent {
   boost: boolean;
   /** A dash was requested this tick (tap + direction, or a double-tap). */
   dash: boolean;
-  /** Multiplier applied to speed caps, e.g. Speed saturation. */
+  /**
+   * Multiplier on the *base* speed caps — free flight and walking. Speed
+   * saturation lifts this a little; a cryo affliction drags it down.
+   */
   speedScale: number;
+  /**
+   * Multiplier on the *boost and dash* caps specifically. Split from
+   * `speedScale` because Speed saturation is meant to make the thrusters
+   * dramatically faster while lifting ordinary movement only slightly — one
+   * shared number could express one or the other, never both. Defaults to
+   * `speedScale` when omitted, which is the pre-split behaviour.
+   */
+  boostSpeedScale?: number;
   /** Multiplier applied to velocity each tick, e.g. firing anchor. */
   moveScale: number;
+  /**
+   * Thrusters run free: boost drains no gauge and a dash costs nothing. Speed
+   * saturation's "does not overheat" clause.
+   */
+  boostFree?: boolean;
   /**
    * Multiplier on boost refill, e.g. a thermal-siphon drone. Applied to the
    * airborne and grounded refill alike, so parking on the deck to recover still
@@ -85,6 +101,11 @@ export function stepFlight(
 
   if (s.dashCooldown > 0) s.dashCooldown--;
   const regen = def.boostRegen * (intent.boostRegenScale ?? 1);
+  // Thrust caps default to the base scale, so a caller that does not care about
+  // the split behaves exactly as it did before the split existed.
+  const thrustScale = intent.boostSpeedScale ?? intent.speedScale;
+  const dashCost = intent.boostFree ? 0 : def.dashCost;
+  const boostDrain = intent.boostFree ? 0 : def.boostDrain;
 
   // ---- grounded mode (FlyingMode off) -----------------------------------
   // The reference is not purely aerial: with the flight flag clear a machine
@@ -139,9 +160,9 @@ export function stepFlight(
     hasDir &&
     s.dashTicks <= 0 &&
     s.dashCooldown <= 0 &&
-    s.boost >= def.dashCost
+    s.boost >= dashCost
   ) {
-    s.boost -= def.dashCost;
+    s.boost -= dashCost;
     s.boostRegenTimer = def.boostRegenDelay;
     s.dashTicks = def.dashTicks;
     s.dashCooldown = def.dashTicks + def.dashCooldown;
@@ -153,7 +174,7 @@ export function stepFlight(
   // ---- Dash sustain -----------------------------------------------------
   if (s.dashTicks > 0) {
     s.dashTicks--;
-    const speed = def.dashSpeed * intent.speedScale;
+    const speed = def.dashSpeed * thrustScale;
     s.vx = s.dashDirX * speed;
     s.vy = s.dashDirY * speed;
     s.x += s.vx;
@@ -162,7 +183,7 @@ export function stepFlight(
   }
 
   // ---- Boost / brake / accelerate ---------------------------------------
-  const wantsBoost = intent.boost && hasDir && s.boost > 0;
+  const wantsBoost = intent.boost && hasDir && (s.boost > 0 || intent.boostFree === true);
   const wantsBrake = intent.boost && !hasDir;
 
   // Speed at the start of the tick. The cap for this tick is allowed to sit
@@ -176,9 +197,11 @@ export function stepFlight(
 
   if (wantsBoost) {
     accel = def.boostAccel;
-    cap = def.boostMaxSpeed * intent.speedScale;
-    s.boost = Math.max(0, s.boost - def.boostDrain);
-    s.boostRegenTimer = def.boostRegenDelay;
+    cap = def.boostMaxSpeed * thrustScale;
+    s.boost = Math.max(0, s.boost - boostDrain);
+    // Free thrust must not park the refill timer at its delay every tick, or the
+    // gauge would sit empty for the whole burst and then refuse to refill.
+    if (!intent.boostFree) s.boostRegenTimer = def.boostRegenDelay;
     result.boosting = true;
   }
 

@@ -25,6 +25,20 @@ import { Element, StatusState } from './Status';
 /** Radians per tick a melee lunge may correct toward its target. */
 const MELEE_TRACK_RATE = 9 * DEG;
 
+/** Extra swings Speed saturation adds to a melee chain and a lock-on sequence. */
+const SAT_SPEED_BONUS_HITS = 3;
+
+/**
+ * Ticks the pilot is helpless after a saturation burst burns out.
+ *
+ * Saturation used to end with no downside at all, so the only question was when
+ * to spend it, never whether. The burnout makes the last second of a burst a
+ * real liability: overdrive is a window you have to get value out of and then
+ * survive the end of. Sized between a melee lockout (34) and a guard break (50)
+ * — long enough to be punished for, short enough not to decide the match.
+ */
+const SAT_BURNOUT_TICKS = 38;
+
 /**
  * Arm angle at normalised swing progress `t`, in radians relative to the aim.
  *
@@ -201,12 +215,27 @@ export class Combatant implements FlightState {
   satActive = false;
   satMode: SatMode = SatMode.Shield;
   satTicks = 0;
+  /** Ticks of helplessness left after a burst burned out. See SAT_BURNOUT_TICKS. */
+  satBurnout = 0;
 
   act: ActState = ActState.Free;
   attack: AttackDef | null = null;
   attackTick = 0;
   /** Set once the current attack has spawned its hit. */
   attackFired = false;
+
+  /**
+   * Second attack slot, used only by Shoot saturation's twin fire.
+   *
+   * A separate slot rather than a general list of concurrent attacks: only one
+   * mode ever produces two at once, only ranged attacks go in here, and it owns
+   * none of the mech's movement or pose. Everything that reads `attack` — the
+   * renderer, the flight anchor, the AI, the lunge — keeps seeing exactly one
+   * attack and needs no changes.
+   */
+  coAttack: AttackDef | null = null;
+  private coTick = 0;
+  private coFired = false;
 
   meleeCount = 0;
   meleeHitConfirmed = false;
@@ -411,19 +440,65 @@ export class Combatant implements FlightState {
 
   /** Saturation multipliers, applied where the reference applied them. */
   get satShootScale(): number {
-    return this.satActive && this.satMode === SatMode.Shoot ? 1.5 : 1;
+    return this.shootActive ? 1.5 : 1;
   }
+  /**
+   * Base movement under Speed saturation: free flight and walking.
+   *
+   * Deliberately modest. The mode's headline is the thrusters — `satThrustScale`
+   * — and lifting ordinary flight by the same 1.75 made the mech feel weightless
+   * and impossible to place, which is the opposite of what a speed burst should
+   * buy you.
+   */
   get satSpeedScale(): number {
-    return this.satActive && this.satMode === SatMode.Speed ? 1.75 : 1;
+    return this.speedActive ? 1.25 : 1;
+  }
+  /** Boost and dash under Speed saturation. This is the part that should read. */
+  get satThrustScale(): number {
+    return this.speedActive ? 1.85 : 1;
   }
   get satProjSpeedScale(): number {
-    return this.satActive && this.satMode === SatMode.Shoot ? 1.6 : 1;
+    return this.shootActive ? 1.6 : 1;
   }
+  /** Swings in a button-chain. Speed saturation adds three, as it does to a lock-on. */
   get maxMeleeHits(): number {
-    return this.satActive && this.satMode === SatMode.Speed ? 6 : 3;
+    return 3 + (this.speedActive ? SAT_SPEED_BONUS_HITS : 0);
   }
+  /**
+   * Swings in a lock-on sequence. Per-chassis, so CIRRUS's eight becomes eleven
+   * and OBELISK's two becomes five — the bonus is flat, but what it is added to
+   * is the mech's own identity.
+   */
+  get meleeLockHits(): number {
+    return this.def.meleeLock.hits + (this.speedActive ? SAT_SPEED_BONUS_HITS : 0);
+  }
+
   get shieldActive(): boolean {
     return this.satActive && this.satMode === SatMode.Shield;
+  }
+  get shootActive(): boolean {
+    return this.satActive && this.satMode === SatMode.Shoot;
+  }
+  get speedActive(): boolean {
+    return this.satActive && this.satMode === SatMode.Speed;
+  }
+
+  /**
+   * "Does not overheat" — each mode makes its own resource free for the burst.
+   *
+   * Shield stops the barrier gauge falling at all, Shoot stops weapons costing
+   * energy, Speed stops thrust costing boost. One rule per mode, expressed once
+   * here so the three read as the same promise rather than three special cases
+   * scattered through the step.
+   */
+  get barrierFree(): boolean {
+    return this.shieldActive;
+  }
+  get energyFree(): boolean {
+    return this.shootActive;
+  }
+  get boostFree(): boolean {
+    return this.speedActive;
   }
 
   /**
@@ -498,7 +573,12 @@ export class Combatant implements FlightState {
     this.tickSaturation(events);
     this.cmd.push(input, this.facing);
 
-    if (this.hitstun > 0 || this.guardBreakStun > 0) {
+    // The twin shot advances before any of the branches below, so a hit taken
+    // mid-volley cannot leave it running and nothing can orphan it behind an
+    // early return. `takeHit` cancels it outright, which is the intended answer.
+    this.stepCoAttack(spawns, events);
+
+    if (this.hitstun > 0 || this.guardBreakStun > 0 || this.satBurnout > 0) {
       // Taking a hit drops an in-progress lock-on sequence. This has to happen
       // here: the stun branch returns before the melee step ever runs.
       if (this.meleeLock) this.endMeleeLock(false);
@@ -506,6 +586,12 @@ export class Combatant implements FlightState {
       clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH);
       return;
     }
+
+    // Saturation activation is checked here, ahead of everything that can own
+    // the mech for a frame. See `tryActivateSaturation` for why it cannot live
+    // in `tryStartAction`. Opening a burst consumes the tick's input, so the
+    // two buttons that opened it do not also fire a shot on the way through.
+    const activated = this.tryActivateSaturation(input, events);
 
     // A lock-on melee sequence owns the mech until it finishes or breaks.
     if (this.meleeLock) {
@@ -522,7 +608,7 @@ export class Combatant implements FlightState {
 
     if (this.attack) {
       this.stepAttack(input, target, spawns, events);
-    } else {
+    } else if (!activated) {
       this.act = ActState.Free;
       this.tryStartAction(input, target, events);
       // The tick an attack starts on is frame 0 of its startup, so advance it
@@ -530,7 +616,7 @@ export class Combatant implements FlightState {
       if (this.attack) this.stepAttack(input, target, spawns, events);
     }
 
-    this.stepMotion(input);
+    this.stepMotion(input, activated);
     if (this.landedThisTick) {
       this.landedThisTick = false;
       events.push({ t: 'land', x: this.x, y: this.y, id: this.id });
@@ -594,6 +680,12 @@ export class Combatant implements FlightState {
         jam;
     this.energy = Math.min(g.maxEnergy, this.energy + regen);
 
+    // Shield saturation holds the guard up for the whole burst, whatever the
+    // mech is doing — attacking, stunned, mid-dash. Set here rather than in
+    // `tryStartAction` because that is not reached during hitstun or an attack,
+    // and "remains activated" has to mean exactly that.
+    if (this.shieldActive) this.guarding = true;
+
     // Barrier gauge regen after a delay.
     if (this.barrierRegenTimer > 0) {
       this.barrierRegenTimer--;
@@ -624,27 +716,83 @@ export class Combatant implements FlightState {
     const g = this.def.gauges;
     if (this.satActive) {
       // Shield mode burns the meter faster, as the reference did for its
-      // barrier-type concentration.
+      // barrier-type concentration. It also now buys the most: a free permanent
+      // guard on top of the projectile-erasing bubble, so it pays in duration.
       this.satTicks -= this.satMode === SatMode.Shield ? 2 : 1;
       this.sat = Math.max(0, (this.satTicks / g.satDuration) * g.maxSaturation);
       if (this.satTicks <= 0) {
         this.satActive = false;
         this.sat = 0;
+        this.burnOut(events);
       }
     } else if (this.sat < g.maxSaturation) {
       const gain = g.satPassive * (this.dronePassive?.satGainMul ?? 1);
       this.sat = Math.min(g.maxSaturation, this.sat + gain);
     }
-    void events;
+  }
+
+  /**
+   * The burst has run dry. The pilot is helpless for a moment.
+   *
+   * Drops everything in flight rather than letting an attack finish through the
+   * stun: the machine has just lost the reactor output that was driving it, and
+   * a swing that carried on regardless would read as the stun not applying.
+   */
+  private burnOut(events: SimEvent[]): void {
+    this.satBurnout = SAT_BURNOUT_TICKS;
+    this.act = ActState.Hitstun;
+    this.attack = null;
+    this.coAttack = null;
+    this.guarding = false;
+    if (this.meleeLock) this.endMeleeLock(false);
+    events.push({ t: 'satBurnout', x: this.x, y: this.y, id: this.id });
+  }
+
+  /**
+   * Advances the Shoot-saturation twin shot.
+   *
+   * It carries the full authored startup so the second weapon does not simply
+   * appear on the same frame as the first — a heavy fired alongside a vulcan
+   * should still take a heavy's wind-up. It applies no recoil and drives no
+   * movement; the primary attack owns all of that.
+   */
+  private stepCoAttack(spawns: ProjectileSpawn[], events: SimEvent[]): void {
+    const a = this.coAttack;
+    if (!a) return;
+    this.coTick++;
+    if (!this.coFired && this.coTick >= a.startup) {
+      this.coFired = true;
+      this.fire(a, null, spawns, events);
+    }
+    if (this.coTick >= ATTACK_TOTAL(a)) {
+      this.coAttack = null;
+      this.coTick = 0;
+      this.coFired = false;
+    }
+  }
+
+  /** Loads the twin slot. Refuses while it is still busy, which rate-limits it. */
+  private beginCo(a: AttackDef): void {
+    if (this.coAttack) return;
+    this.coAttack = a;
+    this.coTick = 0;
+    this.coFired = false;
   }
 
   private stepStunned(input: InputFrame, events: SimEvent[]): void {
     if (this.guardBreakStun > 0) this.guardBreakStun--;
+    if (this.satBurnout > 0) this.satBurnout--;
     if (this.hitstun > 0) this.hitstun--;
-    this.act = this.hitstun > 0 ? ActState.Hitstun : ActState.Free;
+    this.act = this.hitstun > 0 || this.satBurnout > 0 ? ActState.Hitstun : ActState.Free;
 
     // Barrier-cancel out of hitstun for double cost (reference penalty).
+    //
+    // Deliberately does NOT clear a saturation burnout. Every other stun in the
+    // game has an escape, because every other stun is something an opponent did
+    // to you. The burnout is the price of the burst you chose to spend, and an
+    // escape hatch would refund it.
     if (
+      this.satBurnout <= 0 &&
       isPressed(input, Btn.Barrier) &&
       this.barrier >= this.def.barrier.cost + this.def.barrier.cancelPenalty
     ) {
@@ -713,35 +861,30 @@ export class Combatant implements FlightState {
       }
     }
 
-    // Saturation activation: Main + Heavy together on a full meter.
-    if (
-      !this.satActive &&
-      this.sat >= d.gauges.maxSaturation &&
-      isPressed(input, Btn.Main) &&
-      isHeld(input, Btn.Heavy)
-    ) {
-      this.activateSaturation(events);
-      return;
-    }
-
     // Barrier burst.
     if (isPressed(input, Btn.Barrier) && this.barrier >= d.barrier.cost) {
       this.startBarrier(this.guarding, events);
       return;
     }
 
-    // Holding barrier without a burst is a guard stance.
-    this.guarding = isHeld(input, Btn.Barrier) && this.canGuard && this.barrier > 0;
-    if (this.guarding) {
-      const drain = d.gauges.guardDrain * (this.dronePassive?.guardDrainMul ?? 1);
-      this.barrier = Math.max(0, this.barrier - drain);
-      this.barrierRegenTimer = d.gauges.barrierRegenDelay;
-      if (this.barrier <= 0) this.breakGuard(events);
-      this.act = ActState.GuardHold;
+    // Holding barrier without a burst is a guard stance. Shield saturation keeps
+    // it up for free and, crucially, does not claim the action state — that is
+    // what lets you keep shooting and swinging from behind it.
+    if (this.shieldActive) {
+      this.guarding = true;
+    } else {
+      this.guarding = isHeld(input, Btn.Barrier) && this.canGuard && this.barrier > 0;
+      if (this.guarding) {
+        const drain = d.gauges.guardDrain * (this.dronePassive?.guardDrainMul ?? 1);
+        this.barrier = Math.max(0, this.barrier - drain);
+        this.barrierRegenTimer = d.gauges.barrierRegenDelay;
+        if (this.barrier <= 0) this.breakGuard(events);
+        this.act = ActState.GuardHold;
+      }
     }
 
     // Command motions take priority over plain button presses.
-    if (this.cmd.matches(MOTIONS.lance) && this.energy >= d.lance.energyCost) {
+    if (this.cmd.matches(MOTIONS.lance) && (this.energyFree || this.energy >= d.lance.energyCost)) {
       this.begin(d.lance);
       return;
     }
@@ -750,7 +893,7 @@ export class Combatant implements FlightState {
     if (this.cmd.matches(MOTIONS.salvo)) {
       if (this.orderAssist(d.salvo, events)) return;
     }
-    if (this.cmd.matches(MOTIONS.spread) && this.energy >= d.spread.energyCost) {
+    if (this.cmd.matches(MOTIONS.spread) && (this.energyFree || this.energy >= d.spread.energyCost)) {
       this.begin(d.spread);
       return;
     }
@@ -762,9 +905,34 @@ export class Combatant implements FlightState {
       return;
     }
 
+    // Shoot saturation: one press, both guns.
+    //
+    // Either weapon button produces the pair, so the player does not have to
+    // learn a new input to use the mode — the buttons they already hold simply
+    // do more. Main takes the primary slot because it is the short one and the
+    // one that auto-fires; the heavy rides the twin slot, which refuses a reload
+    // while it is busy and so rate-limits itself to a heavy's own cadence.
+    if (this.shootActive) {
+      const twinDown =
+        isPressed(input, Btn.Heavy) ||
+        isPressed(input, Btn.Main) ||
+        (isHeld(input, Btn.Main) && this.autoFireReady());
+      if (twinDown) {
+        if (!this.flying) {
+          this.flying = true;
+          this.vy -= this.def.flight.takeoffImpulse * 0.6;
+          this.grounded = false;
+          events.push({ t: 'takeoff', x: this.x, y: this.y, id: this.id });
+        }
+        this.beginCo(d.heavy);
+        this.begin(d.main);
+        return;
+      }
+    }
+
     // Heavy shot. The reference switched FlyingMode on automatically for its
     // Level 2 shot, so a heavy commitment always happens airborne.
-    if (isPressed(input, Btn.Heavy) && this.energy >= d.heavy.energyCost) {
+    if (isPressed(input, Btn.Heavy) && (this.energyFree || this.energy >= d.heavy.energyCost)) {
       if (!this.flying) {
         this.flying = true;
         this.vy -= this.def.flight.takeoffImpulse * 0.6;
@@ -788,7 +956,7 @@ export class Combatant implements FlightState {
 
     // Main gun, with hold-to-autofire as the reference offered.
     const mainDown = isPressed(input, Btn.Main) || (isHeld(input, Btn.Main) && this.autoFireReady());
-    if (mainDown && this.energy >= d.main.energyCost) {
+    if (mainDown && (this.energyFree || this.energy >= d.main.energyCost)) {
       this.begin(d.main);
     }
     void target;
@@ -818,9 +986,9 @@ export class Combatant implements FlightState {
 
     const dist = Math.hypot(target.x - this.x, target.y - this.y);
     if (dist > p.acquireRange) return false;
-    if (this.energy < p.energy + Math.min(p.hitEnergy * 2, 40)) return false;
+    if (!this.energyFree && this.energy < p.energy + Math.min(p.hitEnergy * 2, 40)) return false;
 
-    this.energy -= p.energy;
+    if (!this.energyFree) this.energy -= p.energy;
     this.sat = Math.min(this.def.gauges.maxSaturation, this.sat + 4 + p.hits * 0.35);
     this.aim = Math.atan2(target.y - this.y, target.x - this.x);
     this.facing = target.x >= this.x ? 1 : -1;
@@ -948,11 +1116,11 @@ export class Combatant implements FlightState {
 
     if (ml.hitTimer === 1) {
       // Each swing is paid for. Running dry fizzles the sequence.
-      if (this.energy < p.hitEnergy) {
+      if (!this.energyFree && this.energy < p.hitEnergy) {
         this.endMeleeLock(true);
         return false;
       }
-      this.energy -= p.hitEnergy;
+      if (!this.energyFree) this.energy -= p.hitEnergy;
       this.bladeTimer = Math.max(this.bladeTimer, p.swing + p.gap + 5);
       events.push({
         t: 'melee',
@@ -971,7 +1139,7 @@ export class Combatant implements FlightState {
       // that visually reaches should land.
       if (dist < p.range + 54) {
         ml.hitDone = true;
-        const last = ml.hitIndex >= p.hits - 1;
+        const last = ml.hitIndex >= this.meleeLockHits - 1;
         const base = this.def.melee[Math.min(ml.hitIndex, this.def.melee.length - 1)];
         const dmg = p.damage[Math.min(ml.hitIndex, p.damage.length - 1)];
         const knock = p.knock[Math.min(ml.hitIndex, p.knock.length - 1)];
@@ -1006,7 +1174,7 @@ export class Combatant implements FlightState {
 
     if (ml.hitTimer >= p.swing) {
       ml.hitIndex++;
-      if (ml.hitIndex >= p.hits) {
+      if (ml.hitIndex >= this.meleeLockHits) {
         this.endMeleeLock(true);
         return false;
       }
@@ -1051,10 +1219,12 @@ export class Combatant implements FlightState {
     this.attackTick = 0;
     this.attackFired = false;
     this.act = ActState.Attack;
-    this.guarding = false;
+    // Shield saturation is the one case where attacking does not drop the guard —
+    // "you can still attack while the shield is active" is the whole mode.
+    if (!this.shieldActive) this.guarding = false;
     this.meleeChainQueued = false;
 
-    this.energy = Math.max(0, this.energy - a.energyCost);
+    if (!this.energyFree) this.energy = Math.max(0, this.energy - a.energyCost);
     if (a.subCost) {
       this.subCharges = Math.max(0, this.subCharges - a.subCost);
       this.subRecharge = 0;
@@ -1062,14 +1232,52 @@ export class Combatant implements FlightState {
     this.autoFireTimer = ATTACK_TOTAL(a);
   }
 
+  /**
+   * Saturation activation: Boost + Barrier on a full meter.
+   *
+   * Two changes from what this used to be, both because the burst was very
+   * nearly impossible to trigger by hand.
+   *
+   * **The buttons.** It was Main + Heavy — the two weapon buttons — and either
+   * one landing first immediately started its own attack. `tryStartAction` is
+   * never reached while an attack is running, so the second button was simply
+   * never seen, and only pressing both inside the same 16.7ms tick worked.
+   * Boost and Barrier start no attack, so the combination has nothing to race
+   * against, and it keeps the weapon buttons free during a fight.
+   *
+   * **The timing.** The condition is now "both held, either one pressed this
+   * tick", which is what pressing two keys together actually looks like to a
+   * simulation running at 60Hz.
+   *
+   * Checked from `step` ahead of the attack dispatch, and the caller suppresses
+   * this tick's dash and skips `tryStartAction`, so opening a burst does not
+   * also spend a dash or fire off a barrier burst.
+   */
+  private tryActivateSaturation(input: InputFrame, events: SimEvent[]): boolean {
+    if (this.satActive || this.satBurnout > 0) return false;
+    if (this.sat < this.def.gauges.maxSaturation) return false;
+    if (!isHeld(input, Btn.Boost) || !isHeld(input, Btn.Barrier)) return false;
+    if (!isPressed(input, Btn.Boost) && !isPressed(input, Btn.Barrier)) return false;
+
+    // Opening a burst overrides anything already running.
+    this.attack = null;
+    this.coAttack = null;
+    if (this.meleeLock) this.endMeleeLock(false);
+    this.activateSaturation(events);
+    return true;
+  }
+
   private activateSaturation(events: SimEvent[]): void {
     this.satActive = true;
     this.satTicks = this.def.gauges.satDuration;
     this.invuln = Math.max(this.invuln, 20);
-    // Speed mode refunds the boost tank outright (reference: boost 100% recover).
+    // Each mode opens by topping up the resource it is about to spend freely, so
+    // the burst starts from full rather than from whatever the fight left you.
     if (this.satMode === SatMode.Speed) this.boost = this.def.flight.maxBoost;
-    if (this.satMode === SatMode.Shoot) {
-      this.energy = Math.min(this.def.gauges.maxEnergy, this.energy + this.def.gauges.maxEnergy * 0.5);
+    if (this.satMode === SatMode.Shoot) this.energy = this.def.gauges.maxEnergy;
+    if (this.satMode === SatMode.Shield) {
+      this.barrier = this.def.gauges.maxBarrier;
+      this.guarding = true;
     }
     events.push({ t: 'saturation', id: this.id, mode: this.satMode });
   }
@@ -1078,7 +1286,7 @@ export class Combatant implements FlightState {
     const b = this.def.barrier;
     let cost = b.cost;
     if (cancelling) cost += b.cancelPenalty;
-    this.barrier = Math.max(0, this.barrier - cost);
+    if (!this.barrierFree) this.barrier = Math.max(0, this.barrier - cost);
     this.barrierRegenTimer = this.def.gauges.barrierRegenDelay;
 
     this.invuln = Math.max(
@@ -1088,6 +1296,9 @@ export class Combatant implements FlightState {
     this.barrierActiveTicks = b.actionTicks;
     this.act = ActState.Barrier;
     this.attack = null;
+    this.coAttack = null;
+    // Shield saturation puts it straight back up on the next tick, which is the
+    // point: bursting out of a guard should not cost you the guard.
     this.guarding = false;
     events.push({ t: 'barrier', x: this.x, y: this.y, id: this.id });
   }
@@ -1245,7 +1456,12 @@ export class Combatant implements FlightState {
     void target;
   }
 
-  private stepMotion(input: InputFrame): void {
+  /**
+   * `suppressDash` is set on the tick a saturation burst opens: the activation
+   * combo includes the boost button, and without this the burst would always
+   * come with a free dash nobody asked for.
+   */
+  private stepMotion(input: InputFrame, suppressDash = false): void {
     const a = this.attack;
     const locked = this.barrierActiveTicks > 0;
 
@@ -1257,9 +1473,11 @@ export class Combatant implements FlightState {
       // mid-swing — that overlap is what makes the movement read as aggressive
       // rather than as a series of committed stops. Firing and melee remain
       // mutually exclusive with each other; only movement overlaps them.
-      dash: !locked && isPressed(input, Btn.Boost),
+      dash: !locked && !suppressDash && isPressed(input, Btn.Boost),
       // Cryo bites here, so it slows flight, walking and boost alike.
       speedScale: this.satSpeedScale * this.status.speedScale,
+      boostSpeedScale: this.satThrustScale * this.status.speedScale,
+      boostFree: this.boostFree,
       // Firing anchors you, but never so much that a simultaneous dash fizzles:
       // the dash impulse is the whole point of allowing the overlap.
       moveScale: a && a.kind !== ProjKind.Melee && !isPressed(input, Btn.Boost)
@@ -1367,14 +1585,14 @@ export class Combatant implements FlightState {
     if (this.guarding && !piercing) {
       const b = this.def.barrier;
       this.life -= dmg * b.guardScale;
-      this.barrier = Math.max(0, this.barrier - p.guardDamage * 0.5);
+      if (!this.barrierFree) this.barrier = Math.max(0, this.barrier - p.guardDamage * 0.5);
       this.barrierRegenTimer = this.def.gauges.barrierRegenDelay;
       this.hitstop = Math.max(this.hitstop, Math.floor(p.hitstop * 0.6));
       const kb = p.knockback * 0.4;
       const l = Math.hypot(p.vx, p.vy) || 1;
       this.vx += (p.vx / l) * kb;
       this.vy += (p.vy / l) * kb;
-      if (this.barrier <= 0) {
+      if (this.barrier <= 0 && !this.barrierFree) {
         this.guarding = false;
         this.guardBreakStun = b.breakStun;
       }
@@ -1394,6 +1612,7 @@ export class Combatant implements FlightState {
       this.sat + dmg * this.def.gauges.satOnDamage,
     );
     this.attack = null;
+    this.coAttack = null;
     this.guarding = false;
     this.meleeCount = 0;
     this.meleeChainQueued = false;

@@ -16,7 +16,7 @@ import { Hud } from '../ui/Hud';
 import { Menu, makeScrim, bigTitle, smallText } from '../ui/Menu';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { sfx } from '../audio/Sfx';
-import { MatchPhase, ProjKind, emptyInput, type InputFrame } from '../combat/types';
+import { MatchPhase, ProjKind, SAT_MODE_NAMES, SatMode, emptyInput, type InputFrame } from '../combat/types';
 import { ELEMENTS, type Element } from '../combat/Status';
 import { DroneMode } from '../combat/Supporter';
 import type { Combatant } from '../combat/Combatant';
@@ -466,10 +466,30 @@ export class BattleScene extends Phaser.Scene {
         }
         case 'saturation': {
           const c = this.byId(ev.id);
-          if (c) this.effects.saturation(c.x, c.y, c.def.tint.thruster);
+          if (c) {
+            // Shield reads best in the mech's own glow, Shoot in its accent, and
+            // Speed in its thruster colour — each borrows the palette entry the
+            // player already associates with that part of the machine.
+            const tint =
+              ev.mode === SatMode.Shield
+                ? c.def.tint.glow
+                : ev.mode === SatMode.Shoot
+                  ? c.def.tint.accent
+                  : c.def.tint.thruster;
+            this.effects.saturationBurst(c.x, c.y, ev.mode, tint, c.facing);
+          }
           sfx.saturation();
-          this.shake = Math.max(this.shake, 7);
-          if (ev.id === s.player.id) this.hud.banner('SATURATION', 46);
+          this.shake = Math.max(this.shake, 11);
+          if (ev.id === s.player.id) {
+            this.hud.banner(`${SAT_MODE_NAMES[ev.mode]} SATURATION`, 52);
+          }
+          break;
+        }
+        case 'satBurnout': {
+          this.effects.satBurnout(ev.x, ev.y);
+          sfx.satBurnout();
+          this.shake = Math.max(this.shake, 5);
+          if (ev.id === s.player.id) this.hud.banner('BURNOUT', 40);
           break;
         }
         case 'modeCycle':

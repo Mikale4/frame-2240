@@ -148,6 +148,8 @@ export type SimEvent =
   | { t: 'status'; x: number; y: number; victimId: number; element: number }
   | { t: 'explode'; x: number; y: number; big: boolean }
   | { t: 'saturation'; id: number; mode: SatMode }
+  /** A saturation burst ran dry, leaving its pilot briefly helpless. */
+  | { t: 'satBurnout'; x: number; y: number; id: number }
   | { t: 'modeCycle'; id: number; mode: SatMode }
   | { t: 'ko'; id: number }
   | { t: 'takeoff'; x: number; y: number; id: number }
