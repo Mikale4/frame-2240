@@ -1,4 +1,5 @@
 import { CUES, loadSoundBank, type CueDef } from './SoundBank';
+import { DEFAULT_SFX_STEP, stepToGain } from './AudioSettings';
 
 /**
  * Sound effects via the Web Audio API, from recorded samples where available
@@ -16,6 +17,8 @@ export class Sfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
+  /** Effects bus level; see `AudioSettings`. Restored from storage at boot. */
+  private gain = stepToGain(DEFAULT_SFX_STEP);
   muted = false;
 
   /** Cue name → decoded takes. Empty until `load()` resolves. */
@@ -120,7 +123,7 @@ export class Sfx {
       if (!Ctor) return false;
       this.ctx = new Ctor();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.32;
+      this.master.gain.value = this.gain;
       this.master.connect(this.ctx.destination);
 
       // One second of white noise, reused for every percussive sound.
@@ -141,9 +144,29 @@ export class Sfx {
     this.ensure();
   }
 
-  setMuted(m: boolean): void {
-    this.muted = m;
-    if (this.master) this.master.gain.value = m ? 0 : 0.32;
+  /**
+   * The shared audio graph, created on demand.
+   *
+   * `MusicPlayer` mixes into the same context rather than opening a second one:
+   * browsers cap how many an origin may hold, and two graphs cannot be ducked
+   * against each other with sample accuracy. Music hangs its own bus off
+   * `destination`, not off this class's master, so their levels stay independent.
+   */
+  context(): AudioContext | null {
+    return this.ensure() ? this.ctx : null;
+  }
+
+  /**
+   * Sets the effects bus level.
+   *
+   * `muted` is derived rather than separate: at zero gain there is nothing to
+   * hear, so the synthesised paths skip their work instead of building an
+   * oscillator graph nobody will listen to.
+   */
+  setGain(g: number): void {
+    this.gain = Math.max(0, g);
+    this.muted = this.gain <= 0;
+    if (this.master) this.master.gain.value = this.gain;
   }
 
   private tone(opts: {

@@ -4,6 +4,7 @@ import { DIFFICULTY_NAMES, MODE_LABELS, session } from '../core/Session';
 import { InputManager } from '../input/InputManager';
 import { Menu, bigTitle, makeScrim, smallText } from '../ui/Menu';
 import { MECHS } from '../data/mechs';
+import { music } from '../audio/Music';
 
 /** Post-match summary with rematch and return-to-title. */
 export class ResultsScene extends Phaser.Scene {
@@ -32,6 +33,10 @@ export class ResultsScene extends Phaser.Scene {
     const draw = session.lastOutcome === 'draw';
     const headline = draw ? 'DRAW' : won ? 'MISSION COMPLETE' : 'MISSION FAILED';
     const colour = draw ? '#cfd8e8' : won ? '#8effc0' : '#ff8f9c';
+
+    // A draw shares the defeat track: reflective suits it far better than a
+    // fanfare, and it is too uncommon an outcome to be worth its own generation.
+    music.play(won ? 'results_win' : 'results_lose');
 
     bigTitle(this, headline, 108, 44, colour);
     smallText(

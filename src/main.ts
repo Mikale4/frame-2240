@@ -7,6 +7,7 @@ import { MechSelectScene } from './scenes/MechSelectScene';
 import { BattleScene } from './scenes/BattleScene';
 import { ResultsScene } from './scenes/ResultsScene';
 import { sfx } from './audio/Sfx';
+import { music } from './audio/Music';
 
 /** Shows a fatal boot/runtime error on the page instead of failing silently. */
 function showFatal(message: string): void {
@@ -23,9 +24,12 @@ window.addEventListener('unhandledrejection', (e) => {
   showFatal(String((e as PromiseRejectionEvent).reason));
 });
 
-// Browsers require a gesture before audio may start.
+// Browsers require a gesture before audio may start. The soundtrack asks for
+// the title track before anyone has necessarily pressed anything, so it holds
+// the cue and starts it here.
 const unlock = () => {
   sfx.unlock();
+  music.unlock();
   window.removeEventListener('pointerdown', unlock);
   window.removeEventListener('keydown', unlock);
 };

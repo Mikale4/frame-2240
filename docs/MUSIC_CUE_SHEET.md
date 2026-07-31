@@ -5,6 +5,14 @@ Seven screen tracks, eight pilot themes, one stage theme.
 Names here are load-bearing: `MusicBank` loads by name, and a file that is not
 listed is not loaded.
 
+> **Adding a track is two steps.** Drop the file in `assets/music/`, then flip
+> its `present` flag in `MUSIC_CUES` (`src/audio/MusicBank.ts`). The flag is what
+> stops the loader requesting a path that does not exist — Vite answers an
+> unknown path with `index.html` and a 200, which hands the audio decoder HTML.
+> `music.test.ts` checks the flags against the directory **in both directions**,
+> so a file added without its flag, or a flag set without its file, fails the
+> suite rather than going quietly silent.
+
 If a track is missing the scene is **silent** — never a crash, and never a
 request for a path that does not exist. (Vite answers an unknown path with
 `index.html` and a 200, so asking for a missing `.mp3` hands the audio decoder
@@ -90,6 +98,13 @@ stage's own, is the variety the roll buys.
   drops under 25 % life.
 * **A missing file falls through** to the next candidate, then to `battle`, then
   to silence. Never a request for a path that does not exist.
+
+  > **As built (D60):** `pickBattleCue` rolls uniformly across the candidates
+  > that *exist*, rather than rolling across all three and then falling through.
+  > The two are identical once all sixteen tracks are generated. They differ only
+  > while the set is partial, and there roll-then-fall-through piles most matches
+  > onto whichever candidate sits last in the list — losing exactly the variety
+  > the roll is for, during the period it is least able to deliver it.
 
 > **The roll must not touch the simulation's RNG.** `MatchSim` is seeded and
 > `match.test.ts` asserts a bit-identical replay for the same seed and inputs.

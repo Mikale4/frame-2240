@@ -9,6 +9,25 @@ export interface MenuItem {
   onSelect: () => void;
   /** Optional live value shown to the right (e.g. a toggle state). */
   value?: () => string;
+  /**
+   * Makes the row a slider: left/right nudge it by `dir` (-1 or +1) without
+   * confirming anything.
+   *
+   * Rows without this ignore left and right entirely, so adding a slider to a
+   * menu cannot change what the other rows do.
+   */
+  onAdjust?: (dir: number) => void;
+  /**
+   * Shown, but not selectable.
+   *
+   * Kept in the list rather than omitted so a mode that is coming is visible as
+   * a promise instead of a surprise. It still takes a cursor stop — skipping it
+   * would make the highlight jump two rows for no visible reason — but confirm
+   * refuses it audibly.
+   */
+  disabled?: boolean;
+  /** Replaces the value column while `disabled`, e.g. 'COMING SOON'. */
+  disabledNote?: string;
 }
 
 /**
@@ -109,10 +128,16 @@ export class Menu {
         return;
       }
       const sel = i === this.index;
-      const value = item.value ? `   ${item.value()}` : '';
+      const value = item.disabled
+        ? `   ${item.disabledNote ?? 'LOCKED'}`
+        : item.value
+          ? `   ${item.value()}`
+          : '';
       t.setText(`${sel ? '▸ ' : '  '}${item.label}${value}`);
-      t.setColor(sel ? '#ffd166' : '#8fa3bd');
-      t.setScale(sel ? 1.06 : 1);
+      // A disabled row stays dim even under the cursor, so the highlight never
+      // reads as "press enter here".
+      t.setColor(item.disabled ? '#4d5a6e' : sel ? '#ffd166' : '#8fa3bd');
+      t.setScale(sel && !item.disabled ? 1.06 : 1);
     });
     this.upArrow?.setVisible(this.top > 0);
     this.downArrow?.setVisible(this.top + this.windowSize < this.items.length);
@@ -125,6 +150,22 @@ export class Menu {
     this.refresh();
   }
 
+  /**
+   * Nudges the highlighted row if it is a slider.
+   *
+   * Returns false when the row has nothing to adjust, so a scene can let left
+   * and right mean something else on ordinary rows.
+   */
+  adjust(dir: number): boolean {
+    if (this.destroyed) return false;
+    const item = this.items[this.index];
+    if (!item?.onAdjust || item.disabled) return false;
+    item.onAdjust(dir);
+    sfx.uiMove();
+    this.refresh();
+    return true;
+  }
+
   /** The currently highlighted row, for scenes that mirror the selection. */
   get selectedIndex(): number {
     return this.index;
@@ -132,8 +173,15 @@ export class Menu {
 
   confirm(): void {
     if (this.destroyed) return;
+    const item = this.items[this.index];
+    if (item?.disabled) {
+      // Refused, and audibly so: a dead row that makes no sound is
+      // indistinguishable from a dropped input.
+      sfx.assistDenied();
+      return;
+    }
     sfx.uiConfirm();
-    this.items[this.index].onSelect();
+    item.onSelect();
     this.refresh();
   }
 

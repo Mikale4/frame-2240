@@ -1,4 +1,5 @@
 import type { MatchOutcome } from '../combat/MatchSim';
+import { defaultAudioSettings } from '../audio/AudioSettings';
 
 export type MatchMode = 'vsCpu' | 'aiVsAi' | 'training';
 
@@ -54,13 +55,28 @@ export const session = {
   enemyDifficulty: Difficulty.Normal,
   playerMech: 'halcyon',
   enemyMech: 'nocturne',
+  /**
+   * The arena being fought over.
+   *
+   * There is exactly one, hard-coded in `render/Backdrop.ts` — three fixed
+   * parallax layers, no arena data and no selection screen. It lives here anyway
+   * because the battle music takes its third candidate from the stage
+   * (`stage_<arena>`), and routing that through a field rather than a literal is
+   * what lets a second arena arrive as data instead of as a code change.
+   */
+  arena: 'cathedral_yard',
   /** Incremented per match so each rematch gets a fresh deterministic seed. */
   matchIndex: 0,
   lastOutcome: 'none' as MatchOutcome,
   lastTimeLeft: 0,
   lastPlayerLife: 0,
   lastEnemyLife: 0,
-  muted: false,
+  /**
+   * Music and effect levels, in steps. Loaded from storage during boot and
+   * written back whenever the player moves one, so a mix survives a restart —
+   * a balance you have to set again every launch is not a setting.
+   */
+  audio: defaultAudioSettings(),
 
   seed(): number {
     return (

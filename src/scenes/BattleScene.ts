@@ -20,8 +20,11 @@ import { SatCutscene } from '../ui/SatCutscene';
 import { pickConversation } from '../data/matchups';
 import { pickBanter, type BanterTrigger } from '../data/banter';
 import { Menu, makeScrim, bigTitle, smallText } from '../ui/Menu';
+import { audioMenuItems } from '../ui/AudioOptions';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { sfx } from '../audio/Sfx';
+import { music } from '../audio/Music';
+import { DANGER_LIFE_FRACTION, pickBattleCue } from '../audio/MusicBank';
 import { MatchPhase, ProjKind, SAT_MODE_NAMES, SatMode, emptyInput, type InputFrame } from '../combat/types';
 import { ELEMENTS, type Element } from '../combat/Status';
 import { DroneMode } from '../combat/Supporter';
@@ -86,6 +89,21 @@ export class BattleScene extends Phaser.Scene {
   private banterDelay = 0;
   private cutscene!: SatCutscene;
 
+  /** Whichever of the three candidates won this match's roll. */
+  private battleCue: string | null = null;
+  /**
+   * True once either pilot has dropped under a quarter life and `battle_danger`
+   * has taken over.
+   *
+   * One-way within a match. Life only ever goes down in this game, so a flip
+   * back could only come from the threshold being straddled by rounding — and
+   * a soundtrack that switches back and forth across one hit is worse than one
+   * that commits.
+   */
+  private danger = false;
+  /** Mirrors whatever is currently asking the soundtrack to step aside. */
+  private musicDucked = false;
+
   private accumulator = 0;
   private paused = false;
   private pauseUi?: { scrim: Phaser.GameObjects.Rectangle; menu: Menu; extra: Phaser.GameObjects.GameObject[] };
@@ -144,6 +162,28 @@ export class BattleScene extends Phaser.Scene {
         new Rng(aiSeed ^ 0x2545f491),
       );
     }
+
+    // ---- soundtrack ------------------------------------------------------
+    // Three candidates — both pilots' themes and the stage's — one per match,
+    // re-rolled on a rematch.
+    //
+    // `Math.random`, deliberately, and not `this.sim`'s generator: the match is
+    // seeded and `match.test.ts` asserts a bit-identical replay, so taking a
+    // number out of that stream to choose music would change the fight itself.
+    this.danger = false;
+    this.musicDucked = false;
+    music.duck(false);
+    this.battleCue = pickBattleCue(
+      {
+        mode: session.mode,
+        playerMech: session.playerMech,
+        enemyMech: session.enemyMech,
+        arena: session.arena,
+      },
+      Math.random,
+    );
+    // Idempotent, so a rematch that re-rolls the same track never restarts it.
+    music.play(this.battleCue);
 
     this.input$ = new InputManager(this);
     this.input$.reset();
@@ -252,7 +292,7 @@ export class BattleScene extends Phaser.Scene {
     const title = bigTitle(this, 'PAUSED', 140, 40, '#eaf2ff');
     const hint = smallText(
       this,
-      'ESC resumes · debug overlays stay available with F1 / F2',
+      'ESC resumes · LEFT / RIGHT adjust volume · F1 / F2 debug overlays',
       VIEW_W / 2,
       VIEW_H - 40,
       12,
@@ -262,14 +302,7 @@ export class BattleScene extends Phaser.Scene {
       this,
       [
         { label: 'RESUME', onSelect: () => this.closePause() },
-        {
-          label: 'AUDIO',
-          value: () => (session.muted ? 'MUTED' : 'ON'),
-          onSelect: () => {
-            session.muted = !session.muted;
-            sfx.setMuted(session.muted);
-          },
-        },
+        ...audioMenuItems(),
         { label: 'RESTART MATCH', onSelect: () => this.restart() },
         { label: 'QUIT TO TITLE', onSelect: () => this.toTitle() },
       ],
@@ -309,12 +342,24 @@ export class BattleScene extends Phaser.Scene {
     const dt = Math.min(delta, 100) / 1000;
     const ui = this.input$.readUi();
 
+    // The soundtrack steps aside for anything that wants to be heard over it:
+    // the saturation cutscene's spoken line, and the pause menu. Mirrored here
+    // rather than at each call site so the two cannot fight over it — and above
+    // the pause early-return, or unpausing would never lift the duck.
+    const wantDuck = this.paused || this.cutscene.active;
+    if (wantDuck !== this.musicDucked) {
+      this.musicDucked = wantDuck;
+      music.duck(wantDuck);
+    }
+
     if (ui.toggleDebug) this.debug.toggleText();
     if (ui.toggleHitboxes) this.debug.toggleHitboxes();
 
     if (this.paused) {
       if (ui.up) this.pauseUi?.menu.move(-1);
       if (ui.down) this.pauseUi?.menu.move(1);
+      if (ui.left) this.pauseUi?.menu.adjust(-1);
+      if (ui.right) this.pauseUi?.menu.adjust(1);
       if (ui.confirm) this.pauseUi?.menu.confirm();
       if (ui.pause) this.closePause();
       this.pauseUi?.menu.update();
@@ -341,7 +386,30 @@ export class BattleScene extends Phaser.Scene {
     // If we are hopelessly behind, drop the backlog rather than stuttering.
     if (this.accumulator > TICK_MS * 6) this.accumulator = 0;
 
+    this.checkDanger();
     this.render(dt);
+  }
+
+  /**
+   * Hands the soundtrack over to `battle_danger` when either pilot drops under a
+   * quarter life.
+   *
+   * Deliberately shared rather than per-pilot: eight danger variants would mean
+   * twenty-three tracks each heard rarely, where one escalation cutting across
+   * whoever's theme is playing reads as the game itself changing gear.
+   *
+   * Not in training. Nothing there can hurt the player, so the only way to reach
+   * the threshold is by working the dummy down — and swapping the low-fatigue
+   * practice track for a last-stand one because you shot a target is nonsense.
+   */
+  private checkDanger(): void {
+    if (this.danger || this.battleCue === null || session.mode === 'training') return;
+    const s = this.sim;
+    const low = (c: Combatant): boolean =>
+      c.life / c.def.gauges.maxLife < DANGER_LIFE_FRACTION && c.life > 0;
+    if (!low(s.player) && !low(s.enemy)) return;
+    this.danger = true;
+    music.play('battle_danger', 1.2);
   }
 
   private stepSim(): void {

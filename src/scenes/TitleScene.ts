@@ -4,6 +4,7 @@ import { InputManager } from '../input/InputManager';
 import { bigTitle, smallText } from '../ui/Menu';
 import { MECHS } from '../data/mechs';
 import { sfx } from '../audio/Sfx';
+import { music } from '../audio/Music';
 import { PART_SCALE } from '../render/MechRenderer';
 import { partTexture } from '../render/PartTexture';
 
@@ -34,6 +35,11 @@ export class TitleScene extends Phaser.Scene {
     this.mechGroups = [];
     this.t = 0;
     this.armAt = 0.25;
+
+    // Boot reaches here without a gesture, so this normally sets the intent and
+    // the first keypress is what actually starts it. Coming back from a match
+    // there has been a gesture, and it starts immediately.
+    music.play('title');
 
     // ---- background ------------------------------------------------------
     const g = this.add.graphics();

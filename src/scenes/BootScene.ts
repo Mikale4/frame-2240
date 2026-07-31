@@ -3,6 +3,9 @@ import { MECHS } from '../data/mechs';
 import { createEffectTextures, createPixel } from '../render/Textures';
 import { VIEW_H, VIEW_W } from '../core/GameConfig';
 import { sfx } from '../audio/Sfx';
+import { loadAudioSettings } from '../audio/AudioSettings';
+import { applyAudioSettings } from '../ui/AudioOptions';
+import { session } from '../core/Session';
 
 /**
  * Loads mech part sprites, arena layers and the sound bank, builds the
@@ -117,6 +120,11 @@ export class BootScene extends Phaser.Scene {
       this.load.image(`pilot_${id}`, `sprites/pilots/${id}.png`);
       this.load.image(`pilot_${id}_thumb`, `sprites/pilots/${id}_thumb.png`);
     }
+
+    // Volume levels, before anything can make a sound. A stored mix has to be in
+    // force by the first menu blip, not applied once a settings screen is opened.
+    session.audio = loadAudioSettings();
+    applyAudioSettings();
 
     // Sound bank. Runs alongside Phaser's loader rather than inside it.
     this.audioReady = sfx.load();

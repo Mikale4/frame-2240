@@ -11,6 +11,7 @@ import { InputManager } from '../input/InputManager';
 import { bigTitle, smallText } from '../ui/Menu';
 import { ROSTER } from '../data/mechs';
 import { sfx } from '../audio/Sfx';
+import { music } from '../audio/Music';
 
 const FONT = 'ui-monospace, Consolas, monospace';
 const COLS = 4;
@@ -80,6 +81,10 @@ export class MechSelectScene extends Phaser.Scene {
     this.picking = 'player';
     this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.playerMech));
     this.cells = [];
+
+    // Carries all four stages, skill panels included — the anticipation the
+    // track is written around does not reset when the heading changes.
+    music.play('select');
 
     // ---- background ------------------------------------------------------
     const g = this.add.graphics();

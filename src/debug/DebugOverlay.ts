@@ -4,6 +4,7 @@ import type { Combatant } from '../combat/Combatant';
 import type { RivalAI } from '../ai/RivalAI';
 import { Phase, ProjKind, SAT_MODE_NAMES } from '../combat/types';
 import { VIEW_H } from '../core/GameConfig';
+import { music } from '../audio/Music';
 
 const FONT = 'ui-monospace, Consolas, monospace';
 const PHASE_NAMES = ['STARTUP', 'ACTIVE', 'RECOVERY'];
@@ -106,6 +107,9 @@ export class DebugOverlay {
       this.line(s.player, 'P1'),
       this.line(s.enemy, 'CPU'),
       `AI tactic ${this.ai.tacticName}`,
+      // Which of the three candidates won the roll is otherwise invisible —
+      // you can hear that music is playing but not which track it is.
+      `music ${music.current ?? 'silent'}${music.current && !music.playing ? ' (waiting for a keypress)' : ''}`,
     ].join('\n');
   }
 

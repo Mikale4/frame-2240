@@ -4,7 +4,9 @@ import { MODE_LABELS, session, type MatchMode } from '../core/Session';
 import { InputManager } from '../input/InputManager';
 import { Menu, bigTitle, smallText } from '../ui/Menu';
 import { BindingsPanel } from '../ui/BindingsPanel';
+import { audioMenuItems } from '../ui/AudioOptions';
 import { sfx } from '../audio/Sfx';
+import { music } from '../audio/Music';
 
 /**
  * The main menu, reached from the title's Press Start.
@@ -15,6 +17,11 @@ import { sfx } from '../audio/Sfx';
 export class MenuScene extends Phaser.Scene {
   private input$!: InputManager;
   private menu!: Menu;
+  private settingsMenu!: Menu;
+  private subtitle!: Phaser.GameObjects.Text;
+  private hint!: Phaser.GameObjects.Text;
+  /** Which list is on screen. Settings is a page, not a popup. */
+  private page: 'main' | 'settings' = 'main';
   private bindingsPanel?: BindingsPanel;
   private t = 0;
   private armAt = 0;
@@ -29,6 +36,11 @@ export class MenuScene extends Phaser.Scene {
     this.t = 0;
     // The same press that left the title would otherwise land here too.
     this.armAt = 0.18;
+    // Field initialisers do not re-run on a scene restart.
+    this.page = 'main';
+
+    // Also covers the controls and audio panels, which live on this scene.
+    music.play('menu');
 
     // ---- background ------------------------------------------------------
     const g = this.add.graphics();
@@ -47,37 +59,53 @@ export class MenuScene extends Phaser.Scene {
     far.setTint(0x39445e).setAlpha(0.4);
 
     bigTitle(this, GAME_TITLE, 62, 34, '#eaf2ff');
-    smallText(this, 'MAIN MENU', VIEW_W / 2, 96, 13, '#7d8ea8');
+    this.subtitle = smallText(this, 'MAIN MENU', VIEW_W / 2, 96, 13, '#7d8ea8');
 
-    // ---- menu ------------------------------------------------------------
-    // Mode only. Which machines fight and how good the rival is are match
-    // settings, and they belong on the select screen where you can see the
-    // roster — picking a fighter from a text menu is not how this genre works.
+    // ---- menus -----------------------------------------------------------
+    // What to play, and nothing else. Which machines fight and how good the
+    // rival is are match settings, and they belong on the select screen where
+    // you can see the roster — picking a fighter from a text menu is not how
+    // this genre works.
+    //
+    // Everything that is not a mode lives one level down under SETTINGS. A flat
+    // list that mixed "start a fight" with "set the music volume" made the two
+    // look like equivalent choices, which they are not.
     this.menu = new Menu(
       this,
       [
+        {
+          label: 'CAMPAIGN',
+          disabled: true,
+          disabledNote: 'COMING SOON',
+          onSelect: () => {},
+        },
         { label: MODE_LABELS.vsCpu, onSelect: () => this.pick('vsCpu') },
         { label: MODE_LABELS.aiVsAi, onSelect: () => this.pick('aiVsAi') },
         { label: MODE_LABELS.training, onSelect: () => this.pick('training') },
-        { label: 'CONTROLS', onSelect: () => this.toggleControls() },
-        {
-          label: 'AUDIO',
-          value: () => (session.muted ? 'MUTED' : 'ON'),
-          onSelect: () => {
-            session.muted = !session.muted;
-            sfx.setMuted(session.muted);
-          },
-        },
+        { label: 'SETTINGS', onSelect: () => this.openSettings() },
         { label: 'BACK TO TITLE', onSelect: () => this.back() },
       ],
       VIEW_W / 2,
-      VIEW_H / 2 - 34,
-      { size: 22, gap: 40, maxVisible: 5 },
+      VIEW_H / 2 - 54,
+      { size: 22, gap: 40, maxVisible: 6 },
     );
 
-    smallText(
+    this.settingsMenu = new Menu(
       this,
-      'ARROWS / W S  select      ENTER or J  confirm      ESC  back',
+      [
+        { label: 'CONTROLS', onSelect: () => this.toggleControls() },
+        ...audioMenuItems(),
+        { label: 'BACK', onSelect: () => this.closeSettings() },
+      ],
+      VIEW_W / 2,
+      VIEW_H / 2 - 34,
+      { size: 22, gap: 40, maxVisible: 4 },
+    );
+    this.settingsMenu.setVisible(false);
+
+    this.hint = smallText(
+      this,
+      '',
       VIEW_W / 2,
       VIEW_H - 26,
       12,
@@ -85,6 +113,36 @@ export class MenuScene extends Phaser.Scene {
     );
 
     this.buildControls();
+    this.refreshChrome();
+  }
+
+  /** Which list is live. Kept explicit so `update` has one place to branch. */
+  private get active(): Menu {
+    return this.page === 'settings' ? this.settingsMenu : this.menu;
+  }
+
+  private openSettings(): void {
+    this.page = 'settings';
+    this.refreshChrome();
+  }
+
+  private closeSettings(): void {
+    this.page = 'main';
+    this.bindingsPanel?.setVisible(false);
+    this.refreshChrome();
+  }
+
+  /** Title, hint line and which list is on screen, for the current page. */
+  private refreshChrome(): void {
+    const settings = this.page === 'settings';
+    this.subtitle.setText(settings ? 'SETTINGS' : 'MAIN MENU');
+    this.menu.setVisible(!settings);
+    this.settingsMenu.setVisible(settings);
+    this.hint.setText(
+      settings
+        ? 'ARROWS / W S  select      LEFT RIGHT  adjust      ENTER  confirm      ESC  back'
+        : 'ARROWS / W S  select      ENTER or J  confirm      ESC  back',
+    );
   }
 
   private buildControls(): void {
@@ -134,11 +192,23 @@ export class MenuScene extends Phaser.Scene {
     }
 
     if (this.t < this.armAt) return;
+    const menu = this.active;
     const ui = this.input$.readUi();
-    if (ui.up) this.menu.move(-1);
-    if (ui.down) this.menu.move(1);
-    if (ui.confirm) this.menu.confirm();
-    if (ui.cancel) this.back();
-    this.menu.update();
+    if (ui.up) menu.move(-1);
+    if (ui.down) menu.move(1);
+    // Only the volume rows consume these; every other row ignores them.
+    if (ui.left) menu.adjust(-1);
+    if (ui.right) menu.adjust(1);
+    if (ui.confirm) menu.confirm();
+    // Cancel backs out one level rather than always leaving the scene.
+    if (ui.cancel) {
+      if (this.page === 'settings') {
+        sfx.uiBack();
+        this.closeSettings();
+      } else {
+        this.back();
+      }
+    }
+    menu.update();
   }
 }
