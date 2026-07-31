@@ -2,6 +2,7 @@ import type { AttackDef } from './AttackData';
 import type { SupporterDef } from '../mechs/MechDef';
 import type { ProjectileSpawn, SimEvent } from './types';
 import { wrapAngle } from '../core/MathUtil';
+import { playstyleFor, type DroneDoctrine } from '../ai/Playstyles';
 
 /**
  * The supporter drone.
@@ -13,21 +14,24 @@ import { wrapAngle } from '../core/MathUtil';
  *
  * Design decisions, recorded here because the handoff asked for them explicitly:
  *
- * * **A deployed asset, not a fire button.** The assist button used to mean
- *   "shoot now". It now means "launch" or "bring it home". Once it is on station
- *   the drone picks its own moments to fire, which frees the button from being a
- *   third weapon and turns it into a standing decision: is the drone worth more
- *   in the air than it is safe in the backpack?
- * * **Damageable, and destroyed for good.** This reverses an earlier decision.
- *   The reference draws only a charge gauge on its supporter and never a life
- *   bar, so the first pass made the drone invulnerable — but with a passive and
- *   free auto-fire attached to it, an invulnerable drone is a strictly-better
- *   button with no counterplay. Its hit points are a fraction of a chassis's and
- *   destruction is permanent for the match, so hunting one is a real, and
- *   rewarding, thing to spend attention on.
- * * **Stowing repairs it.** Recall is otherwise a pure loss of tempo. Repairing
- *   only while docked makes the toggle a rhythm — fly it while you are winning
- *   the exchange, pull it in while you are eating one.
+ * * **Always deployed.** There is no launch/recall button any more. The toggle
+ *   was a standing decision nobody was making: measured, drones were dying with
+ *   a 10th-percentile life of *two seconds* and a median of eight, so the
+ *   "should it be out?" question answered itself in the opening exchange and the
+ *   button spent the rest of the match dead. The drone is now a permanent part
+ *   of the machine, and keeping it alive is the skill instead.
+ * * **It flies itself.** Because it can no longer be pulled to safety, it has to
+ *   find safety on its own — see `station()`. It keeps formation, drifts toward
+ *   a firing position when that is safe, and breaks away from incoming fire.
+ * * **Damageable, and rebuilt exactly once.** The reference draws only a charge
+ *   gauge on its supporter and never a life bar, so the first pass made the
+ *   drone invulnerable — but with a passive and free auto-fire attached, an
+ *   invulnerable drone is a strictly-better button with no counterplay. Shooting
+ *   one down now retires it into the chassis, where it rebuilds slowly and
+ *   relaunches itself. **That happens once per match.** The second kill is
+ *   permanent. One rebuild keeps the subsystem present in a fight it used to
+ *   vanish from in the first five seconds; the hard cap keeps hunting it worth
+ *   the attention, because the second kill really does end it.
  * * **Inherits nothing it should not.** It follows the owner's position, but it
  *   is not bound to it: it lags, overshoots slightly and catches up, so it reads
  *   as a machine flying in formation rather than a welded-on sprite.
@@ -35,7 +39,8 @@ import { wrapAngle } from '../core/MathUtil';
  *   and KO, so no order can arrive; the drone keeps station regardless.
  *
  * Everything here is deterministic — no RNG, no wall-clock — so a replay and a
- * test see identical behaviour.
+ * test see identical behaviour. That extends to the evasion: it reads the live
+ * projectile list and does arithmetic on it, and never rolls a die.
  */
 
 export const enum SupState {
@@ -54,7 +59,7 @@ export const enum SupState {
  * have to enumerate the other's states.
  */
 export const enum DroneMode {
-  /** Docked in the chassis. Invisible, untouchable, repairing, no passive. */
+  /** Docked in the chassis. Invisible, untouchable, no passive. */
   Stowed = 0,
   /** Flying out to station. Already exposed, not yet contributing. */
   Deploying = 1,
@@ -62,9 +67,109 @@ export const enum DroneMode {
   Active = 2,
   /** Flying home. Still exposed, passive already gone. */
   Recalling = 3,
-  /** Shot down. Gone for the rest of the match. */
+  /** Shot down for good. No passive, no gun, for the rest of the match. */
   Destroyed = 4,
+  /**
+   * Shot down the first time: limping home and reassembling itself.
+   *
+   * Visible, so the player can watch the repair they are waiting on, but **not**
+   * hittable — it is already out of the fight and shooting a wreck should not
+   * deny the rebuild. Relaunches itself at full hit points.
+   */
+  Rebuilding = 5,
 }
+
+/**
+ * Ticks to reassemble a downed drone, and then how long the relaunch takes.
+ *
+ * Fifteen seconds of a match that now runs 180. Long enough that losing the
+ * drone is a real and felt penalty — a quarter of a minute without your passive
+ * — and short enough that the subsystem comes back while the fight it belongs to
+ * is still going. A per-tick repair rate was the obvious alternative and is
+ * worse: hit points were just scaled 3.5×, so any rate tuned against the old
+ * pools would now take most of the match.
+ */
+export const REBUILD_TICKS = 900;
+
+/** How many times a drone may come back. One, then the next kill is final. */
+export const MAX_REBUILDS = 1;
+
+// ---- movement AI tuning ----------------------------------------------------
+// All in logical pixels, all displacements from the authored formation point.
+
+/** How far a shot is noticed from. Roughly a third of the arena's height. */
+const THREAT_RADIUS = 300;
+/** How hard one closing shot at point-blank pushes the drone out of its lane. */
+const EVADE_STRENGTH = 150;
+/**
+ * Forward lean toward a target the drone can actually reach.
+ *
+ * Deliberately well under the smallest `followBack` on the roster. The first cut
+ * used 46 against a 64px follow-back and the drone ended up 18px behind its
+ * owner — flying through the chassis sprite rather than escorting it.
+ * `MIN_OWNER_GAP` is the hard floor; this is the number that keeps it from
+ * having to do any work.
+ */
+const SUPPORT_FORWARD = 26;
+/** Most it will climb or drop to get level with what it is shooting at. */
+const SUPPORT_RISE = 40;
+/**
+ * Closest the drone will station itself to its owner's centre.
+ *
+ * Applies after every other pull, evasion included: dodging a shot by hiding
+ * inside your own mech is not a dodge, it is a rendering bug.
+ */
+const MIN_OWNER_GAP = 46;
+/**
+ * Furthest the drone will stray from formation, however loud the arithmetic
+ * above gets. This is the difference between an escort and a second fighter:
+ * without it, a busy screen sends the drone across the arena and it stops
+ * reading as part of its owner's machine.
+ */
+const LEASH = 190;
+
+/** What the drone needs to know about one projectile in order to dodge it. */
+export interface DroneThreat {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  team: number;
+}
+
+/**
+ * How the drone's standing orders bend the numbers above.
+ *
+ * The doctrine comes from the pilot's playstyle (`ai/Playstyles.ts`), because a
+ * permanently-deployed escort that flies itself is otherwise the one part of the
+ * machine with no opinion. `forward` and `leash` scale the support lean;
+ * `caution` scales the evasion; `offAxis` pushes the drone away from the line
+ * between its owner and the target instead of along it.
+ */
+interface DoctrineTuning {
+  forward: number;
+  leash: number;
+  caution: number;
+  offAxis: number;
+}
+
+const DOCTRINES: Record<DroneDoctrine, DoctrineTuning> = {
+  /** Balanced. The baseline every other row is a deviation from. */
+  escort: { forward: 1, leash: 1, caution: 1, offAxis: 0 },
+  /**
+   * Get in front and stay there.
+   *
+   * Leans a long way forward on a long leash and dodges *less*, which looks like
+   * a mistake and is the entire point: every shot spent on the drone is one not
+   * spent on a pilot who needs to hold still. VESPER cannot line up a shot while
+   * being rushed, so his escort goes and does the being-rushed for him.
+   */
+  screen: { forward: 2.6, leash: 1.9, caution: 0.45, offAxis: 0 },
+  /** Work an angle. Off the owner-to-target line, and hard to pin. */
+  flank: { forward: 1.5, leash: 1.5, caution: 1.35, offAxis: 78 },
+  /** Stay tight, stay alive, keep the passive up. */
+  shadow: { forward: 0.35, leash: 0.6, caution: 1.6, offAxis: 0 },
+};
 
 /** The subset of the owner the drone needs. Keeps this file free of Combatant. */
 export interface SupporterOwner {
@@ -73,6 +178,7 @@ export interface SupporterOwner {
   facing: number;
   alive: boolean;
   id: number;
+  team: number;
 }
 
 /**
@@ -103,6 +209,18 @@ export class Supporter {
   /** Ticks spent in the current `mode`, for the deploy/recall transitions. */
   modeTicks = 0;
   life: number;
+  /** Rebuilds remaining. Decremented when one is spent, never restored mid-match. */
+  rebuildsLeft = MAX_REBUILDS;
+  /** Copied from the owner at construction, so threat filtering needs no lookup. */
+  readonly team: number;
+  /**
+   * Standing orders, taken from the pilot's playstyle.
+   *
+   * Resolved once at construction rather than looked up per tick: it cannot
+   * change during a match, and a drone that re-derived its doctrine sixty times
+   * a second would be paying for a question with one answer.
+   */
+  doctrine: DroneDoctrine = 'escort';
 
   /** The attack this drone was ordered to fire, held through the windup. */
   private pending: AttackDef | null = null;
@@ -110,8 +228,12 @@ export class Supporter {
   constructor(
     readonly def: SupporterDef,
     owner: SupporterOwner,
+    /** Owning chassis id, used only to look up the pilot's drone doctrine. */
+    mechId?: string,
   ) {
     this.life = def.maxLife;
+    this.team = owner.team;
+    this.doctrine = playstyleFor(mechId).droneDoctrine;
     this.x = owner.x - owner.facing * def.followBack;
     this.y = owner.y + def.followDown;
     this.aim = owner.facing > 0 ? 0 : Math.PI;
@@ -120,7 +242,7 @@ export class Supporter {
 
   // ------------------------------------------------------------------ queries
 
-  /** Shot down, permanently. */
+  /** Shot down, permanently. Rebuilding is *not* this. */
   get destroyed(): boolean {
     return this.mode === DroneMode.Destroyed;
   }
@@ -134,9 +256,27 @@ export class Supporter {
     );
   }
 
-  /** Drawn this tick. Same set as `hittable` — if it can be shot, it is visible. */
+  /**
+   * Drawn this tick.
+   *
+   * A superset of `hittable`: a rebuilding drone is on screen, limping alongside
+   * its owner with its bar refilling, but cannot be shot again. Watching the
+   * repair is most of what makes the wait readable rather than just a missing
+   * passive.
+   */
   get visible(): boolean {
-    return this.hittable;
+    return this.hittable || this.mode === DroneMode.Rebuilding;
+  }
+
+  /** Reassembling itself after its first death. */
+  get rebuilding(): boolean {
+    return this.mode === DroneMode.Rebuilding;
+  }
+
+  /** 0..1 through the rebuild, for the progress ring drawn while it waits. */
+  get rebuildFraction(): number {
+    if (this.mode !== DroneMode.Rebuilding) return 0;
+    return Math.max(0, Math.min(1, this.modeTicks / REBUILD_TICKS));
   }
 
   /**
@@ -175,44 +315,34 @@ export class Supporter {
   // -------------------------------------------------------------- deployment
 
   /**
-   * Toggles the drone between the backpack and its station.
+   * Applies a hit.
    *
-   * Returns what it did, so the caller can pick the right event and sound. A
-   * destroyed drone answers 'none' — the button is dead for the rest of the
-   * match, and that has to be audible rather than silent.
-   */
-  toggle(): 'deploy' | 'recall' | 'none' {
-    if (this.destroyed) return 'none';
-    if (this.outbound) {
-      this.mode = DroneMode.Recalling;
-      this.modeTicks = 0;
-      this.cancel();
-      return 'recall';
-    }
-    this.mode = DroneMode.Deploying;
-    this.modeTicks = 0;
-    return 'deploy';
-  }
-
-  /**
-   * Applies a hit. Returns 'down' on the blow that destroys it.
+   * Returns 'down' on the blow that retires it into a rebuild, and 'destroyed'
+   * on the one that ends it for the match. Callers that only care that it fell
+   * out of the sky can test for either; the two are distinguished because they
+   * deserve different cues — one is a setback, the other is final.
    *
    * Damage is scaled by the drone's own `defenceMul` rather than its owner's:
    * an armoured escort on a paper chassis is a deliberate design axis, and
    * borrowing the mech's defence would have collapsed it.
    */
-  takeHit(damage: number): 'ignored' | 'hit' | 'down' {
+  takeHit(damage: number): 'ignored' | 'hit' | 'down' | 'destroyed' {
     if (!this.hittable) return 'ignored';
     this.life -= damage * this.def.defenceMul;
     if (this.life > 0) return 'hit';
 
     this.life = 0;
-    this.mode = DroneMode.Destroyed;
     this.modeTicks = 0;
     this.cancel();
     this.vx = 0;
     this.vy = 0;
-    return 'down';
+    if (this.rebuildsLeft > 0) {
+      this.rebuildsLeft--;
+      this.mode = DroneMode.Rebuilding;
+      return 'down';
+    }
+    this.mode = DroneMode.Destroyed;
+    return 'destroyed';
   }
 
   /** Accepts a firing order. False when the drone is busy, stowed or gone. */
@@ -248,6 +378,7 @@ export class Supporter {
     events: SimEvent[],
     fire: (a: AttackDef, x: number, y: number, angle: number, spawns: ProjectileSpawn[], events: SimEvent[]) => void,
     requestVolley?: VolleyRequest,
+    threats: DroneThreat[] = [],
   ): void {
     const d = this.def;
 
@@ -266,8 +397,11 @@ export class Supporter {
     }
 
     this.stepMode(owner);
-    this.follow(owner);
+    this.follow(owner, target, threats);
     this.slew(owner, target);
+
+    // A rebuilding drone is a passenger: no gun, no passive, no orders.
+    if (this.mode === DroneMode.Rebuilding) return;
 
     switch (this.state) {
       case SupState.Windup:
@@ -340,8 +474,24 @@ export class Supporter {
         }
         break;
 
+      case DroneMode.Rebuilding:
+        // Life climbs linearly across the whole rebuild rather than by a
+        // per-tick rate, so the bar is a progress meter for the wait and the
+        // wait is the same length whatever the chassis's drone happens to have.
+        this.life = d.maxLife * this.rebuildFraction;
+        if (this.modeTicks >= REBUILD_TICKS) {
+          this.life = d.maxLife;
+          // Relaunches itself. There is no button to press any more, and a drone
+          // that finished rebuilding and then sat in the backpack would be a
+          // worse outcome than the permanent death this replaced.
+          this.mode = DroneMode.Deploying;
+          this.modeTicks = 0;
+        }
+        break;
+
       case DroneMode.Stowed:
-        // Repairs only in the backpack, and never back from destroyed.
+        // Only reachable now with a downed owner; the drone powers down with the
+        // wreck rather than flying formation on it.
         if (this.life < d.maxLife) this.life = Math.min(d.maxLife, this.life + d.repair);
         break;
 
@@ -356,20 +506,129 @@ export class Supporter {
   }
 
   /**
+   * Where the drone wants to be this tick — the whole of its movement AI.
+   *
+   * Three pulls, summed, then leashed to the owner:
+   *
+   * 1. **Formation.** The authored rest offset, behind and below the chassis.
+   *    This is the anchor; everything else is a displacement from it.
+   * 2. **Support.** While it is healthy and the enemy is inside `fireRange`, it
+   *    edges toward its own firing line — a little further forward, and level
+   *    with the target rather than tucked under its owner's belly. It has a gun
+   *    and a range limit, so hovering behind a wall of its owner's chassis makes
+   *    it decorative.
+   * 3. **Evasion.** Every hostile projectile inside `THREAT_RADIUS` pushes it
+   *    away, weighted by how close it is and by whether the shot is actually
+   *    coming at the drone rather than merely passing nearby. This is the whole
+   *    reason it can survive without a recall button.
+   *
+   * The result is clamped to `LEASH` of the formation point, which is what makes
+   * it read as an escort keeping up with its mech rather than a second fighter
+   * wandering off to have its own war. Deterministic throughout.
+   */
+  private station(owner: SupporterOwner, target: SupporterOwner | null, threats: DroneThreat[]): { x: number; y: number } {
+    const d = this.def;
+    const doc = DOCTRINES[this.doctrine];
+    const base = { x: owner.x - owner.facing * d.followBack, y: owner.y + d.followDown };
+
+    let ox = 0;
+    let oy = 0;
+
+    // ---- support --------------------------------------------------------
+    if (this.onStation && target && target.alive) {
+      const dist = Math.hypot(target.x - this.x, target.y - this.y);
+      // Only when it can actually shoot, and only while it is healthy enough to
+      // afford the exposure. A drone on its last few hit points falls back into
+      // formation and stops volunteering — a screening doctrine included, since
+      // a dead screen screens nothing.
+      if (dist <= d.fireRange && this.lifeFraction > 0.4) {
+        const dir = Math.sign(target.x - owner.x) || owner.facing;
+        ox += dir * SUPPORT_FORWARD * doc.forward;
+        // Rise or fall toward the target's line, but only part of the way: fully
+        // matching its height puts the drone directly in the firing lane.
+        oy += Math.max(-SUPPORT_RISE, Math.min(SUPPORT_RISE, (target.y - base.y) * 0.35));
+        // A flanking drone deliberately leaves that lane, so it is not shooting
+        // from the same angle its owner is — and is not in the way of it.
+        if (doc.offAxis !== 0) {
+          oy += target.y >= owner.y ? -doc.offAxis : doc.offAxis;
+        }
+      }
+    }
+
+    // ---- evasion --------------------------------------------------------
+    if (this.hittable) {
+      for (const t of threats) {
+        if (t.team === this.team) continue;
+        const dx = this.x - t.x;
+        const dy = this.y - t.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > THREAT_RADIUS || dist < 0.001) continue;
+
+        // Is it heading at us? A shot already past the drone is not a threat, and
+        // treating it as one makes the drone flee its own safe space.
+        //
+        // `(dx, dy)` points from the shot to the drone, so a shot closing on the
+        // drone has its velocity pointing the same way and the dot product is
+        // positive. Getting this sign backwards makes the drone dodge everything
+        // that has already missed and stand still for everything that has not.
+        const speed = Math.hypot(t.vx, t.vy) || 1;
+        const closing = (t.vx * dx + t.vy * dy) / (dist * speed);
+        if (closing <= 0.1) continue;
+
+        // Push perpendicular to the shot rather than directly away from it:
+        // running from a projectile that is faster than you is how you get hit,
+        // and stepping out of its lane is how you do not.
+        const nx = -t.vy / speed;
+        const ny = t.vx / speed;
+        const side = nx * dx + ny * dy >= 0 ? 1 : -1;
+        const weight = (1 - dist / THREAT_RADIUS) * closing;
+        ox += nx * side * EVADE_STRENGTH * doc.caution * weight;
+        oy += ny * side * EVADE_STRENGTH * doc.caution * weight;
+      }
+    }
+
+    // ---- leash ----------------------------------------------------------
+    const leash = LEASH * doc.leash;
+    const mag = Math.hypot(ox, oy);
+    if (mag > leash) {
+      ox = (ox / mag) * leash;
+      oy = (oy / mag) * leash;
+    }
+
+    // ---- keep out of the chassis ----------------------------------------
+    let px = base.x + ox;
+    let py = base.y + oy;
+    const gx = px - owner.x;
+    const gy = py - owner.y;
+    const gap = Math.hypot(gx, gy);
+    if (gap < MIN_OWNER_GAP) {
+      // Straight back along the owner's facing when the two coincide exactly,
+      // which is otherwise a divide by zero.
+      const ux = gap > 0.001 ? gx / gap : -owner.facing;
+      const uy = gap > 0.001 ? gy / gap : 0;
+      px = owner.x + ux * MIN_OWNER_GAP;
+      py = owner.y + uy * MIN_OWNER_GAP;
+    }
+    return { x: px, y: py };
+  }
+
+  /**
    * Springs toward wherever the drone currently belongs.
    *
    * The reference positioned its helper at a fixed offset scaled by the chassis
    * weight (`Parent,Pos X - 20 * Parent,fvar(11) * Parent,facing`); the spring
    * is this game's take on it, so the drone swings out through turns instead of
-   * snapping to a fixed point. The same spring flies it out on a deploy and home
-   * on a recall — only the target moves.
+   * snapping to a fixed point. The same spring flies it out on a deploy, home on
+   * a rebuild, and around incoming fire — only the target point moves.
    */
-  private follow(owner: SupporterOwner): void {
+  private follow(owner: SupporterOwner, target: SupporterOwner | null, threats: DroneThreat[]): void {
     const d = this.def;
     const home =
-      this.mode === DroneMode.Recalling || this.mode === DroneMode.Stowed
+      this.mode === DroneMode.Recalling ||
+      this.mode === DroneMode.Stowed ||
+      this.mode === DroneMode.Rebuilding
         ? this.dock(owner)
-        : { x: owner.x - owner.facing * d.followBack, y: owner.y + d.followDown };
+        : this.station(owner, target, threats);
 
     // Launch and recall are urgent: pull harder than station-keeping so the trip
     // actually finishes inside the authored window rather than easing forever.
@@ -411,8 +670,9 @@ export class Supporter {
   /**
    * Puts the drone back on station, for a dummy respawn.
    *
-   * Restores its hit points and undoes destruction: a training dummy that could
-   * permanently lose its drone would stop being a dummy after one good run.
+   * Restores its hit points, undoes destruction and hands back the rebuild: a
+   * training dummy that could permanently lose its drone would stop being a
+   * dummy after one good run.
    */
   reset(owner: SupporterOwner): void {
     this.cancel();
@@ -420,6 +680,7 @@ export class Supporter {
     this.mode = DroneMode.Active;
     this.modeTicks = 0;
     this.life = this.def.maxLife;
+    this.rebuildsLeft = MAX_REBUILDS;
     this.x = owner.x - owner.facing * this.def.followBack;
     this.y = owner.y + this.def.followDown;
     this.vx = 0;

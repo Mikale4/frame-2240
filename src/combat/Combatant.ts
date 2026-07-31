@@ -441,7 +441,7 @@ export class Combatant implements FlightState {
     this.barrier = init.def.gauges.maxBarrier;
     this.boost = init.def.flight.maxBoost;
     this.subCharges = init.def.subCharges;
-    this.supporter = new Supporter(init.def.supporter, this);
+    this.supporter = new Supporter(init.def.supporter, this, init.def.id);
   }
 
   /**
@@ -462,29 +462,6 @@ export class Combatant implements FlightState {
     s.order(a);
     events.push({ t: 'assist', x: s.x, y: s.y, angle: s.aim, ownerId: this.id });
     return true;
-  }
-
-  /**
-   * Launches or recalls the drone.
-   *
-   * This is what the assist button does now — the press is a standing decision
-   * about where the drone should be, not a request for one volley. A destroyed
-   * drone answers with the refusal cue rather than with nothing, because a dead
-   * button that makes no sound is indistinguishable from a dropped input.
-   */
-  private toggleDrone(events: SimEvent[]): void {
-    const s = this.supporter;
-    switch (s.toggle()) {
-      case 'deploy':
-        events.push({ t: 'droneDeploy', x: s.x, y: s.y, ownerId: this.id });
-        break;
-      case 'recall':
-        events.push({ t: 'droneRecall', x: s.x, y: s.y, ownerId: this.id });
-        break;
-      default:
-        events.push({ t: 'assistDenied', x: s.x, y: s.y, ownerId: this.id });
-        break;
-    }
   }
 
   /**
@@ -1078,10 +1055,15 @@ export class Combatant implements FlightState {
       return;
     }
 
-    // Sub weapon: the drone carries it, so the chassis only decides *whether the
-    // drone is out*. It picks its own firing moments from there.
+    // Sub weapon: the drone carries it and is now permanently deployed, so the
+    // button no longer launches or recalls anything — it orders a volley.
+    //
+    // That is what this button meant two designs ago, before the drone became a
+    // toggle. The toggle is gone because the drone is always out; leaving the
+    // button dead would have taken the sub-weapon away from every player who has
+    // not discovered the quarter-circle motion that also fires it.
     if (isPressed(input, Btn.Sub)) {
-      this.toggleDrone(events);
+      this.orderAssist(d.sub, events);
       return;
     }
 

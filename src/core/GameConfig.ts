@@ -24,8 +24,18 @@ export const TICK_MS = 1000 / TICK_HZ;
 export const ARENA_W = 2400;
 export const ARENA_H = 1200;
 
-/** Match rules. */
-export const ROUND_TIME_TICKS = 99 * TICK_HZ;
+/**
+ * Match rules.
+ *
+ * 180 seconds, not the arcade-traditional 99. The roster's life pools were
+ * raised by 1.75× because matches were finishing in 10–15 seconds against the
+ * lower tiers — measured, and it matched what playtesting felt like — and at
+ * that scale a 99-second clock stops being a fail-safe and starts being the
+ * thing that decides the fight: 30% of EXTREME matches ended in a draw on time.
+ * At 180 seconds no tier draws more than 4% of the time, so the clock is back to
+ * being the fail-safe it is meant to be.
+ */
+export const ROUND_TIME_TICKS = 180 * TICK_HZ;
 
 /**
  * World y of the deck surface — the line a landed machine's **feet** rest on.

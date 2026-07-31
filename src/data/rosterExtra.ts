@@ -159,7 +159,7 @@ function chain3(
 
 /** Neutral gauge block. Every mech below overrides what defines it. */
 const GAUGES: GaugeDef = {
-  maxLife: 1000,
+  maxLife: 1750,
   maxEnergy: 1000,
   energyRegen: 3.1,
   maxBoost: 100,
@@ -234,7 +234,7 @@ const DRONE: Omit<SupporterDef, 'name' | 'passive'> = {
   cooldown: 22,
   muzzleForward: 18,
   radius: 15,
-  maxLife: 110,
+  maxLife: 385,
   defenceMul: 1,
   hurtRadius: 13,
   deployTicks: 28,
@@ -261,7 +261,7 @@ export const VESPER: MechDef = {
   statRange: 5,
   flight: { ...FLIGHT, accel: 1.6, maxSpeed: 5.1, boostMaxSpeed: 8.8, turretRate: 15 * DEG, bankMax: 20 * DEG },
   // Glass cannon: fewer hit points and no grounded bracing bonus.
-  gauges: { ...GAUGES, maxLife: 850, maxEnergy: 1150, energyRegen: 3.4 },
+  gauges: { ...GAUGES, maxLife: 1490, maxEnergy: 1150, energyRegen: 3.4 },
   barrier: { ...BARRIER, cost: 34, invulnTicks: 32 },
   defence: { mul: 1.15, groundedMul: 1.0 },
   rig: makeRig({
@@ -453,7 +453,7 @@ export const VESPER: MechDef = {
     followDown: 44,
     cooldown: 26,
     maxSpeed: 13,
-    maxLife: 100,
+    maxLife: 350,
     defenceMul: 1.12,
     hurtRadius: 12,
     fireRange: 1000,
@@ -501,7 +501,7 @@ export const TERRAMOTH: MechDef = {
     takeoffImpulse: 4.8,
     groundedBoostRegen: 3.4,
   },
-  gauges: { ...GAUGES, maxLife: 1420, maxEnergy: 900, energyRegen: 2.7, barrierRegen: 0.44 },
+  gauges: { ...GAUGES, maxLife: 2490, maxEnergy: 900, energyRegen: 2.7, barrierRegen: 0.44 },
   barrier: { ...BARRIER, radius: 56, cost: 26, breakStun: 58 },
   // Built to stand and take it.
   defence: { mul: 0.78, groundedMul: 0.66 },
@@ -694,7 +694,7 @@ export const TERRAMOTH: MechDef = {
     maxSpeed: 10,
     cooldown: 30,
     radius: 19,
-    maxLife: 170,
+    maxLife: 595,
     defenceMul: 0.82,
     hurtRadius: 17,
     deployTicks: 38,
@@ -749,7 +749,7 @@ export const CIRRUS: MechDef = {
     walkSpeed: 3.0,
     takeoffImpulse: 6.6,
   },
-  gauges: { ...GAUGES, maxLife: 820, maxBoost: 130, energyRegen: 3.6, barrierRegenDelay: 38 },
+  gauges: { ...GAUGES, maxLife: 1440, maxBoost: 130, energyRegen: 3.6, barrierRegenDelay: 38 },
   barrier: { ...BARRIER, cost: 24, invulnTicks: 30, radius: 40 },
   defence: { mul: 1.18, groundedMul: 1.1 },
   rig: makeRig({
@@ -940,7 +940,7 @@ export const CIRRUS: MechDef = {
     turretRate: 9 * DEG,
     cooldown: 16,
     radius: 12,
-    maxLife: 95,
+    maxLife: 335,
     defenceMul: 1.15,
     hurtRadius: 10,
     deployTicks: 18,
@@ -990,7 +990,7 @@ export const OBELISK: MechDef = {
   // Barrier is the whole identity: bigger pool, faster regen, cheaper burst.
   gauges: {
     ...GAUGES,
-    maxLife: 1180,
+    maxLife: 2070,
     maxBarrier: 160,
     barrierRegen: 1.05,
     barrierRegenDelay: 30,
@@ -1188,7 +1188,7 @@ export const OBELISK: MechDef = {
     maxSpeed: 12,
     cooldown: 28,
     radius: 18,
-    maxLife: 145,
+    maxLife: 510,
     defenceMul: 0.88,
     hurtRadius: 16,
     deployTicks: 32,
@@ -1233,7 +1233,7 @@ export const PYRE: MechDef = {
     turretRate: 13 * DEG,
     gravity: 0.58,
   },
-  gauges: { ...GAUGES, maxLife: 1060, energyRegen: 3.3, satPassive: 0.62 },
+  gauges: { ...GAUGES, maxLife: 1860, energyRegen: 3.3, satPassive: 0.62 },
   barrier: { ...BARRIER, cost: 28 },
   defence: { mul: 0.95, groundedMul: 0.88 },
   rig: makeRig({
@@ -1427,7 +1427,7 @@ export const PYRE: MechDef = {
     followDown: 54,
     maxSpeed: 16,
     cooldown: 20,
-    maxLife: 130,
+    maxLife: 455,
     defenceMul: 0.98,
     hurtRadius: 13,
     deployTicks: 24,
@@ -1474,7 +1474,7 @@ export const NULLTIDE: MechDef = {
     turretRate: 14 * DEG,
     gravity: 0.5,
   },
-  gauges: { ...GAUGES, maxLife: 920, maxEnergy: 1250, energyRegen: 3.9, maxSaturation: 440, satPassive: 0.72 },
+  gauges: { ...GAUGES, maxLife: 1610, maxEnergy: 1250, energyRegen: 3.9, maxSaturation: 440, satPassive: 0.72 },
   barrier: { ...BARRIER, cost: 26, invulnTicks: 40 },
   defence: { mul: 1.08, groundedMul: 1.0 },
   rig: makeRig({

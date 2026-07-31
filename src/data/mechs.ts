@@ -164,7 +164,7 @@ const NOCTURNE_FLIGHT: FlightDef = {
 };
 
 const BASE_GAUGES: GaugeDef = {
-  maxLife: 1000,
+  maxLife: 1750,
   maxEnergy: 1000,
   energyRegen: 3.1,
   maxBoost: 100,
@@ -502,7 +502,7 @@ export const HALCYON: MechDef = {
     cooldown: 22,
     muzzleForward: 18,
     radius: 15,
-    maxLife: 120,
+    maxLife: 420,
     defenceMul: 1,
     hurtRadius: 13,
     deployTicks: 26,
@@ -546,7 +546,7 @@ export const NOCTURNE: MechDef = {
   statSpeed: 3,
   statRange: 3,
   flight: NOCTURNE_FLIGHT,
-  gauges: { ...BASE_GAUGES, maxLife: 1000, energyRegen: 2.9 },
+  gauges: { ...BASE_GAUGES, maxLife: 1750, energyRegen: 2.9 },
   barrier: { ...BASE_BARRIER, cost: 34 },
   // Heavy frame: thicker armour, and very hard to shift once planted.
   defence: { mul: 0.82, groundedMul: 0.8 },
@@ -568,7 +568,7 @@ export const NOCTURNE: MechDef = {
     radius: 18,
     // Armoured, slow to launch and slow to recover — the heavy frame's escort
     // is built to stay out rather than to duck in and out of the backpack.
-    maxLife: 125,
+    maxLife: 440,
     defenceMul: 0.9,
     hurtRadius: 16,
     deployTicks: 34,

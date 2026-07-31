@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { MatchSim } from '../combat/MatchSim';
 import { HALCYON, NOCTURNE } from '../data/mechs';
 import { ROSTER } from '../data/mechs';
-import { DroneMode } from '../combat/Supporter';
-import { Btn, MatchPhase, emptyInput, type InputFrame, type SimEvent } from '../combat/types';
+import { DroneMode, REBUILD_TICKS, Supporter, type DroneThreat } from '../combat/Supporter';
+import { Btn, MatchPhase, Team, emptyInput, type InputFrame, type SimEvent } from '../combat/types';
 import { ACTION_ORDER, BUTTON_ACTION, DEFAULT_BINDINGS } from '../input/Bindings';
 
 const W = 2400;
@@ -93,6 +93,10 @@ describe('supporter — station keeping', () => {
   it('follows the owner across the arena and settles behind it', () => {
     const s = sim();
     toFight(s);
+    // Out of every drone's reach, so the movement AI's support lean stays off
+    // and this measures station-keeping alone. With a target in range the drone
+    // deliberately sits forward of the formation point — see 'movement AI'.
+    separate(s);
     const p = s.player;
     // Fly right for a while.
     for (let i = 0; i < 120; i++) s.step({ ...emptyInput(), dx: 1 }, emptyInput());
@@ -148,87 +152,261 @@ describe('supporter — station keeping', () => {
   });
 });
 
-describe('supporter — deploy and recall', () => {
-  it('recalls on the first press, since the drone starts deployed', () => {
+/**
+ * The drone is permanently deployed and there is no button that changes that.
+ *
+ * This replaced a launch/recall toggle. The toggle read well and measured badly:
+ * drones were dying with a 10th-percentile life of two seconds, so the standing
+ * decision it was meant to pose had already been made for you by the time you
+ * could make it, and the button spent the rest of the match dead.
+ */
+describe('supporter — always deployed', () => {
+  it('is on station from the first tick and stays there', () => {
     const s = sim();
     toFight(s);
     const p = s.player;
-    s.step(press(Btn.Sub), emptyInput());
-    expect(eventsOfType(s, 'droneRecall').length).toBe(1);
-    expect(p.supporter.mode).toBe(DroneMode.Recalling);
-  });
-
-  it('completes the recall into the chassis, then hides and protects it', () => {
-    const s = sim();
-    toFight(s);
-    const p = s.player;
-    s.step(press(Btn.Sub), emptyInput());
-    stepUntil(s, () => p.supporter.mode === DroneMode.Stowed, 200);
-    expect(p.supporter.mode).toBe(DroneMode.Stowed);
-    expect(p.supporter.visible).toBe(false);
-    expect(p.supporter.hittable).toBe(false);
-    // Docked, not abandoned wherever it happened to be.
-    expect(Math.hypot(p.supporter.x - p.x, p.supporter.y - p.y)).toBeLessThan(30);
-  });
-
-  it('deploys again on the next press, and only contributes once on station', () => {
-    const s = sim();
-    toFight(s);
-    const p = s.player;
-    s.step(press(Btn.Sub), emptyInput());
-    stepUntil(s, () => p.supporter.mode === DroneMode.Stowed, 200);
-
-    s.step(press(Btn.Sub), emptyInput());
-    expect(eventsOfType(s, 'droneDeploy').length).toBe(1);
-    expect(p.supporter.mode).toBe(DroneMode.Deploying);
-    // Exposed on the way out, but earning nothing yet.
+    for (let i = 0; i < 300; i++) s.step(press(Btn.Sub), emptyInput());
+    expect(p.supporter.mode).toBe(DroneMode.Active);
     expect(p.supporter.hittable).toBe(true);
-    expect(p.supporter.onStation).toBe(false);
-    expect(p.dronePassive).toBeNull();
-
-    stepUntil(s, () => p.supporter.mode === DroneMode.Active, 200);
     expect(p.dronePassive?.name).toBe('REACTOR LINK');
   });
 
-  it('takes the authored number of ticks to launch', () => {
+  it('never recalls or stows itself while its owner is alive', () => {
     const s = sim();
     toFight(s);
     const p = s.player;
-    s.step(press(Btn.Sub), emptyInput());
-    stepUntil(s, () => p.supporter.mode === DroneMode.Stowed, 200);
-    s.step(press(Btn.Sub), emptyInput());
-    const took = stepUntil(s, () => p.supporter.mode === DroneMode.Active, 200);
-    expect(took).toBeGreaterThanOrEqual(HALCYON.supporter.deployTicks - 3);
-    expect(took).toBeLessThanOrEqual(HALCYON.supporter.deployTicks + 3);
+    const seen = new Set<DroneMode>();
+    for (let i = 0; i < 400; i++) {
+      s.step(press(Btn.Sub), emptyInput());
+      seen.add(p.supporter.mode);
+    }
+    expect(seen.has(DroneMode.Recalling)).toBe(false);
+    expect(seen.has(DroneMode.Stowed)).toBe(false);
   });
 
-  it('repairs while stowed and never while flying', () => {
+  it('turns the sub button into a volley order rather than a dead input', () => {
+    const s = sim();
+    toFight(s);
+    close(s);
+    const p = s.player;
+    // Idle and in range: the press should put it straight into a windup.
+    p.supporter.cancel();
+    p.supporter.cooldown = 0;
+    s.step(press(Btn.Sub), emptyInput());
+    expect(p.supporter.state).not.toBe(0);
+    expect(eventsOfType(s, 'assist').length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * One rebuild per match, then the next kill is final.
+ *
+ * The cap is the whole design. Without a rebuild the drone was gone inside the
+ * opening exchange of a 180-second match and its passive with it; without the
+ * cap, hunting one stops paying and it becomes the invulnerable button an
+ * earlier pass already rejected.
+ */
+describe('supporter — the rebuild', () => {
+  it('retires into a rebuild on the first kill rather than dying outright', () => {
+    const s = sim();
+    toFight(s);
+    const p = s.player;
+    expect(p.supporter.takeHit(9999)).toBe('down');
+    expect(p.supporter.mode).toBe(DroneMode.Rebuilding);
+    expect(p.supporter.destroyed).toBe(false);
+    expect(p.supporter.rebuildsLeft).toBe(0);
+  });
+
+  it('cannot be shot again while it rebuilds, but is still drawn', () => {
+    const s = sim();
+    toFight(s);
+    const p = s.player;
+    p.supporter.takeHit(9999);
+    expect(p.supporter.hittable).toBe(false);
+    expect(p.supporter.visible).toBe(true);
+    expect(p.supporter.takeHit(9999)).toBe('ignored');
+    expect(p.supporter.mode).toBe(DroneMode.Rebuilding);
+  });
+
+  it('contributes nothing at all while it rebuilds', () => {
+    const s = sim();
+    toFight(s);
+    close(s);
+    const p = s.player;
+    p.supporter.takeHit(9999);
+    for (let i = 0; i < 120; i++) s.step(emptyInput(), emptyInput());
+    expect(p.dronePassive).toBeNull();
+    expect(p.supporter.onStation).toBe(false);
+    expect(p.supporter.ready).toBe(false);
+  });
+
+  it('refills its life across the rebuild, so the bar reads as progress', () => {
+    const s = sim();
+    toFight(s);
+    const p = s.player;
+    p.supporter.takeHit(9999);
+    expect(p.supporter.life).toBe(0);
+    for (let i = 0; i < REBUILD_TICKS / 2; i++) s.step(emptyInput(), emptyInput());
+    const half = p.supporter.lifeFraction;
+    expect(half).toBeGreaterThan(0.3);
+    expect(half).toBeLessThan(0.7);
+    expect(p.supporter.rebuildFraction).toBeGreaterThan(0.3);
+  });
+
+  it('relaunches itself at full health, with no button to press', () => {
+    const s = sim();
+    toFight(s);
+    const p = s.player;
+    p.supporter.takeHit(9999);
+    const took = stepUntil(s, () => p.supporter.mode === DroneMode.Active, REBUILD_TICKS + 400);
+    expect(took).toBeGreaterThan(REBUILD_TICKS - 10);
+    expect(p.supporter.life).toBe(HALCYON.supporter.maxLife);
+    expect(p.dronePassive?.name).toBe('REACTOR LINK');
+  });
+
+  it('is destroyed for good the second time', () => {
+    const s = sim();
+    toFight(s);
+    const p = s.player;
+    p.supporter.takeHit(9999);
+    stepUntil(s, () => p.supporter.mode === DroneMode.Active, REBUILD_TICKS + 400);
+
+    expect(p.supporter.takeHit(9999)).toBe('destroyed');
+    expect(p.supporter.destroyed).toBe(true);
+    expect(p.supporter.rebuildsLeft).toBe(0);
+    // And it never comes back, however long the match runs.
+    for (let i = 0; i < REBUILD_TICKS * 2; i++) s.step(emptyInput(), emptyInput());
+    expect(p.supporter.mode).toBe(DroneMode.Destroyed);
+    expect(p.supporter.visible).toBe(false);
+    expect(p.dronePassive).toBeNull();
+  });
+});
+
+/**
+ * The drone flies itself now that nothing can pull it out of trouble.
+ */
+describe('supporter — movement AI', () => {
+  it('keeps formation when there is nothing to react to', () => {
     const s = sim();
     toFight(s);
     separate(s);
     const p = s.player;
-    p.supporter.life = 40;
-
-    // Deployed: no repair.
-    for (let i = 0; i < 60; i++) s.step(emptyInput(), emptyInput());
-    expect(p.supporter.life).toBe(40);
-
-    s.step(press(Btn.Sub), emptyInput());
-    stepUntil(s, () => p.supporter.mode === DroneMode.Stowed, 200);
-    const docked = p.supporter.life;
-    for (let i = 0; i < 100; i++) s.step(emptyInput(), emptyInput());
-    expect(p.supporter.life).toBeGreaterThan(docked);
-    expect(p.supporter.life).toBeLessThanOrEqual(HALCYON.supporter.maxLife);
+    for (let i = 0; i < 200; i++) s.step(emptyInput(), emptyInput());
+    const d = p.def.supporter;
+    const homeX = p.x - p.facing * d.followBack;
+    const homeY = p.y + d.followDown;
+    expect(Math.hypot(p.supporter.x - homeX, p.supporter.y - homeY)).toBeLessThan(8);
   });
 
-  it('cancels a volley in flight when recalled', () => {
+  it('never parks itself inside its owner, however hard it is pushed', () => {
     const s = sim();
     toFight(s);
+    close(s);
     const p = s.player;
-    p.supporter.order(HALCYON.sub);
-    expect(p.supporter.state).not.toBe(0);
-    s.step(press(Btn.Sub), emptyInput());
-    expect(p.supporter.state).toBe(0); // Idle
+    let closest = Infinity;
+    for (let i = 0; i < 600; i++) {
+      s.step({ ...emptyInput(), dx: 1 }, { ...emptyInput(), dx: -1, pressed: 1 << Btn.Main, held: 1 << Btn.Main });
+      if (p.supporter.hittable) {
+        closest = Math.min(closest, Math.hypot(p.supporter.x - p.x, p.supporter.y - p.y));
+      }
+    }
+    // The station is floored at MIN_OWNER_GAP; the spring may undershoot it
+    // briefly while catching up, so this checks the drone is not living there.
+    expect(closest).toBeGreaterThan(20);
+  });
+
+  it('stays leashed to its owner rather than going hunting', () => {
+    const s = sim();
+    toFight(s);
+    close(s);
+    const p = s.player;
+    let furthest = 0;
+    for (let i = 0; i < 600; i++) {
+      s.step(emptyInput(), { ...emptyInput(), pressed: 1 << Btn.Main, held: 1 << Btn.Main });
+      if (p.supporter.hittable) {
+        furthest = Math.max(furthest, Math.hypot(p.supporter.x - p.x, p.supporter.y - p.y));
+      }
+    }
+    // Formation offset plus the leash, plus room for the spring to overshoot.
+    expect(furthest).toBeLessThan(420);
+  });
+
+  /**
+   * Evasion is driven straight through `step`'s threat list rather than through
+   * a real projectile: `ProjectileSpawn` carries a dozen combat fields that have
+   * nothing to do with dodging, and `DroneThreat` is the four the drone actually
+   * reads. Testing the unit against its own interface is what keeps this a test
+   * of the movement AI and not of the projectile pool.
+   */
+  const soloDrone = () => {
+    const owner = { x: 800, y: 600, facing: 1, alive: true, id: 0, team: 0 as Team };
+    const drone = new Supporter(HALCYON.supporter, owner);
+    const noFire = () => {};
+    const settle = (threats: DroneThreat[], ticks: number) => {
+      for (let i = 0; i < ticks; i++) drone.step(owner, null, [], [], noFire, undefined, threats);
+    };
+    return { owner, drone, settle };
+  };
+
+  it('breaks out of the lane of a shot that is closing on it', () => {
+    const { drone, settle } = soloDrone();
+    settle([], 120);
+    const before = drone.y;
+    // Dead ahead of the drone, travelling straight back along its own line.
+    settle(
+      [{ x: drone.x + 120, y: drone.y, vx: -12, vy: 0, team: 1 as Team }],
+      30,
+    );
+    expect(Math.abs(drone.y - before)).toBeGreaterThan(4);
+  });
+
+  it('ignores a shot that has already gone past it', () => {
+    const { drone, settle } = soloDrone();
+    settle([], 120);
+    const before = drone.y;
+    // Same position, but travelling away rather than toward.
+    settle([{ x: drone.x + 120, y: drone.y, vx: 12, vy: 0, team: 1 as Team }], 30);
+    expect(Math.abs(drone.y - before)).toBeLessThan(2);
+  });
+
+  it("ignores its own side's fire", () => {
+    const { drone, settle } = soloDrone();
+    settle([], 120);
+    const before = drone.y;
+    settle([{ x: drone.x + 120, y: drone.y, vx: -12, vy: 0, team: 0 as Team }], 30);
+    expect(Math.abs(drone.y - before)).toBeLessThan(2);
+  });
+
+  it('ignores a shot too far away to matter', () => {
+    const { drone, settle } = soloDrone();
+    settle([], 120);
+    const before = drone.y;
+    settle([{ x: drone.x + 900, y: drone.y, vx: -12, vy: 0, team: 1 as Team }], 30);
+    expect(Math.abs(drone.y - before)).toBeLessThan(2);
+  });
+
+  it('returns to formation once the threat is gone', () => {
+    const { owner, drone, settle } = soloDrone();
+    settle([{ x: drone.x + 120, y: drone.y, vx: -12, vy: 0, team: 1 as Team }], 40);
+    settle([], 240);
+    const d = HALCYON.supporter;
+    const homeX = owner.x - owner.facing * d.followBack;
+    const homeY = owner.y + d.followDown;
+    expect(Math.hypot(drone.x - homeX, drone.y - homeY)).toBeLessThan(8);
+  });
+
+  it('is still deterministic with the evasion running', () => {
+    const runOnce = () => {
+      const s = sim();
+      toFight(s);
+      close(s);
+      for (let i = 0; i < 400; i++) {
+        const m = 1 << Btn.Main;
+        s.step({ ...emptyInput(), dx: 1, pressed: m, held: m }, { ...emptyInput(), dx: -1, pressed: m, held: m });
+      }
+      return [s.player.supporter.x, s.player.supporter.y, s.enemy.supporter.x, s.enemy.supporter.y];
+    };
+    expect(runOnce()).toEqual(runOnce());
   });
 });
 
@@ -246,11 +424,17 @@ describe('supporter — hit points and destruction', () => {
     expect(sup.life).toBeCloseTo(HALCYON.supporter.maxLife - 50 * HALCYON.supporter.defenceMul, 6);
   });
 
-  it('is destroyed when its hit points empty, and stays destroyed', () => {
+  it('is destroyed for good once its one rebuild is spent', () => {
     const s = sim();
     toFight(s);
     const sup = s.player.supporter;
-    expect(sup.takeHit(HALCYON.supporter.maxLife * 2)).toBe('down');
+    // Burn the rebuild first, so this is the kill that sticks.
+    sup.takeHit(HALCYON.supporter.maxLife * 2);
+    sup.rebuildsLeft = 0;
+    sup.mode = DroneMode.Active;
+    sup.life = HALCYON.supporter.maxLife;
+
+    expect(sup.takeHit(HALCYON.supporter.maxLife * 2)).toBe('destroyed');
     expect(sup.destroyed).toBe(true);
     expect(sup.hittable).toBe(false);
     expect(sup.visible).toBe(false);
@@ -262,13 +446,16 @@ describe('supporter — hit points and destruction', () => {
     expect(s.player.dronePassive).toBeNull();
   });
 
-  it('refuses the assist button once destroyed, audibly', () => {
+  it('refuses a volley order from a drone that is not flying, audibly', () => {
     const s = sim();
     toFight(s);
+    // Down and rebuilding: the button still exists, but there is nothing to
+    // order. A dead press that makes no sound is indistinguishable from a
+    // dropped input, so it has to answer with the refusal cue.
     s.player.supporter.takeHit(9999);
     s.step(press(Btn.Sub), emptyInput());
     expect(eventsOfType(s, 'assistDenied').length).toBe(1);
-    expect(eventsOfType(s, 'droneDeploy').length).toBe(0);
+    expect(eventsOfType(s, 'assist').length).toBe(0);
   });
 
   it('can be shot down by the opponent, and announces it once', () => {
@@ -305,17 +492,21 @@ describe('supporter — hit points and destruction', () => {
       downs.push(...eventsOfType(s, 'droneDown').map((e) => e.ownerId));
     }
     expect(downs).toEqual([s.enemy.id]);
-    expect(sup.destroyed).toBe(true);
+    // First kill retires it into a rebuild rather than ending it.
+    expect(sup.mode).toBe(DroneMode.Rebuilding);
+    expect(sup.destroyed).toBe(false);
   });
 
-  it('cannot be hit while it is stowed inside the chassis', () => {
+  it('cannot be hit again while it is rebuilding', () => {
     const s = sim();
     toFight(s);
     separate(s);
     const p = s.player;
-    s.step(press(Btn.Sub), emptyInput());
-    stepUntil(s, () => p.supporter.mode === DroneMode.Stowed, 200);
+    p.supporter.takeHit(9999);
+    // Part-way through the rebuild, so there is something left to lose.
+    for (let i = 0; i < REBUILD_TICKS / 2; i++) s.step(emptyInput(), emptyInput());
     const before = p.supporter.life;
+    expect(before).toBeGreaterThan(0);
 
     s.projectiles.spawn({
       x: p.supporter.x - 4,
@@ -337,7 +528,10 @@ describe('supporter — hit points and destruction', () => {
       pierceCount: 0,
     });
     for (let i = 0; i < 20; i++) s.step(emptyInput(), emptyInput());
-    expect(p.supporter.life).toBe(before);
+    // Not merely undamaged: the rebuild carried on through the hit, so life has
+    // gone *up*. Shooting a wreck must not delay or deny the repair.
+    expect(p.supporter.life).toBeGreaterThan(before);
+    expect(p.supporter.mode).toBe(DroneMode.Rebuilding);
   });
 });
 
@@ -384,7 +578,10 @@ describe('supporter — auto-fire', () => {
     const dDrone = Math.hypot(spawned!.x - sup.x, spawned!.y - sup.y);
     const dChassis = Math.hypot(spawned!.x - p.x, spawned!.y - p.y);
     expect(dDrone).toBeLessThan(p.def.supporter.muzzleForward + 8);
-    expect(dChassis).toBeGreaterThan(40);
+    // Comfortably off the chassis. The bound is not tighter because the movement
+    // AI leans the drone toward its firing line when a target is in range, which
+    // brings it closer to its owner than the bare formation offset would.
+    expect(dChassis).toBeGreaterThan(30);
   });
 
   it('keeps the owner and team on the assist projectile', () => {
@@ -450,13 +647,12 @@ describe('supporter — auto-fire', () => {
     expect(p.subCharges).toBe(HALCYON.subCharges);
   });
 
-  it('holds fire while stowed, even in range', () => {
+  it('holds fire while rebuilding, even in range', () => {
     const s = sim();
     toFight(s);
     close(s);
     const p = s.player;
-    s.step(press(Btn.Sub), emptyInput());
-    stepUntil(s, () => p.supporter.mode === DroneMode.Stowed, 200);
+    p.supporter.takeHit(9999);
     const before = p.subCharges;
     for (let i = 0; i < 200; i++) s.step(emptyInput(), emptyInput());
     expect(p.subCharges).toBeGreaterThanOrEqual(before);
@@ -510,9 +706,10 @@ describe('supporter — passives', () => {
       s.player.energy = 0;
       separate(s);
     }
-    // Stow the second one's drone entirely.
-    without.step(press(Btn.Sub), emptyInput());
-    stepUntil(without, () => without.player.supporter.mode === DroneMode.Stowed, 200);
+    // Take the second one's drone out of the fight entirely. There is no recall
+    // any more, so the only way to lose the passive is to lose the drone —
+    // which is rather the point of the redesign.
+    without.player.supporter.takeHit(9999);
     without.player.energy = 0;
 
     for (let i = 0; i < 60; i++) {
@@ -565,10 +762,10 @@ describe('supporter — match states', () => {
     expect(s.projectiles.activeCount).toBe(0);
   });
 
-  it('cannot be deployed or recalled during the intro', () => {
+  it('accepts no volley order during the intro', () => {
     const s = sim({ introTicks: 60 });
     s.step(press(Btn.Sub), press(Btn.Sub));
-    expect(eventsOfType(s, 'droneRecall').length).toBe(0);
+    expect(eventsOfType(s, 'assist').length).toBe(0);
     expect(s.player.supporter.mode).toBe(DroneMode.Active);
   });
 
@@ -627,6 +824,12 @@ describe('supporter — match states', () => {
     const s = sim({ dummy: true });
     toFight(s);
     const e = s.enemy;
+    // Spend the rebuild, then kill it for good, so this is a genuinely
+    // destroyed drone rather than one that was going to come back anyway.
+    e.supporter.takeHit(9999);
+    e.supporter.rebuildsLeft = 0;
+    e.supporter.mode = DroneMode.Active;
+    e.supporter.life = NOCTURNE.supporter.maxLife;
     e.supporter.takeHit(9999);
     expect(e.supporter.destroyed).toBe(true);
     e.life = 0;
@@ -657,29 +860,35 @@ describe('supporter — input path', () => {
   it('drives the drone from an ordinary InputFrame, with no private path', () => {
     const s = sim();
     toFight(s);
+    close(s);
+    s.player.supporter.cancel();
+    s.player.supporter.cooldown = 0;
     // Exactly what InputManager builds when the bound key goes down.
     const frame: InputFrame = { ...emptyInput(), held: 1 << Btn.Sub, pressed: 1 << Btn.Sub };
     s.step(frame, emptyInput());
-    expect(eventsOfType(s, 'droneRecall').length).toBe(1);
+    // Manual only: the *enemy's* drone auto-fires on the same tick, and counting
+    // that would pass whether or not the button did anything.
+    expect(eventsOfType(s, 'assist').filter((e) => !e.auto && e.ownerId === s.player.id)).toHaveLength(1);
   });
 
-  it('toggles on the pressed edge only, never while the button is held', () => {
+  it('orders on the pressed edge only, never while the button is held', () => {
     const s = sim();
     toFight(s);
+    close(s);
+    s.player.supporter.cancel();
+    s.player.supporter.cooldown = 0;
     const held: InputFrame = { ...emptyInput(), held: 1 << Btn.Sub, pressed: 0 };
 
-    let toggles = 0;
     s.step({ ...held, pressed: 1 << Btn.Sub }, emptyInput());
-    toggles += eventsOfType(s, 'droneRecall').length + eventsOfType(s, 'droneDeploy').length;
-    expect(toggles).toBe(1);
+    let manual = eventsOfType(s, 'assist').filter((e) => !e.auto).length;
+    expect(manual).toBe(1);
 
-    // Keep holding for well past a full deploy and recall cycle, so a held
-    // button has every opportunity to sneak a second toggle through.
+    // Keep holding well past a full windup / recover / cooldown cycle, so a
+    // held button has every opportunity to sneak a second order through.
     for (let i = 0; i < 400; i++) {
       s.step(held, emptyInput());
-      toggles += eventsOfType(s, 'droneRecall').length + eventsOfType(s, 'droneDeploy').length;
+      manual += eventsOfType(s, 'assist').filter((e) => !e.auto).length;
     }
-    expect(toggles).toBe(1);
-    expect(s.player.supporter.mode).toBe(DroneMode.Stowed);
+    expect(manual).toBe(1);
   });
 });

@@ -201,6 +201,9 @@ export class MatchSim {
         // shooting on its own either — otherwise the intro would open with a
         // volley nobody asked for.
         this.phase === MatchPhase.Fight ? () => c.requestVolley() : undefined,
+        // The drone dodges for itself now that nothing can recall it. Live
+        // projectiles only — a spawn queued this tick is not yet in the air.
+        this.activeProjectiles(),
       );
       // Only an order placed *inside* the drone's own step can be a self-started
       // one: a salvo motion has already moved it out of Idle earlier this tick.
