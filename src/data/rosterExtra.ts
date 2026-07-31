@@ -185,6 +185,7 @@ const BARRIER: BarrierDef = {
   breakStun: 50,
   guardScale: 0.20,
   meleeGuardScale: 0.50,
+  pierceGuardScale: 0.50,
   radius: 46,
 };
 
@@ -996,7 +997,7 @@ export const OBELISK: MechDef = {
     guardDrain: 0.42,
     satOnAbsorb: 42,
   },
-  barrier: { ...BARRIER, cost: 20, invulnTicks: 44, shieldBonusTicks: 34, guardScale: 0.14, meleeGuardScale: 0.38, radius: 54, breakStun: 44 },
+  barrier: { ...BARRIER, cost: 20, invulnTicks: 44, shieldBonusTicks: 34, guardScale: 0.14, meleeGuardScale: 0.38, pierceGuardScale: 0.38, radius: 54, breakStun: 44 },
   defence: { mul: 0.86, groundedMul: 0.76 },
   rig: makeRig({
     scale: 1.18,

@@ -42,11 +42,11 @@ results, 8 mechs, full audio, real art, pilot dialogue.
 
 ## 3. Current status — verified
 
-* **370 tests pass** (18 files), typecheck clean, production build clean.
+* **381 tests pass** (18 files), typecheck clean, production build clean.
 * Verified in-game at 61 fps: title → menu → select → battle → results →
   rematch → quit to title, with no console errors. Projectiles, muzzle flashes,
   impacts, explosions, barriers, saturation cutscenes and banter all render.
-* Last committed at `922b4de`; the projectile work is uncommitted on top.
+* Working tree clean. Nothing pushed — the repo has no remote.
 * All 71 audio files decode through the game's own `loadSoundBank`: 40 cues,
   zero failures.
 
@@ -76,6 +76,8 @@ a649f46  Give saturation its own button, and let it be forced early
 e1059bb  Make a burnt-out mech look burnt out, and finish the cutscene panel
 214b1fc  Trim and level-match the sound set
 0c1d869  Make a guard worth holding, and let a burst throw a sword back
+922b4de  Study how the 2005 reference draws its projectiles, and hand the session over
+24057cf  Give every mech its own bullet, beam and fire
 ```
 
 Nothing is pushed. Git identity is unset globally; pass it per command to match
@@ -132,9 +134,42 @@ instead, which the study itself names as the acceptable middle path.
 
 ---
 
+## 4b. The barrier and Shield saturation — DONE
+
+Came out of reading the barrier system end to end for the user. Four changes,
+`docs/DECISIONS.md` D57–D58a:
+
+* **Shield saturation now cuts damage by category** (`SHIELD_TAKEN`): gunfire
+  and status chip 95 % off, a piercing lance 80 %, melee **70 %**. Melee is the
+  porous one deliberately — closing to sword range is the way through a Shield.
+  It *replaces* the guard's scaling rather than stacking, so the figures read as
+  written; a test pins them against the plain guard so a burst can never be
+  worse than simply holding.
+* **A held guard halves a lance** (`pierceGuardScale`). Since D56 gave every
+  lance `Pierce`, and the guard branch excludes `Pierce`, holding guard against
+  any lance in the game was worth exactly nothing. Damage only — a guarded lance
+  still returns `'hit'`, staggers and knocks the guard down.
+* **Shield saturation locks the barrier button out.** Not cosmetic: the burst
+  has **no cooldown anywhere in the game** (`barrierActiveTicks` only locks
+  movement), so the 30-point cost *is* the rate limiter — and `barrierFree`
+  deletes it. Four free taps covered the entire 3.5 s mode in invulnerability.
+  **This is balance, not a bug. Do not "fix" it.**
+* **The rival respects the lock-out.** `shouldBarrier` also gates the AI's
+  attack, so every tick it reached for a barrier it could not have, it skipped
+  its own offence for a shot it never fired.
+
+---
+
 ## 5. Open questions the user still owes an answer on
 
-1. **A forced SHIELD burst is very short.** Shield already drains the meter at
+1. **A forced SHIELD burst is very short** — and D57 has changed the arithmetic
+   behind this question without answering it. Shield now takes 95 % off gunfire
+   and status chip, 80 % off a piercing lance and 70 % off melee, so a second of
+   it is worth far more than it was when this was first raised; the "net loss
+   almost always" conclusion below predates that and should be re-checked before
+   acting on it.
+
+   Shield already drains the meter at
    double rate, so forcing at ~35 % gives ~1 s of burst against a 2 s overheat —
    a net loss almost always, where Shoot and Speed get ~2.4 s. May be the correct
    punishment for gambling with the defensive mode, or the double drain may want

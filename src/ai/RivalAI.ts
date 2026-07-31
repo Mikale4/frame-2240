@@ -137,8 +137,21 @@ export class RivalAI {
     }
 
     // ---- Guard / barrier ---------------------------------------------------
+    //
+    // Both halves are off while Shield saturation is up, because both are
+    // already being done for the rival: the mode holds the guard itself and
+    // locks the burst out by design (see `Combatant.tryStartAction`). That
+    // lock-out is balance, not a bug — a free burst under `barrierFree` is
+    // uncapped invulnerability — so the rival must not spend its turn asking
+    // for one.
+    //
+    // Leaving it live was not merely wasteful. `shouldBarrier` also gates the
+    // attack further down, so every tick the rival reached for a barrier it
+    // could not have, it skipped its own offence for a shot it never fired.
     this.guardTicks--;
+    const canBarrier = !self.shieldActive;
     const shouldBarrier =
+      canBarrier &&
       incoming !== null &&
       incoming.ttc <= this.reactionTicks + 3 &&
       self.barrier >= self.def.barrier.cost &&
@@ -151,6 +164,7 @@ export class RivalAI {
       held.v |= 1 << Btn.Barrier;
       this.guardTicks = 26;
     } else if (
+      canBarrier &&
       this.guardTicks > 0 &&
       self.barrier > self.def.gauges.maxBarrier * 0.25 &&
       incoming !== null

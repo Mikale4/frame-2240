@@ -64,6 +64,55 @@ function guarding(c: Combatant): void {
   if (!c.guarding) throw new Error('guard did not engage');
 }
 
+describe('held guard vs a lance', () => {
+  /** A lance: piercing, but not melee. The one thing a guard used to ignore. */
+  const lance = (over: Partial<ProjectileSpawn> = {}): ProjectileSpawn =>
+    shot({ kind: ProjKind.Beam, barrier: BarrierResponse.Pierce, damage: 200, ...over });
+
+  const taken = (guard: boolean): number => {
+    const c = make();
+    if (guard) guarding(c);
+    c.invuln = 0;
+    const before = c.life;
+    const p = lance();
+    p.x = c.x;
+    p.y = c.y;
+    c.takeHit(p);
+    return before - c.life;
+  };
+
+  it('halves it, where it used to do nothing at all', () => {
+    const open = taken(false);
+    expect(open).toBeGreaterThan(0);
+    expect(1 - taken(true) / open).toBeCloseTo(0.5, 5);
+  });
+
+  it('still lets the lance beat the guard', () => {
+    // A lance is the roster's answer to turtling. Half damage has to stay a
+    // worse deal for the defender than the fifth that gunfire gets, or holding
+    // guard becomes the correct response to everything.
+    for (const m of ROSTER) {
+      expect(m.barrier.pierceGuardScale, `${m.id}`).toBeGreaterThan(m.barrier.guardScale);
+      expect(m.barrier.pierceGuardScale, `${m.id}`).toBeLessThan(1);
+    }
+  });
+
+  it('keeps the lance a real hit rather than a blocked one', () => {
+    // Only the damage was softened. A lance still staggers, still cancels what
+    // you were doing and still knocks the guard down — it does not become a
+    // 'guarded' ping the way gunfire and melee do.
+    const c = make();
+    guarding(c);
+    c.invuln = 0;
+    const p = lance({ hitstun: 20, knockback: 5 });
+    p.x = c.x;
+    p.y = c.y;
+    expect(c.takeHit(p)).toBe('hit');
+    expect(c.hitstun).toBeGreaterThan(0);
+    expect(c.guarding).toBe(false);
+  });
+});
+
 describe('held guard', () => {
   it('cuts ordinary damage by 80%', () => {
     const c = make();

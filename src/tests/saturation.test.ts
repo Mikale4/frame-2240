@@ -4,7 +4,9 @@ import { MatchSim } from '../combat/MatchSim';
 import { HALCYON, NOCTURNE, ROSTER } from '../data/mechs';
 import {
   ActState,
+  BarrierResponse,
   Btn,
+  ProjKind,
   SatMode,
   Team,
   emptyInput,
@@ -12,6 +14,10 @@ import {
   type ProjectileSpawn,
   type SimEvent,
 } from '../combat/types';
+import { Element } from '../combat/Status';
+import { RivalAI } from '../ai/RivalAI';
+import { ProjectilePool } from '../projectiles/Projectile';
+import { Rng } from '../core/Rng';
 
 /**
  * The three saturation modes, after the rework that gave each one a resource it
@@ -285,6 +291,165 @@ describe('saturation — Shield', () => {
     expect(result).toBe('guarded');
     expect(c.life).toBeLessThan(before);
     expect(c.life).toBeGreaterThan(before - 100);
+  });
+
+  /**
+   * What a Shield burst leaves of each kind of damage.
+   *
+   * Measured against the hit taken **raw** — no guard, no burst — so each figure
+   * reads as the total reduction rather than as a modifier on top of whatever
+   * the guard happened to be doing. Melee is the porous one on purpose: closing
+   * to sword range is the intended answer to a pilot sitting in a Shield.
+   */
+  const EXPECTED_REDUCTION: [string, number, Partial<ProjectileSpawn>][] = [
+    ['gunfire', 0.95, {}],
+    ['melee', 0.7, { kind: ProjKind.Melee, barrier: BarrierResponse.Pierce }],
+    ['piercing lance', 0.8, { kind: ProjKind.Beam, barrier: BarrierResponse.Pierce }],
+  ];
+
+  it('cuts each kind of damage by its own amount', () => {
+    const took = (shielded: boolean, over: Partial<ProjectileSpawn>): number => {
+      const c = make();
+      if (shielded) activate(c, SatMode.Shield);
+      c.invuln = 0;
+      const before = c.life;
+      c.takeHit({
+        x: c.x, y: c.y, vx: 6, vy: 0, damage: 200, guardDamage: 20, life: 4, radius: 8,
+        ownerId: 9, team: Team.Enemy, kind: ProjKind.Bullet, barrier: BarrierResponse.Absorb,
+        hitstop: 0, hitstun: 0, knockback: 0, homing: 0, pierceCount: 0, ...over,
+      });
+      return before - c.life;
+    };
+
+    for (const [label, reduction, over] of EXPECTED_REDUCTION) {
+      const raw = took(false, over);
+      const shielded = took(true, over);
+      expect(raw, `${label} should hurt with no burst up`).toBeGreaterThan(0);
+      expect(1 - shielded / raw, `${label} reduction`).toBeCloseTo(reduction, 5);
+    }
+  });
+
+  it('cuts a lingering burn by 95%', () => {
+    // Status chip is the one damage source a guard has never done anything
+    // about, so it needs its own path and its own check.
+    const measure = (shielded: boolean): number => {
+      const c = make();
+      if (shielded) activate(c, SatMode.Shield);
+      c.status.apply(Element.Incendiary);
+      const before = c.life;
+      const k = ctx();
+      run(c, emptyInput(), 40, null, k);
+      return before - c.life;
+    };
+    const raw = measure(false);
+    expect(raw).toBeGreaterThan(0);
+    expect(1 - measure(true) / raw).toBeCloseTo(0.95, 5);
+  });
+
+  it('leaves melee the way through a Shield', () => {
+    // The ordering is the design, and it is what stops the mode being a wall.
+    const [, gun] = EXPECTED_REDUCTION[0];
+    const [, melee] = EXPECTED_REDUCTION[1];
+    const [, lance] = EXPECTED_REDUCTION[2];
+    expect(melee).toBeLessThan(lance);
+    expect(lance).toBeLessThan(gun);
+  });
+
+  it('beats a plain guard on every kind of damage', () => {
+    // Shield replaces the guard's scaling rather than stacking with it, so it
+    // would be possible to make the burst *worse* than simply holding guard.
+    const b = HALCYON.barrier;
+    expect(1 - 0.05, 'gunfire vs guardScale').toBeGreaterThan(1 - b.guardScale);
+    expect(1 - 0.3, 'melee vs meleeGuardScale').toBeGreaterThan(1 - b.meleeGuardScale);
+  });
+
+  it('takes the barrier button away for the length of the burst', () => {
+    // Saturation is already holding the guard, so the button has nothing left to
+    // do — and leaving it live was an exploit, not an option: `barrierFree` makes
+    // a burst free and Shield pins the gauge at full, so the affordability check
+    // always passed and the button bought unlimited invulnerability.
+    const c = make();
+    activate(c, SatMode.Shield);
+    const k = ctx();
+    c.invuln = 0;
+    for (let i = 0; i < 12; i++) {
+      c.step(press(Btn.Barrier), null, W, H, k.spawns, k.events);
+      c.invuln = 0; // strip the activation i-frames so a burst would be visible
+    }
+    expect(k.events.some((e) => e.t === 'barrier'), 'a burst got through').toBe(false);
+    // The guard is up regardless, which is the point — nothing was lost.
+    expect(c.guarding).toBe(true);
+  });
+
+  it('stops the rival reaching for a barrier it cannot have', () => {
+    // The lock-out is balance, so the AI has to know about it rather than
+    // hammering a dead button. It is not only wasted input: `shouldBarrier`
+    // gates the AI's attack too, so every such tick cost the rival its offence.
+    const threatened = (shield: boolean): { barrier: number; ticks: number } => {
+      const self = new Combatant({ id: 1, team: Team.Enemy, def: HALCYON, x: 900, y: 600, facing: -1 });
+      const foe = new Combatant({ id: 0, team: Team.Player, def: HALCYON, x: 400, y: 600, facing: 1 });
+      if (shield) activate(self, SatMode.Shield);
+      const ai = new RivalAI({ level: 10 }, new Rng(4242));
+
+      // A shot closing on `self` inside the reaction window. At level 10 the
+      // skill clamps to 1, so `reactionTicks` is 4 and the burst wants
+      // `ttc <= 7`; 40px at 10px/tick lands at 4.
+      const pool = new ProjectilePool(4);
+      let barrier = 0;
+      const ticks = 240;
+      for (let i = 0; i < ticks; i++) {
+        pool.clear();
+        pool.spawn({
+          x: self.x - 40, y: self.y, vx: 10, vy: 0, damage: 40, guardDamage: 10,
+          life: 30, radius: 6, ownerId: foe.id, team: Team.Player,
+          kind: ProjKind.Bullet, barrier: BarrierResponse.Absorb,
+          hitstop: 0, hitstun: 0, knockback: 0, homing: 0, pierceCount: 0,
+        });
+        self.invuln = 0; // the AI declines to burst while already invulnerable
+        const f = ai.think(self, foe, pool.items, W, H);
+        if ((f.held | f.pressed) & (1 << Btn.Barrier)) barrier++;
+      }
+      return { barrier, ticks };
+    };
+
+    // Control: without the burst up, this scenario definitely provokes a guard.
+    expect(threatened(false).barrier, 'the scenario never provoked a barrier').toBeGreaterThan(0);
+    // And with it up, never once.
+    expect(threatened(true).barrier, 'rival pressed barrier during Shield').toBe(0);
+  });
+
+  it('hands the barrier button back when the burst ends', () => {
+    const c = make();
+    activate(c, SatMode.Shield);
+    const k = ctx();
+    run(c, emptyInput(), 400, null, k);
+    expect(c.satActive).toBe(false);
+    c.barrier = c.def.gauges.maxBarrier;
+    const before = k.events.length;
+    c.step(press(Btn.Barrier), null, W, H, k.spawns, k.events);
+    expect(k.events.slice(before).some((e) => e.t === 'barrier')).toBe(true);
+  });
+
+  it('goes back to normal once the burst ends', () => {
+    const c = make();
+    activate(c, SatMode.Shield);
+    expect(c.shieldActive).toBe(true);
+    const k = ctx();
+    run(c, emptyInput(), 400, null, k);
+    expect(c.satActive).toBe(false);
+    expect(c.shieldActive).toBe(false);
+
+    // A guarded shot is back to the plain 80% the guard alone provides.
+    c.guarding = true;
+    c.invuln = 0;
+    const before = c.life;
+    c.takeHit({
+      x: c.x, y: c.y, vx: 6, vy: 0, damage: 200, guardDamage: 0, life: 4, radius: 8,
+      ownerId: 9, team: Team.Enemy, kind: ProjKind.Bullet, barrier: BarrierResponse.Absorb,
+      hitstop: 0, hitstun: 0, knockback: 0, homing: 0, pierceCount: 0,
+    });
+    const taken = before - c.life;
+    expect(taken).toBeCloseTo(200 * c.incomingScale * HALCYON.barrier.guardScale, 5);
   });
 
   it('still erases shots in the bubble, which is the other half of the mode', () => {

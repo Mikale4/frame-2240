@@ -190,6 +190,7 @@ const BASE_BARRIER: BarrierDef = {
   breakStun: 50,
   guardScale: 0.20,
   meleeGuardScale: 0.50,
+  pierceGuardScale: 0.50,
   radius: 46,
 };
 

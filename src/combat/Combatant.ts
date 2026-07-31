@@ -30,6 +30,37 @@ const MELEE_TRACK_RATE = 9 * DEG;
 const SAT_SPEED_BONUS_HITS = 3;
 
 /**
+ * Fraction of a hit that lands while a Shield burst is up, by how it arrives.
+ *
+ * These are **totals against raw damage**, not modifiers stacked onto the guard:
+ * while Shield is up this table *replaces* `guardScale` / `meleeGuardScale`
+ * rather than multiplying with them. Stating the end result directly is the only
+ * way these stay legible — the four categories reach the hull down three
+ * different branches of `takeHit` plus the status tick, each already carrying
+ * its own scaling, so one figure applied "somewhere in the middle" of all that
+ * lands as four different numbers nobody chose.
+ *
+ * The shape of the table is the design: **melee is the way through a Shield.**
+ * A sword gets 30 % of its damage in where a rifle gets 5 %, so the answer to a
+ * pilot sitting inside a defensive burst is to close the distance, with a lance
+ * in between. Shield is not a wall, it is a wall with a known door.
+ *
+ * Every one is still a large improvement on the same hit without the burst: a
+ * plain guard stops 80 % of gunfire and only 50 % of melee, and stops nothing
+ * whatsoever from a piercing lance or a burn.
+ */
+const SHIELD_TAKEN = {
+  /** Ordinary shots — 95 % off. */
+  gunfire: 0.05,
+  /** Swords, claws, pile drivers — 70 % off. The intended way in. */
+  melee: 0.3,
+  /** Lances, which a guard cannot touch at all — 80 % off. */
+  pierce: 0.2,
+  /** Burn, acid and the rest of the status damage — 95 % off. */
+  chip: 0.05,
+} as const;
+
+/**
  * Ticks the pilot is helpless after a saturation burst burns out.
  *
  * Saturation used to end with no downside at all, so the only question was when
@@ -573,9 +604,26 @@ export class Combatant implements FlightState {
    * Multiplier on damage this machine takes: its chassis defence, plus its
    * drone's passive. The grounded bracing bonus is applied at the hit itself,
    * since chip damage does not get it.
+   *
+   * Shield saturation is deliberately *not* folded in here. It was, briefly, as
+   * a single 0.1 — but the four categories it has to cover want four different
+   * end results, and this multiplier cannot tell them apart. `SHIELD_TAKEN` does
+   * it at the point each one resolves instead.
    */
   get incomingScale(): number {
     return this.def.defence.mul * (this.dronePassive?.defenceMul ?? 1);
+  }
+
+  /**
+   * Fraction of a hit that gets through a Shield burst, by category.
+   *
+   * Melee is tested before pierce because a melee attack is *also* marked
+   * `Pierce` — it has to be, so a barrier bubble cannot erase a sword — and
+   * without the ordering every swing would be scaled as a lance.
+   */
+  private shieldTaken(isMelee: boolean, piercing: boolean): number {
+    if (isMelee) return SHIELD_TAKEN.melee;
+    return piercing ? SHIELD_TAKEN.pierce : SHIELD_TAKEN.gunfire;
   }
 
   /** World-space muzzle position for an attack. */
@@ -723,7 +771,10 @@ export class Combatant implements FlightState {
       // Chip goes through the same defence multiplier as everything else, but
       // deliberately cannot land the killing blow: being finished by a lingering
       // burn seconds after the shooter disengaged reads as a bug, not a loss.
-      this.life = Math.max(1, this.life - chip * this.incomingScale);
+      // A Shield burst smothers it, same as it smothers gunfire — a burn is the
+      // one damage source a guard could never do anything about.
+      const shieldChip = this.shieldActive ? SHIELD_TAKEN.chip : 1;
+      this.life = Math.max(1, this.life - chip * this.incomingScale * shieldChip);
     }
     if (st?.energyDrain) this.energy = Math.max(0, this.energy - st.energyDrain);
 
@@ -862,6 +913,7 @@ export class Combatant implements FlightState {
     // escape hatch would refund it.
     if (
       this.satBurnout <= 0 &&
+      !this.shieldActive &&
       isPressed(input, Btn.Barrier) &&
       this.barrier >= this.def.barrier.cost + this.def.barrier.cancelPenalty
     ) {
@@ -931,7 +983,13 @@ export class Combatant implements FlightState {
     }
 
     // Barrier burst.
-    if (isPressed(input, Btn.Barrier) && this.barrier >= d.barrier.cost) {
+    //
+    // `!this.shieldActive` is BALANCE, NOT A BUG. The barrier button is meant to
+    // be inert for the whole of a Shield burst; if you are here because pressing
+    // it "does nothing", that is the mechanic working. See the note on the guard
+    // stance below for the arithmetic, and D58. Do not remove it without
+    // re-reading both — `saturation.test.ts` fails loudly if you do.
+    if (!this.shieldActive && isPressed(input, Btn.Barrier) && this.barrier >= d.barrier.cost) {
       this.startBarrier(this.guarding, events);
       return;
     }
@@ -939,6 +997,14 @@ export class Combatant implements FlightState {
     // Holding barrier without a burst is a guard stance. Shield saturation keeps
     // it up for free and, crucially, does not claim the action state — that is
     // what lets you keep shooting and swinging from behind it.
+    //
+    // While the burst is up the button is inert: saturation is already holding
+    // the guard, so there is nothing left for it to do, and leaving it live was
+    // an exploit rather than an option. `barrierFree` makes a burst cost zero
+    // and Shield tops the gauge to full and never lets it fall, so
+    // `barrier >= cost` always passed — a pilot could mash the button for
+    // back-to-back 60-tick invulnerability windows across the whole burst, which
+    // is strictly better than the 5–30 % scaling the mode is balanced around.
     if (this.shieldActive) {
       this.guarding = true;
     } else {
@@ -1740,7 +1806,15 @@ export class Combatant implements FlightState {
     if (this.guarding && (!piercing || isMelee)) {
       const b = this.def.barrier;
       if (isMelee) this.meleeHitsTaken++;
-      this.life -= dmg * (isMelee ? b.meleeGuardScale : b.guardScale);
+      // A Shield burst supersedes the guard's own scaling rather than stacking
+      // with it, so the figures in `SHIELD_TAKEN` are the whole story.
+      this.life -=
+        dmg *
+        (this.shieldActive
+          ? this.shieldTaken(isMelee, piercing)
+          : isMelee
+            ? b.meleeGuardScale
+            : b.guardScale);
       if (!this.barrierFree) this.barrier = Math.max(0, this.barrier - p.guardDamage * 0.5);
       this.barrierRegenTimer = this.def.gauges.barrierRegenDelay;
       this.hitstop = Math.max(this.hitstop, Math.floor(p.hitstop * 0.6));
@@ -1757,16 +1831,27 @@ export class Combatant implements FlightState {
     }
 
     if (isMelee) this.meleeHitsTaken++;
-    this.life = Math.max(0, this.life - dmg);
+
+    // The unguarded route — and the only one a piercing lance can take, since
+    // the branch above excludes `Pierce`. Reaching here with `guarding` true is
+    // therefore exactly one case: a lance met by a held guard.
+    let scale = 1;
+    if (this.shieldActive) scale = this.shieldTaken(isMelee, piercing);
+    else if (this.guarding) scale = this.def.barrier.pierceGuardScale;
+    const landed = dmg * scale;
+    this.life = Math.max(0, this.life - landed);
     this.hitstop = Math.max(this.hitstop, p.hitstop);
     this.hitstun = Math.max(this.hitstun, p.hitstun);
     // A brief window after every hit, so overlapping multi-hit sources cannot
     // chain-lock a mech with no chance to respond.
     this.invuln = Math.max(this.invuln, this.def.gauges.hitInvuln);
     // Being hit builds the overdrive meter: a losing pilot fights back toward it.
+    // Off what actually landed, not what was thrown — otherwise a pilot inside a
+    // Shield burst would charge their next one at full rate off damage they did
+    // not take, which is a loop that feeds itself. Identical outside a burst.
     this.sat = Math.min(
       this.def.gauges.maxSaturation,
-      this.sat + dmg * this.def.gauges.satOnDamage,
+      this.sat + landed * this.def.gauges.satOnDamage,
     );
     this.attack = null;
     this.coAttack = null;

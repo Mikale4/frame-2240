@@ -1154,3 +1154,122 @@ NOCTURNE, against 153–241 for the six lances that already pierce. Both remain 
 invulnerable target still returns `ignored`; the shot is merely denied to them as
 saturation charge. It skips the held guard's damage reduction. Those are easy to
 confuse and the distinction is the whole reason the change is small.
+
+### D57 — Shield saturation cuts each kind of damage by its own amount
+
+**Decision.** While a Shield burst is up, `SHIELD_TAKEN` sets what gets through:
+
+| Incoming | Plain guard | Shield burst |
+| --- | --- | --- |
+| Gunfire | 80 % off | **95 % off** |
+| Melee | 50 % off | **70 % off** |
+| Piercing lance | nothing | **80 % off** |
+| Status chip | nothing | **95 % off** |
+
+**Why a table and not one multiplier.** It was one multiplier first — a flat
+`0.1` folded into `incomingScale`, which is elegant precisely because every
+damage path already reads it. That is also why it could not work: the four
+categories resolve down three different branches of `takeHit` plus the status
+tick, each already carrying its own scaling, so a single figure applied in the
+middle of all that emerges as four different end results (98 / 95 / 90 / 90 %)
+rather than four chosen ones. The table states the totals directly.
+
+**It replaces the guard's scaling rather than stacking with it.** `guardScale`
+and `meleeGuardScale` are skipped entirely while the burst is up. That is what
+lets the numbers above be read as written, and it is also the risk: replacing
+rather than stacking makes it possible to author a burst that is *worse* than
+simply holding guard. A test pins both against the plain guard figures.
+
+**Melee is the way in, and that is the design.** A sword lands 30 % of its
+damage where a rifle lands 5 %. The mode is not a wall, it is a wall with a
+known door — the answer to a pilot sitting inside a Shield burst is to close the
+distance, with a lance as the middle option. Before this change the ordering was
+accidentally inverted: the bubble sweep erased ordinary shots outright but let
+`Pierce` through untouched, so a lance was the *best* thing to throw at a
+defensive burst and gunfire the worst.
+
+**Saturation gained from being hit is now taken off what landed, not what was
+thrown.** Otherwise a pilot inside a burst charges the next one at full rate off
+damage they did not take, which is a loop that feeds itself. Identical outside a
+burst, where the two are the same number.
+
+**It applies to both pilots,** so versus and AI-vs-AI stay symmetric and the
+simulation never needs to know which combatant is human.
+
+**Cost.** Shield already drains the meter at double rate, so this is a short,
+expensive window rather than a standing defence.
+
+### D58 — A held guard halves a lance, and Shield saturation takes the button
+
+**Two changes to the barrier, both closing holes the audit in the last session
+turned up.**
+
+**A held guard now scales piercing damage** by `pierceGuardScale`, 0.50 (OBELISK
+0.38). Since D56 gave every lance on the roster `Pierce`, and the guard branch in
+`takeHit` excludes `Pierce`, holding guard against any lance in the game was
+worth *exactly nothing* — the shot arrived at full strength and the gauge you
+were spending to hold the stance bought you not one point. This is the same
+problem `meleeGuardScale` was added to solve, one weapon class later.
+
+A lance still beats a guard: half is a far worse deal for the defender than the
+fifth that gunfire gets, so the lance remains the designated answer to turtling.
+Holding guard is now a decision instead of a no-op.
+
+**Only the damage was softened.** A guarded lance still returns `'hit'`, not
+`'guarded'` — it staggers, cancels what you were doing and knocks the guard
+down, and it does not drain the barrier gauge or risk a guard break. Routing it
+through the guard branch would have handed it melee's reduced hitstop and
+knockback too, which is a much larger change than was asked for.
+
+**Shield saturation now locks the barrier button out.** Saturation already holds
+the guard for the whole burst, so the button has nothing left to do — and
+leaving it live was an exploit rather than a redundancy. `barrierFree` makes a
+burst cost zero, and Shield tops the gauge to full and never lets it fall, so
+`barrier >= cost` always passed: a pilot could mash the button for back-to-back
+60-tick invulnerability windows across the entire burst. That is strictly better
+than the 5–30 % scaling in D57 and would have made the tuning there irrelevant.
+
+The lock-out covers the hitstun escape as well. It costs the burst its melee
+repel, which suits the shape of D57 — melee is meant to be the way through a
+Shield, and being able to throw the first sword back would have undone that.
+
+### D58a — The Shield lock-out is balance, and the rival respects it
+
+**Status: settled. Do not "fix" this.** The barrier button doing nothing during a
+Shield burst is the mechanic working. Anyone arriving at that code from a bug
+report should read this entry and `saturation.test.ts` before changing it.
+
+**Why it cannot be costed instead of blocked.** The burst has **no cooldown
+anywhere in the game** — `barrierActiveTicks` is set on a burst and read in
+exactly one place, the movement lock in `stepMotion`. Nothing gates a second
+burst. The 30-point barrier cost *is* the rate limiter, which is why the mechanic
+is self-limiting everywhere else: 100 gauge buys three bursts and then the
+45-tick regen delay bites.
+
+`barrierFree` therefore does not make bursts cheaper during Shield. It deletes
+the only rate limit they have. And because `startBarrier` does
+`invuln = Math.max(invuln, guardTicks)`, each press *refreshes* the window rather
+than queueing behind it, so no timing is required at all — mashing keeps immunity
+from ever lapsing.
+
+The arithmetic, with `shieldBonusTicks` folded in:
+
+| | Immunity per press | Shield burst | Presses to cover it |
+| --- | --- | --- | --- |
+| HALCYON | 36 + 24 = 60 ticks | 210 ticks | **3.5** |
+| OBELISK | 44 + 34 = 78 ticks | 210 ticks | **2.7** |
+
+Four free taps and the entire 3.5-second mode is spent invulnerable, for an
+11 % movement-lock tax. That is not a strong option, it is a mode with no
+failure state — and it would make D57's 5–30 % scaling irrelevant.
+
+**Where the skill went.** Nowhere. Outside a Shield burst the tap keeps its full
+role: timed total immunity plus the melee repel, paid for out of a gauge that
+runs dry. Inside one, activation itself still grants 20 i-frames, so *when* you
+spend the meter remains a real decision — you simply get one of them instead of
+an unlimited supply.
+
+**The rival respects it too** (`RivalAI`). Both the burst and the guard-hold are
+gated on `!self.shieldActive`. This was not cosmetic: `shouldBarrier` also gates
+the AI's attack, so every tick the rival reached for a barrier it could not have,
+it skipped its own offence for a shot it never fired.

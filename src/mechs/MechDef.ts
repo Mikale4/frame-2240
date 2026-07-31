@@ -106,6 +106,20 @@ export interface BarrierDef {
    * melee the better tool against a guard without making the guard pointless.
    */
   meleeGuardScale: number;
+  /**
+   * Fraction of *piercing* damage taken through a held guard — the lances.
+   *
+   * Exactly the problem `meleeGuardScale` was introduced to solve, one weapon
+   * class later. Since every lance on the roster pierces, a held guard used to
+   * be worth literally nothing against any of them: the branch that applies
+   * `guardScale` excludes `Pierce`, so the shot arrived at full strength and the
+   * gauge you were spending to hold the guard bought you not a single point.
+   *
+   * A lance still beats a guard — it is the roster's designated answer to
+   * turtling and half damage is a great deal more than gunfire's fifth — but
+   * holding guard is now a decision rather than a no-op.
+   */
+  pierceGuardScale: number;
   radius: number;
 }
 
