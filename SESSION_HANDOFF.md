@@ -206,12 +206,11 @@ Came out of reading the barrier system end to end for the user. Four changes,
 
 ## 6. Other unfinished work
 
-* **Music.** Not started, never in the cue sheet. ElevenLabs `compose_music` is
-  available. The 2005 reference has 16 BGM tracks worth studying for style.
-* **Rotate the ElevenLabs API key.** Generation is finished and the key was
-  pasted into a chat transcript. See `AUDIO_SESSION_CONTEXT.md` §8.
-* **Back up `assets/sprites/pilots/_raw/`** (14 MB, untracked and gitignored).
-  Delivered portrait sources; cannot be regenerated.
+* **Music.** In progress. `docs/MUSIC_STUDY_2005.md` is the research and is
+  done; the headline is that the reference's sixteen tracks are ~30 s seamless
+  **loops** (11.8–48.3 s, median ~25), not songs. Nothing built yet.
+  The ElevenLabs key rotation and the `pilots/_raw` backup are both resolved —
+  the user handled them.
 * **Cues with no trigger**: `footstep`, `melee_ignite`, and the two loop beds
   (`thruster_loop`, `drone_hover`) are loaded and playable but nothing calls them.
 * `melee_claw` still does triple duty for claw, ram shield and pile driver.
