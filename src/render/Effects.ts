@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { TEX } from './Textures';
 import { ProjKind } from '../combat/types';
 import { depthScaleAt } from '../core/Depth';
+import { PROJ_FAMILIES, type ProjFamilyId } from '../projectiles/families';
 
 interface Particle {
   img: Phaser.GameObjects.Image;
@@ -15,6 +16,9 @@ interface Particle {
   scaleTo: number;
   alphaFrom: number;
   fadePow: number;
+  /** Scale signs, so a flipped particle stays flipped as it is re-scaled. */
+  signX: number;
+  signY: number;
   active: boolean;
 }
 
@@ -48,6 +52,8 @@ export class Effects {
         scaleTo: 0,
         alphaFrom: 1,
         fadePow: 1,
+        signX: 1,
+        signY: 1,
         active: false,
       });
     }
@@ -79,6 +85,14 @@ export class Effects {
     scaleYMul?: number;
     fadePow?: number;
     blend?: Phaser.BlendModes;
+    /**
+     * Mirror the sprite at random on each axis.
+     *
+     * Straight from the reference, which sets `facing` and `vfacing` from
+     * `Random < 500` on every secondary effect it spawns. It costs nothing and
+     * it is why a bank of four debris sprites never reads as four sprites.
+     */
+    flip?: boolean;
   }): void {
     const p = this.take();
     if (!p) return;
@@ -96,13 +110,15 @@ export class Effects {
     p.scaleTo = (opts.scaleTo ?? 0) * d;
     p.alphaFrom = opts.alpha ?? 1;
     p.fadePow = opts.fadePow ?? 1;
+    p.signX = opts.flip && Math.random() < 0.5 ? -1 : 1;
+    p.signY = opts.flip && Math.random() < 0.5 ? -1 : 1;
 
     const img = p.img;
     img.setTexture(opts.key);
     img.setPosition(opts.x, opts.y);
     img.setTint(opts.tint);
     img.setRotation(opts.rotation ?? 0);
-    img.setScale(p.scaleFrom, p.scaleFrom * (opts.scaleYMul ?? 1));
+    img.setScale(p.scaleFrom * p.signX, p.scaleFrom * (opts.scaleYMul ?? 1) * p.signY);
     img.setAlpha(p.alphaFrom);
     img.setBlendMode(opts.blend ?? Phaser.BlendModes.ADD);
     img.setVisible(true);
@@ -128,7 +144,7 @@ export class Effects {
       p.img.rotation += p.spin * f;
       const s = p.scaleFrom + (p.scaleTo - p.scaleFrom) * t;
       const ym = (p.img.getData('scaleYMul') as number) ?? 1;
-      p.img.setScale(s, s * ym);
+      p.img.setScale(s * p.signX, s * ym * p.signY);
       p.img.setAlpha(p.alphaFrom * Math.pow(1 - t, p.fadePow));
     }
   }
@@ -221,6 +237,349 @@ export class Effects {
         drag: 0.9,
       });
     }
+  }
+
+  // -------------------------------------------------- family-keyed projectile fx
+  //
+  // `muzzle` and `hit` above key off `ProjKind`, which has five values for
+  // forty-eight weapons: a flame thrower and a railgun are both `Bullet` and lit
+  // up identically. These key off the projectile family instead, so what a shot
+  // is *made of* decides how it leaves the barrel and how it comes apart. The
+  // kind-based pair stays for the hits that have no family behind them — a shot
+  // striking a drone, for one.
+
+  /**
+   * Muzzle flash for a family.
+   *
+   * Sized from the family's own dimensions, so a needle spits a thin hot line
+   * and a mortar coughs. The reference bakes its spawn flash into the front of
+   * the projectile animation as a one-frame additive frame; ours is a separate
+   * emitter, which comes to the same thing on screen and does not require the
+   * flash to travel with the shot.
+   */
+  muzzleFor(x: number, y: number, angle: number, famId: ProjFamilyId, tint: number): void {
+    const f = PROJ_FAMILIES[famId];
+    const long = Math.max(f.length, f.width);
+    // 60px is a mid-sized family, so `size` lands near 1 for most of the bank.
+    const size = long / 60;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    this.emit({
+      key: TEX.glow,
+      x,
+      y,
+      life: 4 + size * 4,
+      scaleFrom: 0.18 * size + 0.1,
+      scaleTo: 0.02,
+      tint,
+      alpha: 0.85,
+      fadePow: 1.3,
+    });
+    // A flare down the barrel, as long and as thin as the shot itself.
+    this.emit({
+      key: TEX.streak,
+      x: x + cos * 12 * size,
+      y: y + sin * 12 * size,
+      life: 3 + size * 4,
+      scaleFrom: 0.26 * size + 0.14,
+      scaleTo: 0.05,
+      tint: 0xffffff,
+      alpha: 0.75,
+      rotation: angle,
+      scaleYMul: Math.max(0.12, f.width / f.length) * 0.6,
+    });
+
+    if (f.burst === 'ember') {
+      // Propellant: a wash of smoke back down the barrel.
+      for (let i = 0; i < 4; i++) {
+        const a = angle + Math.PI + (Math.random() - 0.5) * 1.1;
+        this.emit({
+          key: TEX.glow,
+          x,
+          y,
+          life: 14 + Math.random() * 12,
+          scaleFrom: 0.18 * size,
+          scaleTo: 0.5 * size,
+          tint: f.trailTint || 0xff9a4a,
+          alpha: 0.45,
+          vx: Math.cos(a) * 2.2,
+          vy: Math.sin(a) * 2.2,
+          drag: 0.9,
+          fadePow: 1.5,
+        });
+      }
+      return;
+    }
+
+    if (f.burst === 'arc') {
+      // Electricity earths itself across the muzzle rather than spraying.
+      for (let i = 0; i < 3; i++) {
+        this.emit({
+          key: TEX.streak,
+          x: x + cos * 10,
+          y: y + sin * 10,
+          life: 4 + Math.random() * 4,
+          scaleFrom: 0.4 + Math.random() * 0.4,
+          scaleTo: 0.1,
+          tint: i % 2 ? 0xffffff : tint,
+          alpha: 0.9,
+          rotation: angle + (Math.random() - 0.5) * 2.2,
+          scaleYMul: 0.1,
+          fadePow: 1.7,
+        });
+      }
+      return;
+    }
+
+    const n = f.burst === 'shatter' ? 5 : 3;
+    for (let i = 0; i < n; i++) {
+      const a = angle + (Math.random() - 0.5) * 0.85;
+      const sp = 1.6 + Math.random() * (2 + size * 2);
+      this.emit({
+        key: f.burst === 'shatter' ? TEX.shard : TEX.spark,
+        x,
+        y,
+        life: 8 + Math.random() * 10,
+        scaleFrom: 0.26 + size * 0.1,
+        scaleTo: 0.03,
+        tint,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        drag: 0.9,
+        spin: f.burst === 'shatter' ? (Math.random() - 0.5) * 0.4 : 0,
+        flip: true,
+      });
+    }
+  }
+
+  /**
+   * Impact burst for a family.
+   *
+   * `power` scales the whole thing with the damage dealt, so a grazing
+   * flechette and a breach lance do not detonate identically.
+   */
+  impactFor(x: number, y: number, famId: ProjFamilyId, tint: number, power = 1): void {
+    const f = PROJ_FAMILIES[famId];
+    const size = Math.max(0.55, Math.min(2.2, (Math.max(f.length, f.width) / 60) * power));
+
+    // Every impact opens on a white core flash: the hit has to register before
+    // it has to be identified.
+    this.emit({
+      key: TEX.glow,
+      x,
+      y,
+      life: 6 + size * 4,
+      scaleFrom: 0.34 * size,
+      scaleTo: 0.04,
+      tint: 0xffffff,
+      alpha: 0.95,
+      fadePow: 1.4,
+    });
+
+    switch (f.burst) {
+      case 'pulse': {
+        for (let r = 0; r < 3; r++) {
+          this.emit({
+            key: TEX.ring,
+            x,
+            y,
+            life: 12 + r * 6,
+            scaleFrom: 0.12,
+            scaleTo: (0.55 + r * 0.36) * size,
+            tint: r === 1 ? 0xffffff : tint,
+            alpha: 0.8,
+            fadePow: 1.7,
+          });
+        }
+        for (let i = 0; i < 5; i++) {
+          const a = Math.random() * Math.PI * 2;
+          this.emit({
+            key: TEX.spark,
+            x,
+            y,
+            life: 10 + Math.random() * 12,
+            scaleFrom: 0.24 * size,
+            scaleTo: 0.02,
+            tint,
+            vx: Math.cos(a) * (2 + Math.random() * 4),
+            vy: Math.sin(a) * (2 + Math.random() * 4),
+            drag: 0.9,
+          });
+        }
+        break;
+      }
+
+      case 'ember': {
+        this.emit({
+          key: TEX.glow,
+          x,
+          y,
+          life: 16 + size * 6,
+          scaleFrom: 0.5 * size,
+          scaleTo: 0.08,
+          tint: f.trailTint || 0xff8a3a,
+          alpha: 0.9,
+          fadePow: 1.3,
+        });
+        for (let i = 0; i < Math.round(9 * size); i++) {
+          const a = Math.random() * Math.PI * 2;
+          const sp = 1.5 + Math.random() * 5 * size;
+          this.emit({
+            key: TEX.spark,
+            x,
+            y,
+            life: 22 + Math.random() * 26,
+            scaleFrom: 0.3 * size,
+            scaleTo: 0.02,
+            tint: i % 3 === 0 ? 0xfff0c0 : f.trailTint || 0xff7a2a,
+            vx: Math.cos(a) * sp,
+            // Embers fall. Fire that radiates evenly looks like a firework.
+            vy: Math.sin(a) * sp * 0.6 + 1.1,
+            drag: 0.965,
+          });
+        }
+        this.emit({
+          key: TEX.glow,
+          x,
+          y: y + 6,
+          life: 34,
+          scaleFrom: 0.24 * size,
+          scaleTo: 0.9 * size,
+          tint: 0x3a3630,
+          alpha: 0.45,
+          vy: -0.7,
+          drag: 0.98,
+          fadePow: 1.5,
+        });
+        break;
+      }
+
+      case 'shatter': {
+        for (let i = 0; i < Math.round(10 * size); i++) {
+          const a = Math.random() * Math.PI * 2;
+          const sp = 2.5 + Math.random() * 7 * size;
+          this.emit({
+            key: TEX.shard,
+            x,
+            y,
+            life: 18 + Math.random() * 22,
+            scaleFrom: (0.7 + Math.random() * 0.5) * size,
+            scaleTo: 0.06,
+            tint: i % 4 === 0 ? 0xffffff : tint,
+            vx: Math.cos(a) * sp,
+            vy: Math.sin(a) * sp,
+            spin: (Math.random() - 0.5) * 0.55,
+            drag: 0.94,
+            flip: true,
+          });
+        }
+        this.emit({
+          key: TEX.ring,
+          x,
+          y,
+          life: 12,
+          scaleFrom: 0.1,
+          scaleTo: 0.7 * size,
+          tint,
+          alpha: 0.7,
+          fadePow: 2,
+        });
+        break;
+      }
+
+      case 'arc': {
+        for (let i = 0; i < 6; i++) {
+          this.emit({
+            key: TEX.streak,
+            x: x + (Math.random() - 0.5) * 22 * size,
+            y: y + (Math.random() - 0.5) * 22 * size,
+            life: 5 + Math.random() * 6,
+            scaleFrom: (0.5 + Math.random() * 0.7) * size,
+            scaleTo: 0.1,
+            tint: i % 2 ? 0xffffff : tint,
+            alpha: 0.95,
+            rotation: Math.random() * Math.PI * 2,
+            scaleYMul: 0.09,
+            fadePow: 1.6,
+          });
+        }
+        for (let i = 0; i < 6; i++) {
+          const a = Math.random() * Math.PI * 2;
+          this.emit({
+            key: TEX.spark,
+            x,
+            y,
+            life: 12 + Math.random() * 12,
+            scaleFrom: 0.22 * size,
+            scaleTo: 0.02,
+            tint: 0xdff2ff,
+            vx: Math.cos(a) * (3 + Math.random() * 5),
+            vy: Math.sin(a) * (3 + Math.random() * 5),
+            drag: 0.88,
+          });
+        }
+        break;
+      }
+
+      default: {
+        this.emit({
+          key: TEX.ring,
+          x,
+          y,
+          life: 10 + size * 4,
+          scaleFrom: 0.12,
+          scaleTo: 0.62 * size,
+          tint,
+          alpha: 0.85,
+          fadePow: 1.6,
+        });
+        for (let i = 0; i < Math.round(8 * size); i++) {
+          const a = Math.random() * Math.PI * 2;
+          const sp = 2 + Math.random() * 6 * size;
+          this.emit({
+            key: TEX.spark,
+            x,
+            y,
+            life: 12 + Math.random() * 16,
+            scaleFrom: (0.26 + Math.random() * 0.2) * size,
+            scaleTo: 0.02,
+            tint: i % 3 === 0 ? 0xffffff : tint,
+            vx: Math.cos(a) * sp,
+            vy: Math.sin(a) * sp,
+            drag: 0.9,
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  /**
+   * The smear a shot leaves behind it.
+   *
+   * Kept short on purpose. The reference's trails are `AfterImage` with
+   * `length = 2` — two frames, one frame apart. The long streaks in its
+   * screenshots are that short trail on a *fast* projectile, plus several fired
+   * at once; building a twenty-node ribbon would look nothing like it.
+   */
+  projTrail(x: number, y: number, angle: number, famId: ProjFamilyId, tint: number): void {
+    const f = PROJ_FAMILIES[famId];
+    const col = f.trailTint || tint;
+    this.emit({
+      key: f.burst === 'ember' ? TEX.glow : TEX.streak,
+      x,
+      y,
+      life: f.burst === 'ember' ? 12 : 6,
+      scaleFrom: f.trailScale,
+      scaleTo: f.burst === 'ember' ? f.trailScale * 1.5 : 0.02,
+      tint: col,
+      alpha: f.burst === 'ember' ? 0.5 : 0.62,
+      rotation: angle,
+      scaleYMul: f.burst === 'ember' ? 1 : Math.max(0.1, f.width / f.length) * 0.8,
+      drag: 0.9,
+      fadePow: 1.5,
+    });
   }
 
   guard(x: number, y: number, tint: number): void {

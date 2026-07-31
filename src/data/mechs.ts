@@ -4,6 +4,7 @@ import type { FlightDef, GaugeDef, BarrierDef, MechDef, MechRigDef } from '../me
 import { DEG } from '../core/MathUtil';
 import { Element } from '../combat/Status';
 import { EXTRA_MECHS } from './rosterExtra';
+import { applyProjectileArt } from './projectileArt';
 
 /**
  * Original mech roster for the vertical slice.
@@ -270,6 +271,25 @@ export const HALCYON: MechDef = {
     satGain: 50,
     recoil: 5.5,
     kind: ProjKind.Beam,
+    /**
+     * Ignores a held guard, as all six expansion lances do.
+     *
+     * These two were the odd ones out purely by history: `002ed42` used `Pierce`
+     * for melee only, `a36ce70` put it on the six new lances and never came back
+     * for the originals. A lance is the roster's designated answer to turtling
+     * and it should mean that on every chassis.
+     *
+     * NOCTURNE takes this by object spread — it is built as `{ ...HALCYON }` and
+     * declares no lance of its own — so this one flag covers both.
+     *
+     * It is a smaller change than it looks. `Pierce` does not defeat a barrier
+     * *burst*: an invulnerable target still returns `ignored` (the piercing shot
+     * is merely denied to them as saturation charge). What it skips is the
+     * guard's damage reduction. And the three stacked segments cannot all cash
+     * in, because the first one to land raises `hitInvuln` and the rest are
+     * ignored behind it.
+     */
+    barrier: BarrierResponse.Pierce,
     // HALCYON's identity element: the lance dumps charge into the target, so a
     // clean hit stalls its energy economy rather than just hurting.
     element: Element.Shock,
@@ -653,3 +673,13 @@ export const MECHS: Record<string, MechDef> = {
 
 /** Stable ordering for menus and the mech select screen. */
 export const ROSTER: MechDef[] = [HALCYON, NOCTURNE, ...EXTRA_MECHS];
+
+/**
+ * Attach each weapon's projectile family, drawn size, motion and volley shape.
+ *
+ * Applied here rather than inline at each definition so the roster's whole
+ * visual identity can be read side by side — see `data/projectileArt.ts`. It
+ * runs once at module load, before anything can observe a weapon, so `MECHS` and
+ * `ROSTER` are fully formed by the time any importer sees them.
+ */
+applyProjectileArt(ROSTER);

@@ -1,6 +1,7 @@
 ﻿import type { DronePassiveDef, MechDef, SwingArc } from '../mechs/MechDef';
 import type { AttackDef } from './AttackData';
-import { ATTACK_TOTAL } from './AttackData';
+import { ATTACK_TOTAL, defaultFamily } from './AttackData';
+import { PROJ_FAMILIES, PROJ_SPEED_MAX, PROJ_SPEED_MIN } from '../projectiles/families';
 import { CommandBuffer, MOTIONS, Sym, dirFrom } from './CommandBuffer';
 import { clampToArena, stepFlight, type FlightIntent, type FlightState } from './FlightModel';
 import {
@@ -1500,19 +1501,66 @@ export class Combatant implements FlightState {
     const dmgScale = this.satShootScale * this.outgoingScale;
     const homing = a.homing * (this.satActive && this.satMode === SatMode.Shoot ? 1.8 : 1);
 
+    const famId = a.family ?? defaultFamily(a.kind);
+    const fam = PROJ_FAMILIES[famId];
+    // Beams stacked along the axis long before patterns existed; that stays
+    // their default so no beam has to restate it.
+    const pattern = a.pattern ?? (a.kind === ProjKind.Beam ? 'stack' : 'line');
+    const gap = a.projGap ?? a.projRadius * 1.9;
+    const cos = Math.cos(aim);
+    const sin = Math.sin(aim);
+
     const n = a.projCount;
     const half = (n - 1) / 2;
 
     for (let i = 0; i < n; i++) {
-      const off = n === 1 ? 0 : (i - half) * (a.spreadRad / Math.max(1, n - 1)) * 2;
-      const ang = aim + off;
-      // Beams stack along the axis instead of fanning out.
-      const along = a.kind === ProjKind.Beam ? i * a.projRadius * 1.6 : 0;
+      // Signed slot about the centre of the volley: -1, 0, +1 for three shots.
+      const k = n === 1 ? 0 : i - half;
+      const fan = n === 1 ? 0 : k * (a.spreadRad / Math.max(1, n - 1)) * 2;
+
+      let ang = aim + fan;
+      /** Offset along the aim axis, and across it. */
+      let along = 0;
+      let lateral = 0;
+      let speedMul = 1;
+
+      switch (pattern) {
+        case 'stack':
+          ang = aim;
+          along = i * a.projRadius * 1.6;
+          break;
+        case 'bundle':
+          // Parallel streaks that fray as they travel. The reference draws a
+          // volley as several thin lines of slightly different length side by
+          // side — the long streaks in its screenshots are that, not one shot
+          // with a long trail.
+          lateral = k * gap;
+          along = -Math.abs(k) * gap * 0.35;
+          speedMul = 1 + k * 0.05;
+          break;
+        case 'ripple':
+          // One heading, descending speeds, so the volley strings out into a
+          // moving wall instead of arriving as a single point of damage.
+          speedMul = 1 - (n === 1 ? 0 : (i / (n - 1)) * 0.34);
+          break;
+        case 'arc':
+          // A bowed launch front: the outer shots start further back, so the
+          // spread reads as a curved wave rather than a cone from a muzzle.
+          lateral = k * gap;
+          along = -Math.abs(k) * gap * 0.8;
+          break;
+        case 'line':
+          break;
+      }
+
+      const sp = speed * speedMul;
+      const velMul = a.velMul ?? fam.velMul;
+      const accel = (a.projAccel ?? fam.accel) * sp;
       spawns.push({
-        x: m.x + Math.cos(aim) * along,
-        y: m.y + Math.sin(aim) * along,
-        vx: Math.cos(ang) * speed,
-        vy: Math.sin(ang) * speed,
+        x: m.x + cos * along - sin * lateral,
+        y: m.y + sin * along + cos * lateral,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp,
         damage: a.damage * dmgScale,
         guardDamage: a.guardDamage * dmgScale,
         life: a.projLife,
@@ -1527,6 +1575,18 @@ export class Combatant implements FlightState {
         homing,
         pierceCount: a.pierceCount,
         element: a.element ?? Element.None,
+        family: famId,
+        visualScale: a.visualScale ?? 1,
+        velMul,
+        accel,
+        swerve: a.swerve ?? fam.swerve,
+        swervePeriod: fam.swervePeriod,
+        // Bounds only bite once a family actually changes speed — a coasting
+        // family skips the whole branch, which is what keeps homing missiles
+        // (whose acceleration is modelled in `Projectile.step`) exactly as fast
+        // as they were before families existed.
+        speedMin: sp * PROJ_SPEED_MIN,
+        speedMax: sp * PROJ_SPEED_MAX,
       });
     }
 
@@ -1539,7 +1599,7 @@ export class Combatant implements FlightState {
 
     this.sat = Math.min(this.def.gauges.maxSaturation, this.sat + (this.satActive ? 0 : a.satGain));
     this.firedThisTick = a.kind;
-    events.push({ t: 'fire', x: m.x, y: m.y, angle: aim, kind: a.kind, ownerId: this.id });
+    events.push({ t: 'fire', x: m.x, y: m.y, angle: aim, kind: a.kind, ownerId: this.id, family: famId });
     void target;
   }
 

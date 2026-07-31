@@ -1,5 +1,6 @@
 import { BarrierResponse, ProjKind } from './types';
 import { Element } from './Status';
+import type { ProjFamilyId, ProjPattern } from '../projectiles/families';
 
 /**
  * Frame data for one attack. Authored in ticks at 60Hz.
@@ -52,6 +53,28 @@ export interface AttackDef {
   muzzleForward: number;
   muzzleLateral: number;
 
+  // ---- projectile art -----------------------------------------------------
+  //
+  // Assigned in `data/projectileArt.ts` rather than inline here, so that one
+  // file holds the whole roster's visual identity side by side. See the note
+  // there for why.
+
+  /** Which family draws this shot. Falls back to `defaultFamily(kind)`. */
+  family?: ProjFamilyId;
+  /** Drawn size multiplier on top of the family's dimensions. Default 1. */
+  visualScale?: number;
+  /** How the volley is arranged. Defaults to `stack` for beams, `line` otherwise. */
+  pattern?: ProjPattern;
+  /**
+   * Lateral spacing between shots for `bundle` and `arc`, in logical pixels.
+   * Defaults to a little over the projectile's own radius.
+   */
+  projGap?: number;
+  /** Per-family motion overrides. Omitted means the family's own value. */
+  velMul?: number;
+  projAccel?: number;
+  swerve?: number;
+
   /** Melee-only: forward lunge speed during startup, and chain metadata. */
   lunge?: number;
   /** Ticks (inclusive) during which a chain input is buffered. */
@@ -64,6 +87,26 @@ export interface AttackDef {
 }
 
 export const ATTACK_TOTAL = (a: AttackDef): number => a.startup + a.active + a.recovery;
+
+/**
+ * Family for an attack that has not declared one.
+ *
+ * Lives here rather than in `projectiles/families.ts` so that module stays a
+ * leaf: `combat/types.ts` imports `ProjFamilyId` from it, and a `ProjKind`
+ * import going back the other way would close the loop.
+ */
+export function defaultFamily(kind: ProjKind): ProjFamilyId {
+  switch (kind) {
+    case ProjKind.Heavy:
+      return 'slug';
+    case ProjKind.Beam:
+      return 'beam';
+    case ProjKind.Missile:
+      return 'rocket';
+    default:
+      return 'pellet';
+  }
+}
 
 /** Cheap helper so definitions stay readable. */
 export function attack(base: Partial<AttackDef> & Pick<AttackDef, 'id' | 'label'>): AttackDef {

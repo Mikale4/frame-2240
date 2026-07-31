@@ -12,6 +12,8 @@ import { Effects } from '../render/Effects';
 import { Backdrop } from '../render/Backdrop';
 import { GroundPlane } from '../render/GroundPlane';
 import { TEX } from '../render/Textures';
+import { ProjectileLayer } from '../render/ProjectileLayer';
+import { createProjectileTextures } from '../render/ProjTextures';
 import { Hud } from '../ui/Hud';
 import { BanterBox } from '../ui/BanterBox';
 import { SatCutscene } from '../ui/SatCutscene';
@@ -27,14 +29,6 @@ import type { Combatant } from '../combat/Combatant';
 import { clamp, wrapAngle } from '../core/MathUtil';
 import { depthScaleAt, depthSortAt } from '../core/Depth';
 
-/** Visual style per projectile kind. */
-const PROJ_STYLE: Record<number, { tex: string; scale: number; yMul: number; trail: number }> = {
-  [ProjKind.Bullet]: { tex: TEX.streak, scale: 0.34, yMul: 0.42, trail: 0.35 },
-  [ProjKind.Heavy]: { tex: TEX.streak, scale: 0.72, yMul: 0.68, trail: 0.6 },
-  [ProjKind.Beam]: { tex: TEX.streak, scale: 1.15, yMul: 0.5, trail: 0.9 },
-  [ProjKind.Missile]: { tex: TEX.glow, scale: 0.3, yMul: 1, trail: 0.8 },
-  [ProjKind.Melee]: { tex: TEX.glow, scale: 0.1, yMul: 1, trail: 0 },
-};
 
 /**
  * Beam-saber bloom geometry, in logical pixels along the blade from the
@@ -68,7 +62,7 @@ export class BattleScene extends Phaser.Scene {
   private backdrop!: Backdrop;
   private ground!: GroundPlane;
   private renderers: MechRenderer[] = [];
-  private projSprites: Phaser.GameObjects.Image[] = [];
+  private projLayer!: ProjectileLayer;
   /** One beam-sword sprite per combatant, shown only while swinging. */
   private blades: Phaser.GameObjects.Image[] = [];
   /** One supporter drone sprite per combatant, plus its readiness ring. */
@@ -117,7 +111,6 @@ export class BattleScene extends Phaser.Scene {
     this.banter = [];
     this.banterQueue = [];
     this.banterDelay = 0;
-    this.projSprites = [];
     this.blades = [];
     this.drones = [];
     this.droneRings = [];
@@ -159,14 +152,9 @@ export class BattleScene extends Phaser.Scene {
     this.renderers[0].setDepth(20);
     this.renderers[1].setDepth(21);
 
-    // Projectile sprite pool.
-    for (let i = 0; i < 320; i++) {
-      const img = this.add.image(0, 0, TEX.streak);
-      img.setBlendMode(Phaser.BlendModes.ADD);
-      img.setVisible(false);
-      img.setDepth(40);
-      this.projSprites.push(img);
-    }
+    // Projectiles. Three additive layers per shot — see ProjectileLayer.
+    createProjectileTextures(this);
+    this.projLayer = new ProjectileLayer(this);
 
     for (let i = 0; i < 2; i++) {
       const blade = this.add.image(0, 0, TEX.streak);
@@ -217,7 +205,7 @@ export class BattleScene extends Phaser.Scene {
       ...this.backdrop.objects,
       ...this.ground.objects,
       ...this.renderers.map((r) => r.root),
-      ...this.projSprites,
+      ...this.projLayer.objects,
       ...this.blades,
       ...this.drones,
       ...this.droneRings,
@@ -491,7 +479,8 @@ export class BattleScene extends Phaser.Scene {
         case 'fire': {
           const owner = this.byId(ev.ownerId);
           const tint = owner?.def.tint.thruster ?? 0xffffff;
-          this.effects.muzzle(ev.x, ev.y, ev.angle, ev.kind, tint);
+          if (ev.family) this.effects.muzzleFor(ev.x, ev.y, ev.angle, ev.family, tint);
+          else this.effects.muzzle(ev.x, ev.y, ev.angle, ev.kind, tint);
           if (ev.kind === ProjKind.Beam) sfx.beam();
           else if (ev.kind === ProjKind.Heavy) sfx.shootHeavy();
           else if (ev.kind === ProjKind.Missile) sfx.missile();
@@ -502,7 +491,13 @@ export class BattleScene extends Phaser.Scene {
         case 'hit': {
           const victim = this.byId(ev.victimId);
           const tint = victim?.def.tint.accent ?? 0xffd166;
-          this.effects.hit(ev.x, ev.y, ev.kind, tint);
+          if (ev.family) {
+            // Scaled by the damage dealt, so a flechette and a breach lance do
+            // not come apart in the same shower.
+            this.effects.impactFor(ev.x, ev.y, ev.family, tint, clamp(ev.damage / 70, 0.6, 2));
+          } else {
+            this.effects.hit(ev.x, ev.y, ev.kind, tint);
+          }
           const heavy = ev.kind === ProjKind.Melee || ev.kind === ProjKind.Beam || ev.kind === ProjKind.Heavy;
           if (heavy) sfx.heavyHit();
           else sfx.hit();
@@ -947,40 +942,11 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // ---- projectiles -----------------------------------------------------
-    const live = this.sim.projectiles.items;
-    let si = 0;
-    for (const pr of live) {
-      if (!pr.active) continue;
-      if (si >= this.projSprites.length) break;
-      const img = this.projSprites[si++];
-      const style = PROJ_STYLE[pr.kind] ?? PROJ_STYLE[ProjKind.Bullet];
-      const owner = this.byId(pr.ownerId);
-      const tint = owner?.def.tint.thruster ?? 0xffffff;
-
-      img.setVisible(true);
-      img.setTexture(style.tex);
-      img.setPosition(pr.x, pr.y);
-      img.setRotation(pr.angle);
-      const fade = pr.kind === ProjKind.Beam ? clamp(pr.life / 12, 0.15, 1) : 1;
-      // Shots take the same depth scale as the mechs so they sit in the world.
-      const d = depthScaleAt(pr.y);
-      img.setScale(style.scale * d, style.scale * style.yMul * d);
-      img.setAlpha(fade);
-      img.setTint(tint);
-      img.setDepth(depthSortAt(pr.y, 40));
-
-      // Trails: missiles smoke, everything else leaves a brief streak.
-      if (style.trail > 0 && Math.random() < style.trail) {
-        this.effects.thruster(
-          pr.prevX,
-          pr.prevY,
-          pr.angle + Math.PI,
-          pr.kind === ProjKind.Missile ? 0.4 : 0.22,
-          tint,
-        );
-      }
-    }
-    for (let i = si; i < this.projSprites.length; i++) this.projSprites[i].setVisible(false);
+    this.projLayer.draw(
+      this.sim.projectiles.items,
+      (ownerId: number) => this.byId(ownerId)?.def.tint.thruster ?? 0xffffff,
+      this.effects,
+    );
 
     // ---- overlays --------------------------------------------------------
     this.effects.update(dt);

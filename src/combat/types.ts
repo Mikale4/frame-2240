@@ -1,5 +1,7 @@
 /** Shared simulation vocabulary. Nothing here may import Phaser. */
 
+import type { ProjFamilyId } from '../projectiles/families';
+
 export const enum Btn {
   Main = 0,
   Heavy = 1,
@@ -116,6 +118,34 @@ export interface ProjectileSpawn {
   pierceCount: number;
   /** Status element inflicted on a clean hit. Omitted or 0 = none. */
   element?: number;
+
+  // ---- art and motion -----------------------------------------------------
+  //
+  // All optional, and all defaulted in `Projectile.reset`. `Combatant.fire`
+  // always fills them in from the attack's family; they are optional because
+  // `Projectile.asHit` and the combat tests construct spawns by hand to poke a
+  // single behaviour, and should not have to restate a shot's appearance.
+
+  /** Which projectile family draws this shot. Defaults to a plain pellet. */
+  family?: ProjFamilyId;
+  /**
+   * Drawn size multiplier, on top of the family's own dimensions.
+   *
+   * Deliberately independent of `radius`. The reference draws a shot many times
+   * larger than the 6x6 box that actually hits, and tying the two together — as
+   * we used to — is why a heavy shell and a vulcan round differed only in size.
+   */
+  visualScale?: number;
+  /** Per-tick speed multiplier. 1 coasts. */
+  velMul?: number;
+  /** Per-tick speed change along the heading, in pixels per tick squared. */
+  accel?: number;
+  /** Peak weave off the aim line, in radians, and its period in ticks. */
+  swerve?: number;
+  swervePeriod?: number;
+  /** Absolute speed bounds, so no family can stall a shot or run it away. */
+  speedMin?: number;
+  speedMax?: number;
 }
 
 export const enum ProjKind {
@@ -128,8 +158,11 @@ export const enum ProjKind {
 
 /** Events the simulation emits for the renderer/audio. Cleared each tick. */
 export type SimEvent =
-  | { t: 'fire'; x: number; y: number; angle: number; kind: ProjKind; ownerId: number }
-  | { t: 'hit'; x: number; y: number; damage: number; ownerId: number; victimId: number; kind: ProjKind }
+  // `family` rides on both of these so the muzzle flash and the impact burst can
+  // be keyed to the weapon rather than to its broad kind — a flame thrower and a
+  // railgun are both `Bullet`, and they must not light up the same way.
+  | { t: 'fire'; x: number; y: number; angle: number; kind: ProjKind; ownerId: number; family?: ProjFamilyId }
+  | { t: 'hit'; x: number; y: number; damage: number; ownerId: number; victimId: number; kind: ProjKind; family?: ProjFamilyId }
   | { t: 'guard'; x: number; y: number; victimId: number }
   | { t: 'absorb'; x: number; y: number; victimId: number; charge: number }
   | { t: 'barrier'; x: number; y: number; id: number }

@@ -339,6 +339,7 @@ export class MatchSim {
               ownerId: p.ownerId,
               victimId: c.id,
               kind: p.kind,
+              family: p.family,
             });
             if (attacker) {
               attacker.hitstop = Math.max(attacker.hitstop, p.hitstop);

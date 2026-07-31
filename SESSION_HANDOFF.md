@@ -42,8 +42,11 @@ results, 8 mechs, full audio, real art, pilot dialogue.
 
 ## 3. Current status — verified
 
-* **352 tests pass** (17 files), typecheck clean, production build clean.
-* Working tree clean at `0c1d869`.
+* **370 tests pass** (18 files), typecheck clean, production build clean.
+* Verified in-game at 61 fps: title → menu → select → battle → results →
+  rematch → quit to title, with no console errors. Projectiles, muzzle flashes,
+  impacts, explosions, barriers, saturation cutscenes and banter all render.
+* Last committed at `922b4de`; the projectile work is uncommitted on top.
 * All 71 audio files decode through the game's own `loadSoundBank`: 40 cues,
   zero failures.
 
@@ -88,59 +91,55 @@ command.
 
 ---
 
-## 4. NEXT TASK — per-mech projectile art and VFX
+## 4. Per-mech projectile art and VFX — DONE
 
-**This is where the session stopped. No code has been written for it.**
+Delivered. The user chose **procedural canvas** art (their answer named the look
+— "how it looks in Babel Sword 2005 … also in various Touhou games" — and that
+look is flat additive 2D sprite art, which settles the pipeline), and the full
+scope: visuals + motion + firing patterns.
 
-The user's ask, verbatim in intent: every mech should have its own unique
-bullet/beam/fire projectile, with different patterns, shapes and sizes, and they
-should glow and emit VFX the way Babel Sword 2005 does.
+* **16 families** in `src/projectiles/families.ts`, drawn in
+  `src/render/ProjTextures.ts` and packed into one runtime canvas texture.
+* **Three additive layers per shot** — tinted halo, tinted shell, white core —
+  because Phaser's tint is a multiply and cannot leave a white centre inside a
+  coloured shell any other way. `src/render/ProjectileLayer.ts`.
+* **60 Hz flicker** off the projectile's age in ticks, not the render frame.
+* **Drawn size decoupled from the hitbox** via `AttackDef.visualScale`.
+* **Per-family motion** — `velMul` / `accel` / `swerve`, gentler than the
+  reference's 0.945 so no weapon loses its range; tested at ≥70 % of nominal.
+* **Five volley patterns** — `line`, `stack`, `bundle`, `ripple`, `arc`.
+* **Family-keyed muzzle and impact bursts** in five characters (`spark`,
+  `ember`, `shatter`, `pulse`, `arc`), with the reference's randomised flips.
+* **Per-mech kits** in `src/data/projectileArt.ts` — one file, whole roster
+  side by side, because the design question is comparative.
+* Six weapons fire denser volleys at unchanged full-connect damage (D55).
+* All eight lances now ignore a held guard (D56).
 
-**Read `docs/PROJECTILE_STUDY_2005.md` first.** It is the study of how the 2005
-game does it, taken from its animation table and state files, and it ends with a
-prioritised gap list. The headline findings:
+See `docs/DECISIONS.md` D52–D56. `docs/PROJECTILE_STUDY_2005.md` remains the
+research; its gap list is now closed except for pre-drawn per-angle sprites,
+which was deliberately not done — we rotate a bank of distinct silhouettes
+instead, which the study itself names as the acceptable middle path.
 
-* Sixteen projectile *families*, each a base animation number; the offsets within
-  a family are **pre-drawn angle steps**, not variants.
-* Every projectile frame is **additive**, alternating between two additive
-  strengths each frame — a 60 Hz intensity flicker.
-* The **hitbox is 6×6 px** while the drawn shot is many times larger. Drawn size
-  is deliberately decoupled from the hitbox; ours is not.
-* Trails are **AfterImage, only 2 frames**. The long streaks are short trails on
-  fast shots, plus several fired in a fan.
-* Motion is not linear — `velmul` 0.945 and `accel = vel/8` … `vel/30` per
-  family, so shots decelerate or accelerate distinctly.
-* Secondary effects are Explods with randomised H/V flips, depth-scaled by the
-  same pseudo-3D factor we already use, on a **ramping** emission schedule.
+### What is NOT done here
 
-Current state to change: `src/render/Effects.ts` and `PROJ_STYLE` in
-`BattleScene.ts` map five `ProjKind`s onto two textures (`fx_streak`, `fx_glow`)
-tinted per mech, sized from `projRadius`, moving in a straight line.
-
-Open decision the user has not made: **where the projectile art comes from.**
-Blender can render sprite banks exactly as it renders mech parts (orthographic,
-transparent PNG, atlas-packed) which matches the existing pipeline; or extend the
-procedural canvas textures in `src/render/Textures.ts`. Ask before committing to
-one.
+* **Per-angle sprite banks.** We rotate. Fine, and documented.
+* **Ramping emission schedules.** The reference accelerates its secondary
+  effects as a state runs (`time%6` → `%4` → `%2` → every frame). Our muzzle and
+  impact bursts are one-shot. Only worth doing for sustained beams.
+* **Only two mech pairs were verified in-game** (VESPER/PYRE, TERRAMOTH/NULLTIDE).
+  All 48 weapons were verified as art via a contact sheet, and every family goes
+  through one code path, but the other pairs have not been watched in motion.
 
 ---
 
 ## 5. Open questions the user still owes an answer on
 
-1. **HALCYON's and NOCTURNE's lances do not pierce barriers; all six expansion
-   lances do.** Traced to history, not design: `002ed42` used `Pierce` for melee
-   only; `a36ce70` introduced it on the six new lances and never revisited the
-   two originals. But the two are structurally different weapons — 96 dmg ×3
-   stacked segments versus a single 142–240 spear — so simply adding the flag
-   would make them the strongest anti-guard tool in the game. Three options were
-   put to the user (unify as single heavy spears / add the flag as-is / leave and
-   document). **No answer yet.**
-2. **A forced SHIELD burst is very short.** Shield already drains the meter at
+1. **A forced SHIELD burst is very short.** Shield already drains the meter at
    double rate, so forcing at ~35 % gives ~1 s of burst against a 2 s overheat —
    a net loss almost always, where Shoot and Speed get ~2.4 s. May be the correct
    punishment for gambling with the defensive mode, or the double drain may want
    to not stack with the partial scaling.
-3. **Audio duration targets.** `docs/AUDIO_CUE_SHEET.md` lists targets far
+2. **Audio duration targets.** `docs/AUDIO_CUE_SHEET.md` lists targets far
    shorter than what was generated (`fire_vulcan` wants 0.10 s, the file has
    audio across its full 0.52 s). The normalise pass removed **only silence** on
    purpose — cutting real content needs ears. Frequent cues may be overlapping
@@ -173,6 +172,33 @@ one.
   effect by screenshotting after triggering it. **Use `Escape` to pause** — the
   update loop returns early while paused, so the frame freezes and the screenshot
   can take as long as it likes. This is how every VFX in this session was verified.
+* **Driving the game from the Browser pane needs four separate tricks.** All of
+  these cost time in the projectile session; none are obvious.
+  1. `computer{action:'key'}` **does not reach Phaser.** Dispatch a real event
+     instead, on `window`, keyed by physical `code`:
+     `window.dispatchEvent(new KeyboardEvent('keydown', {code:'Enter', bubbles:true}))`.
+  2. **Hold keys for ~220 ms.** Menus read *held* state (`input$.readUi()`), not
+     key-down edges, so a `keydown` + `keyup` in the same frame is invisible to
+     them. Down, `await sleep(220)`, up.
+  3. **Freeze by hijacking `requestAnimationFrame`, not by pausing.** `Escape`
+     works but lays a scrim over the frame and washes the effects out. Instead
+     swap in a rAF that stores the pending callback rather than scheduling it —
+     the canvas holds its last frame with no overlay, and restoring the real rAF
+     and re-firing the stored callback resumes cleanly. This is how every
+     projectile screenshot was taken.
+  4. **You cannot read the canvas back.** The WebGL context has no
+     `preserveDrawingBuffer`, so `drawImage(canvas, …)` yields transparent black
+     and there is no way to crop or magnify. Full-frame screenshots only.
+* **The Browser pane has its own empty `localStorage`,** so it runs the
+  **default** bindings, not the user's remapped profile — `Enter`/`J` confirm,
+  `WASD`/arrows move, `Escape` pauses. Check `localStorage.getItem('bsr.bindings.v1')`:
+  `null` means defaults. (The remapped profile below is the *user's own browser*.)
+* **To inspect generated canvas art without the game running,** import the module
+  in the page with a `?v=` cache-buster, hand it a fake scene whose
+  `textures.createCanvas` returns a plain canvas, then POST the result as a blob
+  to a throwaway Node server and read the PNG. Works while the pane is throttled,
+  because canvas drawing needs no compositing. This is how the 16 families and
+  the 48-weapon contact sheet were reviewed.
 * **The user's bindings are remapped** in `localStorage` (`bsr.bindings.v1`):
   boost `Space`/`KeyS`, barrier `KeyF`/`KeyD`, **`ShiftLeft` is the flight
   toggle**, melee `KeyU`/`KeyC`, modeCycle `Tab`/`KeyA`. The stored profile has

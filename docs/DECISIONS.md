@@ -1056,3 +1056,101 @@ duration per cue, several far shorter than what was generated — `fire_vulcan`
 wants 0.10 s and the file carries audio across its full 0.52 s. Those targets
 were written before the audio existed. Cutting real content to them is a
 judgement to make by ear, not by a script, so the pass removes only silence.
+
+### D52 — Projectile art is drawn, not rendered
+
+**Decision.** The sixteen projectile families are procedural Canvas 2D shapes
+(`src/render/ProjTextures.ts`), packed into one texture at runtime. Blender keeps
+the mech parts, the drones and the portraits; it does not make bullets.
+
+**Why.** The brief was the 2005 look, which the user identified — correctly — as
+the same idiom Touhou uses: flat additive 2D shapes with a hot white centre and a
+saturated rim. That is a 2D drawing problem. A Blender render of a missile is a
+better *object* and a worse *forty-pixel bullet*: at the size these draw, modelled
+form turns to mush and the silhouette is all that survives. Procedural also costs
+nothing in payload, keeps every shape recolourable per pilot, and makes a tweak a
+one-line edit instead of a modelling round trip plus `pack_atlases.py`.
+
+**Why one packed texture rather than sixteen.** Every shot draws three sprites.
+Sharing a texture keeps them in one batch; sixteen separate canvas textures would
+break the batch on every family change on screen.
+
+### D53 — A shot is three additive layers, not one tinted sprite
+
+**Decision.** Every projectile draws as `halo` (tinted, soft, stretched to the
+shot's proportions), `shell` (tinted silhouette) and `core` (the same silhouette,
+smaller, left white).
+
+**Why it cannot be one sprite.** Phaser's tint is a multiply. Tinting a white
+texture crimson makes all of it crimson — there is no white left for a core. The
+hot centre inside a coloured shell is the single most recognisable property of
+both the reference's art and the Touhou bullets it shares an idiom with, so it
+has to be its own untinted layer composited additively over the shell.
+
+**The flicker.** The reference alternates each projectile frame between two
+additive strengths (`A` / `A1`). Ours is driven off the projectile's age in
+*ticks*, not the render frame, so it stays a 60 Hz shimmer on a 144 Hz display.
+
+**Drawn size is decoupled from the hitbox.** `AttackDef.visualScale` sizes the
+sprite; `projRadius` still sizes the hit. The reference draws a 6×6 box as a shot
+many times that size and deliberately keeps the two apart. Ours used to derive
+the sprite from the radius, which is why every weapon looked like a scaled copy
+of every other one.
+
+### D54 — Volley patterns, and per-family motion
+
+**Decision.** Five arrangements — `line`, `stack`, `bundle`, `ripple`, `arc` —
+plus per-family `velMul` / `accel` / `swerve`.
+
+**Why patterns.** The reference draws a volley as four to six thin streaks of
+slightly different length side by side. A single angular fan cannot express that,
+and the long streaks in its screenshots turn out to be short trails on fast
+shots fired in a bundle, not long trails on one shot.
+
+**Why the weave integrates a sinusoid's derivative.** The heading stays exactly
+`aim + swerve · sin(t)`, so a weaving shot oscillates about its aim line and
+never drifts off it. A weave that accumulated could not be led by the player and
+would defeat the AI's dodge prediction, which reads a straight line off velocity.
+
+**Why the motion values are gentler than the reference's.** 2005 runs `velmul`
+0.945, which over our projectile lifetimes brings a shot nearly to a halt and
+would quietly halve several weapons' range — a nerf disguised as an art pass.
+Ours sit in 0.99–1.0 with a floor at 0.35× launch speed, and
+`projectiles.test.ts` asserts every weapon still covers ≥70 % of the distance it
+did at constant velocity.
+
+**Homing ordnance is excluded.** `Projectile.step` already accelerates a homing
+shot; a family curve on top would fight or compound it. Missiles coast unless the
+art table asks otherwise.
+
+### D55 — Denser volleys at the same damage
+
+**Decision.** Six weapons fire more shots than they did — VESPER's FLECHETTE
+3→5, CIRRUS's TWIN SMG 2→4, OBELISK's MINEFIELD 3→5, PYRE's FIRESTORM 4→6,
+NULLTIDE's ARC SPRAY and DISRUPT NET 4→6 — with per-shot damage and guard damage
+divided by the same ratio.
+
+**Why the damage is held.** A full connect is worth exactly what it was worth
+before, so no chassis was re-tuned to buy an art change. What does change is
+texture: partial hits are finer-grained and a guard chips in smaller steps.
+`projectiles.test.ts` pins the resulting totals against the pre-change numbers,
+because raising a count without dividing the damage is a silent roster-wide buff
+that no other test would catch.
+
+### D56 — All eight lances ignore a held guard
+
+**Decision.** HALCYON's and NOCTURNE's lances take `BarrierResponse.Pierce`,
+which the six expansion lances already had.
+
+**Why the hesitation was misplaced.** The concern on record was that a
+three-segment stacked lance with the flag would become the strongest anti-guard
+tool in the game. Measured, it does not: only the first segment cashes in,
+because landing it raises `hitInvuln` and the rest are ignored behind it.
+Damage through a held guard goes 57.6 → 96.0 for HALCYON and 47.2 → 78.7 for
+NOCTURNE, against 153–241 for the six lances that already pierce. Both remain the
+*weakest* anti-guard lances on the roster.
+
+**What `Pierce` actually does.** It does not defeat a barrier *burst* — an
+invulnerable target still returns `ignored`; the shot is merely denied to them as
+saturation charge. It skips the held guard's damage reduction. Those are easy to
+confuse and the distinction is the whole reason the change is small.
