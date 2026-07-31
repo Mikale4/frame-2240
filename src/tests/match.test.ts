@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Difficulty } from '../core/Session';
 import { MatchSim } from '../combat/MatchSim';
 import { RivalAI } from '../ai/RivalAI';
 import { HALCYON, NOCTURNE } from '../data/mechs';
@@ -64,7 +65,7 @@ describe('match simulation', () => {
   it('diverges for different seeds once the AI drives it', () => {
     const runWithAi = (seed: number) => {
       const s = sim(seed);
-      const ai = new RivalAI({ level: 6 }, new Rng(seed));
+      const ai = new RivalAI({ difficulty: Difficulty.Hard }, new Rng(seed));
       for (let i = 0; i < 600; i++) {
         const e = ai.think(s.enemy, s.player, s.activeProjectiles(), 2400, 1200);
         s.step(scriptedInput(i), e);
@@ -146,7 +147,7 @@ describe('match simulation', () => {
 
   it('produces no NaN state under sustained random play', () => {
     const s = sim(31337);
-    const ai = new RivalAI({ level: 8 }, new Rng(4321));
+    const ai = new RivalAI({ difficulty: Difficulty.Extreme }, new Rng(4321));
     for (let i = 0; i < 2000; i++) {
       const e = ai.think(s.enemy, s.player, s.activeProjectiles(), 2400, 1200);
       s.step(scriptedInput(i * 3), e);
@@ -255,7 +256,7 @@ describe('projectiles', () => {
 describe('rival AI fairness', () => {
   it('only ever emits a normal input frame', () => {
     const s = sim(2);
-    const ai = new RivalAI({ level: 8 }, new Rng(2));
+    const ai = new RivalAI({ difficulty: Difficulty.Extreme }, new Rng(2));
     for (let i = 0; i < 600; i++) {
       const f = ai.think(s.enemy, s.player, s.activeProjectiles(), 2400, 1200);
       expect(Math.abs(f.dx)).toBeLessThanOrEqual(1);
@@ -269,7 +270,7 @@ describe('rival AI fairness', () => {
 
   it('actually fights: it damages an idle opponent', () => {
     const s = sim(8);
-    const ai = new RivalAI({ level: 7 }, new Rng(8));
+    const ai = new RivalAI({ difficulty: Difficulty.Extreme }, new Rng(8));
     const start = s.player.life;
     for (let i = 0; i < 1800; i++) {
       const f = ai.think(s.enemy, s.player, s.activeProjectiles(), 2400, 1200);
@@ -280,7 +281,7 @@ describe('rival AI fairness', () => {
 
   it('can be beaten: a scripted aggressor damages it', () => {
     const s = sim(11);
-    const ai = new RivalAI({ level: 4 }, new Rng(11));
+    const ai = new RivalAI({ difficulty: Difficulty.Normal }, new Rng(11));
     const start = s.enemy.life;
     for (let i = 0; i < 1800; i++) {
       const f = emptyInput();
@@ -299,7 +300,7 @@ describe('rival AI fairness', () => {
 
   it('respects its own gauges (never spends below zero)', () => {
     const s = sim(3);
-    const ai = new RivalAI({ level: 8 }, new Rng(3));
+    const ai = new RivalAI({ difficulty: Difficulty.Extreme }, new Rng(3));
     for (let i = 0; i < 1200; i++) {
       const f = ai.think(s.enemy, s.player, s.activeProjectiles(), 2400, 1200);
       s.step(emptyInput(), f);

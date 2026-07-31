@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Difficulty } from '../core/Session';
 import fs from 'node:fs';
 import path from 'node:path';
 import { MatchSim } from '../combat/MatchSim';
@@ -405,7 +406,7 @@ describe('every mech survives a real match', () => {
   for (const def of ROSTER) {
     it(`${def.id} fights without producing NaN or leaving the arena`, () => {
       const s = new MatchSim({ playerDef: def, enemyDef: def, seed: 99, introTicks: 1 });
-      const ai = new RivalAI({ level: 6 }, new Rng(99));
+      const ai = new RivalAI({ difficulty: Difficulty.Hard }, new Rng(99));
       for (let i = 0; i < 600 && s.phase !== MatchPhase.Over; i++) {
         const e = ai.think(s.enemy, s.player, s.activeProjectiles(), 2400, 1200);
         s.step(scriptedInput(i), e);

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ARENA_H, ARENA_W, TICK_MS, VIEW_H, VIEW_W } from '../core/GameConfig';
-import { session } from '../core/Session';
+import { Difficulty, session } from '../core/Session';
 import { MatchSim } from '../combat/MatchSim';
 import { MECHS } from '../data/mechs';
 import { RivalAI } from '../ai/RivalAI';
@@ -129,13 +129,20 @@ export class BattleScene extends Phaser.Scene {
       dummy: session.mode === 'training',
     });
 
+    // Each side runs its own tier. In `aiVsAi` that is the whole point of the
+    // mode — an EXTREME rival taking apart an EASY one is a different thing to
+    // watch than two of the same. Training's rival never acts, so its tier is
+    // irrelevant and simply takes the floor.
     const aiSeed = session.seed() ^ 0x9e3779b9;
     this.ai = new RivalAI(
-      { level: session.mode === 'training' ? 2 : session.difficulty },
+      { difficulty: session.mode === 'training' ? Difficulty.Easy : session.enemyDifficulty },
       new Rng(aiSeed),
     );
     if (session.mode === 'aiVsAi') {
-      this.playerAi = new RivalAI({ level: session.difficulty }, new Rng(aiSeed ^ 0x2545f491));
+      this.playerAi = new RivalAI(
+        { difficulty: session.playerDifficulty },
+        new Rng(aiSeed ^ 0x2545f491),
+      );
     }
 
     this.input$ = new InputManager(this);

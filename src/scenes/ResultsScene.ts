@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { VIEW_H, VIEW_W } from '../core/GameConfig';
-import { MODE_LABELS, session } from '../core/Session';
+import { DIFFICULTY_NAMES, MODE_LABELS, session } from '../core/Session';
 import { InputManager } from '../input/InputManager';
 import { Menu, bigTitle, makeScrim, smallText } from '../ui/Menu';
 import { MECHS } from '../data/mechs';
@@ -36,9 +36,13 @@ export class ResultsScene extends Phaser.Scene {
     bigTitle(this, headline, 108, 44, colour);
     smallText(
       this,
+      // Both tiers are named in CPU-vs-CPU, since which one won is the result.
       session.mode === 'aiVsAi'
-        ? `${MODE_LABELS[session.mode]} · ${p.name} vs ${e.name}`
-        : `${MODE_LABELS[session.mode]} · RIVAL SKILL ${session.difficulty}`,
+        ? `${MODE_LABELS[session.mode]} · ${p.name} [${DIFFICULTY_NAMES[session.playerDifficulty]}]` +
+          ` vs ${e.name} [${DIFFICULTY_NAMES[session.enemyDifficulty]}]`
+        : session.mode === 'training'
+          ? MODE_LABELS[session.mode]
+          : `${MODE_LABELS[session.mode]} · ${DIFFICULTY_NAMES[session.enemyDifficulty]}`,
       VIEW_W / 2,
       150,
       13,

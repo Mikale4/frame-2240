@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Difficulty } from '../core/Session';
 import { Combatant } from '../combat/Combatant';
 import { MatchSim } from '../combat/MatchSim';
 import { HALCYON, NOCTURNE, ROSTER } from '../data/mechs';
@@ -389,7 +390,7 @@ describe('saturation — Shield', () => {
       const self = new Combatant({ id: 1, team: Team.Enemy, def: HALCYON, x: 900, y: 600, facing: -1 });
       const foe = new Combatant({ id: 0, team: Team.Player, def: HALCYON, x: 400, y: 600, facing: 1 });
       if (shield) activate(self, SatMode.Shield);
-      const ai = new RivalAI({ level: 10 }, new Rng(4242));
+      const ai = new RivalAI({ difficulty: Difficulty.Extreme }, new Rng(4242));
 
       // A shot closing on `self` inside the reaction window. At level 10 the
       // skill clamps to 1, so `reactionTicks` is 4 and the burst wants

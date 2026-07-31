@@ -1,6 +1,12 @@
 import Phaser from 'phaser';
 import { VIEW_H, VIEW_W } from '../core/GameConfig';
-import { DIFFICULTY_NAMES, MODE_LABELS, session } from '../core/Session';
+import {
+  DIFFICULTY_COLOURS,
+  DIFFICULTY_COUNT,
+  DIFFICULTY_NAMES,
+  MODE_LABELS,
+  session,
+} from '../core/Session';
 import { InputManager } from '../input/InputManager';
 import { bigTitle, smallText } from '../ui/Menu';
 import { ROSTER } from '../data/mechs';
@@ -28,13 +34,23 @@ export class MechSelectScene extends Phaser.Scene {
   private input$!: InputManager;
   private index = 0;
   /**
-   * Your machine, then the rival's, then how good the rival is.
+   * Machine, then that pilot's tier, for each side in turn.
    *
-   * Skill sits here rather than in the main menu because it is a property of the
-   * opponent you just chose, not a global setting — you decide who you are
-   * fighting and how hard they fight in one continuous flow.
+   * Skill sits here rather than in the main menu because it is a property of a
+   * specific opponent, not a global setting — you decide who is fighting and how
+   * hard *each of them* fights, in one continuous flow.
+   *
+   * Which stages run depends on the mode:
+   *
+   * - `vsCpu`    player → enemy → enemySkill
+   * - `aiVsAi`   player → playerSkill → enemy → enemySkill
+   * - `training` player → enemy            (the dummy never acts)
+   *
+   * The per-side tier is what `aiVsAi` exists for: one global dial could not
+   * express an EXTREME rival dismantling an EASY one, which is the most
+   * interesting thing that mode can show you.
    */
-  private picking: 'player' | 'enemy' | 'skill' = 'player';
+  private picking: 'player' | 'playerSkill' | 'enemy' | 'enemySkill' = 'player';
   private armAt = 0;
   private t = 0;
 
@@ -246,46 +262,90 @@ export class MechSelectScene extends Phaser.Scene {
     // Dim whichever machine is already committed, so the second pass reads as a
     // different choice rather than a repeat of the first.
     this.cells.forEach((cell, i) => {
-      const chosen = this.picking === 'enemy' && ROSTER[i].id === session.playerMech;
+      const chosen =
+        (this.picking === 'enemy' || this.picking === 'enemySkill') &&
+        ROSTER[i].id === session.playerMech;
       cell.setAlpha(chosen ? 0.42 : 1);
     });
 
+    // In CPU vs CPU neither machine is "yours", so the headings say which slot
+    // is being filled rather than pretending one of them belongs to the player.
+    const duel = session.mode === 'aiVsAi';
     this.heading.setText(
       this.picking === 'player'
-        ? 'SELECT YOUR MECH'
-        : this.picking === 'enemy'
-          ? 'SELECT YOUR RIVAL'
-          : 'RIVAL SKILL',
+        ? duel
+          ? 'SELECT CPU 1'
+          : 'SELECT YOUR MECH'
+        : this.picking === 'playerSkill'
+          ? 'CPU 1 SKILL'
+          : this.picking === 'enemy'
+            ? duel
+              ? 'SELECT CPU 2'
+              : 'SELECT YOUR RIVAL'
+            : duel
+              ? 'CPU 2 SKILL'
+              : 'RIVAL SKILL',
     );
 
     const mine = ROSTER.find((m) => m.id === session.playerMech)?.name ?? '';
     const theirs = ROSTER.find((m) => m.id === session.enemyMech)?.name ?? '';
+    const mineTier = DIFFICULTY_NAMES[session.playerDifficulty];
     this.lockedText.setText(
-      this.picking === 'enemy'
-        ? `YOUR MECH:  ${mine}`
-        : this.picking === 'skill'
-          ? `${mine}   vs   ${theirs}      ${MODE_LABELS[session.mode]}`
-          : '',
+      this.picking === 'playerSkill'
+        ? `${duel ? 'CPU 1' : 'YOUR MECH'}:  ${mine}`
+        : this.picking === 'enemy'
+          ? `${duel ? `CPU 1:  ${mine}  [${mineTier}]` : `YOUR MECH:  ${mine}`}`
+          : this.picking === 'enemySkill'
+            ? `${mine}${duel ? ` [${mineTier}]` : ''}   vs   ${theirs}      ${MODE_LABELS[session.mode]}`
+            : '',
     );
 
-    this.skillPanel.setVisible(this.picking === 'skill');
-    if (this.picking === 'skill') {
-      const d = session.difficulty;
-      this.skillText.setText(`${'★'.repeat(d)}${'☆'.repeat(8 - d)}\n${d}  ${DIFFICULTY_NAMES[d]}`);
+    const onSkill = this.picking === 'playerSkill' || this.picking === 'enemySkill';
+    this.skillPanel.setVisible(onSkill);
+    if (onSkill) {
+      const d = this.tier;
+      // Four filled pips out of four, coloured by tier — the shape reads before
+      // the word does, and four states are distinguishable at a glance where
+      // eight stars were not.
+      this.skillText.setText(`${'◆'.repeat(d + 1)}${'◇'.repeat(DIFFICULTY_COUNT - d - 1)}\n${DIFFICULTY_NAMES[d]}`);
+      this.skillText.setColor(DIFFICULTY_COLOURS[d]);
+      this.skillHint.setText(
+        `ARROWS  adjust        ENTER  ${this.picking === 'enemySkill' ? 'FIGHT' : 'NEXT'}`,
+      );
       this.cursor.setVisible(false);
     } else {
       this.cursor.setVisible(true);
     }
   }
 
+  /** The tier the current stage is editing. */
+  private get tier(): number {
+    return this.picking === 'playerSkill' ? session.playerDifficulty : session.enemyDifficulty;
+  }
+
+  private setTier(v: number): void {
+    if (this.picking === 'playerSkill') session.playerDifficulty = v;
+    else session.enemyDifficulty = v;
+  }
+
+  /** Does the player slot need its own tier? Only when a CPU is holding it. */
+  private get pickPlayerSkill(): boolean {
+    return session.mode === 'aiVsAi';
+  }
+
+  /** Does the rival need a tier? Not in training, where it never acts. */
+  private get pickEnemySkill(): boolean {
+    return session.mode !== 'training';
+  }
+
   private move(dx: number, dy: number): void {
-    if (this.picking === 'skill') {
-      // On the last stage the same keys tune the rival instead of moving a cursor.
+    if (this.picking === 'playerSkill' || this.picking === 'enemySkill') {
+      // On a skill stage the same keys tune the tier instead of moving a cursor.
       const step = dx + dy;
       if (step === 0) return;
-      const next = session.difficulty + step;
-      if (next < 1 || next > 8) return;
-      session.difficulty = next;
+      const next = this.tier + step;
+      if (next < 0 || next >= DIFFICULTY_COUNT) return;
+      this.setTier(next);
       sfx.uiMove();
       this.refresh();
       return;
@@ -299,23 +359,49 @@ export class MechSelectScene extends Phaser.Scene {
 
   private confirm(): void {
     sfx.uiConfirm();
+
     if (this.picking === 'player') {
       session.playerMech = ROSTER[this.index].id;
-      this.picking = 'enemy';
-      // Land the cursor somewhere other than the machine just taken.
-      if (ROSTER[this.index].id === session.enemyMech) {
-        this.index = (this.index + 1) % ROSTER.length;
+      if (this.pickPlayerSkill) {
+        this.picking = 'playerSkill';
+        this.refresh();
+        return;
       }
-      this.refresh();
+      this.toEnemy();
       return;
     }
+
+    if (this.picking === 'playerSkill') {
+      this.toEnemy();
+      return;
+    }
+
     if (this.picking === 'enemy') {
       session.enemyMech = ROSTER[this.index].id;
-      this.picking = 'skill';
-      this.refresh();
+      if (this.pickEnemySkill) {
+        this.picking = 'enemySkill';
+        this.refresh();
+        return;
+      }
+      this.start();
       return;
     }
-    // Straight into the match, as a fighting game would.
+
+    this.start();
+  }
+
+  /** Move to the rival's machine, landing the cursor off the one just taken. */
+  private toEnemy(): void {
+    this.picking = 'enemy';
+    this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.enemyMech));
+    if (ROSTER[this.index].id === session.playerMech) {
+      this.index = (this.index + 1) % ROSTER.length;
+    }
+    this.refresh();
+  }
+
+  /** Straight into the match, as a fighting game would. */
+  private start(): void {
     sfx.unlock();
     session.matchIndex++;
     this.scene.start('Battle');
@@ -323,19 +409,29 @@ export class MechSelectScene extends Phaser.Scene {
 
   private back(): void {
     sfx.uiBack();
-    if (this.picking === 'skill') {
+
+    if (this.picking === 'enemySkill') {
       this.picking = 'enemy';
       this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.enemyMech));
       this.refresh();
       return;
     }
+
     if (this.picking === 'enemy') {
-      // Step back to choosing your own machine rather than leaving outright.
+      // Back to whichever stage actually preceded this one.
+      this.picking = this.pickPlayerSkill ? 'playerSkill' : 'player';
+      this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.playerMech));
+      this.refresh();
+      return;
+    }
+
+    if (this.picking === 'playerSkill') {
       this.picking = 'player';
       this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.playerMech));
       this.refresh();
       return;
     }
+
     this.scene.start('Menu');
   }
 
