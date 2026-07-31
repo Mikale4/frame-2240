@@ -1273,3 +1273,168 @@ an unlimited supply.
 gated on `!self.shieldActive`. This was not cosmetic: `shouldBarrier` also gates
 the AI's attack, so every tick the rival reached for a barrier it could not have,
 it skipped its own offence for a shot it never fired.
+
+---
+
+## D59 — Music: streamed, not decoded
+
+`SoundBank` pulls every effect into memory as an `AudioBuffer`. That is right for
+71 files averaging a fifth of a second and catastrophic for sixteen three-minute
+tracks: decoded PCM runs about 23 MB per stereo minute, so the same approach
+would have cost roughly **a gigabyte** of resident memory for the album.
+
+Each track is therefore an `HTMLAudioElement` through a
+`MediaElementAudioSourceNode` — the browser streams and decodes incrementally
+(verified: the dev server answers with `206 Partial Content`), and it still lands
+in the same `AudioContext` as the effects, so gain, ducking and muting are
+ordinary Web Audio. `Sfx.context()` exists purely to share that graph; two
+contexts cannot be ducked against each other with sample accuracy, and browsers
+cap how many an origin may hold.
+
+The bus is `voice.gain -> duck -> master -> destination`. Every level change is an
+`AudioParam` ramp, so nothing needs a per-frame update and a fade survives a
+scene transition mid-flight.
+
+**Looping is hand-rolled.** `el.loop` is a hard cut and the cue sheet
+deliberately does not ask Suno for seamless loops — asking costs length, and
+these tracks are long precisely so a match does not hear the same bar twice.
+Instead the track cross-fades into a second copy of itself 2.5 s before the file
+ends. Measured at the seam: old voice 1.00 -> 0.02 while the new one climbs
+0.07 -> 0.98, then the old voice is dropped. One voice before, one after, no gap.
+
+## D60 — The battle roll draws from what exists, not from all three
+
+`docs/MUSIC_CUE_SHEET.md` describes rolling across all three candidates (both
+pilots' themes and the stage's) and falling through when the winner's file is
+missing. `pickBattleCue` instead rolls uniformly across the candidates that
+*exist*, then falls back to `battle`, then to silence.
+
+The two are **identical once all sixteen tracks are generated** — every candidate
+is present, so nothing ever falls through. They differ only while the set is
+partial, and there the spec's version is worse: with 2 of 8 themes delivered and
+no stage track, roll-then-fall-through piles most matches onto whichever
+candidate happens to sit last in the list. Rolling over what exists preserves the
+variety the roll is *for* during exactly the period the roll is least able to
+deliver it.
+
+**The roll takes its generator as a parameter.** `MatchSim` is seeded and
+`match.test.ts` asserts a bit-identical replay; drawing a number from that stream
+to choose music would shift every subsequent roll and change the fight. The scene
+layer passes `Math.random`. `music.test.ts` proves it: a 600-tick match with the
+roll fired every single tick is bit-identical to one with no rolls at all.
+
+## D61 — Two volume buses on one scale, replacing the mute toggle
+
+`AUDIO: ON / MUTED` became `MUSIC` and `SFX`, each 0-10. One switch could not
+answer the question people actually have about a soundtrack — not "is there
+music" but "is there too much of it".
+
+Both buses share one scale, so `MUSIC 70 / SFX 80` says plainly that music sits
+under the effects and levelling the numbers levels the buses. Per-bus maxima
+would have made the defaults rounder and the comparison meaningless. Defaults
+land on the levels the game already mixed at (effects 0.32, music 0.28) with
+headroom above. There is no separate mute: either slider at zero is that bus's
+mute, which is finer-grained than the toggle it replaced — the common case is
+wanting the music gone and the hit confirmation kept. Persisted under
+`bsr.audio.v1`, normalised on load exactly as bindings are.
+
+## D62 — Match length: 1.75x life and a 180-second clock
+
+**Measured, because the complaint was about feel and feel is measurable.** 56
+AI-vs-AI matchups per tier, at the shipped life pools:
+
+| Tier | median | p10 | p90 |
+| --- | --- | --- | --- |
+| EASY | 15.6 s | 11.6 s | 24.7 s |
+| NORMAL | 15.0 s | 11.9 s | 26.9 s |
+| HARD | 29.8 s | 16.2 s | 63.6 s |
+| EXTREME | 43.4 s | 27.3 s | 84.9 s |
+
+Two findings. Matches were finishing in 10-15 seconds against the lower tiers,
+which matches what playtesting reported exactly. And **EASY and NORMAL are the
+same length** and under half of HARD's — the lower tiers trade damage freely
+instead of defending, so the tiers a new player lives in are the ones that end
+fastest.
+
+Life pools scaled **1.75x**, uniformly, so the roster's relative durability is
+untouched (every ratio preserved to within 0.003 by rounding to the nearest 10).
+Medians become EASY 24 s, NORMAL 30 s, HARD 52 s, EXTREME 73 s.
+
+**The clock had to move with it.** The 99-second limit was already producing
+draws at the top tiers, and at 1.75x it decided 30 % of EXTREME matches. At 180
+seconds no tier draws more than 4 %, so the clock is back to being the fail-safe
+it is meant to be rather than a participant.
+
+## D63 — The drone is always deployed, flies itself, and rebuilds once
+
+Three changes to one subsystem, because they only make sense together.
+
+**The launch/recall toggle is gone.** It read well and measured badly: drones
+were dying with a 10th-percentile life of **two seconds** and a median of eight,
+so the standing decision the button was meant to pose had already been answered
+by the opening exchange, and it spent the rest of the match dead. `Btn.Sub` now
+orders a volley — which is what it meant two designs ago — rather than becoming a
+dead input.
+
+**Hit points 3.5x.** This restores the invariant `SupporterDef.maxLife` already
+documented ("around 12 % of the owner's `maxLife`"), which the 1.75x chassis
+scale had quietly broken down to 6.9 %.
+
+**One rebuild per match.** Because nothing can pull it to safety any more, and
+because `Stowed` was the only state that repaired, permanent death would have
+left the supporter absent for 160 s of a 180 s match. A first kill retires it
+into `Rebuilding` — visible, *not* hittable, life refilling linearly across 900
+ticks — after which it relaunches itself at full health. The second kill is
+final. The cap is the point: without a rebuild the drone vanished in the opening
+exchange; without the cap it becomes the invulnerable button an earlier pass
+already rejected.
+
+**It flies itself** (`Supporter.station`). Formation, plus a lean toward its
+firing line when it is healthy and in range, plus repulsion from closing shots —
+pushed *perpendicular* to the shot rather than directly away, because running
+from something faster than you is how you get hit. Leashed to the owner, and
+floored at 46 px from them.
+
+Two bugs the tests caught rather than review: the closing-velocity dot product
+had its **sign inverted**, so the drone dodged everything that had already missed
+and stood still for everything that had not; and a 46 px support lean against a
+64 px follow-back put the drone *inside* its owner's sprite.
+
+## D64 — Per-pilot playstyles, and the lever that had to be defanged
+
+`AI_PROFILES` answers how good a rival is; `PLAYSTYLES` answers who it is. Kept
+as separate axes so an EASY CIRRUS and an EXTREME CIRRUS both fight like Mira
+Holloway and differ only in how well they pull it off. Every entry is a
+multiplier or a small bias, never an override — the tier still decides which
+*behaviours* are unlocked — which is why the difficulty ladder is unaffected (it
+fights identical machines, so a symmetric lean cancels).
+
+**The first cut made the roster worse, and only measuring found it.** Balance
+spread went from 0.555 to **0.854**, and CIRRUS — the pilot the feature was
+designed around — fell from -0.11 to **-0.44**, the worst machine in the game.
+Ablation, one lever at a time:
+
+| Lever | Spread |
+| --- | --- |
+| neutral (no playstyles) | 0.555 |
+| scalars only | 0.585 |
+| drone doctrine only | 0.624 |
+| **satPreference only** | **0.944** |
+| everything on | 0.854 |
+
+`satPreference` was responsible for essentially all of it. The cause is not the
+personalities: it is that **SHOOT is currently the strongest burst** — the same
+imbalance the forced-SHIELD trade table records as an open question — so any
+pilot told to prefer something else was being told to lose.
+
+Fixed by making a preference **widen the window its mode already wins in**
+instead of overriding the situation: a SHIELD-preferring pilot reaches for it at
+50 % life rather than 35 %, a SPEED-preferring one from 340 px rather than 220 px,
+and both still take SHOOT at range. Everything on now measures **0.511**, better
+than the 0.555 baseline — the playstyles express personality *and* tighten the
+roster. `playstyles.test.ts` pins the spread so this cannot silently regress.
+
+**Drone doctrines** (`escort`, `screen`, `flank`, `shadow`) come from the same
+table. VESPER's screens — it leans far forward on a long leash and dodges *less*,
+which looks like a mistake and is the point: every shot spent on the drone is one
+not spent on a marksman who needs to hold still.

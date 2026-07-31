@@ -4,6 +4,7 @@ import type { MatchSim } from '../combat/MatchSim';
 import { SAT_MODE_NAMES, SatMode } from '../combat/types';
 import { VIEW_W } from '../core/GameConfig';
 import { clamp01 } from '../core/MathUtil';
+import { session } from '../core/Session';
 
 interface Bar {
   bg: Phaser.GameObjects.Rectangle;
@@ -27,10 +28,19 @@ export class Hud {
   private readonly root: Phaser.GameObjects.Container;
   private readonly bars = new Map<string, Bar>();
   private readonly timerText: Phaser.GameObjects.Text;
-  private readonly satModeText: Phaser.GameObjects.Text;
+  /**
+   * Saturation mode and flight state, one pair per pilot.
+   *
+   * Index 0 is the left block, 1 the right. These used to exist only for the
+   * player, which made the rival's saturation mode and flight state invisible —
+   * fine when the right-hand slot was always a CPU, wrong the moment you want to
+   * read what it is about to do, and plainly broken in CPU-vs-CPU where neither
+   * side is "yours".
+   */
+  private readonly satModeTexts: Phaser.GameObjects.Text[] = [];
+  private readonly flightTexts: Phaser.GameObjects.Text[] = [];
   private readonly comboText: Phaser.GameObjects.Text;
   private readonly bannerText: Phaser.GameObjects.Text;
-  private readonly lockText: Phaser.GameObjects.Text;
   private readonly subPips: Phaser.GameObjects.Rectangle[][] = [[], []];
   private comboHold = 0;
   private bannerHold = 0;
@@ -79,25 +89,33 @@ export class Hud {
       .setStroke('#0a0e18', 6);
     this.root.add(this.timerText);
 
-    this.satModeText = scene.add
-      .text(18, 136, 'SAT MODE: SHIELD', {
-        fontFamily: FONT,
-        fontSize: '13px',
-        color: '#ffb0ea',
-      })
-      .setOrigin(0, 0)
-      .setStroke('#0a0e18', 4);
-    this.root.add(this.satModeText);
-
-    this.lockText = scene.add
-      .text(18, 154, 'LOCK: ON', {
-        fontFamily: FONT,
-        fontSize: '12px',
-        color: '#9fe0ff',
-      })
-      .setOrigin(0, 0)
-      .setStroke('#0a0e18', 4);
-    this.root.add(this.lockText);
+    // Mirrored per side, so the rival's mode and flight state are as readable as
+    // the player's. The right-hand pair is right-aligned against the same margin
+    // its bars use.
+    for (let side = 0; side < 2; side++) {
+      const right = side === 1;
+      const x = right ? VIEW_W - 18 : 18;
+      const sat = scene.add
+        .text(x, 136, 'SAT MODE: SHIELD', {
+          fontFamily: FONT,
+          fontSize: '13px',
+          color: '#ffb0ea',
+        })
+        .setOrigin(right ? 1 : 0, 0)
+        .setStroke('#0a0e18', 4);
+      const flight = scene.add
+        .text(x, 154, 'FLIGHT: ON', {
+          fontFamily: FONT,
+          fontSize: '12px',
+          color: '#9fe0ff',
+        })
+        .setOrigin(right ? 1 : 0, 0)
+        .setStroke('#0a0e18', 4);
+      this.satModeTexts.push(sat);
+      this.flightTexts.push(flight);
+      this.root.add(sat);
+      this.root.add(flight);
+    }
 
     this.comboText = scene.add
       .text(VIEW_W / 2, 74, '', {
@@ -235,26 +253,32 @@ export class Hud {
     this.timerText.setText(unlimited ? '--' : String(s.secondsLeft).padStart(2, '0'));
     this.timerText.setColor(!unlimited && s.secondsLeft <= 10 ? '#ff6a6a' : '#eaf2ff');
 
-    const modeName = SAT_MODE_NAMES[p.satMode];
-    this.satModeText.setText(
-      p.satActive ? `SAT ACTIVE: ${modeName}` : `SAT MODE: ${modeName}  [Q]`,
-    );
-    this.satModeText.setColor(
-      p.satActive
-        ? p.satMode === SatMode.Shield
-          ? '#9fe0ff'
-          : p.satMode === SatMode.Shoot
-            ? '#ffd166'
-            : '#ff9ae0'
-        : p.sat >= p.def.gauges.maxSaturation
-          ? '#ffffff'
-          : '#8f7ea8',
-    );
+    for (let side = 0; side < 2; side++) {
+      const c = side === 0 ? p : e;
+      const modeName = SAT_MODE_NAMES[c.satMode];
+      // The `[Q]` hint is the player's key and belongs only on the player's
+      // side; naming it over a CPU would imply a control that does nothing.
+      const hint = side === 0 && session.mode !== 'aiVsAi' ? '  [Q]' : '';
+      this.satModeTexts[side].setText(
+        c.satActive ? `SAT ACTIVE: ${modeName}` : `SAT MODE: ${modeName}${hint}`,
+      );
+      this.satModeTexts[side].setColor(
+        c.satActive
+          ? c.satMode === SatMode.Shield
+            ? '#9fe0ff'
+            : c.satMode === SatMode.Shoot
+              ? '#ffd166'
+              : '#ff9ae0'
+          : c.sat >= c.def.gauges.maxSaturation
+            ? '#ffffff'
+            : '#8f7ea8',
+      );
 
-    this.lockText.setText(
-      `${p.flying ? 'FLIGHT: ON' : p.grounded ? 'FLIGHT: OFF (LANDED)' : 'FLIGHT: OFF'}`,
-    );
-    this.lockText.setColor(p.flying ? '#9fe0ff' : '#8effc0');
+      this.flightTexts[side].setText(
+        c.flying ? 'FLIGHT: ON' : c.grounded ? 'FLIGHT: OFF (LANDED)' : 'FLIGHT: OFF',
+      );
+      this.flightTexts[side].setColor(c.flying ? '#9fe0ff' : '#8effc0');
+    }
 
     // Sub-weapon pips.
     //

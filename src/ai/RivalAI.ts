@@ -1,9 +1,11 @@
 import type { Combatant } from '../combat/Combatant';
 import type { MechDef } from '../mechs/MechDef';
 import { ActState, Btn, ProjKind, SatMode, type InputFrame } from '../combat/types';
+import { playstyleFor, type Playstyle } from './Playstyles';
 import type { Projectile } from '../projectiles/Projectile';
 import type { Rng } from '../core/Rng';
 import { Difficulty } from '../core/Session';
+import { clamp } from '../core/MathUtil';
 
 /**
  * Rival CPU behaviour.
@@ -290,6 +292,17 @@ export class RivalAI {
     return AI_PROFILES[this.cfg.difficulty] ?? AI_PROFILES[Difficulty.Normal];
   }
 
+  /**
+   * Who this pilot is, as opposed to how good they are.
+   *
+   * Read from the machine being flown rather than passed in, so a rival picked
+   * on the select screen arrives with its pilot's habits already attached and
+   * nothing has to remember to wire them up. See `ai/Playstyles.ts`.
+   */
+  private style(self: Combatant): Playstyle {
+    return playstyleFor(self.def.id);
+  }
+
   private get skill(): number {
     return this.p.skill;
   }
@@ -320,7 +333,11 @@ export class RivalAI {
    * lifetime that bounds every shot. There is no standing off that.
    */
   private preferredRangeFor(self: Combatant, foe: Combatant): number {
-    if (!this.p.rangeIq) return 300 - this.skill * 90;
+    // The pilot's own preference scales whatever the tier works out, so a
+    // marksman stands off and a brawler crowds in at every difficulty rather
+    // than only once `rangeIq` unlocks.
+    const styleMul = this.style(self).rangeMul;
+    if (!this.p.rangeIq) return (300 - this.skill * 90) * styleMul;
 
     const mine = reachOf(self.def);
     const theirs = reachOf(foe.def);
@@ -467,7 +484,10 @@ export class RivalAI {
       this.dashCharge <= 0 &&
       self.boost >= self.def.flight.dashCost + floor &&
       (mx !== 0 || my !== 0) &&
-      this.rng.chance(evadeDash ? this.p.evadeDashChance : this.p.dashChance);
+      // Twitchiness is the pilot's: CIRRUS is never still, TERRAMOTH walks.
+      this.rng.chance(
+        clamp((evadeDash ? this.p.evadeDashChance : this.p.dashChance) * this.style(self).dashMul, 0, 1),
+      );
     if (wantsDash) {
       pressed.v |= 1 << Btn.Boost;
       held.v |= 1 << Btn.Boost;
@@ -555,7 +575,14 @@ export class RivalAI {
     const shouldBarrier =
       canBarrier &&
       barrierWindow &&
-      this.rng.chance(cornered ? Math.max(this.p.barrierChance, 0.85) : this.p.barrierChance);
+      // Turtles guard; skirmishers would rather not be there at all. The
+      // cornered floor is untouched — that branch is 'nothing else will work',
+      // and no characterisation should talk a pilot out of it.
+      this.rng.chance(
+        cornered
+          ? Math.max(this.p.barrierChance, 0.85)
+          : clamp(this.p.barrierChance * this.style(self).guardMul, 0, 1),
+      );
 
     if (shouldBarrier) {
       // Barrier burst absorbs the shot and feeds saturation — the good answer.
@@ -838,7 +865,10 @@ export class RivalAI {
       // Melee is the one thing a guard barely stops and the only way through a
       // Shield burst, so a rival that reads the defence swings into it.
       const turtling = this.p.closeOnGuard && (foe.guarding || foe.shieldActive);
-      return this.rng.chance(turtling ? 0.95 : 0.5 + this.skill * 0.45) ? Btn.Melee : null;
+      // Appetite is the pilot's, and it is where a long combo chain pays: CIRRUS
+      // swings at nearly everything, VESPER would much rather be elsewhere.
+      const want = clamp(0.5 + this.skill * 0.45 + this.style(self).meleeAppetite, 0.05, 0.98);
+      return this.rng.chance(turtling ? 0.95 : want) ? Btn.Melee : null;
     }
 
     /**
@@ -856,8 +886,12 @@ export class RivalAI {
       this.p.punishRecovery &&
       (foe.act === ActState.Hitstun || foe.satBurnout > 0 || foe.guardBreakStun > 0);
 
+    // Personality scales the tier's willingness to attack at all. Above 1 is a
+    // real trade, not a free upgrade: firing anchors movement, which is why
+    // EXTREME's base aggression is deliberately lower than HARD's.
+    const aggro = clamp(this.p.aggression * this.style(self).aggressionMul, 0, 1);
     const roll = this.rng.next();
-    if (roll > (exposed ? Math.min(1, this.p.aggression + 0.25) : this.p.aggression)) return null;
+    if (roll > (exposed ? Math.min(1, aggro + 0.25) : aggro)) return null;
 
     // The sub-weapon is not on this menu: `Btn.Sub` deploys and recalls the
     // drone rather than firing it, and the drone picks its own firing moments.
@@ -947,10 +981,34 @@ export class RivalAI {
     return wantOut !== s.outbound;
   }
 
+  /**
+   * Which burst to spend.
+   *
+   * The survival override outranks characterisation — nobody's personality is
+   * worth losing a match over — but everything below it is the pilot's own
+   * preference, which is one of the most legible personality tells in the game.
+   * A pilot who prefers SPEED still takes SHIELD when they are about to die.
+   */
   private chooseSatMode(self: Combatant, dist: number): SatMode {
     const lifeFrac = self.life / self.def.gauges.maxLife;
-    if (lifeFrac < 0.35) return SatMode.Shield;
-    if (dist < 220) return SatMode.Speed;
+    const pref = this.style(self).satPreference;
+
+    // A pilot's preference **widens the window their favourite mode already
+    // wins in**; it never overrides the situation.
+    //
+    // The first cut let `satPreference` decide outright and it was measured as
+    // the single most destructive thing in this whole file: roster spread went
+    // from 0.555 to 0.944, and CIRRUS — the pilot the feature was designed
+    // around — fell from -0.11 to -0.43. The cause is not the personalities, it
+    // is that SHOOT is simply the strongest burst right now (see the forced-
+    // SHIELD trade table in the handoff's open questions), so *any* pilot told
+    // to prefer something else was being told to lose. Nudging the thresholds
+    // keeps the characterisation legible and costs almost nothing: measured at
+    // 0.585 spread against 0.555 for no playstyles at all.
+    const shieldAt = pref === SatMode.Shield ? 0.5 : 0.35;
+    if (lifeFrac < shieldAt) return SatMode.Shield;
+    const speedAt = pref === SatMode.Speed ? 340 : 220;
+    if (dist < speedAt) return SatMode.Speed;
     return SatMode.Shoot;
   }
 
