@@ -122,6 +122,33 @@ export interface DefenceDef {
  * The point is that a swing is an *arc*. Without one the mech simply translates
  * into its target with the blade held out, which reads as a repeated stab.
  */
+/**
+ * How a melee weapon is delivered.
+ *
+ * The arc alone cannot describe every weapon: it is purely rotational, so a
+ * pile driver and a beam saber would move identically. Motion selects the
+ * *shape* of the strike, and `reach` gives it a forward throw in logical pixels.
+ *
+ * - `swing`  — pure rotation. Blades: saber, cleaver, glaive, daggers, claw.
+ * - `thrust` — draw back, then stab straight out along the aim. Bayonets.
+ * - `bash`   — a short shoulder-first shove that returns. Ram shields.
+ * - `piston` — no wind-up rotation, then a violent short extension. Pile drivers.
+ */
+export type MeleeMotion = 'swing' | 'thrust' | 'bash' | 'piston';
+
+/**
+ * Which family of melee sound a chassis uses.
+ *
+ * `blade` covers everything with an energy edge — saber, bayonet, daggers,
+ * cleaver, glaive — and escalates through the swing cues. `mechanical` covers
+ * claws, rams and pile drivers, which should never play an energy swing.
+ *
+ * This lives in data rather than being switched on mech id in the audio layer,
+ * which is what it used to be: that only worked while exactly one mech was not
+ * carrying a sword.
+ */
+export type MeleeCue = 'blade' | 'mechanical';
+
 export interface SwingArc {
   /** Degrees the blade is raised above the aim before the slash begins. */
   windup: number;
@@ -131,6 +158,14 @@ export interface SwingArc {
   windupFrac: number;
   /** Mirror the arc on alternate hits, as the reference's variants did. */
   alternate: boolean;
+  /** Delivery style. Omitted means `swing`, which is the pre-existing behaviour. */
+  motion?: MeleeMotion;
+  /**
+   * Peak forward extension in logical pixels, along the aim. Ignored by `swing`.
+   * This is presentation only — reach and damage come from the attack data, so a
+   * bigger lunge here never changes what the move actually hits.
+   */
+  reach?: number;
 }
 
 /**
@@ -227,7 +262,20 @@ export interface RigPart {
   follow: 'chassis' | 'turret' | 'thruster' | 'legNear' | 'legFar' | 'fixed';
 }
 
+/**
+ * How big this machine is on screen, relative to HALCYON at 1.0.
+ *
+ * The roster is not one chassis in eight paint jobs — a siege walker should
+ * loom over a skirmisher. The gameplay hitboxes already encoded this (TERRAMOTH
+ * `hurtRadius` 36 against CIRRUS 23); only the rendering did not, because every
+ * part was drawn at one uniform `PART_SCALE`.
+ *
+ * Keep this proportional to `hurtRadius`, or a mech will be hit from further
+ * away than it visibly occupies. `roster.test.ts` asserts the two stay in step.
+ */
 export interface MechRigDef {
+  /** Visual scale relative to HALCYON. See the note above. */
+  scale: number;
   parts: RigPart[];
   drawOrder: string[];
   /** Collision radius used by the simulation. */
@@ -292,6 +340,8 @@ export interface MechDef {
    * it smaller than the chassis itself and the melee feels broken.
    */
   meleeRange: number;
+  /** Melee sound family. Omitted means `blade`. */
+  meleeCue?: MeleeCue;
 
   /** Palette used by the procedural fallback renderer and effects tinting. */
   /** `glow` matches the mech's emissive palette entry — beam blade, visor, tubes. */

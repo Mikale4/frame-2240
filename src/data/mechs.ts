@@ -3,6 +3,7 @@ import { BarrierResponse, ProjKind } from '../combat/types';
 import type { FlightDef, GaugeDef, BarrierDef, MechDef, MechRigDef } from '../mechs/MechDef';
 import { DEG } from '../core/MathUtil';
 import { Element } from '../combat/Status';
+import { EXTRA_MECHS } from './rosterExtra';
 
 /**
  * Original mech roster for the vertical slice.
@@ -23,6 +24,8 @@ import { Element } from '../combat/Status';
  * rifle is thrust well ahead of the chassis.
  */
 const HALCYON_RIG: MechRigDef = {
+  // The reference size; every other chassis is expressed relative to this.
+  scale: 1.0,
   hurtRadius: 28,
   chassisHeight: 104,
   // Hip at y=27 from the core, and halcyon_legNear.png reaches 57 logical px
@@ -69,6 +72,7 @@ const HALCYON_RIG: MechRigDef = {
  * tools/blender/build_mechs.py.
  */
 const NOCTURNE_RIG: MechRigDef = {
+  scale: 1.11,
   hurtRadius: 31,
   chassisHeight: 100,
   // Shorter, thicker legs: hip at y=25, reaching 47 logical px below it.
@@ -603,7 +607,19 @@ export const NOCTURNE: MechDef = {
   },
 };
 
+/**
+ * The full roster, in select-screen order.
+ *
+ * HALCYON and NOCTURNE are defined above because they are the two the vertical
+ * slice was tuned against and their rigs are the reference for the Blender
+ * exporter. The remaining six live in `rosterExtra.ts` to keep this file
+ * readable; the import direction is one-way, so there is no cycle.
+ */
 export const MECHS: Record<string, MechDef> = {
   halcyon: HALCYON,
   nocturne: NOCTURNE,
+  ...Object.fromEntries(EXTRA_MECHS.map((m) => [m.id, m])),
 };
+
+/** Stable ordering for menus and the mech select screen. */
+export const ROSTER: MechDef[] = [HALCYON, NOCTURNE, ...EXTRA_MECHS];
