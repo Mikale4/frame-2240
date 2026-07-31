@@ -94,6 +94,48 @@ export const REBUILD_TICKS = 900;
 /** How many times a drone may come back. One, then the next kill is final. */
 export const MAX_REBUILDS = 1;
 
+/**
+ * What the drone is doing with its position this tick.
+ *
+ * The 2005 reference's supporters do not merely trail their pilot — they work
+ * with them, most visibly by crossing the screen so the target is caught between
+ * the drone's fire and the mech's. These are this project's take on that: the
+ * escort has a *plan* that reacts to what its owner is doing, and the doctrine
+ * from the pilot's playstyle decides which plans it is willing to run.
+ */
+export const enum DroneTactic {
+  /** Hold the authored formation. The resting state. */
+  Escort = 0,
+  /**
+   * Cross to the far side of the target, so it sits between two firing lines.
+   *
+   * The signature move, and the one thing here that deliberately ignores the
+   * leash — a pincer that stays 190 px from its owner is not a pincer. A target
+   * caught between a mech and its escort cannot face both, and cannot retreat
+   * from one without closing on the other.
+   */
+  Pincer = 1,
+  /**
+   * Interpose between a helpless owner and the threat.
+   *
+   * A pilot in hitstun or burnout cannot defend themselves and the drone is the
+   * only thing that can act. It is worth far more as a body in the way for a
+   * second than as a gun somewhere else.
+   */
+  Cover = 2,
+  /**
+   * Crowd a turtling target until it has to answer something.
+   *
+   * A held guard stops most of what a mech throws; it does not make the problem
+   * of two attackers go away. Getting in close forces the choice.
+   */
+  Harass = 3,
+  /** Hurt: break off, get back into formation, stop volunteering. */
+  Regroup = 4,
+}
+
+export const DRONE_TACTIC_NAMES = ['ESCORT', 'PINCER', 'COVER', 'HARASS', 'REGROUP'];
+
 // ---- movement AI tuning ----------------------------------------------------
 // All in logical pixels, all displacements from the authored formation point.
 
@@ -127,6 +169,31 @@ const MIN_OWNER_GAP = 46;
  * reading as part of its owner's machine.
  */
 const LEASH = 190;
+/**
+ * How far past the target a pincer parks itself.
+ *
+ * Measured from the target, on the far side from the owner, so the two of them
+ * bracket it. Comfortably outside a chassis so the drone is not sitting inside
+ * whatever it is shooting at.
+ */
+const PINCER_BEYOND = 210;
+/**
+ * The leash a pincer is allowed, replacing the ordinary one.
+ *
+ * The whole play is crossing to the other side of the fight, so the escort
+ * radius that keeps a drone in formation is exactly the thing that has to be
+ * lifted. Still bounded — this is a manoeuvre, not a second fighter wandering
+ * off — but bounded at arena scale rather than formation scale.
+ */
+const PINCER_LEASH = 1100;
+/** Minimum owner-to-target gap worth crossing. Below this there is no far side. */
+const PINCER_MIN_GAP = 320;
+/** How far in front of a helpless owner the drone puts itself. */
+const COVER_AHEAD = 96;
+/** How close a harassing drone crowds its target. */
+const HARASS_GAP = 120;
+/** Life fraction below which the drone stops volunteering for anything. */
+const REGROUP_LIFE = 0.35;
 
 /** What the drone needs to know about one projectile in order to dodge it. */
 export interface DroneThreat {
@@ -151,11 +218,25 @@ interface DoctrineTuning {
   leash: number;
   caution: number;
   offAxis: number;
+  /**
+   * The team-up plays this doctrine is willing to run, in priority order.
+   *
+   * `Escort` and `Regroup` are always available and are not listed — one is the
+   * resting state and the other is self-preservation. What a doctrine chooses is
+   * which *co-operative* plays its pilot's game actually wants.
+   */
+  plays: readonly DroneTactic[];
 }
 
 const DOCTRINES: Record<DroneDoctrine, DoctrineTuning> = {
-  /** Balanced. The baseline every other row is a deviation from. */
-  escort: { forward: 1, leash: 1, caution: 1, offAxis: 0 },
+  /** Balanced, and willing to run anything when the moment calls for it. */
+  escort: {
+    forward: 1,
+    leash: 1,
+    caution: 1,
+    offAxis: 0,
+    plays: [DroneTactic.Cover, DroneTactic.Pincer, DroneTactic.Harass],
+  },
   /**
    * Get in front and stay there.
    *
@@ -164,11 +245,34 @@ const DOCTRINES: Record<DroneDoctrine, DoctrineTuning> = {
    * spent on a pilot who needs to hold still. VESPER cannot line up a shot while
    * being rushed, so his escort goes and does the being-rushed for him.
    */
-  screen: { forward: 2.6, leash: 1.9, caution: 0.45, offAxis: 0 },
+  screen: {
+    forward: 2.6,
+    leash: 1.9,
+    caution: 0.45,
+    offAxis: 0,
+    // Harass first: a screen exists to be the thing being dealt with.
+    plays: [DroneTactic.Harass, DroneTactic.Cover, DroneTactic.Pincer],
+  },
   /** Work an angle. Off the owner-to-target line, and hard to pin. */
-  flank: { forward: 1.5, leash: 1.5, caution: 1.35, offAxis: 78 },
+  flank: {
+    forward: 1.5,
+    leash: 1.5,
+    caution: 1.35,
+    offAxis: 78,
+    // Angles are the whole doctrine, and a pincer is the strongest angle there
+    // is — CIRRUS and NULLTIDE both want the target facing the wrong way.
+    plays: [DroneTactic.Pincer, DroneTactic.Cover],
+  },
   /** Stay tight, stay alive, keep the passive up. */
-  shadow: { forward: 0.35, leash: 0.6, caution: 1.6, offAxis: 0 },
+  shadow: {
+    forward: 0.35,
+    leash: 0.6,
+    caution: 1.6,
+    offAxis: 0,
+    // Never leaves. A shadow's value is the passive staying up, and crossing the
+    // arena is how a drone stops existing.
+    plays: [DroneTactic.Cover],
+  },
 };
 
 /** The subset of the owner the drone needs. Keeps this file free of Combatant. */
@@ -179,7 +283,20 @@ export interface SupporterOwner {
   alive: boolean;
   id: number;
   team: number;
+  /**
+   * Cannot act: hitstun, a saturation burnout, or a broken guard.
+   *
+   * Optional so a bare stand-in can still be handed to `step` in a test; a
+   * missing value simply reads as "not helpless".
+   */
+  helpless?: boolean;
+  /** Holding a guard. */
+  guarding?: boolean;
+  /** Inside a Shield saturation burst. */
+  shieldActive?: boolean;
 }
+
+
 
 /**
  * Asks the owner for a volley.
@@ -221,6 +338,8 @@ export class Supporter {
    * a second would be paying for a question with one answer.
    */
   doctrine: DroneDoctrine = 'escort';
+  /** The team-up play being run this tick, for the debug overlay and tests. */
+  tactic: DroneTactic = DroneTactic.Escort;
 
   /** The attack this drone was ordered to fire, held through the windup. */
   private pending: AttackDef | null = null;
@@ -526,16 +645,102 @@ export class Supporter {
    * it read as an escort keeping up with its mech rather than a second fighter
    * wandering off to have its own war. Deterministic throughout.
    */
+  /**
+   * Which team-up play to run this tick.
+   *
+   * Strictly ordered rather than scored, and entirely deterministic: the drone
+   * has no RNG and a replay has to reproduce its path exactly. Self-preservation
+   * outranks everything, then a helpless owner, then the doctrine's own
+   * preferences in the order its pilot would want them.
+   */
+  private chooseTactic(owner: SupporterOwner, target: SupporterOwner | null): DroneTactic {
+    if (!this.onStation || !target || !target.alive || !owner.alive) return DroneTactic.Escort;
+    // Hurt drones go home. A dead escort helps nobody, and it is one kill from
+    // being gone for the match.
+    if (this.lifeFraction < REGROUP_LIFE) return DroneTactic.Regroup;
+
+    const plays = DOCTRINES[this.doctrine].plays;
+    const gap = Math.hypot(target.x - owner.x, target.y - owner.y);
+
+    // A pilot who cannot act is a pilot who needs a body in the way. This one is
+    // ungated on range, because it is about the owner rather than the target.
+    if (owner.helpless && plays.includes(DroneTactic.Cover)) return DroneTactic.Cover;
+
+    /**
+     * **The offensive plays need a fight to join.**
+     *
+     * Both of them are journeys, and a journey to somewhere the drone cannot
+     * shoot from is just time spent out of formation. Gated on the target being
+     * inside the drone's own `fireRange`, which also keeps it in formation
+     * through the intro and any stretch where the two machines are simply not
+     * engaged — without this the escorts set off across the arena on the first
+     * tick of the match and never came back.
+     */
+    const reach = Math.hypot(target.x - this.x, target.y - this.y);
+    if (reach > this.def.fireRange) return DroneTactic.Escort;
+
+    // Someone hiding behind a guard has to be given a second problem.
+    if ((target.guarding || target.shieldActive) && plays.includes(DroneTactic.Harass)) {
+      return DroneTactic.Harass;
+    }
+    // Enough room between the two machines for a far side to exist.
+    if (gap > PINCER_MIN_GAP && plays.includes(DroneTactic.Pincer)) return DroneTactic.Pincer;
+    if (plays.includes(DroneTactic.Harass) && gap < PINCER_MIN_GAP) return DroneTactic.Harass;
+    return DroneTactic.Escort;
+  }
+
   private station(owner: SupporterOwner, target: SupporterOwner | null, threats: DroneThreat[]): { x: number; y: number } {
     const d = this.def;
     const doc = DOCTRINES[this.doctrine];
     const base = { x: owner.x - owner.facing * d.followBack, y: owner.y + d.followDown };
 
+    this.tactic = this.chooseTactic(owner, target);
+
     let ox = 0;
     let oy = 0;
+    // A pincer overrides the escort radius; every other play keeps it.
+    let leash = LEASH * doc.leash;
 
-    // ---- support --------------------------------------------------------
-    if (this.onStation && target && target.alive) {
+    // ---- the team-up plays ----------------------------------------------
+    if (target && target.alive) {
+      const tx = target.x - owner.x;
+      const ty = target.y - owner.y;
+      const tl = Math.hypot(tx, ty) || 1;
+      const ux = tx / tl;
+      const uy = ty / tl;
+
+      switch (this.tactic) {
+        case DroneTactic.Pincer: {
+          // Park beyond the target, on the line out from the owner, so the two
+          // of them bracket it. Expressed as an offset from the formation point
+          // because everything downstream is.
+          leash = PINCER_LEASH;
+          ox += tx + ux * PINCER_BEYOND - (base.x - owner.x);
+          oy += ty + uy * PINCER_BEYOND - (base.y - owner.y);
+          break;
+        }
+        case DroneTactic.Cover: {
+          // Between the owner and whatever is hitting them.
+          ox += ux * COVER_AHEAD - (base.x - owner.x);
+          oy += uy * COVER_AHEAD - (base.y - owner.y);
+          break;
+        }
+        case DroneTactic.Harass: {
+          // Right up on the target, offset to the drone's current side so two
+          // harassing escorts do not occupy the same point.
+          const side = this.y >= target.y ? 1 : -1;
+          ox += tx - ux * HARASS_GAP - (base.x - owner.x);
+          oy += ty - uy * HARASS_GAP + side * 46 - (base.y - owner.y);
+          leash = LEASH * Math.max(doc.leash, 2.4);
+          break;
+        }
+        default:
+          break;
+      }
+    }
+
+    // ---- support (Escort only; the plays above set their own point) ------
+    if (this.tactic === DroneTactic.Escort && this.onStation && target && target.alive) {
       const dist = Math.hypot(target.x - this.x, target.y - this.y);
       // Only when it can actually shoot, and only while it is healthy enough to
       // afford the exposure. A drone on its last few hit points falls back into
@@ -582,13 +787,13 @@ export class Supporter {
         const ny = t.vx / speed;
         const side = nx * dx + ny * dy >= 0 ? 1 : -1;
         const weight = (1 - dist / THREAT_RADIUS) * closing;
-        ox += nx * side * EVADE_STRENGTH * doc.caution * weight;
-        oy += ny * side * EVADE_STRENGTH * doc.caution * weight;
+        const care = doc.caution * (this.tactic === DroneTactic.Regroup ? 2 : 1);
+        ox += nx * side * EVADE_STRENGTH * care * weight;
+        oy += ny * side * EVADE_STRENGTH * care * weight;
       }
     }
 
     // ---- leash ----------------------------------------------------------
-    const leash = LEASH * doc.leash;
     const mag = Math.hypot(ox, oy);
     if (mag > leash) {
       ox = (ox / mag) * leash;

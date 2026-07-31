@@ -628,6 +628,17 @@ export class Combatant implements FlightState {
     return Math.max(1, Math.round(SAT_SPEED_BONUS_HITS * this.satPower));
   }
 
+  /**
+   * Cannot act at all this tick.
+   *
+   * The three states a pilot genuinely cannot escape: hitstun, the burnout at
+   * the end of a saturation burst, and a broken guard. Read by the supporter,
+   * which is the only thing still able to act on their behalf.
+   */
+  get helpless(): boolean {
+    return this.act === ActState.Hitstun || this.satBurnout > 0 || this.guardBreakStun > 0;
+  }
+
   get shieldActive(): boolean {
     return this.satActive && this.satMode === SatMode.Shield;
   }

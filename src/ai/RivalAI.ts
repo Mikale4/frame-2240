@@ -6,6 +6,7 @@ import type { Projectile } from '../projectiles/Projectile';
 import type { Rng } from '../core/Rng';
 import { Difficulty } from '../core/Session';
 import { clamp } from '../core/MathUtil';
+import { Element } from '../combat/Status';
 import { DESPERATION_LIFE } from '../combat/Combatant';
 
 /**
@@ -139,6 +140,51 @@ export interface AiProfile {
    * forcing the distance closed.
    */
   tempoIq: boolean;
+  /**
+   * Reads status effects — its opponent's and its own.
+   *
+   * A slowed target cannot disengage, which turns Cryo into a punish window
+   * rather than a bit of chip; a *self* that is slowed cannot kite, so trying to
+   * hold a range it can no longer hold is worse than closing. It also stops
+   * re-applying an element that is already running, which was pure waste.
+   */
+  statusIq: boolean;
+  /**
+   * Reads the frame situation: invulnerability, the barrier repel window, dash
+   * cooldown and how much recovery an attack genuinely has left.
+   *
+   * The purest skill trait in the table. Without it the rival fires into
+   * i-frames, swings into a repel that throws it off and stuns it for a full
+   * second, and "punishes" recoveries that already ended.
+   */
+  frameIq: boolean;
+  /**
+   * Reads the opponent's gauges — barrier, boost, energy, and how much of a
+   * burst is left to run.
+   *
+   * Everything here is drawn on the HUD, so it is information the player has had
+   * all along. A guard about to break wants pressure; an opponent with an empty
+   * boost gauge cannot dodge the slow heavy shot; a Shield burst with a quarter
+   * second left is worth waiting out rather than trading into.
+   */
+  resourceIq: boolean;
+  /**
+   * Values the drones — its own and the opponent's.
+   *
+   * A wounded enemy drone is one kill from being gone for the match, which is
+   * worth going out of the way for. Its own drone rebuilding means its passive
+   * is off, which is worth playing around.
+   */
+  droneIq: boolean;
+  /**
+   * Aims where the target is going rather than where it is.
+   *
+   * Nothing but a drone's own shots home, so a projectile aimed at a moving
+   * target's current position is aimed at where it *was* by the time it arrives.
+   * Solves the intercept and steers with the same manual-aim input a human
+   * produces, so it stays inside the fairness rule.
+   */
+  leadShots: boolean;
   /** Willingness to attack at all, before weapon choice. */
   aggression: number;
   /** Per-tick chance of spending a dash while repositioning. */
@@ -177,6 +223,11 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     closeOnGuard: false,
     rangeIq: false,
     tempoIq: false,
+    statusIq: false,
+    frameIq: false,
+    resourceIq: false,
+    droneIq: false,
+    leadShots: false,
     aggression: 0.26,
     dashChance: 0.03,
     boostReserveDashes: 0,
@@ -193,6 +244,11 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     closeOnGuard: false,
     rangeIq: false,
     tempoIq: false,
+    statusIq: false,
+    frameIq: false,
+    resourceIq: false,
+    droneIq: false,
+    leadShots: false,
     aggression: 0.5,
     dashChance: 0.1,
     boostReserveDashes: 1,
@@ -214,6 +270,15 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     // separates the top two tiers.
     rangeIq: false,
     tempoIq: false,
+    // HARD gets the two reads that stop it doing visibly stupid things — firing
+    // into invulnerability, swinging into a repel, ignoring a slowed target —
+    // plus the ability to lead a shot. What it still lacks is the gauge reading
+    // and the drone valuation, which is where EXTREME pulls away.
+    statusIq: true,
+    frameIq: true,
+    resourceIq: false,
+    droneIq: false,
+    leadShots: true,
     aggression: 0.68,
     dashChance: 0.16,
     boostReserveDashes: 2,
@@ -234,6 +299,11 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     closeOnGuard: true,
     rangeIq: true,
     tempoIq: true,
+    statusIq: true,
+    frameIq: true,
+    resourceIq: true,
+    droneIq: true,
+    leadShots: true,
     // Not the highest aggression on the roster, deliberately. Firing anchors
     // movement, so "attack at every opportunity" measured worse than HARD.
     // EXTREME wins on *which* shots it takes and on never being where the last
@@ -359,10 +429,16 @@ export class RivalAI {
       return Math.max(self.def.rig.hurtRadius * 3, want);
     }
 
+    // **A slowed machine cannot hold a range.** Cryo cuts movement and
+    // acceleration, so a pilot who keeps trying to kite through it simply gets
+    // caught at the distance the *opponent* chose, which is the worst of both.
+    // Closing is the answer: it is the one direction the opponent is helping.
+    const chilled = this.p.statusIq && self.status.speedScale < 0.95;
+
     // The pilot's own preference scales whatever the tier works out, so a
     // marksman stands off and a brawler crowds in at every difficulty rather
     // than only once `rangeIq` unlocks.
-    const styleMul = this.style(self).rangeMul;
+    const styleMul = this.style(self).rangeMul * (chilled ? 0.72 : 1);
     if (!this.p.rangeIq) return (300 - this.skill * 90) * styleMul;
 
     const mine = reachOf(self.def);
@@ -384,6 +460,11 @@ export class RivalAI {
       // Comparable machines: fight inside my own effective envelope.
       want = mine.max * 0.55;
     }
+
+    // Without its drone a pilot has lost its passive and its sub-weapon, so the
+    // exchange it was winning a moment ago is not the exchange it is in now.
+    // Give ground while the escort rebuilds rather than trading at a deficit.
+    if (this.p.droneIq && self.supporter.rebuilding) want *= 1.2;
 
     if (this.p.tempoIq) {
       // Play the score. A lead is worth protecting with distance; a deficit will
@@ -689,14 +770,79 @@ export class RivalAI {
     const finalHeld = held.v | realPressed;
     this.prevHeld = finalHeld;
 
+    const lead = this.p.leadShots ? this.leadAim(self, foe) : null;
+
     return {
       dx: mx,
       dy: my,
       held: finalHeld,
       pressed: realPressed,
-      aimX: null,
-      aimY: null,
+      aimX: lead ? lead.x : null,
+      aimY: lead ? lead.y : null,
     };
+  }
+
+  /**
+   * Where to point the mounts so a shot and a moving target arrive together.
+   *
+   * Nothing but a drone's own volley homes, so aiming at where the opponent *is*
+   * aims at where they *were* by the time the shot crosses the gap — at 700 px
+   * against a boosting mech that is most of a chassis width of miss, every time.
+   * The rival was geometrically incapable of landing long-range fire.
+   *
+   * Solves the standard intercept: with `d` the offset to the target, `v` its
+   * velocity and `s` the shot's speed, the flight time `t` satisfies
+   * `|d + v t| = s t`, which expands to `(v·v - s²)t² + 2(v·d)t + d·d = 0`.
+   * The smallest positive root is the first moment they can meet.
+   *
+   * Returns null — falling back to the plain lock — when there is no solution
+   * (the target is outrunning the shot), when the intercept lies beyond what the
+   * weapon can actually reach, or when the target is barely moving and the lead
+   * would be noise. Emitted as manual aim, which is the same input a human
+   * produces, so this stays inside the fairness rule.
+   */
+  private leadAim(self: Combatant, foe: Combatant): { x: number; y: number } | null {
+    const a = self.def.main;
+    const speed = a.projSpeed * self.satProjSpeedScale;
+    if (speed <= 0.001) return null;
+
+    const dx = foe.x - self.x;
+    const dy = foe.y - self.y;
+    // Not worth leading a target that is holding still; the plain lock is
+    // already exact and a spurious lead only introduces error.
+    const vlen = Math.hypot(foe.vx, foe.vy);
+    if (vlen < 0.6) return null;
+
+    const qa = foe.vx * foe.vx + foe.vy * foe.vy - speed * speed;
+    const qb = 2 * (foe.vx * dx + foe.vy * dy);
+    const qc = dx * dx + dy * dy;
+
+    let tHit: number;
+    if (Math.abs(qa) < 1e-6) {
+      // Target moving at exactly the shot's speed: the quadratic degenerates.
+      if (Math.abs(qb) < 1e-6) return null;
+      tHit = -qc / qb;
+    } else {
+      const disc = qb * qb - 4 * qa * qc;
+      // No real root means the shot cannot catch them at all.
+      if (disc < 0) return null;
+      const root = Math.sqrt(disc);
+      const t1 = (-qb - root) / (2 * qa);
+      const t2 = (-qb + root) / (2 * qa);
+      const pos = [t1, t2].filter((v) => v > 0);
+      if (pos.length === 0) return null;
+      tHit = Math.min(...pos);
+    }
+
+    // A shot dies on a timer rather than at a wall, so an intercept the weapon
+    // cannot stay alive long enough to reach is not an intercept.
+    if (!Number.isFinite(tHit) || tHit > a.projLife) return null;
+
+    const ax = dx + foe.vx * tHit;
+    const ay = dy + foe.vy * tHit;
+    const len = Math.hypot(ax, ay);
+    if (len < 0.001) return null;
+    return { x: ax / len, y: ay / len };
   }
 
   private pickTactic(
@@ -714,6 +860,47 @@ export class RivalAI {
     // them rather than plinking at a wall.
     if (this.p.closeOnGuard && (foe.guarding || foe.shieldActive) && dist > self.effectiveMeleeRange) {
       return AiTactic.Approach;
+    }
+
+    // Wait out the last of a Shield burst rather than trading into it: every
+    // shot spent on it is absorbed for nothing *and* feeds their next meter.
+    if (
+      this.p.resourceIq &&
+      foe.satActive &&
+      foe.satMode === SatMode.Shield &&
+      foe.satTicks > 30 &&
+      dist < pref
+    ) {
+      return AiTactic.Retreat;
+    }
+
+    // An opponent with no boost cannot dodge and no barrier cannot guard. That
+    // is the moment the fight is decided, and it does not last.
+    if (
+      this.p.resourceIq &&
+      !foe.satActive &&
+      foe.boost < foe.def.flight.dashCost &&
+      foe.barrier < foe.def.gauges.maxBarrier * 0.3
+    ) {
+      return AiTactic.Approach;
+    }
+
+    // A wounded enemy drone is one kill from being gone for the match — but only
+    // worth taking when it is *already* the nearer target.
+    //
+    // Measured: the first cut said "worth crossing the yard for", which in
+    // practice reduced to returning Approach on almost every re-roll, because a
+    // wounded drone is nearly always further than melee range. EXTREME abandoned
+    // its spacing to chase an escort and **lost 0.09 of a life bar to HARD** for
+    // it. The kill is a bonus to collect, not a plan to follow.
+    if (
+      this.p.droneIq &&
+      foe.supporter.hittable &&
+      foe.supporter.lifeFraction < 0.3 &&
+      foe.supporter.rebuildsLeft === 0
+    ) {
+      const dd = Math.hypot(foe.supporter.x - self.x, foe.supporter.y - self.y);
+      if (dd < dist * 0.75 && dd < reachOf(self.def).max * 0.6) return AiTactic.Approach;
     }
 
     if (threatened && foeCommitted && this.rng.chance(0.35 + this.skill * 0.35)) {
@@ -924,14 +1111,32 @@ export class RivalAI {
     // extends the lock ninefold, and gating on the base figure meant the buff
     // existed and the rival could not reach for it.
     if (dist < self.effectiveMeleeRange) {
+      // **Never swing into a live repel.** A barrier burst throws the opening
+      // strike back at whoever made it, for `MELEE_REPEL_STUN` — a full second
+      // of helplessness, the worst single outcome available to an attacker.
+      // Without `frameIq` the rival walks into it blind.
+      if (this.p.frameIq && foe.repelTicks > 0 && foe.meleeHitsTaken === 0) return null;
+
       // Melee is the one thing a guard barely stops and the only way through a
       // Shield burst, so a rival that reads the defence swings into it.
       const turtling = this.p.closeOnGuard && (foe.guarding || foe.shieldActive);
       // Appetite is the pilot's, and it is where a long combo chain pays: CIRRUS
       // swings at nearly everything, VESPER would much rather be elsewhere.
-      const want = clamp(0.5 + this.skill * 0.45 + this.style(self).meleeAppetite, 0.05, 0.98);
+      let want = clamp(0.5 + this.skill * 0.45 + this.style(self).meleeAppetite, 0.05, 0.98);
+      // A target that cannot move is a target that cannot leave the swing. This
+      // is the read that makes NULLTIDE's Cryo a plan rather than an accident.
+      if (this.p.statusIq && foe.status.speedScale < 0.95) want = Math.min(0.98, want + 0.3);
+      // Nor can one with no dash available and nothing left to spend on one.
+      if (this.p.frameIq && foe.dashCooldown > 0 && foe.boost < foe.def.flight.dashCost) {
+        want = Math.min(0.98, want + 0.2);
+      }
       return this.rng.chance(turtling ? 0.95 : want) ? Btn.Melee : null;
     }
+
+    // **Do not fire into invulnerability.** Every shot thrown at a mech inside
+    // its i-frames is discarded, and firing anchors movement — so it is not a
+    // wasted shot, it is a wasted shot *and* a free positional loss.
+    if (this.p.frameIq && foe.invuln > 2 && !foe.shieldActive) return null;
 
     /**
      * Punish genuine helplessness.
@@ -944,9 +1149,27 @@ export class RivalAI {
      *
      * It biases the roll rather than bypassing it, for the same reason.
      */
-    const exposed =
+    let exposed =
       this.p.punishRecovery &&
       (foe.act === ActState.Hitstun || foe.satBurnout > 0 || foe.guardBreakStun > 0);
+
+    // Slowed counts as exposed: they cannot clear the shot's path in time. The
+    // element chose the opening; this is what notices it.
+    if (this.p.statusIq && foe.status.speedScale < 0.9) exposed = true;
+
+    // So does having no way to dodge — an empty boost gauge with the dash still
+    // cooling is a mech that has to eat whatever arrives.
+    if (this.p.frameIq && foe.dashCooldown > 0 && foe.boost < foe.def.flight.dashCost) {
+      exposed = true;
+    }
+
+    // A guard about to break is worth leaning on, and a burst about to end is
+    // worth *not* leaning on — the shots spent on its last few ticks are
+    // absorbed for nothing and hand them meter for the next one.
+    if (this.p.resourceIq) {
+      if (foe.guarding && foe.barrier < foe.def.gauges.maxBarrier * 0.25) exposed = true;
+      if (foe.satActive && foe.satMode === SatMode.Shield && foe.satTicks > 20) return null;
+    }
 
     // Personality scales the tier's willingness to attack at all. Above 1 is a
     // real trade, not a free upgrade: firing anchors movement, which is why
@@ -994,6 +1217,28 @@ export class RivalAI {
     if (foe.guarding && heavy && this.rng.chance(0.5)) return Btn.Heavy;
     // At range the travel time is affordable and the recovery is survivable.
     if (dist > 300 && heavy && this.rng.chance(0.3)) return Btn.Heavy;
+
+    /**
+     * Do not re-apply an element that is already running.
+     *
+     * A status refresh replaces the countdown rather than stacking, so a shot
+     * landed on a target already deep in the same effect buys the difference
+     * between what is left and a full duration — and nothing else. When both
+     * weapons are affordable and they carry *different* elements, the one the
+     * target is not already carrying is strictly the better shot.
+     */
+    if (this.p.statusIq && heavy && foe.status.active) {
+      const running = foe.status.element;
+      const mainEl = d.main.element ?? Element.None;
+      const heavyEl = d.heavy.element ?? Element.None;
+      const fresh = foe.status.fraction > 0.5;
+      if (fresh && mainEl === running && heavyEl !== running && heavyEl !== Element.None) {
+        return Btn.Heavy;
+      }
+      if (fresh && heavyEl === running && mainEl !== running) {
+        return canPay(d.main.energyCost) ? Btn.Main : null;
+      }
+    }
 
     /**
      * Energy discipline, at EXTREME only.

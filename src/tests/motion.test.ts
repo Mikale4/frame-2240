@@ -94,7 +94,14 @@ describe('melee swing arc', () => {
     const p = s.player;
     s.enemy.x = p.x + 240;
     s.step(press(Btn.Melee), emptyInput());
-    for (let i = 0; i < 400; i++) s.step(emptyInput(), emptyInput());
+    // Then get clear. The rival's escort now runs team-up plays — it will cross
+    // the arena and chain-hit a stationary target — and this test is about the
+    // arm relaxing, not about surviving a pincer.
+    for (let i = 0; i < 400; i++) {
+      s.enemy.x = p.x + 2000;
+      s.enemy.supporter.x = s.enemy.x;
+      s.step(emptyInput(), emptyInput());
+    }
     expect(p.meleeLock).toBeNull();
     expect(p.swinging).toBe(false);
     // The arm has relaxed back to rest rather than sticking at follow-through.
