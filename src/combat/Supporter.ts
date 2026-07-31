@@ -250,12 +250,31 @@ const MINE_CLUSTER = 3;
 const MINE_SPREAD = 74;
 /** Drawn size. A mine has to look like something you would avoid. */
 const MINE_DRAW = 3.4;
-/** `hazard`: burning ground is frequent, short and weak — the element is the point. */
-const HAZARD_PERIOD = 26;
-const HAZARD_LIFE = 210;
-const HAZARD_DAMAGE = 12;
-const HAZARD_RADIUS = 30;
-const HAZARD_DRAW = 2.2;
+/**
+ * `hazard`: a **trail**, not a field.
+ *
+ * EMBER lays small embers densely along its own path, so what you see is fire
+ * streaming off the drone rather than craters being dropped. That is the whole
+ * distinction from BULWARK's minefield — few and heavy against many and light —
+ * and briefly blurring it by drawing hazards at 2.2x scale made the two roles
+ * look like the same thing at different speeds.
+ *
+ * Individually almost harmless. The element is what does the work.
+ */
+const HAZARD_PERIOD = 8;
+const HAZARD_LIFE = 150;
+const HAZARD_DAMAGE = 5;
+const HAZARD_RADIUS = 16;
+/** Drawn at its natural size. An ember is a dot. */
+const HAZARD_DRAW = 1;
+/**
+ * Minimum movement per tick before another ember is laid.
+ *
+ * Fire trails *behind* something. A drone holding station would otherwise stack
+ * the whole trail into one spot, which is neither the look nor a fair amount of
+ * damage for standing still.
+ */
+const HAZARD_MIN_SPEED = 0.9;
 
 /** What the drone needs to know about one projectile in order to dodge it. */
 export interface DroneThreat {
@@ -797,7 +816,12 @@ export class Supporter {
       case 'hazard':
         // Dropped underneath itself as it moves, so the trail is a record of
         // where the drone has been rather than an aimed attack.
-        if (this.roleTimer <= 0 && live && reach <= d.fireRange) {
+        if (
+          this.roleTimer <= 0 &&
+          live &&
+          reach <= d.fireRange &&
+          Math.hypot(this.vx, this.vy) >= HAZARD_MIN_SPEED
+        ) {
           this.roleTimer = HAZARD_PERIOD;
           spawns.push(
             this.areaSpawn(
