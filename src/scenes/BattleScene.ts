@@ -97,6 +97,8 @@ export class BattleScene extends Phaser.Scene {
   /** One supporter drone sprite per combatant, plus its readiness ring. */
   private drones: Phaser.GameObjects.Image[] = [];
   private droneRings: Phaser.GameObjects.Graphics[] = [];
+  /** One per side; only a `decoy` drone ever shows its own. */
+  private decoyGhosts: Phaser.GameObjects.Container[] = [];
 
   /** Pilot speech boxes, indexed the same way as `combatants`. */
   private banter: BanterBox[] = [];
@@ -158,6 +160,7 @@ export class BattleScene extends Phaser.Scene {
     this.blades = [];
     this.drones = [];
     this.droneRings = [];
+    this.decoyGhosts = [];
     this.worldObjects = [];
     this.renderers = [];
 
@@ -246,6 +249,20 @@ export class BattleScene extends Phaser.Scene {
       drone.setScale(PART_SCALE);
       this.drones.push(drone);
       this.droneRings.push(this.add.graphics());
+
+      /**
+       * The decoy silhouette, for a `decoy` drone.
+       *
+       * A ghost of the **whole chassis**, assembled from the same rig the real
+       * machine is drawn from — the first cut used the `core` part alone and was
+       * a floating torso, which fools nobody and looks like a missing asset. It
+       * has to be recognisably NULLTIDE at a glance or the deception has nothing
+       * to trade on.
+       *
+       * Built for every mech and left invisible on the seven that never project
+       * one, which is cheaper than branching the render path on a role.
+       */
+      this.decoyGhosts.push(this.buildGhost(def));
     }
 
     this.hud = new Hud(this, this.sim);
@@ -287,6 +304,7 @@ export class BattleScene extends Phaser.Scene {
       ...this.blades,
       ...this.drones,
       ...this.droneRings,
+      ...this.decoyGhosts,
       this.effects.container,
       ...this.debug.worldObjects,
     ];
@@ -827,10 +845,66 @@ export class BattleScene extends Phaser.Scene {
    * 4c.1). Keeping it here also means the player's eye never has to leave the
    * fight to know whether the assist is up.
    */
+  /**
+   * Assembles a translucent copy of a whole chassis, for the decoy projection.
+   *
+   * Same rig walk the title screen's showcase uses: every part placed at its
+   * authored offset, parented, then reordered by `drawOrder`. Static — a decoy
+   * does not animate, and a still silhouette reads as a projection rather than
+   * as a second machine that happens to be standing oddly.
+   */
+  private buildGhost(def: (typeof MECHS)[string]): Phaser.GameObjects.Container {
+    const root = this.add.container(0, 0);
+    const nodes = new Map<string, Phaser.GameObjects.Container>();
+    for (const part of def.rig.parts) {
+      const node = this.add.container(part.x, part.y);
+      const tex = partTexture(this, def.id, part.name);
+      const img = this.add.image(0, 0, tex.key, tex.frame);
+      img.setScale(PART_SCALE);
+      // **No tint, no blend mode.** The projection is meant to be indistinguishable
+      // from the machine it copies — a cyan ghost is a label saying "ignore me",
+      // which is the opposite of the ability. What gives it away is behaviour:
+      // it drifts on its own heading and it does not shoot.
+      node.add(img);
+      nodes.set(part.name, node);
+    }
+    for (const part of def.rig.parts) {
+      const node = nodes.get(part.name)!;
+      const parent = part.parent ? nodes.get(part.parent) : null;
+      (parent ?? root).add(node);
+    }
+    for (const name of def.rig.drawOrder) {
+      const n = nodes.get(name);
+      if (n?.parentContainer) n.parentContainer.bringToTop(n);
+    }
+    // The blade crosses straight through the rifle in a rest pose, exactly as it
+    // does on the title screen.
+    nodes.get('meleeWeapon')?.setVisible(false);
+    root.setScale(def.rig.scale);
+    root.setVisible(false);
+    return root;
+  }
+
   private drawDrone(i: number, c: Combatant): void {
     const sprite = this.drones[i];
     const ring = this.droneRings[i];
     const s = c.supporter;
+
+    // ---- decoy ------------------------------------------------------------
+    const ghost = this.decoyGhosts[i];
+    if (ghost) {
+      const showing = c.alive && s.decoyTicks > 0 && c.def.supporter.role === 'decoy';
+      ghost.setVisible(showing);
+      if (showing) {
+        ghost.setPosition(s.decoyX, s.decoyY);
+        ghost.setScale(c.def.rig.scale * (s.decoyFacing < 0 ? -1 : 1), c.def.rig.scale);
+        ghost.setDepth(depthSortAt(s.decoyY, 17));
+        // Solid for almost all of its life, dissolving only in the last moments
+        // — that flicker is the tell, and it arrives too late to help much.
+        const life = s.decoyTicks / 110;
+        ghost.setAlpha(life > 0.25 ? 1 : life * 4);
+      }
+    }
 
     // The drone leaves with its machine, and a stowed or destroyed one is not on
     // screen at all — `visible` is the same predicate the simulation uses to
@@ -931,8 +1005,6 @@ export class BattleScene extends Phaser.Scene {
     const p = s.player;
     const e = s.enemy;
     const cam = this.cameras.main;
-    const midX = (p.x + e.x) / 2;
-    const midY = (p.y + e.y) / 2;
 
     // ---- zoom: solve for the framing rather than guess at it ---------------
     //
@@ -944,8 +1016,32 @@ export class BattleScene extends Phaser.Scene {
     //
     // Now it computes the zoom that actually fits both machines plus a margin,
     // on each axis independently, and takes the tighter of the two.
-    const spanX = Math.abs(e.x - p.x) + CAM_MARGIN_X * 2;
-    const spanY = Math.abs(e.y - p.y) + CAM_MARGIN_Y * 2;
+    /**
+     * Everything the frame has to contain.
+     *
+     * The two pilots, plus any live decoy projection — a decoy is drawn as a
+     * full chassis and is meant to be mistaken for one, so a decoy outside the
+     * frame is not a subtle deception, it is an ability that appears not to
+     * work. It was: thrown 300px across the fight, it landed below the visible
+     * band perhaps half the time and simply could not be seen.
+     */
+    const pts: Array<{ x: number; y: number }> = [p, e];
+    for (const c of s.combatants) {
+      const sup = c.supporter;
+      if (c.alive && sup.decoyTicks > 0 && c.def.supporter.role === 'decoy') {
+        pts.push({ x: sup.decoyX, y: sup.decoyY });
+      }
+    }
+    const minX = Math.min(...pts.map((q) => q.x));
+    const maxX = Math.max(...pts.map((q) => q.x));
+    const minY = Math.min(...pts.map((q) => q.y));
+    const maxY = Math.max(...pts.map((q) => q.y));
+
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+
+    const spanX = maxX - minX + CAM_MARGIN_X * 2;
+    const spanY = maxY - minY + CAM_MARGIN_Y * 2;
     // Solved against the clear band under the HUD, not the whole viewport.
     const usableH = VIEW_H - CAM_HUD_BAND;
     const fit = Math.min(VIEW_W / spanX, usableH / spanY);
@@ -983,12 +1079,12 @@ export class BattleScene extends Phaser.Scene {
     const wantY = midY + (p.vy + e.vy) * 3;
     const focusX = Phaser.Math.Linear(
       cam.midPoint.x,
-      bound(Math.min(p.x, e.x) - CAM_EDGE, Math.max(p.x, e.x) + CAM_EDGE, wantX, midX, halfW),
+      bound(minX - CAM_EDGE, maxX + CAM_EDGE, wantX, midX, halfW),
       0.11,
     );
     const focusY = Phaser.Math.Linear(
       cam.midPoint.y + hudShift,
-      bound(Math.min(p.y, e.y) - CAM_EDGE, Math.max(p.y, e.y) + CAM_EDGE, wantY, midY, halfH),
+      bound(minY - CAM_EDGE, maxY + CAM_EDGE, wantY, midY, halfH),
       0.11,
     );
     cam.centerOn(focusX, focusY - hudShift);

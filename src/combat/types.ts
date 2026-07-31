@@ -117,6 +117,15 @@ export interface ProjectileSpawn {
   /** Extra hits allowed before removal (beams/melee arcs pass through). */
   pierceCount: number;
   /**
+   * A decoy's shot: it lands, it makes the right noise, and it does nothing.
+   *
+   * Deals no damage and — importantly — grants **no hit invulnerability**. A
+   * harmless projectile that opened the usual i-frame window would have NULLTIDE
+   * *shielding* the pilot it is deceiving from her own real fire, which inverts
+   * the entire ability. Its only bite is `hitstun`, rolled per shot.
+   */
+  decoyShot?: boolean;
+  /**
    * Ignores every damage reduction on the way in — chassis defence, drone
    * armour passives, guards, and Shield saturation alike.
    *

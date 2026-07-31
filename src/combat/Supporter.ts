@@ -4,6 +4,8 @@ import type { ProjectileSpawn, SimEvent } from './types';
 import { wrapAngle } from '../core/MathUtil';
 import { playstyleFor, type DroneDoctrine } from '../ai/Playstyles';
 import type { SupporterRole } from '../mechs/MechDef';
+import type { ProjFamilyId } from '../projectiles/families';
+import { Rng } from '../core/Rng';
 import { Element } from './Status';
 import { BarrierResponse, ProjKind } from './types';
 
@@ -226,17 +228,34 @@ const ARC_MIN_SPAN = 150;
 /** `decoy`: how often a new silhouette is thrown, how long it lasts, how far out. */
 const DECOY_PERIOD = 150;
 const DECOY_LIFE = 110;
-const DECOY_THROW = 130;
-/** `miner`: cadence, lifetime and bite of a dropped charge. */
-const MINE_PERIOD = 96;
+// Far enough out that a fooled shot genuinely misses. At 130 the silhouette sat
+// close enough to its owner that aiming at it still nearly aimed at them.
+const DECOY_THROW = 300;
+/** How fast the projection drifts. Near a mech's cruising speed, not its boost. */
+const DECOY_SPEED = 2.6;
+/** How often the projection fires, and how fast its harmless rounds travel. */
+const DECOY_FIRE_PERIOD = 22;
+const DECOY_SHOT_SPEED = 13;
+/** One in twenty, for one second. Enough that ignoring it is not free. */
+const DECOY_STUN_CHANCE = 0.05;
+const DECOY_STUN_TICKS = 60;
+/** `miner`: a cluster of large, long-lived charges rather than one small one. */
+const MINE_PERIOD = 110;
 const MINE_LIFE = 900;
 const MINE_DAMAGE = 58;
-const MINE_RADIUS = 26;
+/** Trigger radius. Wide enough that crossing the field is a decision. */
+const MINE_RADIUS = 62;
+/** Charges per drop, and how far apart they are seeded. */
+const MINE_CLUSTER = 3;
+const MINE_SPREAD = 74;
+/** Drawn size. A mine has to look like something you would avoid. */
+const MINE_DRAW = 3.4;
 /** `hazard`: burning ground is frequent, short and weak — the element is the point. */
 const HAZARD_PERIOD = 26;
 const HAZARD_LIFE = 210;
 const HAZARD_DAMAGE = 12;
 const HAZARD_RADIUS = 30;
+const HAZARD_DRAW = 2.2;
 
 /** What the drone needs to know about one projectile in order to dodge it. */
 export interface DroneThreat {
@@ -389,10 +408,26 @@ export class Supporter {
   private roleTimer = 0;
   /** `dome`: true while the bubble is up. `MatchSim` sweeps shots out of it. */
   domeActive = false;
-  /** `decoy`: ticks the false silhouette has left, and where it is standing. */
+  /**
+   * `decoy`: the false machine — how long it has left, where it is, and where it
+   * is going.
+   *
+   * It *moves*. A silhouette standing perfectly still is identifiable in about
+   * half a second and then ignored for the rest of its life, which makes the
+   * whole ability a marker rather than a deception. Drifting like a mech that is
+   * holding station is what buys the doubt.
+   */
   decoyTicks = 0;
   decoyX = 0;
   decoyY = 0;
+  decoyVx = 0;
+  decoyVy = 0;
+  /** Heading the projection is currently drifting along, in radians. */
+  private decoyHeading = 0;
+  /** Which way the projection is facing, for the renderer. */
+  decoyFacing = 1;
+  /** Ticks until the projection fires again. */
+  private decoyFireTimer = 0;
   /** `arcTether`: true while the wire between drone and owner is live. */
   tetherLive = false;
   /** `arcTether`: ticks before the wire may bite again. */
@@ -406,6 +441,11 @@ export class Supporter {
     owner: SupporterOwner,
     /** Owning chassis id, used only to look up the pilot's drone doctrine. */
     mechId?: string,
+    /**
+     * The match generator, for the decoy's stun roll. Falls back to its own so a
+     * `Supporter` built in isolation still works.
+     */
+    private readonly rng: Rng = new Rng(0x5eed0007 + owner.id),
   ) {
     this.life = def.maxLife;
     this.team = owner.team;
@@ -653,6 +693,8 @@ export class Supporter {
     if (this.roleTimer > 0) this.roleTimer--;
     if (this.decoyTicks > 0) this.decoyTicks--;
 
+    if (this.decoyTicks > 0) this.stepDecoy(owner, target, spawns, events);
+
     if (!this.onStation || !owner.alive) return;
     const live = target && target.alive;
     const reach = live ? Math.hypot(target!.x - this.x, target!.y - this.y) : Infinity;
@@ -683,21 +725,61 @@ export class Supporter {
         if (this.roleTimer <= 0 && live && reach <= d.fireRange) {
           this.roleTimer = DECOY_PERIOD;
           this.decoyTicks = DECOY_LIFE;
-          // Thrown out to the drone's far side, away from its owner, so a
-          // fooled shot is a shot aimed at nobody rather than at the pilot.
-          const ax = this.x - owner.x;
-          const ay = this.y - owner.y;
-          const al = Math.hypot(ax, ay) || 1;
-          this.decoyX = this.x + (ax / al) * DECOY_THROW;
-          this.decoyY = this.y + (ay / al) * DECOY_THROW;
+          /**
+           * Thrown *across* the fight rather than away from it.
+           *
+           * The first cut pushed it straight out along the owner-to-drone line,
+           * which put the silhouette wherever the escort happened to be —
+           * frequently below the floor line and outside the camera, which frames
+           * on the two machines. A decoy nobody can see is not a decoy, it is a
+           * bug report. Offsetting perpendicular to the line between the two
+           * pilots keeps it inside the frame the fight is being watched in, and
+           * makes a fooled shot swing *sideways*, which is a clean miss rather
+           * than a near one.
+           */
+          const lx = target!.x - owner.x;
+          const ly = target!.y - owner.y;
+          const ll = Math.hypot(lx, ly) || 1;
+          const side = this.y >= owner.y ? 1 : -1;
+          this.decoyX = this.x + (-ly / ll) * DECOY_THROW * side;
+          this.decoyY = this.y + (lx / ll) * DECOY_THROW * side;
+          // Launched drifting back toward the fight, so its first movement is
+          // the movement a real pilot would be making.
+          this.decoyHeading = Math.atan2(ly, lx);
+          this.decoyFacing = lx >= 0 ? 1 : -1;
           events.push({ t: 'assist', x: this.decoyX, y: this.decoyY, angle: this.aim, ownerId: owner.id, auto: true });
         }
         break;
 
       case 'miner':
+        /**
+         * A minefield, not a mine.
+         *
+         * The first cut dropped one charge with a 26px trigger every 96 ticks,
+         * which was both too rare and too small to ever be walked into — and
+         * read as a worse version of the burning ground. A siege walker
+         * *fortifies*: three charges in a spread, each with a trigger wide
+         * enough to matter, that then sit there for fifteen seconds. Slower to
+         * lay than a hazard trail and far harder to ignore.
+         */
         if (this.roleTimer <= 0 && live && reach <= d.fireRange) {
           this.roleTimer = MINE_PERIOD;
-          spawns.push(this.areaSpawn(owner, MINE_LIFE, MINE_DAMAGE, MINE_RADIUS, Element.None));
+          for (let i = 0; i < MINE_CLUSTER; i++) {
+            const ang = (i / MINE_CLUSTER) * Math.PI * 2 + this.aim;
+            spawns.push(
+              this.areaSpawn(
+                owner,
+                MINE_LIFE,
+                MINE_DAMAGE,
+                MINE_RADIUS,
+                Element.None,
+                'ring',
+                MINE_DRAW,
+                Math.cos(ang) * MINE_SPREAD,
+                Math.sin(ang) * MINE_SPREAD,
+              ),
+            );
+          }
           events.push({ t: 'fire', x: this.x, y: this.y, angle: this.aim, kind: ProjKind.Heavy, ownerId: owner.id });
         }
         break;
@@ -707,7 +789,17 @@ export class Supporter {
         // where the drone has been rather than an aimed attack.
         if (this.roleTimer <= 0 && live && reach <= d.fireRange) {
           this.roleTimer = HAZARD_PERIOD;
-          spawns.push(this.areaSpawn(owner, HAZARD_LIFE, HAZARD_DAMAGE, HAZARD_RADIUS, Element.Incendiary));
+          spawns.push(
+            this.areaSpawn(
+              owner,
+              HAZARD_LIFE,
+              HAZARD_DAMAGE,
+              HAZARD_RADIUS,
+              Element.Incendiary,
+              'flame',
+              HAZARD_DRAW,
+            ),
+          );
           events.push({ t: 'fire', x: this.x, y: this.y, angle: this.aim, kind: ProjKind.Bullet, ownerId: owner.id });
         }
         break;
@@ -723,6 +815,83 @@ export class Supporter {
     }
   }
 
+  /**
+   * Flies the projection.
+   *
+   * Deliberately not a straight line and not a fixed point. It wanders on a
+   * slowly-turning heading with a little bob on top, which is close enough to a
+   * mech holding station that it has to be *checked* rather than dismissed —
+   * and that check is the whole cost the ability imposes.
+   *
+   * Deterministic: the turn comes off the projection's own age, so a replay
+   * reproduces its path exactly.
+   */
+  private stepDecoy(
+    owner: SupporterOwner,
+    target: SupporterOwner | null,
+    spawns: ProjectileSpawn[],
+    events: SimEvent[],
+  ): void {
+    const age = DECOY_LIFE - this.decoyTicks;
+    // A slow S-curve rather than a random walk, so it never doubles back in a
+    // way no pilot would.
+    this.decoyHeading += Math.sin(age * 0.045) * 0.028;
+    this.decoyVx = Math.cos(this.decoyHeading) * DECOY_SPEED;
+    this.decoyVy = Math.sin(this.decoyHeading) * DECOY_SPEED + Math.sin(age * 0.11) * 0.55;
+    this.decoyX += this.decoyVx;
+    this.decoyY += this.decoyVy;
+    if (Math.abs(this.decoyVx) > 0.05) this.decoyFacing = this.decoyVx >= 0 ? 1 : -1;
+
+    /**
+     * **It shoots.**
+     *
+     * A silhouette that drifts and never fires is read as a decoy the first time
+     * anyone watches it for a second. Firing is what makes it cost attention:
+     * the shots look exactly like Io's, they arrive from a plausible angle, and
+     * answering them is a decision.
+     *
+     * They do no damage at all. Their only bite is a one-in-twenty chance of a
+     * one-second stun, which is enough that ignoring the projection is not free
+     * and far too little to make the ability a damage source. Rolled at spawn
+     * out of the match RNG, so a replay reproduces it.
+     */
+    if (!target || !target.alive || this.decoyFireTimer-- > 0) return;
+    this.decoyFireTimer = DECOY_FIRE_PERIOD;
+    const ang = Math.atan2(target.y - this.decoyY, target.x - this.decoyX);
+    const stun = this.rng.chance(DECOY_STUN_CHANCE);
+    spawns.push({
+      x: this.decoyX + Math.cos(ang) * 26,
+      y: this.decoyY + Math.sin(ang) * 26,
+      vx: Math.cos(ang) * DECOY_SHOT_SPEED,
+      vy: Math.sin(ang) * DECOY_SHOT_SPEED,
+      damage: 0,
+      guardDamage: 0,
+      life: 46,
+      radius: 9,
+      ownerId: owner.id,
+      team: this.team,
+      kind: ProjKind.Bullet,
+      barrier: BarrierResponse.Absorb,
+      hitstop: 0,
+      hitstun: stun ? DECOY_STUN_TICKS : 0,
+      knockback: 0,
+      homing: 0,
+      pierceCount: 0,
+      element: Element.None,
+      family: 'bolt',
+      decoyShot: true,
+    });
+    events.push({
+      t: 'fire',
+      x: this.decoyX,
+      y: this.decoyY,
+      angle: ang,
+      kind: ProjKind.Bullet,
+      ownerId: owner.id,
+      family: 'bolt',
+    });
+  }
+
   /** A stationary area effect dropped at the drone's feet: mines, burning ground. */
   private areaSpawn(
     owner: SupporterOwner,
@@ -730,10 +899,14 @@ export class Supporter {
     damage: number,
     radius: number,
     element: Element,
+    family: ProjFamilyId,
+    visualScale: number,
+    offX = 0,
+    offY = 0,
   ): ProjectileSpawn {
     return {
-      x: this.x,
-      y: this.y,
+      x: this.x + offX,
+      y: this.y + offY,
       // Not quite zero: a genuinely motionless projectile is a special case in
       // several places that expect a heading, and this reads as a slow drift.
       vx: 0.001,
@@ -752,6 +925,11 @@ export class Supporter {
       homing: 0,
       pierceCount: 0,
       element,
+      // Without these a dropped charge inherits `pellet` — the smallest shot in
+      // the game — so a mine and a patch of burning ground drew as the same
+      // three-pixel dot as a rifle round, and as each other.
+      family,
+      visualScale,
     };
   }
 

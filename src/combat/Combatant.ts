@@ -522,7 +522,7 @@ export class Combatant implements FlightState {
     this.barrier = init.def.gauges.maxBarrier;
     this.boost = init.def.flight.maxBoost;
     this.subCharges = init.def.subCharges;
-    this.supporter = new Supporter(init.def.supporter, this, init.def.id);
+    this.supporter = new Supporter(init.def.supporter, this, init.def.id, this.rng);
   }
 
   /**
@@ -2039,6 +2039,21 @@ export class Combatant implements FlightState {
         return 'absorbed';
       }
       return 'ignored';
+    }
+
+    /**
+     * A decoy's shot. Lands, sounds right, does nothing.
+     *
+     * Handled before every other branch so it can skip the whole ladder: no
+     * damage, no guard interaction, no meter, and no `hitInvuln` — see
+     * `ProjectileSpawn.decoyShot` for why that last one matters.
+     */
+    if (p.decoyShot) {
+      if (p.hitstun > 0 && this.invuln <= 0) {
+        this.hitstun = Math.max(this.hitstun, p.hitstun);
+        this.act = ActState.Hitstun;
+      }
+      return 'hit';
     }
 
     // True damage bypasses the entire ladder below — chassis defence, the drone
