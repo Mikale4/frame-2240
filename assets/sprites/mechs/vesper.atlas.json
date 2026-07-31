@@ -1,0 +1,295 @@
+{
+ "frames": {
+  "mainWeapon": {
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 384,
+    "h": 384
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 384,
+    "h": 384
+   },
+   "sourceSize": {
+    "w": 384,
+    "h": 384
+   }
+  },
+  "core": {
+   "frame": {
+    "x": 384,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "head": {
+   "frame": {
+    "x": 704,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "backpack": {
+   "frame": {
+    "x": 0,
+    "y": 384,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "lowerBody": {
+   "frame": {
+    "x": 320,
+    "y": 384,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "legFar": {
+   "frame": {
+    "x": 640,
+    "y": 384,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "legNear": {
+   "frame": {
+    "x": 0,
+    "y": 704,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "leftArm": {
+   "frame": {
+    "x": 320,
+    "y": 704,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "subWeapon": {
+   "frame": {
+    "x": 640,
+    "y": 704,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "rightArm": {
+   "frame": {
+    "x": 0,
+    "y": 1024,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "meleeWeapon": {
+   "frame": {
+    "x": 320,
+    "y": 1024,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "leftThruster": {
+   "frame": {
+    "x": 640,
+    "y": 1024,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "rightThruster": {
+   "frame": {
+    "x": 0,
+    "y": 1344,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  },
+  "drone": {
+   "frame": {
+    "x": 320,
+    "y": 1344,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
+  }
+ },
+ "meta": {
+  "app": "tools/pack_atlases.py",
+  "image": "vesper.atlas.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 1024,
+   "h": 1664
+  },
+  "scale": "1",
+  "note": "Untrimmed: each frame is square with its pivot at the centre."
+ }
+}

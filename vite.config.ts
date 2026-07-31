@@ -45,16 +45,41 @@ function screenshotSink(): Plugin {
 }
 
 /**
- * `publicDir` is assets/, which also holds the editable Blender sources. Those
- * are authoring inputs, not runtime data, so drop them from the shipped build.
+ * `publicDir` is assets/, which also holds authoring inputs rather than runtime
+ * data: the editable Blender sources, and the audio audition page used to review
+ * generated cues by ear. Neither belongs in a shipped build.
  */
 function stripAuthoringSources(): Plugin {
   return {
     name: 'bsr-strip-authoring-sources',
     apply: 'build',
     closeBundle() {
-      const dir = path.resolve(process.cwd(), 'dist', 'blender');
-      fs.rmSync(dir, { recursive: true, force: true });
+      const dist = path.resolve(process.cwd(), 'dist');
+      fs.rmSync(path.join(dist, 'blender'), { recursive: true, force: true });
+      // Underscore-prefixed entries under assets are authoring inputs, never
+      // runtime data: audition pages, and the multi-megabyte source images the
+      // pilot portraits were keyed from. Shipping the latter would add ~14 MB
+      // of art the game never loads.
+      for (const rel of ['audio', 'sprites/pilots', 'sprites/mechs']) {
+        const dir = path.join(dist, ...rel.split('/'));
+        if (!fs.existsSync(dir)) continue;
+        for (const f of fs.readdirSync(dir)) {
+          if (f.startsWith('_')) fs.rmSync(path.join(dir, f), { recursive: true, force: true });
+        }
+      }
+
+      // The per-part mech PNGs are the atlas packer's input, not runtime data —
+      // the game loads `<mech>.atlas.png` and never the loose parts. They stay in
+      // assets/ so the atlases can be rebuilt, but shipping both would add ~3.9 MB
+      // of files nothing requests.
+      const mechs = path.join(dist, 'sprites', 'mechs');
+      if (fs.existsSync(mechs)) {
+        for (const f of fs.readdirSync(mechs)) {
+          if (f.endsWith('.png') && !f.endsWith('.atlas.png')) {
+            fs.rmSync(path.join(mechs, f), { force: true });
+          }
+        }
+      }
     },
   };
 }
