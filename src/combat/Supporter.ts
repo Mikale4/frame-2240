@@ -265,8 +265,16 @@ const HAZARD_PERIOD = 8;
 const HAZARD_LIFE = 150;
 const HAZARD_DAMAGE = 5;
 const HAZARD_RADIUS = 16;
-/** Drawn at its natural size. An ember is a dot. */
-const HAZARD_DRAW = 1;
+/**
+ * Drawn size, and it is **not** 1.
+ *
+ * `visualScale` multiplies the *family's* own dimensions, so "natural size" for
+ * `flame` is a 64px gout with a 2.2x halo — about 141px of glow, which is a
+ * flamethrower, not an ember. Scaled to roughly a `pellet`'s 26px so the trail
+ * is a line of sparks. The family is still right: it carries the ember burst and
+ * the orange trail tint that make it read as fire rather than as gunfire.
+ */
+const HAZARD_DRAW = 0.4;
 /**
  * Minimum movement per tick before another ember is laid.
  *
