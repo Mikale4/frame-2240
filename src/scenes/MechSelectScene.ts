@@ -118,7 +118,17 @@ export class MechSelectScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setStroke('#070b12', 4);
     this.armsText = this.add
-      .text(sx, STATS_TOP + 90, '', { fontFamily: FONT, fontSize: '10px', color: '#7d8ea8', lineSpacing: 3 })
+      .text(sx, STATS_TOP + 90, '', {
+        fontFamily: FONT,
+        fontSize: '10px',
+        color: '#7d8ea8',
+        lineSpacing: 3,
+        // Wrapped to the column, not left to run off the edge. The drone passive
+        // line is the longest thing here and the only one whose length is not
+        // bounded by a short weapon name, so without this it is silently clipped
+        // mid-sentence at the right margin.
+        wordWrap: { width: VIEW_W - sx - 14 },
+      })
       .setOrigin(0, 0)
       .setStroke('#070b12', 4);
 
@@ -226,7 +236,7 @@ export class MechSelectScene extends Phaser.Scene {
         // has no animation and no sound — so the select screen is the one place
         // it can be read before the match rather than inferred during one.
         `DRONE   ${def.supporter.name}  ${def.supporter.maxLife} HP`,
-        `        ${def.supporter.passive.name}`,
+        `        ${def.supporter.passive.name} (while deployed)`,
         `        ${def.supporter.passive.text}`,
       ].join('\n'),
     );

@@ -492,7 +492,7 @@ export const HALCYON: MechDef = {
     // them.
     passive: {
       name: 'REACTOR LINK',
-      text: 'Energy regenerates 45% faster while ARBITER flies.',
+      text: 'Energy regenerates 45% faster.',
       energyRegenMul: 1.45,
     },
   },
@@ -555,7 +555,7 @@ export const NOCTURNE: MechDef = {
     fireRange: 700,
     passive: {
       name: 'BARRIER FEED',
-      text: 'Barrier gauge refills at double rate while WARDEN flies.',
+      text: 'Barrier gauge refills at double rate.',
       barrierRegenMul: 2,
     },
   },

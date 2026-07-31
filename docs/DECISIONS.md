@@ -834,3 +834,61 @@ went unnoticed because hits land often enough to keep re-triggering it, and
 because nothing else needed to tint the mech. Adding status colours surfaced it
 immediately: an afflicted machine rendered solid white instead. The flash is now
 a ~0.18s flicker, which is what the comment always claimed it was.
+
+---
+
+### D44 — The drone became an asset you can lose
+
+**Decision.** The supporter drone is now a deployable unit with its own hit
+points and a passive, and the assist button deploys and recalls it instead of
+firing it. It fires on its own initiative while on station, still paying from the
+same sub-charge rack. Destruction is permanent for the match.
+
+**Why.** The assist button was a third weapon: press it, a volley comes out.
+Nothing about it was a decision — there was never a reason *not* to press it when
+the charge was up, so it was a damage-per-second tax on remembering to hit `L`.
+
+Making the drone an object in the world rather than a button gives it something
+to trade. Deployed, it earns: free volleys and a passive that is meaningfully
+strong (45 % more energy regeneration, double barrier refill, 14 % more damage —
+big enough to be worth protecting). Stowed, it earns nothing but cannot be hit,
+and it repairs. So the button now asks a real question every time the fight
+turns, and the answer changes depending on whether you are winning the exchange.
+
+**Damageable reverses D-era reasoning, deliberately.** The 2005 reference draws
+only a charge gauge on its supporter, never a life bar, and the first pass here
+made the drone invulnerable and untargetable on that evidence. That was right
+while it was a muzzle on a stick. It stops being right the moment the drone
+carries a passive: an invulnerable source of permanent stat buffs is a
+strictly-better button with no counterplay. Hunting an escort is now a real thing
+to spend attention on, and the drone's hit points (95–170, against 820–1420 for a
+chassis) are tuned so a stray shot does not delete it and deliberate fire does.
+
+**One lever per passive.** Each drone changes exactly one number, enforced by a
+test. A passive touching three stats is neither feelable in play nor balanceable
+against the other seven. The only outward-facing one is NULLTIDE's STATIC, which
+halves the *opponent's* energy regeneration — an electronic-warfare frame should
+starve the other pilot rather than feed its own, and it is worth one asymmetry.
+
+**Auto-fire is gated on the existing economy, not a new one.** The drone asks its
+machine for a volley and the machine pays or refuses, so the charge rack the HUD
+already shows stays the single source of truth for how much sub-weapon there is.
+
+### D45 — Eight drones, eight silhouettes
+
+**Decision.** Each chassis gets its own drone mesh in `build_mechs.py`, keyed by
+`DRONE_BUILDERS`, rather than one mesh in eight palettes.
+
+**Why.** Colour is the first thing lost at gameplay scale, in motion, against a
+lit arena — and both drones on screen are small, fast and near their owners. Eight
+recolours of one dart were indistinguishable in a fight, which mattered little
+when a drone was a muzzle and matters a great deal now that killing one is a
+goal. The designs are separated by *outline* first: SIGHTLINE is a rifle with an
+engine, AEGIS is the only one taller than it is long, WISP is mostly a hole,
+BULWARK is a shield with thrusters behind it. Each says something about the
+passive it carries.
+
+**Rebuilt through a separate entry point.** `tools/blender/rebuild_drones.py`
+re-renders the eight drone sprites and patches their manifest rows, leaving the
+other 104 part renders untouched. A full `build_all` to change one part is slow
+and is a good way to disturb art that was already correct.

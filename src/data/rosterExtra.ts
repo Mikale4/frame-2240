@@ -457,7 +457,7 @@ export const VESPER: MechDef = {
     fireRange: 1000,
     passive: {
       name: 'TARGETING UPLINK',
-      text: 'Every weapon you fire hits 14% harder while SIGHTLINE flies.',
+      text: 'Every weapon you fire hits 14% harder.',
       damageMul: 1.14,
     },
   },
@@ -701,7 +701,7 @@ export const TERRAMOTH: MechDef = {
     fireRange: 640,
     passive: {
       name: 'ARMOUR BRACE',
-      text: 'You take 14% less damage while BULWARK flies.',
+      text: 'You take 14% less damage.',
       defenceMul: 0.86,
     },
   },
@@ -947,7 +947,7 @@ export const CIRRUS: MechDef = {
     fireRange: 620,
     passive: {
       name: 'THERMAL SIPHON',
-      text: 'Boost refills at double rate while WISP flies.',
+      text: 'Boost refills at double rate.',
       boostRegenMul: 2,
     },
   },
@@ -1195,7 +1195,7 @@ export const OBELISK: MechDef = {
     fireRange: 660,
     passive: {
       name: 'GUARD RELAY',
-      text: 'Holding guard costs 45% less barrier while AEGIS flies.',
+      text: 'Holding guard costs 45% less barrier.',
       guardDrainMul: 0.55,
     },
   },
@@ -1434,7 +1434,7 @@ export const PYRE: MechDef = {
     fireRange: 740,
     passive: {
       name: 'OVERDRIVE TAP',
-      text: 'Saturation builds 80% faster while EMBER flies.',
+      text: 'Saturation builds 80% faster.',
       satGainMul: 1.8,
     },
   },
@@ -1678,7 +1678,7 @@ export const NULLTIDE: MechDef = {
     fireRange: 820,
     passive: {
       name: 'JAMMING FIELD',
-      text: "The opponent's energy regenerates at half rate while STATIC flies.",
+      text: "Halves the opponent's energy regeneration.",
       enemyEnergyRegenMul: 0.5,
     },
   },

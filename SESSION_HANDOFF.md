@@ -105,23 +105,32 @@ commit may not build standalone. Fine for review, worth knowing before bisecting
 
 ---
 
-## 5. IN PROGRESS — the drone overhaul
+## 5. DONE — the drone overhaul
 
-This was the next task and is **not started**. It is one coherent chunk:
+All five parts landed. See `docs/DECISIONS.md` D44 and D45 for the reasoning.
 
-1. **8 unique drone models.** All eight drones are currently the same mesh in
-   different colours. Each needs its own design, built in
-   `tools/blender/build_mechs.py` (`build_drone`, ~line 877).
-2. **A unique passive per drone**, benefiting its pilot. Nothing exists for this
-   — needs a field on `SupporterDef` plus sim support.
-3. **Drone HP and destruction.** Drones get their own HP bar, much lower than a
-   mech's, and are destroyed for the rest of the match if it empties.
-4. **Assist button becomes a deploy/recall toggle** rather than a fire command.
-5. **Auto-fire while deployed**, gated on charges.
+1. **8 unique drone models** — `DRONE_BUILDERS` in `tools/blender/build_mechs.py`,
+   one builder function per chassis. Silhouettes are deliberately unlike each
+   other; see the lineup at `renders/debug/drones_lineup.png`.
+2. **A unique passive per drone** — `DronePassiveDef` on `SupporterDef`. One
+   numeric lever each, enforced by a test. Applied through
+   `Combatant.dronePassive`, live only while the drone is on station.
+3. **Drone HP and permanent destruction** — `Supporter.life` / `takeHit`,
+   collided in `MatchSim.resolveDroneCollisions`. 95–170 HP against 820–1420 for
+   a chassis. Hit points and volley readiness are both drawn on the drone.
+4. **The assist button is a deploy/recall toggle** — `Combatant.toggleDrone`.
+   Stowed drones are invulnerable, invisible and slowly repair.
+5. **Auto-fire while deployed** — the drone asks its owner for a volley
+   (`requestVolley`) and pays from the same sub-charge rack. Gated on
+   `fireRange`, so a match genuinely opens with the drones holding fire until
+   someone closes.
 
-Relevant code: `SupporterDef` in `src/mechs/MechDef.ts`, supporter logic in
-`src/combat/` (see `supporter.test.ts` for the existing 23 tests), drone sprite
-in `BattleScene.ts` (~line 156, uses `partTexture(this, def.id, 'drone')`).
+The quarter-circle salvo motion survives as a manual "fire now" order.
+
+**Rebuilding the drone art:** run `tools/blender/rebuild_drones.py` (via the MCP
+`execute_blender_code`, synchronously — poll
+`renders/debug/_drone_build_status.json`), then `python tools/pack_atlases.py`.
+It re-renders only the eight drone sprites and patches their manifest rows.
 
 ---
 
@@ -133,9 +142,10 @@ in `BattleScene.ts` (~line 156, uses `partTexture(this, def.id, 'drone')`).
 * **Audio trim + normalise.** All 71 files are raw: 0.5 s minimum regardless of
   target, unnormalised. Nine sit below −6 dB. `ffmpeg` is available (2013 build,
   no `-hide_banner`). See `docs/AUDIO_CUE_SHEET.md`.
-* **Cues with no trigger**: `footstep`, `ui_back`, `melee_ignite`, `assist_fire`,
-  and the two loop beds (`thruster_loop`, `drone_hover`) are loaded and playable
-  but nothing calls them.
+* **Cues with no trigger**: `footstep`, `melee_ignite` and the two loop beds
+  (`thruster_loop`, `drone_hover`) are loaded and playable but nothing calls
+  them. `assist_fire` and `ui_back` are now wired — to the drone firing on its
+  own initiative, and to the recall.
 * **`melee_claw` is doing triple duty** for claw, ram shield and pile driver.
   Dedicated `melee_shield` / `melee_pile` cues would be ~6 credits each.
 * **Music.** Not started, and never in the cue sheet — that was SFX only. The
@@ -208,6 +218,21 @@ in `BattleScene.ts` (~line 156, uses `partTexture(this, def.id, 'drone')`).
 | OBELISK `GD-09` | Saar Tengku | 1.18 | ram shield | bash | 2 |
 | PYRE `IN-05` | Rasa Volkov | 1.04 | thermal cleaver | swing | 3 |
 | NULLTIDE `EW-14` | Io Senna | 0.89 | arc glaive | swing | 5 |
+
+### Drones
+
+| Mech | Drone | HP | Shape | Passive |
+| --- | --- | --- | --- | --- |
+| HALCYON | ARBITER | 120 | swept dart | REACTOR LINK — energy regen x1.45 |
+| NOCTURNE | WARDEN | 125 | armoured brick, twin guns | BARRIER FEED — barrier regen x2 |
+| VESPER | SIGHTLINE | 100 | a rifle with an engine | TARGETING UPLINK — damage dealt x1.14 |
+| TERRAMOTH | BULWARK | 170 | shield on thrusters | ARMOUR BRACE — damage taken x0.86 |
+| CIRRUS | WISP | 95 | open hoop and a node | THERMAL SIPHON — boost regen x2 |
+| OBELISK | AEGIS | 145 | upright monolith | GUARD RELAY — guard drain x0.55 |
+| PYRE | EMBER | 130 | tanks and flared vents | OVERDRIVE TAP — saturation gain x1.8 |
+| NULLTIDE | STATIC | 110 | lattice antenna mast | JAMMING FIELD — *opponent's* energy regen x0.5 |
+
+Design rule: **one numeric lever per passive**, enforced by a test.
 
 Design rule: **heavier weapon → fewer, harder hits.** Enforced by a test.
 Chassis `scale` must stay proportional to `hurtRadius` — also enforced by a test.

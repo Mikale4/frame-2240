@@ -85,7 +85,7 @@ or unplugged mid-match.
 | Main gun | `J` | `A` |
 | **Sword / melee** | `U` | `Y` |
 | Heavy shot | `K` | `X` |
-| **Assist — order the drone to fire** | `L` | `B` |
+| **Drone — deploy / recall** | `L` | `B` |
 | Flight mode on/off | `C` | R-stick click |
 | Scatter shot | `↓`, `→` + `J` | same motion |
 | Lance beam | `↓`, `←` + `K` | same motion |
@@ -101,14 +101,27 @@ faster — but you give up free movement. Taking off kicks you upward, and a hea
 shot takes off automatically.
 
 **Your supporter drone.** You do not carry the sub-weapon — a small drone flying
-in formation does. HALCYON is escorted by **ARBITER**, NOCTURNE by **WARDEN**.
-The assist button is an *order*: the drone acknowledges, swings onto the target
-and fires from its own guns, while your chassis stays free to keep flying and
-shooting. The short bar under the drone is its readiness — it fills while the
-drone recovers and while a sub charge rebuilds, and lights up when the assist is
-armed. Ordering an assist you cannot pay for answers with a refusal tone rather
-than doing nothing. The drone cannot be shot down, and it is back on station for
-every rematch.
+in formation does, and every machine has its own. HALCYON is escorted by
+**ARBITER**, NOCTURNE by **WARDEN**; all eight are different designs with
+different hit points, different reach and their own passive.
+
+The drone button is a **toggle**, not a fire command. You start with the drone
+deployed. While it is on station it does two things for you: it picks its own
+moments to fire its volley at whatever you are fighting, and its passive is live
+— ARBITER speeds your energy regeneration, WARDEN refills your barrier twice as
+fast, SIGHTLINE makes everything you fire hit harder, and so on. The select
+screen lists each one.
+
+The catch is that a deployed drone can be **shot down, permanently**. It has its
+own small hit-point bar, it takes far fewer hits than a mech, and once it is
+destroyed it is gone for the rest of the match — no passive, no volleys, and the
+button answers with a refusal tone. Recalling it folds it back into your chassis,
+where it is untouchable and slowly repairs, but you give up the passive and the
+free damage while it is away. Both bars are drawn on the drone itself: hit points
+on top, volley readiness below.
+
+The quarter-circle salvo motion still works while the drone is on station, for
+when you want the heavy volley *now* rather than when the drone decides.
 
 ### Defence and meter
 
