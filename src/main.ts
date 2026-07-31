@@ -6,6 +6,7 @@ import { MenuScene } from './scenes/MenuScene';
 import { MechSelectScene } from './scenes/MechSelectScene';
 import { BattleScene } from './scenes/BattleScene';
 import { ResultsScene } from './scenes/ResultsScene';
+import { ArchiveScene } from './scenes/ArchiveScene';
 import { sfx } from './audio/Sfx';
 import { music } from './audio/Music';
 
@@ -55,7 +56,7 @@ try {
       antialias: true,
       powerPreference: 'high-performance',
     },
-    scene: [BootScene, TitleScene, MenuScene, MechSelectScene, BattleScene, ResultsScene],
+    scene: [BootScene, TitleScene, MenuScene, MechSelectScene, BattleScene, ResultsScene, ArchiveScene],
   });
 
   // Debug handle: lets the browser console (and automated checks) inspect the

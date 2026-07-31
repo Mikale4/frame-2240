@@ -1,0 +1,503 @@
+/**
+ * The Archive: official lore for the eight machines and the eight pilots.
+ *
+ * This is the game's story bible in data form. It is *not* flavour bolted onto
+ * the stat block — every entry is written against what the simulation already
+ * does, so a reader who has played the mech recognises it. TERRAMOTH's armour
+ * brace, NULLTIDE's jamming field and PYRE's saturation gain are all facts of
+ * the fight before they are facts of the fiction, and the lore explains them
+ * rather than contradicting them.
+ *
+ * Kept apart from `data/mechs.ts` deliberately: that file is tuning, changed
+ * whenever a number measures badly, and prose has no business sharing a diff
+ * with a damage value. Nothing here is read by the simulation.
+ *
+ * Pilot genders and ages are fixed by `docs/PILOT_PORTRAIT_SPEC.md` and must
+ * agree with it. Four women, four men.
+ */
+
+export interface ArchiveEntry {
+  /** Mech id this belongs to; the pilot entry shares it. */
+  id: string;
+  /** Headline, e.g. `AV-07 HALCYON` or `NAIA VESK`. */
+  title: string;
+  /** One line under the title: builder and mark, or callsign and origin. */
+  subtitle: string;
+  /** Short definitional line, shown before the body. */
+  tagline: string;
+  /** The body, one paragraph per element. */
+  body: string[];
+}
+
+// ---------------------------------------------------------------- the world
+
+/**
+ * The setting, in one place, so every entry below can lean on it without
+ * restating it.
+ *
+ * Shown as the Archive's opening page.
+ */
+export const WORLD_ENTRY: ArchiveEntry = {
+  id: 'world',
+  title: 'THE SKYWARD',
+  subtitle: 'Standing orders, common era 41',
+  tagline: 'Everything worth having is above the cloud deck.',
+  body: [
+    'The ground has not been survivable for four generations. What is left of it ' +
+      'is weather — a permanent grey ceiling of storm and particulate that begins ' +
+      'about two thousand metres up and does not end. Above that ceiling the air ' +
+      'is clear, cold and thin, and every structure humanity still owns is bolted ' +
+      'to a spar, a mast or a gantry hanging in it.',
+    'These structures are called yards. They are cathedral-scale lattices of ' +
+      'girder and plate, built outward rather than upward, and they exist because ' +
+      'the ore convoys have to dock somewhere. A yard is a port, a foundry, a ' +
+      'town and a fortress in the same breath, and whoever holds one holds ' +
+      'everything that passes through it.',
+    'Aerial frames — mechs — exist because nothing else works up here. A ship is ' +
+      'too large to move inside a lattice and too obvious to hide behind one. A ' +
+      'frame is a pilot, a reactor and as many thrusters as the airframe will ' +
+      'carry, and it fights in three dimensions inside a structure that was built ' +
+      'to hold cranes.',
+    'There has not been a declared war in eleven years. There has also not been a ' +
+      'week without a contested docking, a disputed claim or a yard changing ' +
+      'hands. The five powers below all maintain that the other four started it.',
+  ],
+};
+
+/** The five powers, for the Archive's second page. */
+export const FACTION_ENTRY: ArchiveEntry = {
+  id: 'factions',
+  title: 'THE FIVE POWERS',
+  subtitle: 'Who builds, who flies, who pays',
+  tagline: 'Nobody up here calls themselves an empire. Everybody behaves like one.',
+  body: [
+    'CONCORD SKYWARD — the oldest surviving authority and the only one with a ' +
+      'doctrine written down. It builds the AV line: airframes designed by ' +
+      'committee, tested to exhaustion, and deliberately unexciting. A Concord ' +
+      'frame is never the best machine in a fight and is very rarely the worst.',
+    'IRONWAKE COLLIERY — not a military at all. A mining concern that armed its ' +
+      'excavation walkers when the convoys started being taken, and discovered ' +
+      'that equipment built to survive a rock fall survives most other things ' +
+      'too. Its HV and GD frames are industrial machines that were never asked ' +
+      'whether they wanted to be weapons.',
+    'THE EMBERLINE PACT — a defensive alliance of seven yards that has outlived ' +
+      'the threat it was formed against and become the thing it was formed ' +
+      'against. Emberline frames are Concord designs taken apart and rebuilt ' +
+      'heavier, by people who thought the committee was wrong.',
+    'FREE LATITUDE — less an organisation than an agreement not to ask. It flies ' +
+      'LT and EW frames assembled from salvage, and it is the only power whose ' +
+      'machines are each genuinely unique. Concord calls them pirates. They dock ' +
+      'at Concord yards regularly and are not turned away.',
+    'THE ASHFALL IRREGULARS — mercenaries, and the only honest people in the sky ' +
+      'about it. They take contracts from all four of the above, sometimes in the ' +
+      'same month, and their IN frames are built on the assumption that a fight ' +
+      'is short and somebody else is paying for the repairs.',
+  ],
+};
+
+// ---------------------------------------------------------------- the mechs
+
+export const MECH_ARCHIVE: ArchiveEntry[] = [
+  {
+    id: 'halcyon',
+    title: 'AV-07 HALCYON',
+    subtitle: 'Concord Skyward · Vantor Aeroworks · Mark VII',
+    tagline: 'The frame every other frame is measured against.',
+    body: [
+      'The seventh airframe of the Aerial Vanguard programme and the first that ' +
+        'Concord considered finished. Where the six before it each solved one ' +
+        'problem and created two, the HALCYON solved none outstandingly and ' +
+        'created none at all. Vantor Aeroworks delivered it eleven years late, ' +
+        'four times over budget, and it has not needed a redesign since.',
+      'Its reputation is for being unremarkable, which its pilots resent and its ' +
+        'opponents do not. Every gauge on it is adequate. The beam saber is the ' +
+        'shortest chain of any sword on the roster and the most reliable. The ' +
+        'lance charges fast enough to threaten and cheap enough to repeat. It has ' +
+        'no trick, and so there is nothing to take away from it.',
+      'The REACTOR LINK is the one genuine innovation: the ARBITER escort carries ' +
+        'a secondary coupling that feeds the parent reactor while deployed, ' +
+        'raising regeneration by nearly half. Vantor spent a decade insisting ' +
+        'this was a cooling system. It is a cooling system. It also happens to ' +
+        'mean a HALCYON pilot can afford to be wrong more often than anyone else.',
+      'Concord issues it to instructors, to first postings, and to the pilots it ' +
+        'expects to still be alive in ten years. It is the machine you are given ' +
+        'when nobody has decided yet what you are.',
+    ],
+  },
+  {
+    id: 'nocturne',
+    title: 'AV-13 NOCTURNE',
+    subtitle: 'Emberline Pact · rebuilt from Concord pattern · Mark XIII',
+    tagline: 'A HALCYON that was told it was wrong and agreed.',
+    body: [
+      'Not a Concord machine, whatever the designation says. The Emberline Pact ' +
+        'acquired thirty AV-13 airframes in the settlement of 30 CE and had ' +
+        'stripped every one of them to the spar within two years. What came back ' +
+        'out was heavier by a fifth, slower by a tenth, and hit like something ' +
+        'that had stopped caring about the review process.',
+      'The rotary cannon is the visible change and the least important one. The ' +
+        'real work was structural: Emberline replaced the barrier emitter with a ' +
+        'twin-coil unit that regenerates at double rate, on the reasoning that a ' +
+        'frame which can afford to guard does not need to be able to dodge. ' +
+        'Concord filed a formal objection. Emberline filed it.',
+      'Its hydraulic claw is not a weapon Concord would have authorised. It was ' +
+        'adapted from a salvage grapple, it is slow, and it does not cut so much ' +
+        'as close. Pilots who have been on the receiving end describe the sound ' +
+        'more often than the damage.',
+      'The Pact fields it as a line-holder and a statement. Thirteen is not an ' +
+        'unlucky number in Emberline service; it is the number of yards they ' +
+        'intend to hold.',
+    ],
+  },
+  {
+    id: 'vesper',
+    title: 'AV-12 VESPER',
+    subtitle: 'Concord Skyward · Vantor Aeroworks · Mark XII, limited run',
+    tagline: 'Built for one shot, and given only enough hull to take one in return.',
+    body: [
+      'A specialist frame from a programme that does not like specialists. The ' +
+        'AV-12 exists because the yards are enormous and because a lattice offers ' +
+        'sightlines a kilometre long if you know where to sit. Vantor built forty ' +
+        'and then stopped, on the grounds that the pilots who could use it ' +
+        'properly numbered fewer than forty.',
+      'Everything is traded for reach. The beam bayonet is a formality — a ' +
+        'two-hit chain that exists so the frame is not defenceless, not because ' +
+        'anyone expects it to be used. The hull is the second thinnest in the ' +
+        'sky. In exchange it out-ranges every machine listed here, and the ' +
+        'targeting suite adds fourteen per cent to everything that lands.',
+      'The SIGHTLINE escort was a late addition and changed the frame entirely. ' +
+        'It does not shoot at the enemy; it shoots at what the enemy has fired, ' +
+        'picking rounds out of the air so its pilot never has to break position. ' +
+        'A VESPER that is allowed to stand still is the most dangerous thing at ' +
+        'this altitude. Everything about fighting one is about not allowing it.',
+      'Concord does not advertise the loss rate. It is not the highest on the ' +
+        'roster. It is the highest per engagement.',
+    ],
+  },
+  {
+    id: 'terramoth',
+    title: 'HV-03 TERRAMOTH',
+    subtitle: 'Ironwake Colliery · Pattern 3 excavation walker, armed',
+    tagline: 'It was never designed to fight. It was designed not to stop.',
+    body: [
+      'A mining machine. The Pattern 3 was cutting ore out of a floating seam ' +
+        'sixty years before anyone bolted a mortar to it, and the parts of it ' +
+        'that make it terrifying are all original: the armour is rock-fall ' +
+        'plating, the frame tolerances assume a collapse, and the ARMOUR BRACE ' +
+        'that shaves fourteen per cent off everything it takes is a safety system ' +
+        'with the interlocks removed.',
+      'Ironwake armed them in 34 CE after the third convoy in a season was taken ' +
+        'and the Concord response was a written apology. The conversion was ' +
+        'crude — a siege repeater where the cutting head sat, mortars in the spoil ' +
+        'hoppers, the pile driver left exactly as it was because nothing needed ' +
+        'improving. It remains the heaviest frame flying, and the slowest.',
+      'The BULWARK escort seeds charges rather than shooting: a Pattern 3 cannot ' +
+        'chase, so it makes the ground behind it expensive instead. The tactic is ' +
+        'inherited directly from seam work, where you do not pursue a rock fall, ' +
+        'you make sure it does not follow you.',
+      'It is the only machine here whose pilots are not soldiers, and Ironwake ' +
+        'has never once described them as such. They are crew.',
+    ],
+  },
+  {
+    id: 'cirrus',
+    title: 'LT-21 CIRRUS',
+    subtitle: 'Free Latitude · assembled at Brightwake · no two alike',
+    tagline: 'Thirty kilos of armour and every thruster that would fit.',
+    body: [
+      'There is no CIRRUS production line. There is a pattern, circulated freely, ' +
+        'and twenty-one recorded machines built to it by people who mostly did ' +
+        'not know each other. What they share is a philosophy: strip everything ' +
+        'that is not thrust, then strip some of the thrust mountings too.',
+      'The result is the fastest frame in the sky and very nearly the most ' +
+        'fragile. Boost regenerates at double rate because there is almost ' +
+        'nothing else drawing on the reactor. The twin daggers carry an eight-hit ' +
+        'chain — the longest melee sequence on the roster — because a machine ' +
+        'this light cannot win a trade and has to win an exchange instead.',
+      'The WISP escort strings a charged line back to its parent. Flown well, in ' +
+        'the pincer the Free Latitude pilots call *the scissor*, the wire sweeps ' +
+        'through anything caught between the two. Flown badly it is a tether ' +
+        'attached to the most fragile thing in the fight.',
+      'Concord assessments describe the LT-21 as unsurvivable and decline to ' +
+        'certify it. Free Latitude has never asked anyone to.',
+    ],
+  },
+  {
+    id: 'obelisk',
+    title: 'GD-09 OBELISK',
+    subtitle: 'Ironwake Colliery · Guard pattern, yard defence',
+    tagline: 'Designed around the barrier, not around the gun.',
+    body: [
+      'Ironwake built the Pattern 3 to work and the GD-09 to stand in front of ' +
+        'it. Where the TERRAMOTH is an industrial machine that was armed, the ' +
+        'OBELISK is a purpose-built defensive frame — the only one the Colliery ' +
+        'has ever designed from a blank sheet, and it shows in how single-minded ' +
+        'it is.',
+      'The barrier is the entire machine. Its emitter pool is the largest ' +
+        'fielded, it regenerates fastest, it recovers soonest after a break, and ' +
+        'it drains at slightly over half the normal rate while held. Every other ' +
+        'system is arranged to buy the barrier time: the ram shield exists to ' +
+        'create distance, the bash chain is two hits because two is all you need ' +
+        'to reset a fight.',
+      'The AEGIS escort projects a dome that erases incoming rounds outright. It ' +
+        'costs the drone nothing to maintain and everything to be caught doing — ' +
+        'holding the dome means holding position, and an AEGIS that is shot down ' +
+        'takes the frame\'s whole defensive posture with it.',
+      'Yard crews call it the door. It is not a compliment and it is not an ' +
+        'insult; it is a job description.',
+    ],
+  },
+  {
+    id: 'pyre',
+    title: 'IN-05 PYRE',
+    subtitle: 'Ashfall Irregulars · field-built · fifth of its name',
+    tagline: 'A short fight is a cheap fight, and Ashfall is paid either way.',
+    body: [
+      'The fifth frame to carry the name, and the first four are all accounted ' +
+        'for in the wreck ledgers. Ashfall does not build machines to last a ' +
+        'career; it builds them to make a contract short. Everything about the ' +
+        'IN-05 is calibrated to the assumption that the engagement will be ' +
+        'decided within ninety seconds.',
+      'The thermal cleaver, the cinder jet and the incendiary loadout all share a ' +
+        'flaw the Irregulars decided was a feature: nothing on this frame reaches ' +
+        'very far. The main gun dies at three hundred metres. In exchange the ' +
+        'saturation reactor charges at nearly twice the standard rate, so a PYRE ' +
+        'that is being hit is a PYRE that is about to do something drastic.',
+      'The EMBER escort lays burning ground in short bursts rather than shooting. ' +
+        'The Irregulars did not invent area denial, but they are the only ones ' +
+        'flying a machine that treats the whole engagement envelope as a ' +
+        'consumable.',
+      'Ashfall\'s contract terms are the only ones in the sky that price hull ' +
+        'loss separately from mission failure. Their pilots know this and it does ' +
+        'not appear to slow them down.',
+    ],
+  },
+  {
+    id: 'nulltide',
+    title: 'EW-14 NULLTIDE',
+    subtitle: 'Free Latitude · provenance disputed',
+    tagline: 'It does not out-shoot you. It makes you unable to shoot.',
+    body: [
+      'Nobody will say where the EW-14 came from. Free Latitude claims it as ' +
+        'salvage; Concord\'s inventory has fourteen electronic-warfare airframes ' +
+        'built and thirteen accounted for, and declines to discuss the ' +
+        'discrepancy. The frame itself carries no maker\'s plate, which on a ' +
+        'Concord hull is not an oversight.',
+      'It wins by subtraction. Its guns carry cryogenic and electrical payloads ' +
+        'that slow, drain and stall rather than destroy, and its arc glaive is ' +
+        'the longest-reaching sword on the roster because the frame expects to be ' +
+        'fighting something that can no longer move properly.',
+      'The JAMMING FIELD halves the opponent\'s reactor regeneration outright — ' +
+        'the only passive in service that reaches across and takes something ' +
+        'away. The STATIC escort goes further: it projects a full false frame, ' +
+        'indistinguishable from the real machine at any useful distance, which ' +
+        'drifts, fires and cannot hurt anyone. Every round spent on it is a round ' +
+        'that was aimed correctly at nothing.',
+      'The Archive lists its threat rating as provisional. It has been provisional ' +
+        'for six years.',
+    ],
+  },
+];
+
+// --------------------------------------------------------------- the pilots
+
+export const PILOT_ARCHIVE: ArchiveEntry[] = [
+  {
+    id: 'halcyon',
+    title: 'NAIA VESK',
+    subtitle: 'Concord Skyward · Instructor, 2nd Interceptor · Woman, early 30s',
+    tagline: '"I am not the best pilot here. I am the one who is still here."',
+    body: [
+      'Third generation Concord. Her mother flew an AV-04 and did not come back ' +
+        'from it; her grandmother signed off on the AV-01 and never flew ' +
+        'anything. Vesk grew up inside the programme and has spent her career ' +
+        'being quietly furious at how slow it is, which has not once shown in her ' +
+        'flying.',
+      'She holds the longest unbroken active record in Concord service — eleven ' +
+        'years, no hull loss — and is entirely aware that this is a statement ' +
+        'about her judgement rather than her hands. It is also the reason she is ' +
+        'an instructor at an age when her peers are still line pilots, a posting ' +
+        'she asked for and now cannot leave.',
+      'The arrogance her file notes is real and narrower than it reads. She is ' +
+        'not confident she will win. She is confident she will not lose in any of ' +
+        'the ways that are her own fault, which is a much smaller claim and one ' +
+        'she can actually support.',
+      'She flies the HALCYON because she was given it at nineteen and has never ' +
+        'been offered a reason to change. Vantor has twice asked her to evaluate ' +
+        'a successor frame. She has twice returned it with notes.',
+    ],
+  },
+  {
+    id: 'nocturne',
+    title: 'HALDEN ROOK',
+    subtitle: 'Emberline Pact · Line Sergeant, 7th Assault · Man, late 40s',
+    tagline: '"Everyone gets old up here or they get famous. Pick one."',
+    body: [
+      'Concord trained him. He does not hide it and he does not dwell on it — ' +
+        'twelve years in the AV line, two commendations, one court of inquiry ' +
+        'that cleared him and ended his career anyway. He crossed to Emberline in ' +
+        '33 CE and took his flight manual with him, which the Pact found more ' +
+        'valuable than the pilot.',
+      'He is the oldest active combatant in the sky by six years. His hands are ' +
+        'measurably slower than they were and his reads are measurably better, ' +
+        'and he has arranged his entire flying around that trade: guard rather ' +
+        'than dodge, absorb rather than evade, let the young ones spend ' +
+        'themselves on a frame that does not care.',
+      'The scarring is from the inquiry incident and he will not discuss it. What ' +
+        'is in the record is that he brought a frame home with a failed canopy at ' +
+        'four thousand metres, and that the frame was not his.',
+      'He trains Emberline\'s intake personally. His pilots have the lowest ' +
+        'first-year loss rate of any unit in the sky and describe him, without ' +
+        'affection, as impossible to impress.',
+    ],
+  },
+  {
+    id: 'vesper',
+    title: 'KESTREL DOYNE',
+    subtitle: 'Concord Skyward · Marksman, detached duty · Man, late 20s',
+    tagline: '"You are all very fast. It has not helped yet."',
+    body: [
+      'One of nine pilots ever certified on the AV-12 and the only one currently ' +
+        'flying. Doyne came out of yard survey rather than the flight programme — ' +
+        'six years mapping lattice structure for Concord engineering, which is ' +
+        'where he learned to read a yard as geometry instead of as terrain.',
+      'It is the whole of his advantage. He does not out-aim anyone. He knows, ' +
+        'before an engagement starts, which four places in a given yard have a ' +
+        'kilometre of clear line and a covered approach, and he is in one of them ' +
+        'by the time anybody is looking for him.',
+      'The stillness his file describes is not calm. Colleagues who have flown ' +
+        'wing with him report that he does not speak on the channel at all for ' +
+        'the first several minutes of an engagement, and that this is more ' +
+        'unnerving than anything the enemy does.',
+      'He requested detached duty in 38 CE and has not returned to a squadron ' +
+        'since. Concord permits it because the results are not arguable. His ' +
+        'evaluations note, every year, that he has no demonstrated ability to ' +
+        'fight at close quarters, and that he has never needed to.',
+    ],
+  },
+  {
+    id: 'terramoth',
+    title: 'BRUNN OKONKWO',
+    subtitle: 'Ironwake Colliery · Seam Foreman, Pattern 3 crew · Man, 50s',
+    tagline: '"It is not a war. It is a shift. Shifts end."',
+    body: [
+      'Not a soldier and does not pretend otherwise. Okonkwo has thirty-one years ' +
+        'on the Pattern 3 and twenty-six of them were spent cutting ore. He was ' +
+        'foreman of the Ironwake seam crew when the convoys started being taken, ' +
+        'and he was foreman of the same crew, in the same machines, when they ' +
+        'stopped being taken.',
+      'He is the calmest combatant in the sky and the reason is not courage. A ' +
+        'seam collapse gives you about four seconds and no options; a firefight ' +
+        'gives you minutes and dozens. He has said, on record and apparently ' +
+        'without irony, that combat is the more relaxing of the two.',
+      'The goggles are welding gear and he has never replaced them with anything ' +
+        'military. The Colliery offered him a commission in 36 CE and he declined ' +
+        'it on the grounds that he already had a job, then declined it again in ' +
+        '39 and 42 on the same grounds.',
+      'His crew are miners. He is emphatic about this in a way that Ironwake ' +
+        'management finds inconvenient and has stopped arguing with. Every one of ' +
+        'them is still on the payroll under their original trade.',
+    ],
+  },
+  {
+    id: 'cirrus',
+    title: 'MIRA HOLLOWAY',
+    subtitle: 'Free Latitude · unaffiliated · Woman, early 20s',
+    tagline: '"Worst case, I am somewhere else before it lands."',
+    body: [
+      'Yard-born, at Brightwake, which is not a place anyone is from on purpose. ' +
+        'Holloway assembled her first LT-21 at seventeen out of three wrecks and ' +
+        'a stolen reactor, flew it badly for a year, and has flown it better than ' +
+        'anyone since. She has never held a rank or signed a contract.',
+      'Her flying is genuinely reckless and it is not naive. She has run the ' +
+        'numbers that everyone else has run and reached a different conclusion: ' +
+        'that a frame this fragile does not get safer by being careful, only ' +
+        'slower, and slower is the one thing it cannot survive. So she commits, ' +
+        'every time, on purpose.',
+      'The eight-hit dagger chain is hers. The pattern circulated with a four; ' +
+        'Holloway extended it, published the modification for nothing, and was ' +
+        'mildly offended when Concord assessment described it as impractical.',
+      'She is the youngest active pilot in the sky and has the highest recorded ' +
+        'engagement count of anyone under thirty. Free Latitude does not track ' +
+        'hull losses. Hers would not flatter her.',
+    ],
+  },
+  {
+    id: 'obelisk',
+    title: 'SAAR TENGKU',
+    subtitle: 'Ironwake Colliery · Yard Defence, standing watch · Man, 40s',
+    tagline: '"Nothing gets past. That is the whole of it."',
+    body: [
+      'Twenty years of standing watch at the same three yards, which is a career ' +
+        'most pilots would consider a punishment posting and which Tengku ' +
+        'requested twice. He came up through Colliery security rather than ' +
+        'mining, and he is the only pilot on this roster whose job has a defined ' +
+        'success condition.',
+      'He does not pursue. This is not caution — pursuing means leaving, and ' +
+        'leaving is the failure state. Opponents who mistake his patience for ' +
+        'passivity discover that the GD-09 has a two-hit bash chain and that both ' +
+        'hits are meant for someone who has just committed to something.',
+      'The braid is Colliery tradition, worn by anyone who has held a yard ' +
+        'through a contested docking. Tengku has eleven. He does not mention this ' +
+        'and someone else always does.',
+      'Asked, in a Concord liaison interview, what he would do if ordered to ' +
+        'advance, he reportedly thought about it for some time and then asked ' +
+        'what would be holding the door.',
+    ],
+  },
+  {
+    id: 'pyre',
+    title: 'RASA VOLKOV',
+    subtitle: 'Ashfall Irregulars · Contract pilot · Woman, mid 20s',
+    tagline: '"They are paying for ninety seconds. Why would I take longer?"',
+    body: [
+      'Four PYRE frames, four wrecks, no injuries worth the word. Volkov holds ' +
+        'the Irregulars\' record for hull loss and, in the same ledger, their ' +
+        'record for contracts completed. Ashfall\'s accountants have raised this ' +
+        'twice and dropped it twice, because the second number pays for the first ' +
+        'with room to spare.',
+      'The cheerfulness is not a front and it is not stupidity. She has read the ' +
+        'same range charts as everyone else and knows exactly what a three ' +
+        'hundred metre main gun means: that there is no version of her fight that ' +
+        'happens at a comfortable distance, so there is no point being ' +
+        'uncomfortable about it.',
+      'She has burned two yards she was contracted to defend. Both were ruled ' +
+        'within terms. Neither client rehired her, and the queue behind them did ' +
+        'not shorten.',
+      'The soot does not come off. She has stopped trying and now regards it as ' +
+        'part of the uniform, which the Irregulars — who have no uniform — have ' +
+        'quietly adopted.',
+    ],
+  },
+  {
+    id: 'nulltide',
+    title: 'IO SENNA',
+    subtitle: 'Free Latitude · no file on record · Woman, 30s',
+    tagline: '"Data point."',
+    body: [
+      'The Archive has less on Senna than on any other active pilot, and the gaps ' +
+        'are the wrong shape to be accidental. Free Latitude lists her as crew. ' +
+        'Concord has no record of her at all, which for someone flying a Concord ' +
+        'electronic-warfare airframe is a statement in itself.',
+      'What is observable: she does not raise her voice, does not pursue, does ' +
+        'not finish opponents who have stopped being able to fight, and appears ' +
+        'to treat every engagement as a measurement rather than a contest. Pilots ' +
+        'who have fought her describe the experience as being catalogued.',
+      'Her method is subtraction. Cryogenic and shock payloads to take away ' +
+        'movement and power, a jamming field to take away the reactor, a false ' +
+        'frame to take away certainty. By the time the arc glaive is relevant the ' +
+        'opponent has usually been made unable to do anything about it.',
+      'She has never been recorded speaking about herself. The single personal ' +
+        'remark in the file is secondhand: a Brightwake mechanic who says she ' +
+        'once asked, apparently in earnest, why anyone would want to be ' +
+        'remembered.',
+    ],
+  },
+];
+
+/** Everything the Archive shows, in the order its sections appear. */
+export const ARCHIVE_SECTIONS = [
+  { id: 'world', label: 'THE WORLD', entries: [WORLD_ENTRY, FACTION_ENTRY] },
+  { id: 'mechs', label: 'MACHINES', entries: MECH_ARCHIVE },
+  { id: 'pilots', label: 'PILOTS', entries: PILOT_ARCHIVE },
+] as const;

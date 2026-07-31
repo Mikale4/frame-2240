@@ -82,12 +82,15 @@ export class MenuScene extends Phaser.Scene {
         { label: MODE_LABELS.vsCpu, onSelect: () => this.pick('vsCpu') },
         { label: MODE_LABELS.aiVsAi, onSelect: () => this.pick('aiVsAi') },
         { label: MODE_LABELS.training, onSelect: () => this.pick('training') },
+        // The story lives here rather than behind CAMPAIGN, so it is readable
+        // before the campaign that will use it exists.
+        { label: 'ARCHIVE', onSelect: () => this.openArchive() },
         { label: 'SETTINGS', onSelect: () => this.openSettings() },
         { label: 'BACK TO TITLE', onSelect: () => this.back() },
       ],
       VIEW_W / 2,
       VIEW_H / 2 - 54,
-      { size: 22, gap: 40, maxVisible: 6 },
+      { size: 22, gap: 36, maxVisible: 7 },
     );
 
     this.settingsMenu = new Menu(
@@ -119,6 +122,10 @@ export class MenuScene extends Phaser.Scene {
   /** Which list is live. Kept explicit so `update` has one place to branch. */
   private get active(): Menu {
     return this.page === 'settings' ? this.settingsMenu : this.menu;
+  }
+
+  private openArchive(): void {
+    this.scene.start('Archive');
   }
 
   private openSettings(): void {
