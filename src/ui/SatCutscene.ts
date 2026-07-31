@@ -10,6 +10,10 @@ export const CUTSCENE_TICKS = 76;
 const IN_TICKS = 14;
 const OUT_TICKS = 16;
 
+/** Drawn portrait size, and the plate behind it. */
+const PORTRAIT = 216;
+const PANEL = 240;
+
 /**
  * The saturation activation cutscene.
  *
@@ -35,7 +39,8 @@ export class SatCutscene {
   private readonly barBottom: Phaser.GameObjects.Rectangle;
   private readonly rays: Phaser.GameObjects.Image[] = [];
   private readonly portrait: Phaser.GameObjects.Image;
-  private readonly portraitGlow: Phaser.GameObjects.Rectangle;
+  private readonly portraitPanel: Phaser.GameObjects.Rectangle;
+  private readonly portraitEdge: Phaser.GameObjects.Rectangle;
   private readonly modeText: Phaser.GameObjects.Text;
   private readonly subText: Phaser.GameObjects.Text;
   private readonly pilotText: Phaser.GameObjects.Text;
@@ -65,9 +70,21 @@ export class SatCutscene {
       this.root.add(ray);
     }
 
-    // A slab behind the portrait so it never sits on raw arena.
-    this.portraitGlow = scene.add.rectangle(0, VIEW_H / 2, 240, 240, 0xffffff, 0.16).setOrigin(0.5, 0.5);
-    this.root.add(this.portraitGlow);
+    // The same frame the corner banter boxes use, scaled up: dark plate, thin
+    // tinted border, thicker bar on the outer edge. A translucent coloured
+    // square was the first attempt and read as an unfinished placeholder —
+    // reusing the established panel makes the cutscene look like part of the
+    // same interface rather than a different screen.
+    this.portraitPanel = scene.add
+      .rectangle(0, VIEW_H / 2, PANEL, PANEL, 0x080c15, 0.86)
+      .setOrigin(0.5, 0.5)
+      .setStrokeStyle(2, 0xffffff, 0.9);
+    this.root.add(this.portraitPanel);
+
+    this.portraitEdge = scene.add
+      .rectangle(0, VIEW_H / 2, 4, PANEL, 0xffffff, 1)
+      .setOrigin(0.5, 0.5);
+    this.root.add(this.portraitEdge);
 
     this.portrait = scene.add.image(0, VIEW_H / 2, '__missing');
     this.portrait.setOrigin(0.5, 0.5);
@@ -155,8 +172,10 @@ export class SatCutscene {
     if (this.portrait.scene.textures.exists(opts.portraitKey)) {
       this.portrait.setTexture(opts.portraitKey);
     }
-    this.portrait.setDisplaySize(224, 224);
-    this.portraitGlow.setFillStyle(opts.tint, 0.18);
+    this.portrait.setDisplaySize(PORTRAIT, PORTRAIT);
+    // Border and edge take the pilot's accent, exactly as their banter box does.
+    this.portraitPanel.setStrokeStyle(2, opts.tint, 0.9);
+    this.portraitEdge.setFillStyle(opts.tint, 1);
 
     this.modeText.setText(`${SAT_MODE_NAMES[opts.mode] ?? 'SATURATION'}`);
     // A forced burst is labelled as one and goes red, so the cutscene never
@@ -210,9 +229,11 @@ export class SatCutscene {
     const px = fromX + (restX - fromX) * eased;
     this.portrait.setX(px);
     this.portrait.setAlpha(eased);
-    this.portraitGlow.setX(px);
-    this.portraitGlow.setAlpha(0.18 * eased);
-    this.portraitGlow.setScale(0.8 + 0.2 * eased);
+    this.portraitPanel.setX(px);
+    this.portraitPanel.setAlpha(eased);
+    // The heavy bar sits on the screen-edge side, matching the corner boxes.
+    this.portraitEdge.setX(px - this.side * (PANEL / 2 - 2));
+    this.portraitEdge.setAlpha(eased);
 
     const textX = VIEW_W * (this.side > 0 ? 0.66 : 0.34);
     for (const t of [this.modeText, this.subText, this.pilotText, this.lineText]) {

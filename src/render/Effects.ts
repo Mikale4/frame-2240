@@ -555,6 +555,75 @@ export class Effects {
   }
 
   /**
+   * Sparks venting from a machine that is stunned and hurt.
+   *
+   * Called every frame for the length of a saturation burnout, rather than once
+   * at the start: the stun is the longest helpless window in the game, and
+   * without something continuous on the mech the player cannot tell a stunned
+   * machine from one that is simply hovering. `intensity` rises for an overheat,
+   * which is both longer and damaging.
+   *
+   * Electrical rather than fiery — white-hot specks thrown out and falling,
+   * with the occasional arc across the hull. Fire would read as "on fire", which
+   * is a status element this game already has and means something else.
+   */
+  stunSparks(x: number, y: number, radius: number, tint: number, intensity = 1): void {
+    const n = Math.random() < 0.55 * intensity ? 2 : 1;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = radius * (0.3 + Math.random() * 0.7);
+      const sx = x + Math.cos(a) * r;
+      const sy = y + Math.sin(a) * r * 0.8;
+      this.emit({
+        key: TEX.spark,
+        x: sx,
+        y: sy,
+        life: 14 + Math.random() * 16,
+        scaleFrom: 0.34 + Math.random() * 0.28,
+        scaleTo: 0.02,
+        tint: i % 2 === 0 ? 0xffffff : 0xffd9a0,
+        vx: (Math.random() - 0.5) * 4.5,
+        // Biased downward: the machine is shedding, not firing.
+        vy: 0.8 + Math.random() * 2.6,
+        drag: 0.96,
+      });
+    }
+    // An occasional arc across the hull, so the stun reads as electrical.
+    if (Math.random() < 0.16 * intensity) {
+      const a = Math.random() * Math.PI * 2;
+      this.emit({
+        key: TEX.streak,
+        x: x + Math.cos(a) * radius * 0.4,
+        y: y + Math.sin(a) * radius * 0.35,
+        life: 7,
+        scaleFrom: 0.85,
+        scaleTo: 0.2,
+        tint,
+        alpha: 0.9,
+        rotation: Math.random() * Math.PI,
+        scaleYMul: 0.11,
+        fadePow: 1.6,
+      });
+    }
+    // A puff of vented smoke now and then, low and slow.
+    if (Math.random() < 0.1 * intensity) {
+      this.emit({
+        key: TEX.glow,
+        x: x + (Math.random() - 0.5) * radius,
+        y: y + radius * 0.3,
+        life: 30,
+        scaleFrom: 0.3,
+        scaleTo: 0.9,
+        tint: 0x39404f,
+        alpha: 0.5,
+        vy: -0.5,
+        drag: 0.98,
+        fadePow: 1.4,
+      });
+    }
+  }
+
+  /**
    * The burst running dry. Deliberately ugly next to the activation: sparks
    * falling out of the machine rather than energy pouring into it.
    */

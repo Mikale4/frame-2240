@@ -912,6 +912,19 @@ export class BattleScene extends Phaser.Scene {
       if (c.satActive && Math.random() < 0.5) {
         this.effects.satAura(c.x, c.y, c.def.tint.thruster);
       }
+      // A burnt-out machine visibly sheds sparks for the whole stun, so being
+      // helpless looks like damage rather than like standing still.
+      if (c.alive && c.satBurnout > 0) {
+        this.effects.stunSparks(
+          c.x,
+          c.y,
+          c.def.rig.hurtRadius,
+          c.def.tint.glow,
+          // An overheat runs past the ordinary burnout's length; while it is
+          // still going the machine throws noticeably more.
+          c.satBurnout > 60 ? 1.8 : 1,
+        );
+      }
 
       // Death explosions keep going while the KO plays out.
       if (!c.alive && Math.random() < 0.16) {
