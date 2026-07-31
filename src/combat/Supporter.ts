@@ -262,7 +262,17 @@ const MINE_DRAW = 3.4;
  * Individually almost harmless. The element is what does the work.
  */
 const HAZARD_PERIOD = 8;
-const HAZARD_LIFE = 150;
+/**
+ * How long an ember burns on the deck.
+ *
+ * Four and a half seconds rather than two and a half. A trail that vanishes as
+ * fast as it is laid never reads as a trail — the tail end was gone before the
+ * drone had finished drawing the head, so what you saw was a handful of sparks
+ * following it around rather than a line of fire across the ground. Long enough
+ * now that the path the escort took is still legible after it has moved on,
+ * which is the whole point of area denial.
+ */
+const HAZARD_LIFE = 270;
 const HAZARD_DAMAGE = 5;
 const HAZARD_RADIUS = 16;
 /**
