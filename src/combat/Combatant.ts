@@ -303,6 +303,22 @@ export class Combatant implements FlightState {
 
   hitstop = 0;
   hitstun = 0;
+  /**
+   * Ticks left in which a barrier burst will repel an incoming melee opener.
+   *
+   * Separate from `invuln` because they mean different things: `invuln` is also
+   * granted by simply being hit, and a hit-invulnerability window must not turn
+   * every trade into a parry. Only a deliberate burst opens this one.
+   */
+  repelTicks = 0;
+  /**
+   * Melee hits taken since this machine last had control.
+   *
+   * Gates the repel to the *opening* strike of a sequence: once a sword is
+   * already landing on you, bursting is an escape, not a parry. Reset the moment
+   * hitstun ends, which is the same moment the combo counter resets.
+   */
+  meleeHitsTaken = 0;
   invuln = 0;
   guarding = false;
   guardBreakStun = 0;
@@ -684,6 +700,8 @@ export class Combatant implements FlightState {
     const passive = this.dronePassive;
 
     if (this.invuln > 0) this.invuln--;
+    if (this.repelTicks > 0) this.repelTicks--;
+    if (this.hitstun <= 0 && this.guardBreakStun <= 0) this.meleeHitsTaken = 0;
     if (this.meleeLockout > 0) this.meleeLockout--;
     if (this.bladeTimer > 0) this.bladeTimer--;
     if (this.barrierActiveTicks > 0) this.barrierActiveTicks--;
@@ -1357,10 +1375,11 @@ export class Combatant implements FlightState {
     if (!this.barrierFree) this.barrier = Math.max(0, this.barrier - cost);
     this.barrierRegenTimer = this.def.gauges.barrierRegenDelay;
 
-    this.invuln = Math.max(
-      this.invuln,
-      b.invulnTicks + (this.shieldActive ? b.shieldBonusTicks : 0),
-    );
+    const guardTicks = b.invulnTicks + (this.shieldActive ? b.shieldBonusTicks : 0);
+    this.invuln = Math.max(this.invuln, guardTicks);
+    // A burst answers a sword as well as a gun, but only if the sword has not
+    // already started landing — see `meleeHitsTaken`.
+    this.repelTicks = this.meleeHitsTaken === 0 ? guardTicks : 0;
     this.barrierActiveTicks = b.actionTicks;
     this.act = ActState.Barrier;
     this.attack = null;
@@ -1625,10 +1644,20 @@ export class Combatant implements FlightState {
    * Applies an incoming hit. Returns what happened so the caller can emit the
    * right event and credit the attacker.
    */
-  takeHit(p: ProjectileSpawn): 'ignored' | 'absorbed' | 'guarded' | 'hit' {
+  takeHit(p: ProjectileSpawn): 'ignored' | 'absorbed' | 'guarded' | 'hit' | 'repelled' {
     if (!this.alive) return 'ignored';
 
     const piercing = p.barrier === BarrierResponse.Pierce;
+    const isMelee = p.kind === ProjKind.Melee;
+
+    // Barrier burst vs a sword: the opening strike is thrown back at whoever
+    // swung it. Checked ahead of the invulnerability branch, which would
+    // otherwise swallow the hit as a plain 'ignored' and lose the counter.
+    if (this.repelTicks > 0 && isMelee && this.meleeHitsTaken === 0) {
+      this.sat = Math.min(this.def.gauges.maxSaturation, this.sat + this.def.gauges.satOnAbsorb);
+      this.repelTicks = 0;
+      return 'repelled';
+    }
 
     // Barrier-burst invulnerability. Absorbing a shot feeds the meter, which is
     // the reference's core defensive loop.
@@ -1645,9 +1674,13 @@ export class Combatant implements FlightState {
     const def = this.def.defence;
     const dmg = p.damage * this.incomingScale * (this.grounded ? def.groundedMul : 1);
 
-    if (this.guarding && !piercing) {
+    // A guard now stops melee too, just far less well than it stops gunfire.
+    // Melee keeps its `Pierce` marking, which still means the Shield-saturation
+    // bubble cannot erase it and an absorb cannot bank it as meter.
+    if (this.guarding && (!piercing || isMelee)) {
       const b = this.def.barrier;
-      this.life -= dmg * b.guardScale;
+      if (isMelee) this.meleeHitsTaken++;
+      this.life -= dmg * (isMelee ? b.meleeGuardScale : b.guardScale);
       if (!this.barrierFree) this.barrier = Math.max(0, this.barrier - p.guardDamage * 0.5);
       this.barrierRegenTimer = this.def.gauges.barrierRegenDelay;
       this.hitstop = Math.max(this.hitstop, Math.floor(p.hitstop * 0.6));
@@ -1663,6 +1696,7 @@ export class Combatant implements FlightState {
       return 'guarded';
     }
 
+    if (isMelee) this.meleeHitsTaken++;
     this.life = Math.max(0, this.life - dmg);
     this.hitstop = Math.max(this.hitstop, p.hitstop);
     this.hitstun = Math.max(this.hitstun, p.hitstun);
@@ -1685,6 +1719,22 @@ export class Combatant implements FlightState {
     this.vx += (p.vx / l) * p.knockback;
     this.vy += (p.vy / l) * p.knockback;
     return 'hit';
+  }
+
+  /**
+   * Forces this machine out of whatever it is doing, from outside.
+   *
+   * Used by the melee repel, which has to stop the swing on the frame it is
+   * thrown back. Setting `hitstun` alone would not: collisions resolve after
+   * both combatants have stepped, so a lock-on sequence would run one more
+   * frame and only notice the stun on the next tick.
+   */
+  interrupt(stun: number): void {
+    this.hitstun = Math.max(this.hitstun, stun);
+    this.attack = null;
+    this.coAttack = null;
+    this.act = ActState.Hitstun;
+    if (this.meleeLock) this.endMeleeLock(false);
   }
 
   /** Called on the attacker when one of its hits connects. */

@@ -527,6 +527,15 @@ export class BattleScene extends Phaser.Scene {
           sfx.barrier();
           break;
         }
+        case 'meleeRepel': {
+          const d = this.byId(ev.id);
+          this.effects.barrier(ev.x, ev.y, d?.def.barrier.radius ?? 46, 0x9fe6ff);
+          this.effects.guardBreak(ev.x, ev.y);
+          sfx.guardBreak();
+          this.shake = Math.max(this.shake, 12);
+          if (ev.id === s.player.id) this.hud.banner('REPEL', 50);
+          break;
+        }
         case 'guardBreak':
           this.speak(ev.id, 'guardBroken');
           this.effects.guardBreak(ev.x, ev.y);

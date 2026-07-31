@@ -187,7 +187,8 @@ const BASE_BARRIER: BarrierDef = {
   cost: 30,
   cancelPenalty: 22,
   breakStun: 50,
-  guardScale: 0.32,
+  guardScale: 0.20,
+  meleeGuardScale: 0.50,
   radius: 46,
 };
 

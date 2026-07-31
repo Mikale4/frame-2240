@@ -155,13 +155,24 @@ strafe freely with the trigger held.
 
 **Barrier is offence.** A barrier burst gives you 36 frames of invulnerability,
 and every shot it absorbs is **converted into saturation charge**. You can also
-burst out of blockstun or hitstun — at double the cost. Holding the button
-instead is a cheaper guard that scales damage down but drains the barrier gauge;
-empty it and you are **guard broken** and helpless for nearly a second.
+burst out of blockstun or hitstun — at double the cost.
 
-**Melee ignores barriers.** The sword chain is the answer to a turtle. Stage 1
-into stage 2 into a launching finisher — but a chain only continues if the
-previous swing actually **connected**, so whiffing leaves you in recovery.
+**Holding** the button instead is a guard. It cuts ordinary damage by **80%**
+but drains the barrier gauge; empty it and you are **guard broken** and helpless
+for nearly a second.
+
+**Melee is the answer to a turtle — but not a free one.** A guard only cuts
+sword damage by **50%**, so holding it against a blade is losing ground slowly
+rather than stopping it. And a sword still cannot be erased by the
+Shield-saturation bubble. Stage 1 into stage 2 into a launching finisher — but a
+chain only continues if the previous swing actually **connected**, so whiffing
+leaves you in recovery.
+
+**Repel.** Time a barrier **burst** onto the *opening* strike of a melee
+sequence and you throw the attacker off: they are knocked back and stunned for a
+full second, their sequence dies, and you take nothing. It only works on the
+first hit — once a sword is already landing on you, bursting is an escape, not a
+parry.
 
 **The pilots talk.** Every round opens with an exchange written for that exact
 pairing — all 36 of them, mirrors included, with five conversations each, so a

@@ -89,8 +89,23 @@ export interface BarrierDef {
   cancelPenalty: number;
   /** Ticks of stun on guard break. */
   breakStun: number;
-  /** Fraction of damage taken through a held guard. */
+  /**
+   * Fraction of damage taken through a held guard. 0.20 = 80% reduction.
+   *
+   * A guard is a real answer to gunfire, not a slight discount — the previous
+   * 0.32 left you eating a third of everything and made holding it feel like a
+   * delaying tactic rather than a defence.
+   */
   guardScale: number;
+  /**
+   * Fraction of *melee* damage taken through a held guard.
+   *
+   * Deliberately worse for the defender than `guardScale`. Melee used to ignore
+   * a guard outright, which made a sword the unconditional answer to turtling
+   * and left the defender with nothing to do about it. Halving it instead keeps
+   * melee the better tool against a guard without making the guard pointless.
+   */
+  meleeGuardScale: number;
   radius: number;
 }
 

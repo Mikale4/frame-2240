@@ -134,6 +134,11 @@ export type SimEvent =
   | { t: 'absorb'; x: number; y: number; victimId: number; charge: number }
   | { t: 'barrier'; x: number; y: number; id: number }
   | { t: 'guardBreak'; x: number; y: number; id: number }
+  /**
+   * A barrier burst threw a melee opener back at whoever swung it. `id` is the
+   * defender, `attackerId` the pilot now stunned for it.
+   */
+  | { t: 'meleeRepel'; x: number; y: number; id: number; attackerId: number }
   | { t: 'dash'; x: number; y: number; angle: number; id: number }
   | { t: 'melee'; x: number; y: number; angle: number; id: number; stage: number }
   /**

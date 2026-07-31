@@ -1001,3 +1001,58 @@ gains or loses a frame of advantage from it.
 
 **Everything is seeded.** Line choice comes from the scene's own generator, so a
 replayed match says the same things in the same order.
+
+---
+
+### D50 — A guard now stops swords, and a burst can throw one back
+
+**Decision.** A held guard cuts ordinary damage by 80 % (`guardScale` 0.20, from
+0.32) and melee damage by 50 % (`meleeGuardScale`, new). A barrier burst timed
+onto the **opening** strike of a melee sequence repels it: no damage, the
+attacker is thrown back and stunned for a second, and their sequence dies.
+
+**Why melee stopped ignoring guards.** "Melee is unblockable" was inherited from
+the 2005 reference and it made a sword the unconditional answer to a guard —
+correct as an anti-turtle tool, wrong in that the defender had no read to make.
+Halving it instead keeps melee clearly the better option into a guard while
+giving the defender something to do about it. Melee keeps its `Pierce` marking,
+so the Shield-saturation bubble still cannot erase a sword and an absorb still
+cannot bank one as meter; only the guard branch changed.
+
+**Why the repel is gated to the opening hit.** A parry available at any point in
+a combo is a get-out-of-jail card that punishes the attacker for having
+committed. Gated to the first strike it is a *read*: the defender has to call the
+approach before it lands. `meleeHitsTaken` tracks it, and resets the moment
+hitstun ends.
+
+**Why a separate `repelTicks` rather than reusing `invuln`.** Being hit grants
+i-frames. If the repel keyed off those, every trade would silently become a
+parry. Only a deliberate burst opens the window.
+
+**Why `interrupt()` exists.** Collisions resolve after both combatants have
+stepped, so setting `hitstun` on the attacker would let a lock-on sequence run
+one more frame. The repel has to stop the swing on the frame it is thrown back.
+
+### D51 — The sound set is trimmed and level-matched
+
+**Decision.** All 71 files are RMS-normalised toward −16 dBFS mean, limited by a
+−1.6 dBFS peak ceiling, with leading and trailing silence removed. Scripted in
+`tools/normalise_audio.py` so it is reproducible and reviewable.
+
+**Why RMS rather than peak.** Perceived loudness tracks mean level. The set
+spanned **28.6 dB** of mean volume — `ui_confirm` sat at −33.4 dBFS against
+`fire_autocannon_3` at −4.8 — so peak-normalising would have left the sparse,
+transient-heavy cues still sounding inaudible next to dense ones. After the pass
+the spread is **10.4 dB**. `SoundBank.ts` already carried a per-cue `gain`, but
+every value there is ≤ 1: it can quieten a loud cue and could do nothing at all
+for a quiet one.
+
+**Why the ceiling is −1.6 and not −1.0.** An mp3 round-trip does not preserve
+peaks. Encoding to −1.0 measured back at −0.0 dBFS on the densest file, so the
+ceiling has to absorb the codec's overshoot as well as leave mixing headroom.
+
+**What it deliberately does not do.** `AUDIO_CUE_SHEET.md` lists a target
+duration per cue, several far shorter than what was generated — `fire_vulcan`
+wants 0.10 s and the file carries audio across its full 0.52 s. Those targets
+were written before the audio existed. Cutting real content to them is a
+judgement to make by ear, not by a script, so the pass removes only silence.

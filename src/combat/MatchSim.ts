@@ -48,6 +48,11 @@ function droneHitKey(ownerId: number): number {
   return 1000 + ownerId;
 }
 
+/** How hard a repelled melee attacker is thrown off, and for how long. */
+const MELEE_REPEL_KNOCK = 13;
+/** One second. Long enough to punish, which is the whole point of the read. */
+const MELEE_REPEL_STUN = 60;
+
 /**
  * The authoritative, engine-agnostic match simulation.
  *
@@ -283,12 +288,34 @@ export class MatchSim {
         if (p.hitIds.has(c.id)) continue;
         if (!sweptHit(p, c.x, c.y, c.def.rig.hurtRadius)) continue;
 
+        const attacker = this.combatants.find((a) => a.id === p.ownerId);
         const result = c.takeHit(p.asHit());
         p.hitIds.add(c.id);
 
-        const attacker = this.combatants.find((a) => a.id === p.ownerId);
-
         switch (result) {
+          case 'repelled': {
+            // The swing is thrown back: the attacker is knocked away from the
+            // defender and left helpless for a second. This is the counterplay
+            // to a sword opener, and it is why melee can no longer simply walk
+            // through a barrier.
+            this.events.push({
+              t: 'meleeRepel',
+              x: p.x,
+              y: p.y,
+              id: c.id,
+              attackerId: p.ownerId,
+            });
+            if (attacker) {
+              const dx = attacker.x - c.x;
+              const dy = attacker.y - c.y;
+              const l = Math.hypot(dx, dy) || 1;
+              attacker.vx = (dx / l) * MELEE_REPEL_KNOCK;
+              attacker.vy = (dy / l) * MELEE_REPEL_KNOCK - 2;
+              attacker.interrupt(MELEE_REPEL_STUN);
+            }
+            p.active = false;
+            continue;
+          }
           case 'absorbed':
             this.events.push({
               t: 'absorb',
