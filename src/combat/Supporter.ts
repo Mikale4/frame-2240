@@ -428,6 +428,14 @@ export class Supporter {
   decoyFacing = 1;
   /** Ticks until the projection fires again. */
   private decoyFireTimer = 0;
+  /**
+   * Where the projection's mounts are pointing.
+   *
+   * Lives in the simulation rather than the renderer because it decides where
+   * the rounds actually go. A rig aiming somewhere its own shots do not come
+   * from is the clearest tell a decoy can give.
+   */
+  decoyAim = 0;
   /** `arcTether`: true while the wire between drone and owner is live. */
   tetherLive = false;
   /** `arcTether`: ticks before the wire may bite again. */
@@ -747,6 +755,7 @@ export class Supporter {
           // the movement a real pilot would be making.
           this.decoyHeading = Math.atan2(ly, lx);
           this.decoyFacing = lx >= 0 ? 1 : -1;
+          this.decoyAim = Math.atan2(target!.y - this.decoyY, target!.x - this.decoyX);
           events.push({ t: 'assist', x: this.decoyX, y: this.decoyY, angle: this.aim, ownerId: owner.id, auto: true });
         }
         break;
@@ -855,9 +864,17 @@ export class Supporter {
      * and far too little to make the ability a damage source. Rolled at spawn
      * out of the match RNG, so a replay reproduces it.
      */
-    if (!target || !target.alive || this.decoyFireTimer-- > 0) return;
+    if (!target || !target.alive) return;
+    // Slewed at the drone's own turret rate rather than snapped, exactly as a
+    // real chassis leads its mounts round.
+    const want = Math.atan2(target.y - this.decoyY, target.x - this.decoyX);
+    const delta = wrapAngle(want - this.decoyAim);
+    const rate = this.def.turretRate;
+    this.decoyAim = wrapAngle(this.decoyAim + Math.max(-rate, Math.min(rate, delta)));
+
+    if (this.decoyFireTimer-- > 0) return;
     this.decoyFireTimer = DECOY_FIRE_PERIOD;
-    const ang = Math.atan2(target.y - this.decoyY, target.x - this.decoyX);
+    const ang = this.decoyAim;
     const stun = this.rng.chance(DECOY_STUN_CHANCE);
     spawns.push({
       x: this.decoyX + Math.cos(ang) * 26,

@@ -98,7 +98,9 @@ export class BattleScene extends Phaser.Scene {
   private drones: Phaser.GameObjects.Image[] = [];
   private droneRings: Phaser.GameObjects.Graphics[] = [];
   /** One per side; only a `decoy` drone ever shows its own. */
-  private decoyGhosts: Phaser.GameObjects.Container[] = [];
+  private decoyGhosts: MechRenderer[] = [];
+  /** Per-side animation state for the decoy, keyed by combatant id. */
+  private decoyAnim: Record<number, { bobPhase: number; bank: number }> = {};
 
   /** Pilot speech boxes, indexed the same way as `combatants`. */
   private banter: BanterBox[] = [];
@@ -161,6 +163,7 @@ export class BattleScene extends Phaser.Scene {
     this.drones = [];
     this.droneRings = [];
     this.decoyGhosts = [];
+    this.decoyAnim = {};
     this.worldObjects = [];
     this.renderers = [];
 
@@ -262,7 +265,7 @@ export class BattleScene extends Phaser.Scene {
        * Built for every mech and left invisible on the seven that never project
        * one, which is cheaper than branching the render path on a role.
        */
-      this.decoyGhosts.push(this.buildGhost(def));
+      this.decoyGhosts.push(this.buildDecoyRenderer(def));
     }
 
     this.hud = new Hud(this, this.sim);
@@ -304,7 +307,7 @@ export class BattleScene extends Phaser.Scene {
       ...this.blades,
       ...this.drones,
       ...this.droneRings,
-      ...this.decoyGhosts,
+      ...this.decoyGhosts.map((r) => r.root),
       this.effects.container,
       ...this.debug.worldObjects,
     ];
@@ -846,43 +849,61 @@ export class BattleScene extends Phaser.Scene {
    * fight to know whether the assist is up.
    */
   /**
-   * Assembles a translucent copy of a whole chassis, for the decoy projection.
+   * A second `MechRenderer` per side, used only for a decoy projection.
    *
-   * Same rig walk the title screen's showcase uses: every part placed at its
-   * authored offset, parented, then reordered by `drawOrder`. Static — a decoy
-   * does not animate, and a still silhouette reads as a projection rather than
-   * as a second machine that happens to be standing oddly.
+   * **The real renderer, not a static copy.** An earlier pass assembled the rig
+   * by hand into a still container, and it gave the projection away instantly:
+   * the genuine machine banks into its turns, its thrusters flare, its limbs
+   * settle. A silhouette that holds one pose next to one that does all of that
+   * is not a decoy, it is a cardboard cutout. Driving the same renderer with a
+   * synthesised state means the projection animates by construction and cannot
+   * drift out of step when the real rig gains a behaviour.
    */
-  private buildGhost(def: (typeof MECHS)[string]): Phaser.GameObjects.Container {
-    const root = this.add.container(0, 0);
-    const nodes = new Map<string, Phaser.GameObjects.Container>();
-    for (const part of def.rig.parts) {
-      const node = this.add.container(part.x, part.y);
-      const tex = partTexture(this, def.id, part.name);
-      const img = this.add.image(0, 0, tex.key, tex.frame);
-      img.setScale(PART_SCALE);
-      // **No tint, no blend mode.** The projection is meant to be indistinguishable
-      // from the machine it copies — a cyan ghost is a label saying "ignore me",
-      // which is the opposite of the ability. What gives it away is behaviour:
-      // it drifts on its own heading and it does not shoot.
-      node.add(img);
-      nodes.set(part.name, node);
-    }
-    for (const part of def.rig.parts) {
-      const node = nodes.get(part.name)!;
-      const parent = part.parent ? nodes.get(part.parent) : null;
-      (parent ?? root).add(node);
-    }
-    for (const name of def.rig.drawOrder) {
-      const n = nodes.get(name);
-      if (n?.parentContainer) n.parentContainer.bringToTop(n);
-    }
-    // The blade crosses straight through the rifle in a rest pose, exactly as it
-    // does on the title screen.
-    nodes.get('meleeWeapon')?.setVisible(false);
-    root.setScale(def.rig.scale);
-    root.setVisible(false);
-    return root;
+  private buildDecoyRenderer(def: (typeof MECHS)[string]): MechRenderer {
+    const r = new MechRenderer(this, def, def.id);
+    r.setDepth(17);
+    return r;
+  }
+
+  /**
+   * The state a decoy renderer is driven with.
+   *
+   * Presentation only — the simulation owns the projection's position, heading
+   * and lifetime; everything here is the animation read off them. Deliberately
+   * duck-typed against the fields `MechRenderer.sync` actually reads rather than
+   * faking a whole `Combatant`.
+   */
+  private decoyState(c: Combatant, dt: number): Combatant {
+    const s = c.supporter;
+    const st = (this.decoyAnim[c.id] ??= { bobPhase: 0, bank: 0 });
+    st.bobPhase += dt * 2.4;
+    // Bank into the drift, the way the flight model banks a real chassis.
+    const wantBank = clamp(s.decoyVx * 0.055, -0.38, 0.38) * (s.decoyFacing < 0 ? -1 : 1);
+    st.bank += (wantBank - st.bank) * 0.12;
+
+    return {
+      alive: true,
+      act: 0,
+      y: s.decoyY,
+      // Straight from the simulation, so the mounts point exactly where the
+      // projection's rounds actually leave from. A rig aiming somewhere its own
+      // shots do not come from is the clearest tell there is.
+      aim: s.decoyAim,
+      bank: st.bank,
+      bobPhase: st.bobPhase,
+      facing: s.decoyFacing,
+      hitstop: 0,
+      reach: 0,
+      spin: 0,
+      swinging: false,
+      satActive: false,
+      status: c.status,
+      stride: 0,
+      walkPhase: 0,
+      // Always under thrust: it is flying, so the plumes are lit. A projection
+      // with dead thrusters reads as a wreck.
+      thrust: 0.55 + Math.sin(st.bobPhase * 1.7) * 0.12,
+    } as unknown as Combatant;
   }
 
   private drawDrone(i: number, c: Combatant): void {
@@ -896,13 +917,11 @@ export class BattleScene extends Phaser.Scene {
       const showing = c.alive && s.decoyTicks > 0 && c.def.supporter.role === 'decoy';
       ghost.setVisible(showing);
       if (showing) {
-        ghost.setPosition(s.decoyX, s.decoyY);
-        ghost.setScale(c.def.rig.scale * (s.decoyFacing < 0 ? -1 : 1), c.def.rig.scale);
-        ghost.setDepth(depthSortAt(s.decoyY, 17));
-        // Solid for almost all of its life, dissolving only in the last moments
-        // — that flicker is the tell, and it arrives too late to help much.
+        ghost.sync(this.decoyState(c, 1 / 60), s.decoyX, s.decoyY, 1 / 60);
+        // Solid for almost all of its life, dissolving only at the very end —
+        // that flicker is the tell, and it arrives too late to help much.
         const life = s.decoyTicks / 110;
-        ghost.setAlpha(life > 0.25 ? 1 : life * 4);
+        ghost.setAlpha(life > 0.2 ? 1 : life * 5);
       }
     }
 

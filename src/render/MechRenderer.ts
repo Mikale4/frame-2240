@@ -241,6 +241,22 @@ export class MechRenderer {
     };
   }
 
+  /**
+   * Shows or hides the whole rig.
+   *
+   * Needed by the decoy projection, which uses a second renderer that spends
+   * most of a match switched off. `sync` sets visibility from the combatant's
+   * own liveness, so this is only meaningful on the frames `sync` is not called.
+   */
+  setVisible(v: boolean): void {
+    this.root.setVisible(v);
+  }
+
+  /** Whole-rig opacity. The decoy dissolves as its projection decays. */
+  setAlpha(a: number): void {
+    this.root.setAlpha(a);
+  }
+
   /** Sets the layer base; sync() adds the per-frame y ordering on top. */
   setDepth(d: number): void {
     this.depthBase = d;
