@@ -12,6 +12,13 @@ Thumbs.db
 __pycache__/
 *.pyc
 
-# Generated audio is large and regenerable; keep it out of history until the
-# final set is settled.
-assets/audio/*.mp3
+# The generated audio set is settled (40 cues / 71 files, reviewed by ear), and
+# the takes are NOT reproducible - regenerating gives different audio - so it is
+# tracked. Only the disposable audition page stays out.
+assets/audio/_audition.html
+
+# Source images the pilot portraits were keyed from: 14 MB, and the game only
+# ever loads the processed 256/96 PNGs. Excluded pending a call on whether that
+# much irreplaceable-but-large source belongs in history. BACK THIS FOLDER UP
+# somewhere - regenerating it is not possible.
+assets/sprites/pilots/_raw/

@@ -112,22 +112,55 @@ header: xi-api-key: <key>
 
 * Produced a valid 13,209-byte MP3 (ID3 header confirmed) — correct for
   192 kbps × 0.5 s.
-* **Cost: ~206 credits** for that 0.5 s generation, read from
-  `/v1/usage/character-stats?breakdown_type=product_type`, which reported
-  `"Sound Effects": 206` for the day.
+* Cost was **misread as ~206 credits**. See the correction below.
 
-> **Careful with the meter.** `/v1/user/subscription` → `character_count` lags
-> badly and under-reports (it showed `0`, then `6`). The
-> `usage/character-stats` breakdown is the number to trust.
+### Correction after batch one — 2026-07-30
 
-**Budget estimate.** If cost scales roughly with duration, the full 63-file set
-lands somewhere around **15,000–25,000 credits**, i.e. well under 20% of the
-130,800 quota. The priority 15 should be a few thousand. This is affordable —
-but re-measure after the first batch rather than trusting this extrapolation,
-since it rests on a single data point at the minimum duration.
+The 206 figure was wrong, and the advice about which meter to trust was
+backwards. Measured across the 14-file batch:
 
-That first take was kept as **`assets/audio/fire_vulcan_1.mp3`**. Nobody has
-listened to it yet — judge it with the user as part of batch one.
+| Meter | Before batch | After batch | Delta |
+| --- | --- | --- | --- |
+| `usage/character-stats` → `"Sound Effects"` | 206 | 317 | **+111** |
+| `user/subscription` → `character_count` | 6 | 117 | **+111** |
+
+Both meters move by the same amount; `character-stats` simply sits a constant
+**+200** above `subscription`. That offset is what produced the phantom 206 —
+the single test generation actually cost **6 credits**, exactly what
+`subscription` reported at the time.
+
+**The real cost model is roughly linear in requested duration:**
+
+> **≈ 11–12 credits per second** of generated audio.
+
+Three measurements, all consistent:
+
+| Run | Files | Audio requested | Credits | Per second |
+| --- | --- | --- | --- | --- |
+| Single test take | 1 | 0.5 s | 6 | 12.0 |
+| Batch one | 14 | 9.1 s | 105 | 11.5 |
+| Batch one revisions | 6 | 8.0 s | 89 | 11.1 |
+| Everything after | ~57 | 35.2 s | 426 | 12.1 |
+| **Whole run** | **~78** | **52.8 s** | **632** | **12.0** |
+
+The rate is not perfectly constant — a per-call rounding or floor seems to be
+involved — so treat **12/s** as a planning figure, not an exact formula. A 0.5 s
+minimum-length cue costs about **6 credits**.
+
+**Final:** the complete 71-file set cost **632 credits, 0.48 % of the 130,800
+quota.** The original 15,000–25,000 estimate was ~30× too high.
+
+`subscription.character_count` does lag by a minute or two after a burst, but it
+settles — both meters were stable across a 90-second poll. Trust the **delta**,
+never either absolute number.
+
+**Revised budget.** The full set is ~32 s of remaining audio ≈ **375 credits**;
+whole 71-file set ≈ **490 credits**, about **0.4 %** of the 130,800 quota. The
+earlier 15,000–25,000 estimate was ~35× too high because it inherited the 206
+misreading. Cost is a non-issue for this project.
+
+That first take was kept as **`assets/audio/fire_vulcan_1.mp3`** and is included
+in batch one's audition page.
 
 ---
 
@@ -152,8 +185,36 @@ listened to it yet — judge it with the user as part of batch one.
 
 ## 6. Work still to do after generation
 
-The game **does not load audio files yet**. All current sound is synthesised at
-runtime in `src/audio/Sfx.ts` using WebAudio. Once files exist:
+> **Status: generation is finished.** All **71 files** are in `assets/audio/`,
+> named per the cue sheet and verified by script. `melee_swing_1/2/3` were
+> renamed to `melee_swing_light/mid/finish` to stop the variation suffix
+> producing `melee_swing_1_1.mp3`. Three durations were raised because the sound
+> could not fit the slot: `fire_missile` 0.30→0.60, `barrier_burst` 0.35→0.80,
+> `explode_big` 1.60→3.00. Everything below is now the live task list.
+>
+> Two things remain on the audio itself: **batch two (56 files) has not been
+> reviewed by ear**, and **nothing has been trimmed or normalised** — every file
+> is a raw take at 0.5 s minimum. `assets/audio/_audition.html` plays the whole
+> set for review and is regenerated from the cue sheet.
+
+> **Loader status: done.** `src/audio/SoundBank.ts` declares the 40-cue manifest
+> and fetches/decodes it into `Sfx`'s own AudioContext; `BootScene` kicks the
+> load off in `preload` and awaits it before the title. `Sfx` now tries the
+> sample first and falls through to its synthesised version, so a missing file
+> costs one cue rather than all sound. Verified in the running game: 40 cues /
+> 71 takes decoded, zero failures, and deleting a cue at runtime still produced
+> audible output from the fallback. `src/tests/soundbank.test.ts` checks the
+> manifest against `assets/audio/` so a rename cannot silently disable a cue.
+>
+> **Still unwired:** `footstep`, `ui_back`, `melee_ignite`, `assist_fire`,
+> `match_ready`, `match_fight`, and the two loop beds. Their files load and
+> `Sfx` exposes a method for each, but no game code calls them yet — see the
+> list at the end of this section.
+
+The original state of this section follows; items 1–3 are now complete.
+
+All sound was previously synthesised at runtime in `src/audio/Sfx.ts` using
+WebAudio. Once files exist:
 
 1. **Preload** them in `src/scenes/BootScene.ts`, alongside the mech sprites.
    That scene already tolerates missing assets — it collects failures and
