@@ -420,19 +420,18 @@ describe('saturation', () => {
     expect(c.satMode).toBe(SatMode.Shield);
   });
 
-  // Activation is Boost + Barrier; see saturation.test.ts for why it moved off
-  // the weapon buttons.
+  // Activation is its own button now; see saturation.test.ts for the history.
   it('requires a full meter to activate', () => {
     const c = make();
     const k = ctx();
     c.sat = 10;
-    c.step(press(Btn.Boost, Btn.Barrier), null, W, H, k.spawns, k.events);
+    c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
     expect(c.satActive).toBe(false);
 
     const full = make();
     full.sat = HALCYON.gauges.maxSaturation;
     const k2 = ctx();
-    full.step(press(Btn.Boost, Btn.Barrier), null, W, H, k2.spawns, k2.events);
+    full.step(press(Btn.Saturation), null, W, H, k2.spawns, k2.events);
     expect(full.satActive).toBe(true);
     expect(k2.events.some((e) => e.t === 'saturation')).toBe(true);
   });
@@ -481,7 +480,7 @@ describe('saturation', () => {
     c.satMode = SatMode.Speed;
     c.boost = 5;
     const k = ctx();
-    c.step(press(Btn.Boost, Btn.Barrier), null, W, H, k.spawns, k.events);
+    c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
     expect(c.boost).toBe(HALCYON.flight.maxBoost);
   });
 

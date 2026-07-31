@@ -57,95 +57,170 @@ function activate(c: Combatant, mode: SatMode): void {
   c.satMode = mode;
   c.sat = c.def.gauges.maxSaturation;
   const k = ctx();
-  c.step(press(Btn.Boost, Btn.Barrier), null, W, H, k.spawns, k.events);
+  c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
   if (!c.satActive) throw new Error('activation did not take');
 }
 
 describe('saturation — activation', () => {
   /**
-   * The combo used to be Main + Heavy, checked from behind `tryStartAction`.
-   * Whichever weapon button landed first started its own attack, and that check
-   * is never reached while an attack is running — so only a press of both inside
-   * one 16.7ms tick ever worked, which no human does. It is now Boost + Barrier,
-   * neither of which starts an attack, with a forgiving "both held, either one
-   * pressed this tick" window.
+   * Activation has moved twice, both times because it was hard to reach. It was
+   * Main + Heavy, checked from behind `tryStartAction`, where whichever weapon
+   * button landed first started an attack and stopped the check ever running —
+   * only a same-tick press worked. Then it was Boost + Barrier, which worked but
+   * still asked for a chord. It is now one dedicated button, on the slot the
+   * dead soft-lock toggle used to occupy.
    */
-  it('activates when barrier is already held and boost is then pressed', () => {
+  it('activates from a single press on a full meter', () => {
     const c = make();
     c.sat = c.def.gauges.maxSaturation;
     const k = ctx();
-    c.step(press(Btn.Barrier), null, W, H, k.spawns, k.events);
-    expect(c.satActive).toBe(false);
-    run(c, hold(Btn.Barrier), 4, null, k);
-    c.step(
-      { ...emptyInput(), held: (1 << Btn.Barrier) | (1 << Btn.Boost), pressed: 1 << Btn.Boost },
-      null, W, H, k.spawns, k.events,
-    );
+    c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
     expect(c.satActive).toBe(true);
+    expect(c.satPower).toBe(1);
+    expect(c.satPartial).toBe(false);
   });
 
-  it('activates when boost is already held and barrier is then pressed', () => {
+  it('empties the meter when it is spent', () => {
     const c = make();
     c.sat = c.def.gauges.maxSaturation;
     const k = ctx();
-    c.step(press(Btn.Boost), null, W, H, k.spawns, k.events);
-    expect(c.satActive).toBe(false);
-    run(c, hold(Btn.Boost), 4, null, k);
-    c.step(
-      { ...emptyInput(), held: (1 << Btn.Boost) | (1 << Btn.Barrier), pressed: 1 << Btn.Barrier },
-      null, W, H, k.spawns, k.events,
-    );
-    expect(c.satActive).toBe(true);
+    c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+    expect(c.sat).toBe(0);
   });
 
-  it('activates on a same-tick press too', () => {
+  it('needs a press, not a hold', () => {
+    const c = make();
+    c.sat = c.def.gauges.maxSaturation;
+    const k = ctx();
+    run(c, hold(Btn.Saturation), 20, null, k);
+    expect(c.satActive).toBe(false);
+  });
+
+  it('refuses below the minimum charge, and says so', () => {
+    const c = make();
+    c.sat = c.def.gauges.maxSaturation * 0.1;
+    const k = ctx();
+    c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+    expect(c.satActive).toBe(false);
+    expect(k.events.some((e) => e.t === 'assistDenied')).toBe(true);
+  });
+
+  it('leaves every other control free', () => {
+    // The old chords stole buttons the player needs mid-fight. Pressing boost
+    // and barrier together on a full meter must now do exactly what it says.
     const c = make();
     c.sat = c.def.gauges.maxSaturation;
     const k = ctx();
     c.step(press(Btn.Boost, Btn.Barrier), null, W, H, k.spawns, k.events);
-    expect(c.satActive).toBe(true);
-  });
-
-  it('spends neither a dash nor a barrier burst on the activation tick', () => {
-    const c = make();
-    c.sat = c.def.gauges.maxSaturation;
-    const boost = c.boost;
-    const k = ctx();
-    c.step({ ...emptyInput(), dx: 1, held: (1 << Btn.Boost) | (1 << Btn.Barrier), pressed: (1 << Btn.Boost) | (1 << Btn.Barrier) }, null, W, H, k.spawns, k.events);
-    expect(c.satActive).toBe(true);
-    expect(c.dashTicks).toBe(0);
-    // Ordinary boosting still happens — the button is held with a direction, and
-    // suppressing that would be a different bug. What must not happen is the
-    // dash, which costs 12 against a boost tick's 0.5.
-    expect(boost - c.boost).toBeLessThan(c.def.flight.dashCost);
-    expect(k.events.some((e) => e.t === 'barrier')).toBe(false);
-  });
-
-  it('leaves the weapon buttons free during a burst', () => {
-    const c = make();
-    c.sat = c.def.gauges.maxSaturation;
-    const k = ctx();
-    c.step(press(Btn.Boost, Btn.Barrier), null, W, H, k.spawns, k.events);
-    expect(c.satActive).toBe(true);
-    // Firing immediately afterwards works and does not re-trigger anything.
-    c.step(press(Btn.Main), null, W, H, k.spawns, k.events);
-    expect(c.attack).not.toBeNull();
-  });
-
-  it('does not activate on an empty meter', () => {
-    const c = make();
-    c.sat = 0;
-    const k = ctx();
-    c.step(press(Btn.Boost, Btn.Barrier), null, W, H, k.spawns, k.events);
     expect(c.satActive).toBe(false);
   });
+});
 
-  it('needs an actual press, not just two held buttons', () => {
+describe('saturation — forcing it early', () => {
+  it('opens at reduced power on a part-charged meter', () => {
+    const c = make();
+    c.satMode = SatMode.Shoot;
+    c.sat = c.def.gauges.maxSaturation * 0.5;
+    const k = ctx();
+    c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+    expect(c.satActive).toBe(true);
+    expect(c.satPartial).toBe(true);
+    // The meter also gains its passive tick before the press is read, so this
+    // lands a hair above half rather than exactly on it.
+    expect(c.satPower).toBeCloseTo(0.5, 2);
+  });
+
+  it('scales every multiplier toward nothing', () => {
+    const full = make();
+    const half = make();
+    for (const c of [full, half]) c.satMode = SatMode.Speed;
+    full.sat = full.def.gauges.maxSaturation;
+    half.sat = half.def.gauges.maxSaturation * 0.5;
+    const k = ctx();
+    full.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+    half.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+
+    expect(half.satThrustScale).toBeLessThan(full.satThrustScale);
+    expect(half.satThrustScale).toBeGreaterThan(1);
+    expect(half.meleeLockHits).toBeLessThan(full.meleeLockHits);
+    expect(half.meleeLockHits).toBeGreaterThan(half.def.meleeLock.hits);
+  });
+
+  it('runs for proportionally less time', () => {
+    const full = make();
+    const half = make();
+    full.sat = full.def.gauges.maxSaturation;
+    half.sat = half.def.gauges.maxSaturation * 0.5;
+    const k = ctx();
+    full.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+    half.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+    expect(half.satTicks).toBeLessThan(full.satTicks);
+  });
+
+  it('does not get the free top-up a full burst gets', () => {
+    const c = make();
+    c.satMode = SatMode.Shoot;
+    c.energy = 100;
+    c.sat = c.def.gauges.maxSaturation * 0.5;
+    const k = ctx();
+    c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+    // Ordinary regen still ticks; what must not happen is the refill to full.
+    expect(c.energy).toBeLessThan(120);
+    expect(c.energy).toBeLessThan(c.def.gauges.maxEnergy);
+  });
+
+  it('ends in an overheat: double the stun, plus damage', () => {
+    const c = make();
+    c.sat = c.def.gauges.maxSaturation * 0.5;
+    const k = ctx();
+    c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+    const life = c.life;
+    c.satTicks = 1;
+    c.step(emptyInput(), null, W, H, k.spawns, k.events);
+
+    const ev = k.events.find((e) => e.t === 'satBurnout');
+    expect(ev && 'overheat' in ev && ev.overheat).toBe(true);
+    expect(c.life).toBeLessThan(life);
+    // The stun already ticked once on the frame it was set.
+    expect(c.satBurnout).toBeGreaterThan(100);
+  });
+
+  it('a full burst ends in the ordinary burnout, undamaged', () => {
     const c = make();
     c.sat = c.def.gauges.maxSaturation;
     const k = ctx();
-    run(c, hold(Btn.Boost, Btn.Barrier), 20, null, k);
-    expect(c.satActive).toBe(false);
+    c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+    const life = c.life;
+    c.satTicks = 1;
+    c.step(emptyInput(), null, W, H, k.spawns, k.events);
+
+    const ev = k.events.find((e) => e.t === 'satBurnout');
+    expect(ev && 'overheat' in ev && ev.overheat).toBe(false);
+    expect(c.life).toBe(life);
+    expect(c.satBurnout).toBe(59);
+  });
+
+  it('never lets an overheat land the killing blow', () => {
+    const c = make();
+    c.sat = c.def.gauges.maxSaturation * 0.4;
+    const k = ctx();
+    c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+    c.life = 1;
+    c.satTicks = 1;
+    c.step(emptyInput(), null, W, H, k.spawns, k.events);
+    expect(c.life).toBeGreaterThan(0);
+    expect(c.alive).toBe(true);
+  });
+
+  it('resets its power once the burst is over', () => {
+    const c = make();
+    c.sat = c.def.gauges.maxSaturation * 0.5;
+    const k = ctx();
+    c.step(press(Btn.Saturation), null, W, H, k.spawns, k.events);
+    c.satTicks = 1;
+    c.step(emptyInput(), null, W, H, k.spawns, k.events);
+    expect(c.satPower).toBe(1);
+    expect(c.satPartial).toBe(false);
   });
 });
 

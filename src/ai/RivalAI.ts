@@ -164,12 +164,11 @@ export class RivalAI {
       if (self.satMode !== wantMode) {
         pressed.v |= 1 << Btn.ModeCycle;
       } else if (this.rng.chance(0.35)) {
-        // Boost + Barrier, the same combination a player presses. The rival gets
-        // no private activation path — if the combo ever breaks, it breaks for
-        // both sides and the AI stops using its overdrive too, which is a much
-        // louder failure than a silent one.
-        pressed.v |= (1 << Btn.Boost) | (1 << Btn.Barrier);
-        held.v |= (1 << Btn.Boost) | (1 << Btn.Barrier);
+        // The same button a player presses. The rival gets no private path —
+        // if it ever breaks it breaks for both sides, and the CPU visibly stops
+        // using its overdrive, which is a much louder failure than a silent one.
+        pressed.v |= 1 << Btn.Saturation;
+        held.v |= 1 << Btn.Saturation;
       }
     }
 

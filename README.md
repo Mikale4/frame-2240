@@ -128,9 +128,8 @@ when you want the heavy volley *now* rather than when the drone decides.
 | Action | Keyboard | Gamepad |
 | --- | --- | --- |
 | Barrier burst / hold to guard | `F` | `LB` / `LT` |
-| Activate Saturation (needs a full meter) | `Shift` + `F` | `LB` + `RB` |
+| **Activate Saturation** | `E` | R-stick click |
 | Cycle Saturation mode | `Q` or `Tab` | `Select` |
-| Toggle soft-lock / free aim | `E` | Right-stick click |
 | Manual aim | — | Right stick |
 
 ### System
@@ -164,9 +163,19 @@ empty it and you are **guard broken** and helpless for nearly a second.
 into stage 2 into a launching finisher — but a chain only continues if the
 previous swing actually **connected**, so whiffing leaves you in recovery.
 
+**The pilots talk.** Every round opens with an exchange written for that exact
+pairing — all 36 of them, mirrors included, with five conversations each, so a
+rematch does not replay the same opening. During the fight they react in their
+own voices to first blood, long combos, a drone going down, a guard break and
+the KO, from a box in their own corner of the screen.
+
+**Spending saturation stops the match.** A short cutscene pushes in on the
+pilot's portrait, names the mode, and gives them a line — five per pilot when
+the meter is full, and five more desperate ones for when it is not.
+
 **Saturation — three modes, pick before you spend.** Cycle the mode with `Q`,
-then spend a full meter with **boost + barrier together**. Each mode makes one
-resource free for the whole burst — that is the shape of all three.
+then spend the meter with **`E`**. Each mode makes one resource free for the
+whole burst — that is the shape of all three.
 
 | Mode | While it lasts |
 | --- | --- |
@@ -174,10 +183,18 @@ resource free for the whole burst — that is the shape of all three.
 | **SHOOT** | **Either weapon button fires both guns at once.** Damage ×1.5, projectile speed ×1.6, sharper homing, and **nothing costs energy** — not the guns, not the lance, not the sword. |
 | **SPEED** | **Thrust is free**: boosting and dashing cost nothing and the tank stays full. Boost and dash speed ×1.85, ordinary flight and walking ×1.25, and every melee sequence runs **three extra swings** on top of your mech's own count. |
 
-**Burnout.** When the meter empties you are **stunned for about two thirds of a
-second**, and unlike every other stun in the game you cannot barrier-cancel out
-of it. Overdrive is a window you have to get value out of *and* survive the end
-of — spend it somewhere you can afford to stand still afterwards.
+**Burnout.** When the meter empties you are **stunned for a full second**, and
+unlike every other stun in the game you cannot barrier-cancel out of it.
+Overdrive is a window you have to get value out of *and* survive the end of —
+spend it somewhere you can afford to stand still afterwards.
+
+**Forcing it early.** You do not have to wait for a full meter. Press `E` at any
+charge above a quarter and the burst opens anyway — but **everything scales down
+with it**: a half-charged burst is half the multipliers for half the time, and
+it does not get the free top-up a full one does. Worse, it ends in an
+**overheat** instead of a burnout: two seconds of helplessness *and* damage. The
+pilot tells you which one you took — a forced burst is announced in red, and the
+cutscene line changes from confidence to something closer to panic.
 
 **Winning.** Reduce the rival to zero life, or hold the higher life fraction when
 the clock expires.

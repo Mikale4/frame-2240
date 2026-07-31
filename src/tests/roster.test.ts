@@ -217,9 +217,10 @@ describe('dash overlaps attacks', () => {
     const s = new MatchSim({ playerDef: ROSTER[0], enemyDef: ROSTER[1], seed: 7, introTicks: 1 });
     for (let i = 0; i < 30; i++) {
       const f = emptyInput();
-      // Whatever this button used to be bound to must no longer disable tracking.
-      f.pressed = 1 << Btn.Lock;
-      f.held = 1 << Btn.Lock;
+      // The soft-lock toggle is gone entirely; its slot is now Saturation. Mash
+      // every button there is — none of them may switch tracking off.
+      f.pressed = 0x1ff;
+      f.held = 0x1ff;
       s.step(f, emptyInput());
       expect(s.player.lockEnabled).toBe(true);
     }

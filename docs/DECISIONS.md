@@ -942,3 +942,62 @@ it leaves the weapon buttons free during a fight. The check now runs from `step`
 ahead of the attack dispatch, and the activation tick suppresses its own dash
 and skips `tryStartAction`, so opening a burst never also spends a dash or fires
 a barrier burst.
+
+---
+
+### D48 — Saturation got a button of its own, and a way to be spent early
+
+**Decision.** Activation is a single dedicated button on the slot `Btn.Lock`
+used to hold. It works at any charge above 25 %, not only on a full meter, and
+what you spend is what you get: multipliers, duration and the opening top-up all
+scale with the charge. A forced burst ends in an **overheat** — two seconds of
+helplessness plus 5 % of maximum life — where a full one merely burns out.
+
+**Why a dedicated button.** Both chord versions failed in the live game. Main +
+Heavy was effectively untriggerable (see D47). Boost + Barrier worked, but it
+still asked for a chord and it occupied two buttons a pilot is using constantly.
+`Btn.Lock` was free in the truest sense: lock-on became permanent, the toggle
+stopped doing anything, and the action was still sitting in the rebinding screen
+promising a control that did nothing. Spending a dead control beat adding a
+tenth button.
+
+**Why allow a partial spend.** A meter you may only spend at exactly 100 % is a
+timer, not a decision. Allowing an early spend turns it into a gamble with a
+legible price: you can reach for it when you are about to lose the round, and it
+will probably not be enough, and the overheat may finish what your opponent
+started. The 25 % floor exists because below it the burst is too short to use,
+so the press is refused rather than silently wasting the meter.
+
+**Never lethal.** The overheat cannot take the last point of life. Being killed
+by your own overdrive rather than by the pilot opposite reads as the game
+cheating, whatever the numbers say.
+
+### D49 — The pilots talk, and saturation stops the match to let them
+
+**Decision.** Three layers of dialogue: a written exchange per matchup at the
+top of the round, reactive one-liners during the fight, and a cutscene when
+saturation opens.
+
+**Matchup openings are the expensive one, and worth it.** All 36 pairings —
+28 cross plus 8 mirrors — carry five conversations each. Generic per-pilot intro
+lines were the cheap version and they read as eight people talking past each
+other. Written per pair, the factions start doing work: two CONCORD pilots
+sound different against each other than either does against the Emberline
+veteran, and a mirror match can acknowledge that it is one.
+
+**Lines are queued, not fired.** Both halves of an exchange arriving on the same
+tick is not a conversation, it is two people talking over each other. A queue
+releases one at a time with a gap longer than the box's own fade.
+
+**Priorities, because the box is one box.** A KO line must never be swallowed by
+a combo line still on screen, and a combo line must never stomp a KO. Equal
+priorities do not interrupt, so a line always finishes against its own kind.
+
+**The cutscene is a real pause.** Saturation is the largest commitment in the
+game and it used to open with roughly the weight of a dash. It now stops the
+match for about a second — letterbox in, portrait push, mode and line — and the
+freeze consumes ticks that would have gone to the simulation, so neither pilot
+gains or loses a frame of advantage from it.
+
+**Everything is seeded.** Line choice comes from the scene's own generator, so a
+replayed match says the same things in the same order.

@@ -34,10 +34,36 @@ const SAT_SPEED_BONUS_HITS = 3;
  * Saturation used to end with no downside at all, so the only question was when
  * to spend it, never whether. The burnout makes the last second of a burst a
  * real liability: overdrive is a window you have to get value out of and then
- * survive the end of. Sized between a melee lockout (34) and a guard break (50)
- * — long enough to be punished for, short enough not to decide the match.
+ * survive the end of.
+ *
+ * A full second, and longer than a guard break (50). It was first tuned to 38
+ * by analogy with the other stuns, which played as barely noticeable — the
+ * burst simply ended and you carried on. At 60 the opponent has time to cross
+ * the gap and open on you, which is what makes spending the meter a decision
+ * about position rather than only about timing.
  */
-const SAT_BURNOUT_TICKS = 38;
+const SAT_BURNOUT_TICKS = 60;
+
+/**
+ * Ticks of helplessness after an *early* burst collapses.
+ *
+ * Spending a part-charged meter is allowed, and it is meant to be a gamble
+ * rather than a slightly worse option: the burst is proportionally weaker and
+ * shorter, and it ends in a genuine disaster instead of a stumble. Two seconds
+ * is long enough to lose a round from.
+ */
+const SAT_OVERHEAT_TICKS = 120;
+
+/** Fraction of max life an overheat costs. Slight, and never lethal. */
+const SAT_OVERHEAT_LIFE_FRAC = 0.05;
+
+/**
+ * Least charge the button will accept.
+ *
+ * Below this the burst would be too short to do anything with, so the press is
+ * refused outright rather than throwing the meter away for nothing.
+ */
+const SAT_MIN_FRACTION = 0.25;
 
 /**
  * Arm angle at normalised swing progress `t`, in radians relative to the aim.
@@ -215,8 +241,17 @@ export class Combatant implements FlightState {
   satActive = false;
   satMode: SatMode = SatMode.Shield;
   satTicks = 0;
-  /** Ticks of helplessness left after a burst burned out. See SAT_BURNOUT_TICKS. */
+  /** Ticks of helplessness left after a burst ended. See SAT_BURNOUT_TICKS. */
   satBurnout = 0;
+  /**
+   * How charged the meter was when this burst opened, 0..1.
+   *
+   * Every saturation multiplier is scaled toward 1 by this, so a half-charged
+   * burst is genuinely half a burst rather than a full one that ends sooner.
+   */
+  satPower = 1;
+  /** True when this burst was opened early, and will therefore overheat. */
+  satPartial = false;
 
   act: ActState = ActState.Free;
   attack: AttackDef | null = null;
@@ -440,7 +475,7 @@ export class Combatant implements FlightState {
 
   /** Saturation multipliers, applied where the reference applied them. */
   get satShootScale(): number {
-    return this.shootActive ? 1.5 : 1;
+    return this.shootActive ? 1 + 0.5 * this.satPower : 1;
   }
   /**
    * Base movement under Speed saturation: free flight and walking.
@@ -451,18 +486,18 @@ export class Combatant implements FlightState {
    * buy you.
    */
   get satSpeedScale(): number {
-    return this.speedActive ? 1.25 : 1;
+    return this.speedActive ? 1 + 0.25 * this.satPower : 1;
   }
   /** Boost and dash under Speed saturation. This is the part that should read. */
   get satThrustScale(): number {
-    return this.speedActive ? 1.85 : 1;
+    return this.speedActive ? 1 + 0.85 * this.satPower : 1;
   }
   get satProjSpeedScale(): number {
-    return this.shootActive ? 1.6 : 1;
+    return this.shootActive ? 1 + 0.6 * this.satPower : 1;
   }
   /** Swings in a button-chain. Speed saturation adds three, as it does to a lock-on. */
   get maxMeleeHits(): number {
-    return 3 + (this.speedActive ? SAT_SPEED_BONUS_HITS : 0);
+    return 3 + (this.speedActive ? this.bonusHits : 0);
   }
   /**
    * Swings in a lock-on sequence. Per-chassis, so CIRRUS's eight becomes eleven
@@ -470,7 +505,12 @@ export class Combatant implements FlightState {
    * is the mech's own identity.
    */
   get meleeLockHits(): number {
-    return this.def.meleeLock.hits + (this.speedActive ? SAT_SPEED_BONUS_HITS : 0);
+    return this.def.meleeLock.hits + (this.speedActive ? this.bonusHits : 0);
+  }
+
+  /** Extra melee swings this burst is worth, scaled by how charged it was. */
+  private get bonusHits(): number {
+    return Math.max(1, Math.round(SAT_SPEED_BONUS_HITS * this.satPower));
   }
 
   get shieldActive(): boolean {
@@ -588,9 +628,8 @@ export class Combatant implements FlightState {
     }
 
     // Saturation activation is checked here, ahead of everything that can own
-    // the mech for a frame. See `tryActivateSaturation` for why it cannot live
-    // in `tryStartAction`. Opening a burst consumes the tick's input, so the
-    // two buttons that opened it do not also fire a shot on the way through.
+    // the mech for a frame — a burst must be able to interrupt an attack that is
+    // already running. Opening one consumes the tick's input.
     const activated = this.tryActivateSaturation(input, events);
 
     // A lock-on melee sequence owns the mech until it finishes or breaks.
@@ -616,7 +655,7 @@ export class Combatant implements FlightState {
       if (this.attack) this.stepAttack(input, target, spawns, events);
     }
 
-    this.stepMotion(input, activated);
+    this.stepMotion(input);
     if (this.landedThisTick) {
       this.landedThisTick = false;
       events.push({ t: 'land', x: this.x, y: this.y, id: this.id });
@@ -739,13 +778,24 @@ export class Combatant implements FlightState {
    * a swing that carried on regardless would read as the stun not applying.
    */
   private burnOut(events: SimEvent[]): void {
-    this.satBurnout = SAT_BURNOUT_TICKS;
+    const overheat = this.satPartial;
+    this.satBurnout = overheat ? SAT_OVERHEAT_TICKS : SAT_BURNOUT_TICKS;
     this.act = ActState.Hitstun;
     this.attack = null;
     this.coAttack = null;
     this.guarding = false;
     if (this.meleeLock) this.endMeleeLock(false);
-    events.push({ t: 'satBurnout', x: this.x, y: this.y, id: this.id });
+
+    if (overheat) {
+      // The reactor was pushed before it was ready. Slight damage, and never
+      // the killing blow — losing to your own overdrive rather than to your
+      // opponent reads as the game cheating you.
+      const cost = this.def.gauges.maxLife * SAT_OVERHEAT_LIFE_FRAC;
+      this.life = Math.max(1, this.life - cost);
+    }
+    this.satPower = 1;
+    this.satPartial = false;
+    events.push({ t: 'satBurnout', x: this.x, y: this.y, id: this.id, overheat });
   }
 
   /**
@@ -1255,31 +1305,49 @@ export class Combatant implements FlightState {
    */
   private tryActivateSaturation(input: InputFrame, events: SimEvent[]): boolean {
     if (this.satActive || this.satBurnout > 0) return false;
-    if (this.sat < this.def.gauges.maxSaturation) return false;
-    if (!isHeld(input, Btn.Boost) || !isHeld(input, Btn.Barrier)) return false;
-    if (!isPressed(input, Btn.Boost) && !isPressed(input, Btn.Barrier)) return false;
+    if (!isPressed(input, Btn.Saturation)) return false;
+
+    const frac = this.sat / this.def.gauges.maxSaturation;
+    if (frac < SAT_MIN_FRACTION) {
+      // Not enough to do anything with. Refuse rather than waste it, and say so.
+      events.push({ t: 'assistDenied', x: this.x, y: this.y, ownerId: this.id });
+      return false;
+    }
 
     // Opening a burst overrides anything already running.
     this.attack = null;
     this.coAttack = null;
     if (this.meleeLock) this.endMeleeLock(false);
-    this.activateSaturation(events);
+    this.activateSaturation(Math.min(1, frac), events);
     return true;
   }
 
-  private activateSaturation(events: SimEvent[]): void {
+  /**
+   * Opens a burst at `power` (0..1), the fraction of the meter that was charged.
+   *
+   * A full meter gives the authored numbers. Anything less gives proportionally
+   * weaker multipliers for a proportionally shorter time, and is flagged to
+   * overheat instead of merely burning out. The top-up is reserved for a full
+   * charge — an early burst has to run on what the fight left you, which is most
+   * of why waiting is worth it.
+   */
+  private activateSaturation(power: number, events: SimEvent[]): void {
     this.satActive = true;
-    this.satTicks = this.def.gauges.satDuration;
+    this.satPower = power;
+    this.satPartial = power < 1;
+    this.satTicks = Math.max(30, Math.round(this.def.gauges.satDuration * power));
     this.invuln = Math.max(this.invuln, 20);
-    // Each mode opens by topping up the resource it is about to spend freely, so
-    // the burst starts from full rather than from whatever the fight left you.
-    if (this.satMode === SatMode.Speed) this.boost = this.def.flight.maxBoost;
-    if (this.satMode === SatMode.Shoot) this.energy = this.def.gauges.maxEnergy;
-    if (this.satMode === SatMode.Shield) {
-      this.barrier = this.def.gauges.maxBarrier;
-      this.guarding = true;
+    this.sat = 0;
+
+    if (!this.satPartial) {
+      // Each mode opens by topping up the resource it is about to spend freely,
+      // so a full burst starts from full rather than from whatever it inherited.
+      if (this.satMode === SatMode.Speed) this.boost = this.def.flight.maxBoost;
+      if (this.satMode === SatMode.Shoot) this.energy = this.def.gauges.maxEnergy;
+      if (this.satMode === SatMode.Shield) this.barrier = this.def.gauges.maxBarrier;
     }
-    events.push({ t: 'saturation', id: this.id, mode: this.satMode });
+    if (this.satMode === SatMode.Shield) this.guarding = true;
+    events.push({ t: 'saturation', id: this.id, mode: this.satMode, partial: this.satPartial });
   }
 
   private startBarrier(cancelling: boolean, events: SimEvent[]): void {
@@ -1456,12 +1524,7 @@ export class Combatant implements FlightState {
     void target;
   }
 
-  /**
-   * `suppressDash` is set on the tick a saturation burst opens: the activation
-   * combo includes the boost button, and without this the burst would always
-   * come with a free dash nobody asked for.
-   */
-  private stepMotion(input: InputFrame, suppressDash = false): void {
+  private stepMotion(input: InputFrame): void {
     const a = this.attack;
     const locked = this.barrierActiveTicks > 0;
 
@@ -1473,7 +1536,7 @@ export class Combatant implements FlightState {
       // mid-swing — that overlap is what makes the movement read as aggressive
       // rather than as a series of committed stops. Firing and melee remain
       // mutually exclusive with each other; only movement overlaps them.
-      dash: !locked && !suppressDash && isPressed(input, Btn.Boost),
+      dash: !locked && isPressed(input, Btn.Boost),
       // Cryo bites here, so it slows flight, walking and boost alike.
       speedScale: this.satSpeedScale * this.status.speedScale,
       boostSpeedScale: this.satThrustScale * this.status.speedScale,

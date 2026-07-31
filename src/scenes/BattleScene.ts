@@ -13,6 +13,10 @@ import { Backdrop } from '../render/Backdrop';
 import { GroundPlane } from '../render/GroundPlane';
 import { TEX } from '../render/Textures';
 import { Hud } from '../ui/Hud';
+import { BanterBox } from '../ui/BanterBox';
+import { SatCutscene } from '../ui/SatCutscene';
+import { pickConversation } from '../data/matchups';
+import { pickBanter, type BanterTrigger } from '../data/banter';
 import { Menu, makeScrim, bigTitle, smallText } from '../ui/Menu';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { sfx } from '../audio/Sfx';
@@ -71,6 +75,23 @@ export class BattleScene extends Phaser.Scene {
   private drones: Phaser.GameObjects.Image[] = [];
   private droneRings: Phaser.GameObjects.Graphics[] = [];
 
+  /** Pilot speech boxes, indexed the same way as `combatants`. */
+  private banter: BanterBox[] = [];
+  /** Deterministic source for line choice, so a replayed match says the same things. */
+  private banterRng!: Rng;
+  /** Once-only banter triggers already spent, keyed `<combatantId>:<trigger>`. */
+  private banterFired = new Set<string>();
+  /**
+   * Lines waiting their turn.
+   *
+   * A matchup conversation is a sequence, not a burst: showing both halves at
+   * once is not a conversation, it is two people talking over each other. The
+   * queue releases one line at a time and waits for it to be readable.
+   */
+  private banterQueue: { id: number; line: string; trigger: BanterTrigger }[] = [];
+  private banterDelay = 0;
+  private cutscene!: SatCutscene;
+
   private accumulator = 0;
   private paused = false;
   private pauseUi?: { scrim: Phaser.GameObjects.Rectangle; menu: Menu; extra: Phaser.GameObjects.GameObject[] };
@@ -93,6 +114,9 @@ export class BattleScene extends Phaser.Scene {
     // explicitly or a rematch would keep the previous match's destroyed
     // GameObjects alive in these collections.
     this.pauseUi = undefined;
+    this.banter = [];
+    this.banterQueue = [];
+    this.banterDelay = 0;
     this.projSprites = [];
     this.blades = [];
     this.drones = [];
@@ -164,6 +188,18 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.hud = new Hud(this, this.sim);
+
+    // Pilot banter. The boxes sit in the bottom corners, on the same side as
+    // their owner's gauges, so who is speaking is legible without reading.
+    this.banterFired = new Set();
+    this.banterRng = new Rng(aiSeed ^ 0x51ed2701);
+    this.banter = [
+      new BanterBox(this, false, `pilot_${playerDef.id}_thumb`, playerDef.pilot, playerDef.tint.accent),
+      new BanterBox(this, true, `pilot_${enemyDef.id}_thumb`, enemyDef.pilot, enemyDef.tint.accent),
+    ];
+
+    this.cutscene = new SatCutscene(this, TEX.streak);
+
     this.debug = new DebugOverlay(this, this.sim, this.ai);
 
     this.cameras.main.setBounds(0, 0, ARENA_W, ARENA_H);
@@ -188,7 +224,12 @@ export class BattleScene extends Phaser.Scene {
       this.effects.container,
       ...this.debug.worldObjects,
     ];
-    const uiObjects = [this.hud.container, ...this.debug.uiObjects];
+    const uiObjects = [
+      this.hud.container,
+      ...this.banter.flatMap((b) => b.objects),
+      ...this.cutscene.objects,
+      ...this.debug.uiObjects,
+    ];
     this.cameras.main.ignore(uiObjects);
     this.uiCam.ignore(this.worldObjects);
 
@@ -291,12 +332,16 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // ---- fixed-step simulation ------------------------------------------
+    // The saturation cutscene genuinely stops the match: it consumes ticks that
+    // would otherwise have gone to `stepSim`, so neither pilot gains or loses a
+    // frame of advantage from it.
     this.accumulator += Math.min(delta, 100);
     let steps = 0;
     while (this.accumulator >= TICK_MS && steps < 6) {
       this.accumulator -= TICK_MS;
       steps++;
-      this.stepSim();
+      if (this.cutscene.active) this.cutscene.step();
+      else this.stepSim();
     }
     // If we are hopelessly behind, drop the backlog rather than stuttering.
     if (this.accumulator > TICK_MS * 6) this.accumulator = 0;
@@ -327,9 +372,12 @@ export class BattleScene extends Phaser.Scene {
     if (wasPhase === MatchPhase.Intro && s.phase === MatchPhase.Fight) {
       this.hud.banner('FIGHT', 70);
       sfx.matchFight();
+      this.openConversation();
     }
 
     this.consumeEvents();
+    this.checkBanterState();
+    this.drainBanterQueue();
 
     if (s.phase === MatchPhase.Over && !this.finished) {
       this.finished = true;
@@ -338,6 +386,101 @@ export class BattleScene extends Phaser.Scene {
       session.lastPlayerLife = s.player.life;
       session.lastEnemyLife = s.enemy.life;
       this.time.delayedCall(280, () => this.scene.start('Results'));
+    }
+  }
+
+  /**
+   * Offers a line to one pilot's box.
+   *
+   * `once` triggers fire at most a single time per match — nobody needs to be
+   * told twice that they are hurt. The roll comes from the scene's own seeded
+   * generator rather than `Math.random`, so the same match plays back with the
+   * same dialogue.
+   */
+  private speak(id: number, trigger: BanterTrigger, once = false): void {
+    const box = this.banter[id];
+    if (!box) return;
+    const key = `${id}:${trigger}`;
+    if (once) {
+      if (this.banterFired.has(key)) return;
+      this.banterFired.add(key);
+    }
+    const c = this.byId(id);
+    if (!c) return;
+    const line = pickBanter(c.def.id, trigger, this.banterRng.next());
+    if (line) box.say(line, trigger);
+  }
+
+  /**
+   * Queues the pair's opening exchange.
+   *
+   * Falls back to each pilot's own generic `intro` line when a pair has no
+   * written conversation, so adding a ninth chassis never produces a silent
+   * round while its 36 new matchups are being written.
+   */
+  private openConversation(): void {
+    const s = this.sim;
+    const convo = pickConversation(s.player.def.id, s.enemy.def.id, this.banterRng.next());
+    if (!convo) {
+      for (const c of s.combatants) this.queueLine(c.id, 'intro');
+      return;
+    }
+    for (const ex of convo) {
+      // A mirror match has both speakers on the same mech id, so the exchange
+      // has to alternate by position in the conversation rather than by lookup.
+      const spoken = this.banterQueue.filter((q) => q.trigger === 'intro').length;
+      const isMirror = s.player.def.id === s.enemy.def.id;
+      const id = isMirror
+        ? (spoken % 2 === 0 ? s.player.id : s.enemy.id)
+        : (ex.who === s.player.def.id ? s.player.id : s.enemy.id);
+      this.banterQueue.push({ id, line: ex.line, trigger: 'intro' });
+    }
+  }
+
+  /** Queues a pilot's own generic line for a trigger. */
+  private queueLine(id: number, trigger: BanterTrigger): void {
+    const c = this.byId(id);
+    if (!c) return;
+    const line = pickBanter(c.def.id, trigger, this.banterRng.next());
+    if (line) this.banterQueue.push({ id, line, trigger });
+  }
+
+  /**
+   * Releases one queued line at a time.
+   *
+   * The gap is longer than the box's own fade, so a reply lands after its cue
+   * has cleared rather than on top of it — a conversation you can follow beats
+   * one that arrives all at once.
+   */
+  private drainBanterQueue(): void {
+    if (this.banterDelay > 0) {
+      this.banterDelay--;
+      return;
+    }
+    const next = this.banterQueue.shift();
+    if (!next) return;
+    const box = this.banter[next.id];
+    if (box) box.say(next.line, next.trigger, 165);
+    this.banterDelay = 190;
+  }
+
+  /**
+   * Banter triggered by *state* rather than by an event.
+   *
+   * Life thresholds and combo counts have no event of their own, and inventing
+   * one in the simulation for the sake of a speech bubble would put a
+   * presentation concern into `MatchSim`. Polling here keeps the sim clean.
+   */
+  private checkBanterState(): void {
+    const s = this.sim;
+    if (s.phase !== MatchPhase.Fight) return;
+
+    for (const c of s.combatants) {
+      if (!c.alive) continue;
+      if (c.life / c.def.gauges.maxLife < 0.33) this.speak(c.id, 'hurt', true);
+      // A combo is spoken by whoever is *landing* it, not the victim.
+      const combo = s.combo.get(c.id) ?? 0;
+      if (combo >= 4) this.speak(s.opponentOf(c).id, 'combo');
     }
   }
 
@@ -363,6 +506,7 @@ export class BattleScene extends Phaser.Scene {
           const heavy = ev.kind === ProjKind.Melee || ev.kind === ProjKind.Beam || ev.kind === ProjKind.Heavy;
           if (heavy) sfx.heavyHit();
           else sfx.hit();
+          this.speak(ev.ownerId, 'firstHit', true);
           this.shake = Math.max(this.shake, heavy ? 6.5 : 2.4);
           const idx = ev.victimId === s.player.id ? 0 : 1;
           this.renderers[idx].flashHit();
@@ -384,6 +528,7 @@ export class BattleScene extends Phaser.Scene {
           break;
         }
         case 'guardBreak':
+          this.speak(ev.id, 'guardBroken');
           this.effects.guardBreak(ev.x, ev.y);
           sfx.guardBreak();
           this.shake = Math.max(this.shake, 8);
@@ -441,6 +586,11 @@ export class BattleScene extends Phaser.Scene {
           break;
         }
         case 'droneDown': {
+          // Two lines, one loss: the owner mourns it, the shooter gloats. They
+          // are different boxes, so both can land.
+          this.speak(ev.ownerId, 'droneLost');
+          const shooter = s.combatants.find((x) => x.id !== ev.ownerId);
+          if (shooter) this.speak(shooter.id, 'droneKill');
           const c = this.byId(ev.ownerId);
           // Losing a drone is permanent, so it is announced for both sides —
           // whoever shot it down has earned the news as much as its owner.
@@ -479,6 +629,25 @@ export class BattleScene extends Phaser.Scene {
             this.effects.saturationBurst(c.x, c.y, ev.mode, tint, c.facing);
           }
           sfx.saturation();
+          // The line goes in the cutscene, which has room for it, rather than
+          // into the corner box where it would be buried under the flash.
+          if (c) {
+            this.cutscene.play({
+              portraitKey: `pilot_${c.def.id}`,
+              pilot: c.def.pilot,
+              mode: ev.mode,
+              // A forced burst gets the desperate variant, so the cutscene
+               // itself tells you the pilot gambled rather than committed.
+              line: pickBanter(
+                c.def.id,
+                ev.partial ? 'saturationEarly' : 'saturation',
+                this.banterRng.next(),
+              ),
+              partial: ev.partial === true,
+              tint: c.def.tint.accent,
+              screenFrac: c.x / ARENA_W,
+            });
+          }
           this.shake = Math.max(this.shake, 11);
           if (ev.id === s.player.id) {
             this.hud.banner(`${SAT_MODE_NAMES[ev.mode]} SATURATION`, 52);
@@ -486,10 +655,16 @@ export class BattleScene extends Phaser.Scene {
           break;
         }
         case 'satBurnout': {
+          this.speak(ev.id, 'burnout');
           this.effects.satBurnout(ev.x, ev.y);
           sfx.satBurnout();
-          this.shake = Math.max(this.shake, 5);
-          if (ev.id === s.player.id) this.hud.banner('BURNOUT', 40);
+          // An overheat is a real punish, not a stumble: it hits harder on
+          // screen so the player connects the damage to the gamble.
+          this.shake = Math.max(this.shake, ev.overheat ? 13 : 5);
+          if (ev.overheat) this.effects.explode(ev.x, ev.y, false, 0xff7a3a);
+          if (ev.id === s.player.id) {
+            this.hud.banner(ev.overheat ? 'OVERHEAT' : 'BURNOUT', ev.overheat ? 64 : 40);
+          }
           break;
         }
         case 'modeCycle':
@@ -517,10 +692,14 @@ export class BattleScene extends Phaser.Scene {
           this.shake = Math.max(this.shake, 2.4);
           break;
         }
-        case 'ko':
+        case 'ko': {
           sfx.ko();
           this.hud.banner('K.O.', 110);
+          this.speak(ev.id, 'lose');
+          const victor = s.combatants.find((x) => x.id !== ev.id);
+          if (victor) this.speak(victor.id, 'win');
           break;
+        }
       }
     }
   }
@@ -784,6 +963,7 @@ export class BattleScene extends Phaser.Scene {
     // ---- overlays --------------------------------------------------------
     this.effects.update(dt);
     this.hud.update(dt);
+    for (const b of this.banter) b.update(dt);
     this.debug.update(dt * 1000, (x, y) => ({ x, y }));
   }
 }

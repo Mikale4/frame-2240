@@ -7,7 +7,15 @@ export const enum Btn {
   Boost = 3,
   Barrier = 4,
   ModeCycle = 5,
-  Lock = 6,
+  /**
+   * Spends the saturation meter.
+   *
+   * This slot used to be `Lock`, a soft-lock toggle that stopped existing when
+   * lock-on became permanent — the action was still bindable and did nothing.
+   * Saturation needs a button of its own far more than a dead toggle needs a
+   * slot, so it took this one rather than becoming a tenth button.
+   */
+  Saturation = 6,
   /** Toggles FlyingMode, as the reference's direction+A did. */
   Flight = 7,
   /**
@@ -147,9 +155,13 @@ export type SimEvent =
   /** A status element took hold on a machine. */
   | { t: 'status'; x: number; y: number; victimId: number; element: number }
   | { t: 'explode'; x: number; y: number; big: boolean }
-  | { t: 'saturation'; id: number; mode: SatMode }
-  /** A saturation burst ran dry, leaving its pilot briefly helpless. */
-  | { t: 'satBurnout'; x: number; y: number; id: number }
+  /** `partial` marks a burst opened on a part-charged meter. */
+  | { t: 'saturation'; id: number; mode: SatMode; partial?: boolean }
+  /**
+   * A saturation burst ran dry, leaving its pilot helpless. `overheat` marks the
+   * worse ending an early burst earns: twice the stun, plus damage.
+   */
+  | { t: 'satBurnout'; x: number; y: number; id: number; overheat?: boolean }
   | { t: 'modeCycle'; id: number; mode: SatMode }
   | { t: 'ko'; id: number }
   | { t: 'takeoff'; x: number; y: number; id: number }

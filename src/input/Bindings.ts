@@ -24,7 +24,7 @@ export type ActionId =
   | 'boost'
   | 'barrier'
   | 'modeCycle'
-  | 'lock'
+  | 'saturation'
   | 'flightToggle'
   | 'pause'
   | 'debugText'
@@ -51,7 +51,7 @@ export const ACTION_ORDER: readonly ActionId[] = [
   'boost',
   'barrier',
   'modeCycle',
-  'lock',
+  'saturation',
   'flightToggle',
   'pause',
   'debugText',
@@ -70,7 +70,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   boost: 'BOOST / DASH / BRAKE',
   barrier: 'BARRIER / GUARD',
   modeCycle: 'CYCLE SAT MODE',
-  lock: 'TOGGLE SOFT-LOCK',
+  saturation: 'ACTIVATE SATURATION',
   flightToggle: 'FLIGHT MODE ON/OFF',
   pause: 'PAUSE',
   debugText: 'DEBUG READOUT',
@@ -99,7 +99,7 @@ export const BUTTON_ACTION: Readonly<Record<Btn, ActionId>> = {
   [Btn.Boost]: 'boost',
   [Btn.Barrier]: 'barrier',
   [Btn.ModeCycle]: 'modeCycle',
-  [Btn.Lock]: 'lock',
+  [Btn.Saturation]: 'saturation',
   [Btn.Flight]: 'flightToggle',
 };
 
@@ -115,7 +115,7 @@ export const DEFAULT_BINDINGS: BindingMap = {
   boost: { keys: ['ShiftLeft', 'Space'], pads: [5, 7] },
   barrier: { keys: ['KeyF'], pads: [4, 6] },
   modeCycle: { keys: ['KeyQ', 'Tab'], pads: [8] },
-  lock: { keys: ['KeyE'], pads: [10] },
+  saturation: { keys: ['KeyE'], pads: [10] },
   flightToggle: { keys: ['KeyC'], pads: [11] },
   pause: { keys: ['Escape', 'KeyP'], pads: [9] },
   debugText: { keys: ['F1'], pads: [] },
