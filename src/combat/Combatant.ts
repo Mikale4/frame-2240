@@ -60,6 +60,49 @@ export function swingArcAngle(arc: SwingArc, t: number, hitIndex: number): numbe
   return -deg * DEG * dir;
 }
 
+/**
+ * Forward extension at normalised swing progress `t`, in logical pixels.
+ *
+ * Companion to `swingArcAngle`. The arc rotates the arm; this throws it along
+ * the aim, which is what separates a stab from a slash. Each motion has a
+ * distinctly different curve because each weapon is used differently:
+ *
+ * - `thrust` draws back, then stabs out and decelerates into the hit.
+ * - `bash` shoves and returns within the swing — a shield does not stay extended.
+ * - `piston` holds still while cocked, then fires almost instantaneously. The
+ *   exponent is deliberately brutal: a pile driver has no follow-through.
+ *
+ * Returns 0 for `swing`, so existing blades are untouched.
+ */
+export function swingReach(arc: SwingArc, t: number, _hitIndex: number): number {
+  const motion = arc.motion ?? 'swing';
+  const R = arc.reach ?? 0;
+  if (motion === 'swing' || R === 0) return 0;
+
+  const k = clamp(t, 0, 1);
+  const wf = clamp(arc.windupFrac, 0.05, 0.95);
+
+  if (motion === 'piston') {
+    // Cocked and motionless, then a single violent stroke.
+    if (k <= wf) return 0;
+    const s = (k - wf) / (1 - wf);
+    return R * (1 - Math.pow(1 - s, 6));
+  }
+
+  // Both remaining motions pull back before committing.
+  const drawBack = motion === 'bash' ? 0.15 : 0.22;
+  if (k <= wf) return -R * drawBack * (k / wf);
+
+  const s = (k - wf) / (1 - wf);
+  if (motion === 'bash') {
+    // Out and back inside the active window, so the shove reads as an impact
+    // rather than a lunge that leaves the mech hanging forward.
+    return R * Math.sin(Math.PI * Math.min(1, s * 1.35));
+  }
+  // thrust: straight out, easing into the extension.
+  return R * (1 - Math.pow(1 - s, 3));
+}
+
 /** Velocity retained per tick while an attack is committed â€” firing anchors you. */
 function moveScaleFor(kind: ProjKind): number {
   switch (kind) {
@@ -120,6 +163,11 @@ export class Combatant implements FlightState {
    * blade used to be dragged into the target instead of swung.
    */
   swinging = false;
+  /**
+   * Forward extension of the weapon arm in logical pixels, from `swingReach`.
+   * Presentation only — the hit itself is driven by the attack's own range.
+   */
+  reach = 0;
   /**
    * Set by whichever melee path drove the arc this tick; folded into `swinging`
    * at the end of the step and cleared. Two fields because `updateVisualAngles`
@@ -200,7 +248,14 @@ export class Combatant implements FlightState {
   subCharges: number;
   subRecharge = 0;
 
-  lockEnabled = true;
+  /**
+   * Opposing mechs are always locked on to each other.
+   *
+   * This was a toggle on its own button. Free aim sounded like flexibility and
+   * played as a way to accidentally disable your own tracking mid-fight; the
+   * field stays so the aiming code reads the same, but nothing turns it off.
+   */
+  readonly lockEnabled = true;
   /**
    * FlyingMode. The reference kept this as `var(20)` with a player toggle and an
    * automatic switch-on during a Level 2 shot. Default on: this is an aerial
@@ -560,8 +615,6 @@ export class Combatant implements FlightState {
       events.push({ t: 'modeCycle', id: this.id, mode: this.satMode });
     }
 
-    if (isPressed(input, Btn.Lock)) this.lockEnabled = !this.lockEnabled;
-
     // FlyingMode toggle. Taking off gives an upward kick so lift-off reads.
     if (isPressed(input, Btn.Flight)) {
       this.flying = !this.flying;
@@ -739,7 +792,9 @@ export class Combatant implements FlightState {
       // Carry the blade back into the wind-up while closing, so the swing is
       // already loaded by the time the mech arrives.
       this.swingDriven = true;
-      this.spin = swingArcAngle(p.arc, 0, ml.hitIndex) * Math.min(1, ml.timer / 8);
+      const ramp = Math.min(1, ml.timer / 8);
+      this.spin = swingArcAngle(p.arc, 0, ml.hitIndex) * ramp;
+      this.reach = swingReach(p.arc, 0, ml.hitIndex) * ramp;
       // Thrust onto the target, lerping so it reads as a controlled approach.
       this.vx = lerp(this.vx, nx * p.thrust, p.tracking);
       this.vy = lerp(this.vy, ny * p.thrust, p.tracking);
@@ -757,9 +812,13 @@ export class Combatant implements FlightState {
       // Recover the arm from the follow-through back toward the next wind-up,
       // so consecutive swings are joined by a real recovery rather than a snap.
       this.swingDriven = true;
+      const gapT = clamp(ml.timer / Math.max(1, p.gap), 0, 1);
       const from = swingArcAngle(p.arc, 1, ml.hitIndex);
       const to = swingArcAngle(p.arc, 0, ml.hitIndex + 1);
-      this.spin = lerp(from, to, clamp(ml.timer / Math.max(1, p.gap), 0, 1));
+      this.spin = lerp(from, to, gapT);
+      // The weapon recovers to its next start position rather than snapping, so
+      // a piston visibly retracts between strokes.
+      this.reach = lerp(swingReach(p.arc, 1, ml.hitIndex), swingReach(p.arc, 0, ml.hitIndex + 1), gapT);
       this.vx *= 0.86;
       this.vy *= 0.86;
       if (ml.timer >= p.gap) {
@@ -778,7 +837,9 @@ export class Combatant implements FlightState {
     // slash: the hit window sits in the fast part of the sweep, so the blade is
     // travelling through the target rather than being held against it.
     this.swingDriven = true;
-    this.spin = swingArcAngle(p.arc, ml.hitTimer / Math.max(1, p.swing), ml.hitIndex);
+    const swingT = ml.hitTimer / Math.max(1, p.swing);
+    this.spin = swingArcAngle(p.arc, swingT, ml.hitIndex);
+    this.reach = swingReach(p.arc, swingT, ml.hitIndex);
 
     // Reposition to a point beside the target that shifts each hit, so the
     // sequence circles rather than bulldozing straight through.
@@ -1000,7 +1061,9 @@ export class Combatant implements FlightState {
     if (a.kind === ProjKind.Melee) {
       this.swingDriven = true;
       const total = Math.max(1, a.startup + a.active);
-      this.spin = swingArcAngle(this.def.meleeLock.arc, this.attackTick / total, this.meleeCount - 1);
+      const lockT = this.attackTick / total;
+      this.spin = swingArcAngle(this.def.meleeLock.arc, lockT, this.meleeCount - 1);
+      this.reach = swingReach(this.def.meleeLock.arc, lockT, this.meleeCount - 1);
     }
 
     if (this.autoFireTimer > 0) this.autoFireTimer--;
@@ -1101,10 +1164,18 @@ export class Combatant implements FlightState {
       dx: locked ? 0 : input.dx,
       dy: locked ? 0 : input.dy,
       boost: !locked && isHeld(input, Btn.Boost),
-      dash: !locked && !a && isPressed(input, Btn.Boost),
+      // Dash is deliberately NOT gated on `!a`. A mech may dash while firing or
+      // mid-swing — that overlap is what makes the movement read as aggressive
+      // rather than as a series of committed stops. Firing and melee remain
+      // mutually exclusive with each other; only movement overlaps them.
+      dash: !locked && isPressed(input, Btn.Boost),
       // Cryo bites here, so it slows flight, walking and boost alike.
       speedScale: this.satSpeedScale * this.status.speedScale,
-      moveScale: a && a.kind !== ProjKind.Melee ? moveScaleFor(a.kind) : 1,
+      // Firing anchors you, but never so much that a simultaneous dash fizzles:
+      // the dash impulse is the whole point of allowing the overlap.
+      moveScale: a && a.kind !== ProjKind.Melee && !isPressed(input, Btn.Boost)
+        ? moveScaleFor(a.kind)
+        : 1,
       flying: this.flying,
       groundY: this.groundY,
       lunging: !!(a && a.lunge && this.attackTick <= a.startup + a.active),
@@ -1170,6 +1241,10 @@ export class Combatant implements FlightState {
     if (!this.swinging && this.act !== ActState.Hitstun) {
       this.spin *= 0.86;
       if (Math.abs(this.spin) < 0.01) this.spin = 0;
+      // Extension settles alongside the rotation, so a mech never freezes with
+      // its shield or ram left hanging out after a sequence ends.
+      this.reach *= 0.82;
+      if (Math.abs(this.reach) < 0.05) this.reach = 0;
     }
   }
 

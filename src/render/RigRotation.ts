@@ -20,6 +20,8 @@ export interface RigPose {
   turretRot: number;
   /** Melee sword spin. */
   spin: number;
+  /** Forward weapon extension in logical pixels, along the aim. See `partReachOffset`. */
+  reach: number;
   /** Normalised thruster load, 0..1. */
   thrust: number;
   /** True while a melee attack is actually swinging. */
@@ -68,6 +70,30 @@ export function buildTurretInheritance(parts: readonly RigPart[]): Map<string, b
     out.set(part.name, inherits);
   }
   return out;
+}
+
+/**
+ * Extra translation for one part, in logical pixels, in its PARENT's space.
+ *
+ * A container's rotation turns its children but not its own position, so a
+ * forward lunge cannot be expressed as `x += reach` — that would push the arm
+ * along the chassis axis regardless of where the mech is aiming. The offset is
+ * therefore resolved along `turretRot + spin`: the direction the weapon is
+ * actually pointing at this instant, so a thrust follows the blade.
+ *
+ * Applied only to top-level turret parts. Anything that inherits the turret is
+ * already a child of one of those and is carried along by it; applying the
+ * offset again would double it.
+ */
+export function partReachOffset(
+  part: RigPart,
+  inheritsTurret: boolean,
+  pose: RigPose,
+): { x: number; y: number } {
+  if (!pose.meleeing || pose.reach === 0) return { x: 0, y: 0 };
+  if (part.follow !== 'turret' || inheritsTurret || part.name === 'head') return { x: 0, y: 0 };
+  const a = pose.turretRot + pose.spin;
+  return { x: Math.cos(a) * pose.reach, y: Math.sin(a) * pose.reach };
 }
 
 /**

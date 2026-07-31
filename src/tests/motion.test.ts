@@ -152,6 +152,7 @@ describe('walk cycle', () => {
     const pose: RigPose = {
       turretRot: 0,
       spin: 0,
+      reach: 0,
       thrust: 0,
       meleeing: false,
       walkPhase: Math.PI / 2,
@@ -172,10 +173,20 @@ describe('walk cycle', () => {
 });
 
 describe('deck', () => {
+  /**
+   * How far a chassis's feet sit below its own pivot.
+   *
+   * `footOffset` is measured on the unscaled sprite, so it must be multiplied by
+   * the chassis scale: an eight-mech roster is drawn at 0.82x to 1.29x, and
+   * without this a siege walker stands with its shins through the deck.
+   */
+  const foot = (c: { def: { rig: { footOffset: number; scale: number } } }) =>
+    c.def.rig.footOffset * c.def.rig.scale;
+
   it('rests every chassis with its own feet on the deck line', () => {
     const s = sim();
     for (const c of s.combatants) {
-      expect(c.groundY + c.def.rig.footOffset).toBeCloseTo(DECK_Y, 6);
+      expect(c.groundY + foot(c)).toBeCloseTo(DECK_Y, 6);
     }
   });
 
@@ -183,10 +194,10 @@ describe('deck', () => {
     const s = sim();
     const p = s.player;
     const e = s.enemy;
-    // Different leg lengths...
-    expect(p.def.rig.footOffset).not.toBe(e.def.rig.footOffset);
+    // Different leg lengths and different chassis sizes...
+    expect(foot(p)).not.toBe(foot(e));
     // ...but the same contact height.
-    expect(p.groundY + p.def.rig.footOffset).toBeCloseTo(e.groundY + e.def.rig.footOffset, 6);
+    expect(p.groundY + foot(p)).toBeCloseTo(e.groundY + foot(e), 6);
   });
 
   it('lands feet exactly on the deck, not through it', () => {
@@ -196,9 +207,9 @@ describe('deck', () => {
     s.step(press(Btn.Flight), emptyInput());
     let guard = 0;
     while (!p.grounded && guard++ < 400) s.step(emptyInput(), emptyInput());
-    expect(p.y + p.def.rig.footOffset).toBeCloseTo(DECK_Y, 4);
+    expect(p.y + foot(p)).toBeCloseTo(DECK_Y, 4);
     // And stays there.
     for (let i = 0; i < 120; i++) s.step({ ...emptyInput(), dx: 1 }, emptyInput());
-    expect(p.y + p.def.rig.footOffset).toBeLessThanOrEqual(DECK_Y + 1e-6);
+    expect(p.y + foot(p)).toBeLessThanOrEqual(DECK_Y + 1e-6);
   });
 });

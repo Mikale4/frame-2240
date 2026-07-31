@@ -30,6 +30,7 @@ function worldRotation(
 const restPose: RigPose = {
   turretRot: 0,
   spin: 0,
+  reach: 0,
   thrust: 0,
   meleeing: false,
   walkPhase: 0,

@@ -4,7 +4,13 @@ import type { MechDef, RigPart } from '../mechs/MechDef';
 import { ActState } from '../combat/types';
 import { DEG, clamp, wrapAngle } from '../core/MathUtil';
 import { depthScaleAt, depthSortAt } from '../core/Depth';
-import { buildTurretInheritance, partLocalRotation, type RigPose } from './RigRotation';
+import {
+  buildTurretInheritance,
+  partLocalRotation,
+  partReachOffset,
+  type RigPose,
+} from './RigRotation';
+import { partTexture } from './PartTexture';
 
 /** Blender renders parts at 2x the logical size; display them at half scale. */
 export const PART_SCALE = 0.5;
@@ -49,15 +55,19 @@ export class MechRenderer {
     this.def = def;
     this.root = scene.add.container(0, 0);
     this.bank = scene.add.container(0, 0);
+    // Chassis size lives here rather than on each sprite, so part offsets scale
+    // with the parts. Scaling only the sprites would grow the armour while
+    // leaving the skeleton the same size, and the mech would come apart.
+    this.bank.setScale(def.rig.scale);
     this.root.add(this.bank);
 
     // Build every node first so parents exist before children attach.
     const inherits = buildTurretInheritance(def.rig.parts);
 
     for (const part of def.rig.parts) {
-      const key = `mech_${mechId}_${part.name}`;
+      const tex = partTexture(scene, mechId, part.name);
       const container = scene.add.container(part.x, part.y);
-      const sprite = scene.add.image(0, 0, key);
+      const sprite = scene.add.image(0, 0, tex.key, tex.frame);
       sprite.setOrigin(0.5, 0.5);
       sprite.setScale(PART_SCALE);
       container.add(sprite);
@@ -144,6 +154,7 @@ export class MechRenderer {
     const pose: RigPose = {
       turretRot,
       spin: spinLocal,
+      reach: c.reach,
       thrust: c.thrust,
       meleeing,
       walkPhase: facing > 0 ? c.walkPhase : -c.walkPhase,
@@ -151,6 +162,10 @@ export class MechRenderer {
     };
     for (const node of this.nodes.values()) {
       node.container.rotation = partLocalRotation(node.def, node.inheritsTurret, pose);
+      // Thrusts, bashes and piston strikes throw the arm forward; blades do not,
+      // and get a zero offset, so this costs a rest-pose rig nothing.
+      const off = partReachOffset(node.def, node.inheritsTurret, pose);
+      node.container.setPosition(node.def.x + off.x, node.def.y + off.y);
     }
 
     // Damage flash: tint every part white briefly. A status affliction otherwise

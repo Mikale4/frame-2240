@@ -103,7 +103,11 @@ export class MatchSim {
     // so both machines stand on the same drawn line.
     const deck = cfg.groundY ?? DECK_Y;
     for (const c of this.combatants) {
-      c.groundY = Math.min(deck - c.def.rig.footOffset, this.arenaH - c.def.rig.hurtRadius);
+      // `footOffset` is measured on the unscaled sprite, so a chassis drawn at
+      // 1.29 stands 1.29x further from its own pivot; without this a big mech
+      // sinks through the deck and a small one hovers above it.
+      const foot = c.def.rig.footOffset * c.def.rig.scale;
+      c.groundY = Math.min(deck - foot, this.arenaH - c.def.rig.hurtRadius);
     }
   }
 
