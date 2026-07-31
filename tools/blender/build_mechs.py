@@ -54,7 +54,7 @@ ORTHO_SCALE = TILE / PX_PER_BU  # 2.667 BU across the frame
 # is 1.7 BU of blade growing forward from a pivot at the emitter, which the
 # 320px tile cut off flat mid-blade. Tiles are therefore sized per part from the
 # real bounding box. PX_PER_BU is held constant (ortho_scale tracks the tile), so
-# a bigger tile only adds transparent margin â€” the pivot stays at the centre and
+# a bigger tile only adds transparent margin — the pivot stays at the centre and
 # the game still draws every part at origin 0.5,0.5 and PART_SCALE.
 TILE_STEP = 64  # round tile sizes up to this, to keep texture dimensions tidy
 TILE_MARGIN_PX = 14  # room for the Freestyle contour and any glow bleed
@@ -312,7 +312,7 @@ CHASSIS = {
 Palettes.
 
 Calibrated from the 2005 build's own .act palette files (chars/rs/pal/*.act,
-768-byte RGB tables) and from in-game screenshots â€” NOT from the roster portrait
+768-byte RGB tables) and from in-game screenshots — NOT from the roster portrait
 GIFs, which are rendered in a neutral placeholder palette and led an earlier pass
 badly astray. The real machines are vividly coloured: sampling 00-1.act yields
 #0090FF / #00DCFF with #FF5500, 01-1.act gives orange over teal, 20-1.act a green
@@ -867,120 +867,649 @@ def join_as(name, objs, pivot, coll):
 # --------------------------------------------------------------- drone build
 
 
-# The supporter is small â€” it must still read at roughly 40 logical px â€” so it
-# is built as ONE joined object rather than a rig. A four-part rig on a 40px
+# The supporter is small — it must still read at roughly 40 logical px — so each
+# one is built as ONE joined object rather than a rig. A four-part rig on a 40px
 # sprite buys nothing: the whole drone turns to face its target, so rotating a
 # single sprite gives the same result as animating a hierarchy.
-DRONE_LENGTH_BU = 0.72  # ~43 logical px nose to tail
+#
+# Every drone is modelled nose-along +X, matching the parts convention, with the
+# pivot at the hull centre so the game can rotate it about its own middle. +Y is
+# the lateral/depth axis (the camera sits at an azimuth, so a pair mirrored in Y
+# reads as spread on screen) and +Z is up.
+#
+# The eight designs are deliberately different *silhouettes*, not one hull in
+# eight palettes — that was the previous state and it made the roster's escorts
+# indistinguishable in a fight. Each drone's outline says something about the
+# machine it serves and about the passive it carries:
+#
+#   ARBITER   swept interceptor dart      the neutral baseline
+#   WARDEN    armoured brick, twin guns   heavy frame's escort
+#   SIGHTLINE a rifle with an engine      longest barrel, biggest optics
+#   BULWARK   a shield on thrusters       widest, front-heavy, plated
+#   WISP      an open hoop and a node     smallest, skeletal, barely there
+#   AEGIS     an upright monolith slab    vertical rather than horizontal
+#   EMBER     tanks, vents and nozzles    hunched and exhaust-heavy
+#   STATIC    a lattice antenna mast      asymmetric, almost unarmed
+DRONE_LENGTH_BU = 0.72  # ~43 logical px nose to tail, for the baseline drone
+
+
+def _drone_materials(mech_id, pal):
+    """The seven materials every drone shares. Named per mech so they are reused."""
+    return {
+        "hull": make_material(f"{mech_id}_hull", pal["primary"], roughness=0.44),
+        "far": make_material(f"{mech_id}_far", pal["far"], roughness=0.5),
+        "sub": make_material(f"{mech_id}_sub", pal["secondary"], roughness=0.5),
+        "trim": make_material(f"{mech_id}_trim", pal["trim"], roughness=0.40),
+        "frame": make_material(f"{mech_id}_frame", pal["frame"], roughness=0.62, metallic=0.7),
+        "acc": make_material(f"{mech_id}_accent", pal["accent"], emission=1.1, roughness=0.35),
+        "glow": make_material(f"{mech_id}_glow", pal["glow"], emission=2.1, roughness=0.2, metallic=0.0),
+    }
+
+
+def _drone_arbiter(coll, M):
+    """
+    ARBITER — HALCYON's escort. A swept interceptor dart.
+
+    The baseline against which the other seven read as unusual: back-heavy engine
+    block, hard-tapered forward hull, chisel prow, swept vanes and a slung cannon.
+    """
+    L = 0.72
+    o = []
+
+    # Engine block: the heavy mass, at the tail. Massing the drone back-heavy
+    # stops it reading as a paper dart — the silhouette steps down from a deep
+    # tail to a thin nose.
+    o.append(add_wedge("d_block", (0.30, 0.24, 0.26), 0.66,
+                       Vector((-L * 0.30, 0, 0.005)),
+                       (0, math.radians(90), 0), coll=coll, mat=M["hull"]))
+    o.append(add_box("d_blockcap", (0.055, 0.21, 0.235),
+                     Vector((-L * 0.44, 0, 0.005)), coll=coll, mat=M["frame"]))
+
+    # Forward hull, tapering hard from the block to the nose.
+    o.append(add_wedge("d_hull", (0.235, 0.185, L * 0.52), 0.26,
+                       Vector((L * 0.06, 0, 0.0)),
+                       (0, math.radians(90), 0), coll=coll, mat=M["hull"]))
+    o.append(add_wedge("d_prow", (0.10, 0.10, L * 0.22), 0.14,
+                       Vector((L * 0.42, 0, -0.028)),
+                       (0, math.radians(76), 0), coll=coll, mat=M["sub"]))
+
+    # Layered plates: a visible step along the spine and flank. A narrow
+    # near-white lip only — the identity colour has to hold the surface area.
+    o.append(add_wedge("d_spine", (0.15, 0.075, 0.030), 0.48,
+                       Vector((-L * 0.16, 0, 0.128)), coll=coll, mat=M["trim"]))
+    o.append(add_wedge("d_shoulder", (0.24, 0.20, 0.05), 0.62,
+                       Vector((-L * 0.10, 0, 0.095)), coll=coll, mat=M["sub"]))
+    o.append(add_box("d_belly", (L * 0.46, 0.15, 0.045),
+                     Vector((-L * 0.05, 0, -0.098)), coll=coll, mat=M["far"]))
+    o.append(add_wedge("d_keel", (0.22, 0.16, 0.07), 0.55,
+                       Vector((-L * 0.24, 0, -0.075)), coll=coll, mat=M["far"]))
+
+    # Sensor housing: a raised, angled cowl with a glowing slit.
+    o.append(add_wedge("d_cowl", (0.13, 0.13, 0.075), 0.42,
+                       Vector((L * 0.20, 0, 0.075)),
+                       (0, math.radians(70), 0), coll=coll, mat=M["sub"]))
+    o.append(add_box("d_eye", (0.055, 0.075, 0.022),
+                     Vector((L * 0.255, 0, 0.070)), (0, math.radians(-16), 0),
+                     coll=coll, mat=M["glow"]))
+
+    # Swept vanes: they must break the hull silhouette to read.
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_wedge(f"d_vane{i}", (0.30, 0.030, 0.26), 0.14,
+                           Vector((-L * 0.30, sy * 0.115, 0.075)),
+                           (math.radians(sy * 34), 0, math.radians(-sy * 20)),
+                           coll=coll, mat=M["hull"]))
+        o.append(add_box(f"d_vanetip{i}", (0.04, 0.026, 0.045),
+                         Vector((-L * 0.42, sy * 0.165, 0.155)),
+                         (math.radians(sy * 34), 0, 0), coll=coll, mat=M["acc"]))
+        o.append(add_wedge(f"d_fin{i}", (0.15, 0.026, 0.13), 0.20,
+                           Vector((L * 0.10, sy * 0.085, -0.055)),
+                           (math.radians(sy * 62), 0, math.radians(-sy * 12)),
+                           coll=coll, mat=M["sub"]))
+
+    # Cannon, slung under the nose, thick enough to read at 50px.
+    o.append(add_box("d_breech", (0.115, 0.10, 0.09),
+                     Vector((L * 0.10, 0, -0.075)), coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_barrel", 0.040, L * 0.40, Vector((L * 0.30, 0, -0.075)),
+                     (0, math.radians(90), 0), verts=10, coll=coll, mat=M["frame"]))
+    o.append(add_wedge("d_muzzle", (0.095, 0.095, 0.085), 0.55,
+                       Vector((L * 0.50, 0, -0.075)),
+                       (0, math.radians(90), 0), coll=coll, mat=M["trim"]))
+    o.append(add_box("d_feed", (0.075, 0.13, 0.055),
+                     Vector((L * 0.02, 0, -0.070)), coll=coll, mat=M["sub"]))
+
+    # Thruster.
+    o.append(add_cyl("d_bell", 0.085, 0.11, Vector((-L * 0.52, 0, 0.005)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_flame", 0.058, 0.030, Vector((-L * 0.585, 0, 0.005)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["glow"]))
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_box(f"d_vent{i}", (0.075, 0.030, 0.030),
+                         Vector((-L * 0.20, sy * 0.10, 0.045)), coll=coll, mat=M["acc"]))
+
+    o.extend(scatter_greebles("d_g", Vector((-L * 0.10, 0, 0)),
+                              Vector((L * 0.30, 0.085, 0.085)), 9, coll,
+                              [M["frame"], M["sub"], M["acc"]], seed=77, scale=0.45))
+    return o
+
+
+def _drone_warden(coll, M):
+    """
+    WARDEN — NOCTURNE's escort. An armoured brick with twin stub cannons.
+
+    Almost no taper anywhere: a deep rectangular hull with bolted armour bands, a
+    blunt sloped face instead of a prow, stubby clipped wings and two side-by-side
+    barrels. It should look like it was built to be shot at, because it can be.
+    """
+    L = 0.78
+    o = []
+
+    # Deep slab hull. Two stacked boxes with a recessed dark band between them —
+    # the step is what stops a brick reading as one undetailed lump.
+    o.append(add_box("d_hullup", (L * 0.80, 0.30, 0.15),
+                     Vector((-L * 0.04, 0, 0.075)), coll=coll, mat=M["hull"]))
+    o.append(add_box("d_hullband", (L * 0.82, 0.26, 0.035),
+                     Vector((-L * 0.04, 0, -0.008)), coll=coll, mat=M["frame"]))
+    o.append(add_box("d_hulllow", (L * 0.74, 0.28, 0.12),
+                     Vector((-L * 0.06, 0, -0.085)), coll=coll, mat=M["far"]))
+
+    # Blunt sloped face rather than a point.
+    o.append(add_wedge("d_face", (0.28, 0.26, 0.16), 0.72,
+                       Vector((L * 0.40, 0, 0.02)),
+                       (0, math.radians(72), 0), coll=coll, mat=M["sub"]))
+    o.append(add_box("d_visor", (0.030, 0.20, 0.045),
+                     Vector((L * 0.475, 0, 0.045)), (0, math.radians(-14), 0),
+                     coll=coll, mat=M["glow"]))
+
+    # Bolted armour bands across the back, and a raised dorsal spine.
+    o.append(add_box("d_dorsal", (L * 0.34, 0.12, 0.055),
+                     Vector((-L * 0.14, 0, 0.175)), coll=coll, mat=M["trim"]))
+    for i, sx in enumerate((-0.30, -0.06, 0.18)):
+        o.append(add_box(f"d_rib{i}", (0.035, 0.325, 0.185),
+                         Vector((L * sx, 0, 0.055)), coll=coll, mat=M["frame"]))
+
+    # Clipped stub wings: short, thick, squared off, and canted enough to break
+    # the rectangle. Without the cant the whole drone read as a shipping crate.
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_wedge(f"d_stub{i}", (0.22, 0.155, 0.075), 0.55,
+                           Vector((-L * 0.14, sy * 0.215, 0.03)),
+                           (math.radians(sy * 26), 0, math.radians(-sy * 10)),
+                           coll=coll, mat=M["hull"]))
+        o.append(add_box(f"d_stubtip{i}", (0.07, 0.05, 0.085),
+                         Vector((-L * 0.24, sy * 0.275, 0.06)),
+                         (math.radians(sy * 26), 0, 0), coll=coll, mat=M["acc"]))
+        # Twin cannons, side by side. Carried high on the shoulder line and run
+        # well past the nose, so the guns are the first thing read rather than
+        # something tucked under the hull where the silhouette hides them.
+        o.append(add_box(f"d_breech{i}", (0.155, 0.095, 0.10),
+                         Vector((L * 0.16, sy * 0.105, 0.055)),
+                         coll=coll, mat=M["frame"]))
+        o.append(add_cyl(f"d_barrel{i}", 0.036, L * 0.46,
+                         Vector((L * 0.44, sy * 0.105, 0.055)),
+                         (0, math.radians(90), 0), verts=10, coll=coll, mat=M["frame"]))
+        o.append(add_cyl(f"d_brake{i}", 0.058, 0.065,
+                         Vector((L * 0.65, sy * 0.105, 0.055)),
+                         (0, math.radians(90), 0), verts=10, coll=coll, mat=M["trim"]))
+        o.append(add_cyl(f"d_flash{i}", 0.030, 0.026,
+                         Vector((L * 0.695, sy * 0.105, 0.055)),
+                         (0, math.radians(90), 0), verts=10, coll=coll, mat=M["glow"]))
+        # Squared thrusters, one per side.
+        o.append(add_box(f"d_bell{i}", (0.09, 0.115, 0.115),
+                         Vector((-L * 0.48, sy * 0.095, 0.03)), coll=coll, mat=M["frame"]))
+        o.append(add_box(f"d_flame{i}", (0.025, 0.08, 0.08),
+                         Vector((-L * 0.535, sy * 0.095, 0.03)), coll=coll, mat=M["glow"]))
+
+    o.extend(scatter_greebles("d_g", Vector((-L * 0.08, 0, 0.02)),
+                              Vector((L * 0.5, 0.24, 0.14)), 11, coll,
+                              [M["frame"], M["sub"], M["acc"]], seed=131, scale=0.5))
+    return o
+
+
+def _drone_sightline(coll, M):
+    """
+    SIGHTLINE — VESPER's escort. A rifle that grew an engine.
+
+    The longest and thinnest drone: the barrel is over half the total length, the
+    body is a narrow spine, and the largest single feature is the optics block. It
+    reads as an instrument rather than a fighter, which is the point.
+    """
+    L = 0.90
+    o = []
+
+    # Narrow spine, almost no depth.
+    o.append(add_wedge("d_spine", (0.115, 0.115, L * 0.62), 0.42,
+                       Vector((-L * 0.06, 0, 0.0)),
+                       (0, math.radians(90), 0), coll=coll, mat=M["hull"]))
+    o.append(add_box("d_spinecap", (0.045, 0.10, 0.10),
+                     Vector((-L * 0.40, 0, 0.0)), coll=coll, mat=M["frame"]))
+
+    # Optics: the dominant mass, sat high and forward on a short pylon.
+    o.append(add_box("d_pylon", (0.055, 0.07, 0.075),
+                     Vector((L * 0.03, 0, 0.085)), coll=coll, mat=M["frame"]))
+    # (height, width, length-along-the-nose) — see the note on BULWARK's shield.
+    o.append(add_wedge("d_scope", (0.125, 0.145, 0.28), 0.72,
+                       Vector((L * 0.02, 0, 0.165)),
+                       (0, math.radians(90), 0), coll=coll, mat=M["sub"]))
+    o.append(add_cyl("d_lens", 0.052, 0.028, Vector((L * 0.19, 0, 0.165)),
+                     (0, math.radians(90), 0), verts=14, coll=coll, mat=M["glow"]))
+    o.append(add_cyl("d_hood", 0.062, 0.045, Vector((L * 0.155, 0, 0.165)),
+                     (0, math.radians(90), 0), verts=14, coll=coll, mat=M["trim"]))
+    # Rangefinder bar across the optics — the reference loves an asymmetric aerial.
+    o.append(add_box("d_finder", (0.020, 0.30, 0.020),
+                     Vector((L * 0.00, 0, 0.225)), coll=coll, mat=M["acc"]))
+
+    # The barrel: long, thin, with a mid brace and a slotted muzzle.
+    o.append(add_box("d_receiver", (0.20, 0.10, 0.095),
+                     Vector((L * 0.12, 0, -0.045)), coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_barrel", 0.030, L * 0.56, Vector((L * 0.40, 0, -0.045)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_brace", 0.048, 0.04, Vector((L * 0.30, 0, -0.045)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["sub"]))
+    o.append(add_cyl("d_muzzle", 0.050, 0.075, Vector((L * 0.645, 0, -0.045)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["trim"]))
+    o.append(add_cyl("d_flash", 0.034, 0.03, Vector((L * 0.685, 0, -0.045)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["glow"]))
+
+    # Long tail fins, swept back hard — stabilisers, not wings.
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_wedge(f"d_fin{i}", (0.30, 0.020, 0.155), 0.10,
+                           Vector((-L * 0.30, sy * 0.055, 0.06)),
+                           (math.radians(sy * 24), 0, math.radians(-sy * 26)),
+                           coll=coll, mat=M["hull"]))
+        o.append(add_box(f"d_fintip{i}", (0.035, 0.018, 0.030),
+                         Vector((-L * 0.42, sy * 0.105, 0.135)),
+                         coll=coll, mat=M["acc"]))
+
+    # A single slim thruster in line with the spine.
+    o.append(add_cyl("d_bell", 0.062, 0.10, Vector((-L * 0.44, 0, 0.0)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_flame", 0.042, 0.028, Vector((-L * 0.50, 0, 0.0)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["glow"]))
+
+    o.extend(scatter_greebles("d_g", Vector((-L * 0.05, 0, 0.0)),
+                              Vector((L * 0.40, 0.06, 0.09)), 7, coll,
+                              [M["frame"], M["sub"], M["acc"]], seed=211, scale=0.36))
+    return o
+
+
+def _drone_bulwark(coll, M):
+    """
+    BULWARK — TERRAMOTH's escort. A shield bolted to four thrusters.
+
+    Front-heavy and by far the widest: a convex layered shield plate fills the
+    nose, the body hides behind it, and the weapon is a short mortar poking over
+    the top. The toughest drone should look like the toughest drone.
+    """
+    L = 0.80
+    o = []
+
+    # The shield: three stacked plates, each smaller and further forward, so the
+    # face reads as convex rather than as one flat slab.
+    #
+    # NOTE the argument order. `add_wedge` takes (x, y, taper-axis) in LOCAL
+    # space, and a 90deg Y rotation maps local Z onto world X — so with that
+    # rotation the tuple reads (height, width, thickness-along-the-nose), not
+    # (thickness, width, height). Getting this backwards is what turned the first
+    # version of this shield into a horizontal pancake 7px tall.
+    o.append(add_wedge("d_shield0", (0.44, 0.46, 0.075), 0.86,
+                       Vector((L * 0.34, 0, 0.0)),
+                       (0, math.radians(90), 0), coll=coll, mat=M["hull"]))
+    o.append(add_wedge("d_shield1", (0.34, 0.36, 0.050), 0.82,
+                       Vector((L * 0.40, 0, 0.005)),
+                       (0, math.radians(90), 0), coll=coll, mat=M["sub"]))
+    o.append(add_wedge("d_shield2", (0.20, 0.22, 0.045), 0.72,
+                       Vector((L * 0.44, 0, 0.010)),
+                       (0, math.radians(90), 0), coll=coll, mat=M["trim"]))
+    # Hazard chevron and a slit for the sensor to see through.
+    o.append(add_box("d_chev", (0.020, 0.30, 0.035),
+                     Vector((L * 0.475, 0, -0.10)), coll=coll, mat=M["acc"]))
+    o.append(add_box("d_slit", (0.020, 0.13, 0.030),
+                     Vector((L * 0.475, 0, 0.10)), coll=coll, mat=M["glow"]))
+    # Rivet rows down the shield edges.
+    for i, sy in enumerate((-1, 1)):
+        o.extend(bolt_row(f"d_bolt{i}_", 4,
+                          Vector((L * 0.375, sy * 0.205, -0.135)),
+                          Vector((0, 0, 0.09)), 0.020, coll, M["frame"], axis="X"))
+
+    # Squat body behind the shield.
+    o.append(add_box("d_body", (L * 0.42, 0.30, 0.22),
+                     Vector((-L * 0.10, 0, 0.0)), coll=coll, mat=M["far"]))
+    o.append(add_wedge("d_backplate", (0.10, 0.26, 0.19), 0.72,
+                       Vector((-L * 0.34, 0, 0.0)),
+                       (0, math.radians(-90), 0), coll=coll, mat=M["sub"]))
+
+    # Short mortar over the top, not a rifle: siege ordnance.
+    o.append(add_box("d_mount", (0.12, 0.13, 0.075),
+                     Vector((-L * 0.02, 0, 0.145)), coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_tube", 0.058, L * 0.30, Vector((L * 0.16, 0, 0.165)),
+                     (0, math.radians(78), 0), verts=12, coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_mouth", 0.072, 0.045, Vector((L * 0.30, 0, 0.195)),
+                     (0, math.radians(78), 0), verts=12, coll=coll, mat=M["trim"]))
+
+    # Four short thrusters at the corners, splayed outward.
+    for i, (sy, sz) in enumerate(((-1, 1), (1, 1), (-1, -1), (1, -1))):
+        o.append(add_box(f"d_pod{i}", (0.13, 0.085, 0.085),
+                         Vector((-L * 0.40, sy * 0.145, sz * 0.115)),
+                         (math.radians(sy * 10), 0, 0), coll=coll, mat=M["frame"]))
+        o.append(add_box(f"d_flame{i}", (0.030, 0.055, 0.055),
+                         Vector((-L * 0.475, sy * 0.145, sz * 0.115)),
+                         coll=coll, mat=M["glow"]))
+
+    o.extend(scatter_greebles("d_g", Vector((-L * 0.10, 0, 0.0)),
+                              Vector((L * 0.34, 0.26, 0.17)), 10, coll,
+                              [M["frame"], M["sub"], M["acc"]], seed=307, scale=0.5))
+    return o
+
+
+def _drone_wisp(coll, M):
+    """
+    WISP — CIRRUS's escort. An open hoop with a node in the middle.
+
+    The smallest and least solid thing in the roster: most of its silhouette is a
+    hole. Built from a ring of eight short segments with a floating core, so it
+    reads as barely-there hardware rather than as a small aircraft.
+    """
+    L = 0.58
+    o = []
+
+    # The hoop: eight segments around the YZ plane, so the ring faces the camera.
+    # The radial thickness has to stay above ~3 logical px or the ring vanishes at
+    # gameplay scale and the drone reads as a scrap of debris.
+    R = 0.225
+    for i in range(8):
+        a = math.radians(22.5 + i * 45)
+        cy, cz = math.cos(a) * R, math.sin(a) * R
+        o.append(add_box(f"d_ring{i}", (0.075, 0.155, 0.060),
+                         Vector((-L * 0.06, cy, cz)),
+                         (a + math.radians(90), 0, 0),
+                         bevel=0.004, coll=coll, mat=M["hull"] if i % 2 else M["sub"]))
+    # Four node blocks at the compass points, one lit.
+    for i, a in enumerate((0, 90, 180, 270)):
+        r = math.radians(a)
+        o.append(add_box(f"d_node{i}", (0.085, 0.080, 0.080),
+                         Vector((-L * 0.06, math.cos(r) * R, math.sin(r) * R)),
+                         coll=coll, mat=M["acc"] if i == 0 else M["frame"]))
+
+    # Core, floating inside the hoop on two thin spars.
+    o.append(add_wedge("d_core", (0.145, 0.135, L * 0.50), 0.34,
+                       Vector((L * 0.06, 0, 0.0)),
+                       (0, math.radians(90), 0), coll=coll, mat=M["hull"]))
+    o.append(add_cyl("d_eye", 0.055, 0.032, Vector((L * 0.30, 0, 0.0)),
+                     (0, math.radians(90), 0), verts=14, coll=coll, mat=M["glow"]))
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_box(f"d_spar{i}", (0.036, 0.20, 0.026),
+                         Vector((-L * 0.06, sy * 0.105, 0.0)), coll=coll, mat=M["frame"]))
+
+    # A single small emitter under the core rather than a cannon.
+    o.append(add_cyl("d_emit", 0.026, L * 0.26, Vector((L * 0.22, 0, -0.065)),
+                     (0, math.radians(90), 0), verts=10, coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_tip", 0.036, 0.030, Vector((L * 0.34, 0, -0.065)),
+                     (0, math.radians(90), 0), verts=10, coll=coll, mat=M["trim"]))
+
+    # Two outrigger thrusters on stalks, canted out.
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_cyl(f"d_stalk{i}", 0.016, 0.11,
+                         Vector((-L * 0.22, sy * 0.13, 0.055)),
+                         (math.radians(90), 0, math.radians(-sy * 30)),
+                         verts=8, coll=coll, mat=M["frame"]))
+        o.append(add_cyl(f"d_bell{i}", 0.048, 0.075,
+                         Vector((-L * 0.30, sy * 0.185, 0.085)),
+                         (0, math.radians(90), 0), verts=12, coll=coll, mat=M["sub"]))
+        o.append(add_cyl(f"d_flame{i}", 0.032, 0.024,
+                         Vector((-L * 0.35, sy * 0.185, 0.085)),
+                         (0, math.radians(90), 0), verts=12, coll=coll, mat=M["glow"]))
+
+    o.extend(scatter_greebles("d_g", Vector((L * 0.02, 0, 0.0)),
+                              Vector((L * 0.24, 0.05, 0.05)), 5, coll,
+                              [M["frame"], M["acc"]], seed=419, scale=0.3))
+    return o
+
+
+def _drone_aegis(coll, M):
+    """
+    AEGIS — OBELISK's escort. An upright monolith.
+
+    The only drone taller than it is long. A standing slab with buttressed
+    shoulders, a single vertical eye slot and a projector at its base; the ring of
+    emitters around the top is the guard relay it lends its pilot. Rotating it to
+    aim tips the whole tower, which reads as deliberate rather than as a glitch
+    because nothing else about it is aerodynamic.
+    """
+    L = 0.72
+    o = []
+
+    # The slab: tall, narrow, slightly tapered toward the top.
+    o.append(add_wedge("d_slab", (0.235, 0.24, 0.62), 0.74,
+                       Vector((0, 0, 0.02)), coll=coll, mat=M["hull"]))
+    o.append(add_wedge("d_cap", (0.20, 0.20, 0.075), 0.55,
+                       Vector((0, 0, 0.355)), coll=coll, mat=M["trim"]))
+    o.append(add_box("d_base", (0.26, 0.26, 0.055),
+                     Vector((0, 0, -0.30)), coll=coll, mat=M["frame"]))
+
+    # Vertical eye slot down the face, and a dark inset behind it.
+    o.append(add_box("d_inset", (0.030, 0.13, 0.44),
+                     Vector((L * 0.155, 0, 0.03)), coll=coll, mat=M["far"]))
+    o.append(add_box("d_eye", (0.022, 0.055, 0.34),
+                     Vector((L * 0.175, 0, 0.03)), coll=coll, mat=M["glow"]))
+
+    # Buttressed shoulders: angled plates that widen the base of the tower.
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_wedge(f"d_butt{i}", (0.10, 0.075, 0.34), 0.30,
+                           Vector((-L * 0.02, sy * 0.155, -0.06)),
+                           (math.radians(sy * 16), 0, 0), coll=coll, mat=M["sub"]))
+        o.append(add_box(f"d_shoulder{i}", (0.16, 0.055, 0.075),
+                         Vector((0, sy * 0.175, 0.19)), coll=coll, mat=M["hull"]))
+        # Relay emitters ringing the crown.
+        o.append(add_cyl(f"d_emit{i}", 0.028, 0.075,
+                         Vector((-L * 0.05, sy * 0.10, 0.40)),
+                         (0, 0, 0), verts=10, coll=coll, mat=M["acc"]))
+        o.append(add_cyl(f"d_emitf{i}", 0.030, 0.02,
+                         Vector((L * 0.10, sy * 0.10, 0.40)),
+                         (0, 0, 0), verts=10, coll=coll, mat=M["glow"]))
+        # Recessed bands down the flanks.
+        for j, sz in enumerate((0.16, 0.0, -0.16)):
+            o.append(add_box(f"d_band{i}{j}", (0.185, 0.030, 0.028),
+                             Vector((0, sy * 0.125, sz)), coll=coll, mat=M["frame"]))
+
+    # Projector at the foot, aimed forward — its whole weapon.
+    o.append(add_box("d_proj", (0.145, 0.115, 0.10),
+                     Vector((L * 0.11, 0, -0.245)), coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_lens", 0.052, 0.045, Vector((L * 0.235, 0, -0.245)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["glow"]))
+
+    # Thrusters underneath, since there is no tail to put them on.
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_cyl(f"d_bell{i}", 0.055, 0.09,
+                         Vector((-L * 0.14, sy * 0.115, -0.35)),
+                         (0, 0, 0), verts=12, coll=coll, mat=M["frame"]))
+        o.append(add_cyl(f"d_flame{i}", 0.038, 0.026,
+                         Vector((-L * 0.14, sy * 0.115, -0.405)),
+                         (0, 0, 0), verts=12, coll=coll, mat=M["glow"]))
+
+    o.extend(scatter_greebles("d_g", Vector((-L * 0.08, 0, 0.0)),
+                              Vector((0.14, 0.18, 0.44)), 9, coll,
+                              [M["frame"], M["sub"], M["acc"]], seed=523, scale=0.4))
+    return o
+
+
+def _drone_ember(coll, M):
+    """
+    EMBER — PYRE's escort. A hunched machine strapped with fuel.
+
+    Two large canisters ride the flanks, the exhaust nozzles are oversized and
+    flared, and the muzzle is a wide-mouthed projector rather than a barrel. It
+    should look like it is running too hot, which is what its passive does.
+    """
+    L = 0.74
+    o = []
+
+    # Hunched hull: high at the shoulders, dropping toward the nose.
+    o.append(add_wedge("d_hull", (0.24, 0.22, L * 0.44), 0.44,
+                       Vector((-L * 0.02, 0, 0.02)),
+                       (0, math.radians(84), 0), coll=coll, mat=M["hull"]))
+    o.append(add_wedge("d_hump", (0.26, 0.20, 0.13), 0.52,
+                       Vector((-L * 0.16, 0, 0.135)), coll=coll, mat=M["sub"]))
+    o.append(add_box("d_belly", (L * 0.40, 0.17, 0.055),
+                     Vector((-L * 0.02, 0, -0.10)), coll=coll, mat=M["far"]))
+
+    # Blunt cowled nose with a lit intake.
+    o.append(add_wedge("d_cowl", (0.175, 0.165, 0.155), 0.62,
+                       Vector((L * 0.28, 0, -0.02)),
+                       (0, math.radians(84), 0), coll=coll, mat=M["sub"]))
+    o.append(add_cyl("d_intake", 0.055, 0.035, Vector((L * 0.375, 0, -0.02)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["glow"]))
+
+    # Fuel canisters on the flanks, banded and capped.
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_cyl(f"d_tank{i}", 0.075, L * 0.44,
+                         Vector((-L * 0.08, sy * 0.185, 0.02)),
+                         (0, math.radians(90), 0), verts=12, coll=coll, mat=M["hull"]))
+        o.append(add_cyl(f"d_tankcap{i}", 0.082, 0.035,
+                         Vector((L * 0.09, sy * 0.185, 0.02)),
+                         (0, math.radians(90), 0), verts=12, coll=coll, mat=M["trim"]))
+        o.append(add_cyl(f"d_tankband{i}", 0.080, 0.028,
+                         Vector((-L * 0.20, sy * 0.185, 0.02)),
+                         (0, math.radians(90), 0), verts=12, coll=coll, mat=M["acc"]))
+        # Feed pipe from tank to projector.
+        o.append(add_cyl(f"d_pipe{i}", 0.020, L * 0.30,
+                         Vector((L * 0.16, sy * 0.135, -0.055)),
+                         (0, math.radians(80), 0), verts=8, coll=coll, mat=M["frame"]))
+        # Flared exhaust: an oversized cone, deliberately out of proportion.
+        o.append(add_cyl(f"d_bell{i}", 0.062, 0.16,
+                         Vector((-L * 0.42, sy * 0.135, 0.02)),
+                         (0, math.radians(90), 0), verts=12,
+                         cone_r2=0.115, coll=coll, mat=M["frame"]))
+        o.append(add_cyl(f"d_flame{i}", 0.088, 0.035,
+                         Vector((-L * 0.50, sy * 0.135, 0.02)),
+                         (0, math.radians(90), 0), verts=12, coll=coll, mat=M["glow"]))
+        # Heat vents along the hump.
+        for j, sx in enumerate((-0.26, -0.14, -0.02)):
+            o.append(add_box(f"d_vent{i}{j}", (0.030, 0.030, 0.075),
+                             Vector((L * sx, sy * 0.085, 0.145)),
+                             coll=coll, mat=M["acc"]))
+
+    # Wide-mouthed projector under the nose.
+    o.append(add_box("d_breech", (0.135, 0.11, 0.095),
+                     Vector((L * 0.10, 0, -0.10)), coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_throat", 0.042, L * 0.26, Vector((L * 0.28, 0, -0.10)),
+                     (0, math.radians(90), 0), verts=10, coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_mouth", 0.048, 0.085, Vector((L * 0.44, 0, -0.10)),
+                     (0, math.radians(90), 0), verts=12,
+                     cone_r2=0.090, coll=coll, mat=M["trim"]))
+
+    o.extend(scatter_greebles("d_g", Vector((-L * 0.08, 0, 0.02)),
+                              Vector((L * 0.36, 0.12, 0.14)), 10, coll,
+                              [M["frame"], M["sub"], M["acc"]], seed=641, scale=0.42))
+    return o
+
+
+def _drone_static(coll, M):
+    """
+    STATIC — NULLTIDE's escort. An antenna mast that happens to fly.
+
+    Deliberately barely armed: a lattice mast carrying a dish and a spray of
+    aerials, on a thin fuselage, with one small emitter. The asymmetry — dish on
+    one side only — is the fastest way to tell it apart at gameplay scale.
+    """
+    L = 0.68
+    o = []
+
+    # Thin fuselage.
+    o.append(add_wedge("d_body", (0.145, 0.135, L * 0.56), 0.40,
+                       Vector((-L * 0.04, 0, -0.02)),
+                       (0, math.radians(90), 0), coll=coll, mat=M["hull"]))
+    o.append(add_box("d_keel", (L * 0.34, 0.11, 0.045),
+                     Vector((-L * 0.10, 0, -0.10)), coll=coll, mat=M["far"]))
+    o.append(add_wedge("d_nose", (0.085, 0.085, 0.145), 0.24,
+                       Vector((L * 0.36, 0, -0.03)),
+                       (0, math.radians(78), 0), coll=coll, mat=M["sub"]))
+
+    # Lattice mast: four uprights and two cross-braces, up off the spine.
+    for i, (sy, sx) in enumerate(((-1, -0.16), (1, -0.16), (-1, 0.06), (1, 0.06))):
+        o.append(add_cyl(f"d_strut{i}", 0.016, 0.30,
+                         Vector((L * sx, sy * 0.075, 0.135)),
+                         (math.radians(sy * 8), 0, 0), verts=8, coll=coll, mat=M["frame"]))
+    for i, sz in enumerate((0.06, 0.24)):
+        o.append(add_box(f"d_brace{i}", (0.20, 0.175, 0.018),
+                         Vector((-L * 0.05, 0, sz)), coll=coll, mat=M["frame"]))
+
+    # Dish, cocked to one side. The single most identifying feature.
+    o.append(add_cyl("d_dishback", 0.105, 0.030,
+                     Vector((-L * 0.04, 0.175, 0.29)),
+                     (math.radians(70), 0, math.radians(-18)), verts=16,
+                     coll=coll, mat=M["sub"]))
+    o.append(add_cyl("d_dish", 0.125, 0.035,
+                     Vector((-L * 0.04, 0.195, 0.30)),
+                     (math.radians(70), 0, math.radians(-18)), verts=16,
+                     cone_r2=0.055, coll=coll, mat=M["trim"]))
+    o.append(add_cyl("d_feedhorn", 0.024, 0.085,
+                     Vector((-L * 0.02, 0.255, 0.325)),
+                     (math.radians(70), 0, math.radians(-18)), verts=8,
+                     coll=coll, mat=M["acc"]))
+
+    # Aerials: thin whips at several angles, plus a lit emitter node on the mast.
+    for i, (ang, ln) in enumerate(((18, 0.30), (-26, 0.24), (52, 0.20))):
+        o.append(add_cyl(f"d_whip{i}", 0.009, ln,
+                         Vector((-L * 0.16, -0.10 - i * 0.02, 0.34 + i * 0.02)),
+                         (math.radians(ang), 0, math.radians(12 * i)), verts=6,
+                         coll=coll, mat=M["frame"]))
+    o.append(add_box("d_emitnode", (0.075, 0.075, 0.055),
+                     Vector((L * 0.06, 0, 0.275)), coll=coll, mat=M["glow"]))
+
+    # Sensor eye and the one small weapon.
+    o.append(add_box("d_eye", (0.045, 0.065, 0.022),
+                     Vector((L * 0.30, 0, 0.045)), (0, math.radians(-18), 0),
+                     coll=coll, mat=M["glow"]))
+    o.append(add_cyl("d_emit", 0.028, L * 0.28, Vector((L * 0.26, 0, -0.115)),
+                     (0, math.radians(90), 0), verts=10, coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_tip", 0.038, 0.032, Vector((L * 0.40, 0, -0.115)),
+                     (0, math.radians(90), 0), verts=10, coll=coll, mat=M["acc"]))
+
+    # Canted tail vanes and a single thruster.
+    for i, sy in enumerate((-1, 1)):
+        o.append(add_wedge(f"d_vane{i}", (0.185, 0.018, 0.145), 0.18,
+                           Vector((-L * 0.34, sy * 0.075, 0.02)),
+                           (math.radians(sy * 42), 0, math.radians(-sy * 18)),
+                           coll=coll, mat=M["hull"]))
+    o.append(add_cyl("d_bell", 0.068, 0.10, Vector((-L * 0.42, 0, -0.02)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["frame"]))
+    o.append(add_cyl("d_flame", 0.046, 0.028, Vector((-L * 0.485, 0, -0.02)),
+                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M["glow"]))
+
+    o.extend(scatter_greebles("d_g", Vector((-L * 0.06, 0, -0.02)),
+                              Vector((L * 0.32, 0.10, 0.09)), 8, coll,
+                              [M["frame"], M["sub"], M["acc"]], seed=733, scale=0.34))
+    return o
+
+
+# One builder per mech. A missing entry falls back to ARBITER's dart, so adding a
+# ninth chassis produces a working drone before its own design exists.
+DRONE_BUILDERS = {
+    "halcyon": _drone_arbiter,
+    "nocturne": _drone_warden,
+    "vesper": _drone_sightline,
+    "terramoth": _drone_bulwark,
+    "cirrus": _drone_wisp,
+    "obelisk": _drone_aegis,
+    "pyre": _drone_ember,
+    "nulltide": _drone_static,
+}
 
 
 def build_drone(mech_id, palette_key=None):
     """
     Builds one supporter drone into MECH_<ID>, named `<mech_id>_drone`.
 
-    Design language follows the chassis: tapered wedges rather than boxes, a
-    sharp forward prow, swept vanes, overlapping plates with a visible step, and
-    a glowing sensor. Deliberately NOT a sphere or a cube with a gun â€” the
-    reference's machines are all angles.
-
-    Modelled nose-along +X, matching the parts convention, with the pivot at the
-    hull centre so the game can rotate it about its own middle.
+    The design language follows the chassis throughout: tapered wedges rather than
+    plain boxes, overlapping plates with a visible step, dark recessed bands, and
+    exactly one emissive feature that reads as an eye. What differs per drone is
+    the silhouette, because that is the only thing legible at 40 logical pixels
+    in the middle of a firefight.
     """
     pal = PALETTES[palette_key or mech_id]
     coll = ensure_collection(f"MECH_{mech_id.upper()}")
-
-    M_HULL = make_material(f"{mech_id}_hull", pal["primary"], roughness=0.44)
-    M_FAR = make_material(f"{mech_id}_far", pal["far"], roughness=0.5)
-    M_SUB = make_material(f"{mech_id}_sub", pal["secondary"], roughness=0.5)
-    M_TRIM = make_material(f"{mech_id}_trim", pal["trim"], roughness=0.40)
-    M_FRAME = make_material(f"{mech_id}_frame", pal["frame"], roughness=0.62, metallic=0.7)
-    M_ACC = make_material(f"{mech_id}_accent", pal["accent"], emission=1.1, roughness=0.35)
-    M_GLOW = make_material(f"{mech_id}_glow", pal["glow"], emission=2.1, roughness=0.2, metallic=0.0)
-
-    L = DRONE_LENGTH_BU
-    o = []
-
-    # ---- engine block: the heavy mass, at the tail -------------------------
-    # Massing the drone back-heavy stops it reading as a paper dart: the
-    # silhouette steps down from a deep tail to a thin nose.
-    o.append(add_wedge("d_block", (0.30, 0.24, 0.26), 0.66,
-                       Vector((-L * 0.30, 0, 0.005)),
-                       (0, math.radians(90), 0), coll=coll, mat=M_HULL))
-    o.append(add_box("d_blockcap", (0.055, 0.21, 0.235),
-                     Vector((-L * 0.44, 0, 0.005)), coll=coll, mat=M_FRAME))
-
-    # ---- forward hull: tapers hard from the block to the nose --------------
-    o.append(add_wedge("d_hull", (0.235, 0.185, L * 0.52), 0.26,
-                       Vector((L * 0.06, 0, 0.0)),
-                       (0, math.radians(90), 0), coll=coll, mat=M_HULL))
-    # Chisel prow, cranked down â€” the chassis noses do the same.
-    o.append(add_wedge("d_prow", (0.10, 0.10, L * 0.22), 0.14,
-                       Vector((L * 0.42, 0, -0.028)),
-                       (0, math.radians(76), 0), coll=coll, mat=M_SUB))
-
-    # ---- layered plates: a visible step along the spine and flank ----------
-    # A narrow near-white lip only â€” the identity colour has to hold the surface
-    # area, or the drone reads as a white toy with coloured bits.
-    o.append(add_wedge("d_spine", (0.15, 0.075, 0.030), 0.48,
-                       Vector((-L * 0.16, 0, 0.128)), coll=coll, mat=M_TRIM))
-    o.append(add_wedge("d_shoulder", (0.24, 0.20, 0.05), 0.62,
-                       Vector((-L * 0.10, 0, 0.095)), coll=coll, mat=M_SUB))
-    # Dark identity shade underneath: the underside must fall away in shadow so
-    # the top plates read as plates.
-    o.append(add_box("d_belly", (L * 0.46, 0.15, 0.045),
-                     Vector((-L * 0.05, 0, -0.098)), coll=coll, mat=M_FAR))
-    o.append(add_wedge("d_keel", (0.22, 0.16, 0.07), 0.55,
-                       Vector((-L * 0.24, 0, -0.075)), coll=coll, mat=M_FAR))
-
-    # ---- sensor housing: a raised, angled cowl with a glowing slit ---------
-    o.append(add_wedge("d_cowl", (0.13, 0.13, 0.075), 0.42,
-                       Vector((L * 0.20, 0, 0.075)),
-                       (0, math.radians(70), 0), coll=coll, mat=M_SUB))
-    o.append(add_box("d_eye", (0.055, 0.075, 0.022),
-                     Vector((L * 0.255, 0, 0.070)), (0, math.radians(-16), 0),
-                     coll=coll, mat=M_GLOW))
-
-    # ---- swept vanes: they must break the hull silhouette to read ----------
-    for i, sy in enumerate((-1, 1)):
-        o.append(add_wedge(f"d_vane{i}", (0.30, 0.030, 0.26), 0.14,
-                           Vector((-L * 0.30, sy * 0.115, 0.075)),
-                           (math.radians(sy * 34), 0, math.radians(-sy * 20)),
-                           coll=coll, mat=M_HULL))
-        o.append(add_box(f"d_vanetip{i}", (0.04, 0.026, 0.045),
-                         Vector((-L * 0.42, sy * 0.165, 0.155)),
-                         (math.radians(sy * 34), 0, 0), coll=coll, mat=M_ACC))
-        # Lower canard, forward, to give the nose some width.
-        o.append(add_wedge(f"d_fin{i}", (0.15, 0.026, 0.13), 0.20,
-                           Vector((L * 0.10, sy * 0.085, -0.055)),
-                           (math.radians(sy * 62), 0, math.radians(-sy * 12)),
-                           coll=coll, mat=M_SUB))
-
-    # ---- cannon: slung under the nose, thick enough to read at 50px --------
-    o.append(add_box("d_breech", (0.115, 0.10, 0.09),
-                     Vector((L * 0.10, 0, -0.075)), coll=coll, mat=M_FRAME))
-    o.append(add_cyl("d_barrel", 0.040, L * 0.40, Vector((L * 0.30, 0, -0.075)),
-                     (0, math.radians(90), 0), verts=10, coll=coll, mat=M_FRAME))
-    o.append(add_wedge("d_muzzle", (0.095, 0.095, 0.085), 0.55,
-                       Vector((L * 0.50, 0, -0.075)),
-                       (0, math.radians(90), 0), coll=coll, mat=M_TRIM))
-    o.append(add_box("d_feed", (0.075, 0.13, 0.055),
-                     Vector((L * 0.02, 0, -0.070)), coll=coll, mat=M_SUB))
-
-    # ---- thruster ---------------------------------------------------------
-    o.append(add_cyl("d_bell", 0.085, 0.11, Vector((-L * 0.52, 0, 0.005)),
-                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M_FRAME))
-    o.append(add_cyl("d_flame", 0.058, 0.030, Vector((-L * 0.585, 0, 0.005)),
-                     (0, math.radians(90), 0), verts=12, coll=coll, mat=M_GLOW))
-    for i, sy in enumerate((-1, 1)):
-        o.append(add_box(f"d_vent{i}", (0.075, 0.030, 0.030),
-                         Vector((-L * 0.20, sy * 0.10, 0.045)), coll=coll, mat=M_ACC))
-
-    # Greebles keep the surface from reading as a handful of clean shapes.
-    o.extend(scatter_greebles("d_g", Vector((-L * 0.10, 0, 0)),
-                              Vector((L * 0.30, 0.085, 0.085)), 9, coll,
-                              [M_FRAME, M_SUB, M_ACC], seed=77, scale=0.45))
-
-    return join_as(f"{mech_id}_drone", o, Vector((0, 0, 0)), coll)
+    M = _drone_materials(mech_id, pal)
+    build = DRONE_BUILDERS.get(mech_id, _drone_arbiter)
+    return join_as(f"{mech_id}_drone", build(coll, M), Vector((0, 0, 0)), coll)
 
 
 # ---------------------------------------------------------------- mech build
@@ -1826,6 +2355,45 @@ def required_tile(obj, cam):
     return max(TILE, min(TILE_MAX, steps * TILE_STEP))
 
 
+def render_one_part(obj, out_dir, mech_id, part, manifest):
+    """
+    Renders a single part, centred on its own pivot, and records its manifest row.
+
+    Split out of `render_parts` so one part can be re-rendered on its own — a full
+    eight-mech pass is ~112 renders, and redoing all of them to change one drone
+    is both slow and an invitation to disturb art that was already correct. The
+    caller is responsible for hiding everything else and restoring render state.
+    """
+    scene = bpy.context.scene
+    cam = scene.camera
+
+    saved_loc = tuple(obj.location)
+    obj.location = (0.0, 0.0, 0.0)
+    obj.hide_render = False
+
+    # Frame this part on its own, keeping PX_PER_BU fixed.
+    tile = required_tile(obj, cam)
+    scene.render.resolution_x = tile
+    scene.render.resolution_y = tile
+    cam.data.ortho_scale = tile / PX_PER_BU
+
+    path = os.path.join(out_dir, f"{mech_id}_{part}.png")
+    scene.render.filepath = path
+    bpy.ops.render.render(write_still=True)
+
+    obj.hide_render = True
+    obj.location = saved_loc
+
+    dims = tuple(round(v, 4) for v in obj.dimensions)
+    manifest.setdefault(mech_id, {})[part] = {
+        "file": os.path.basename(path),
+        "tile": tile,
+        "dims_bu": dims,
+        "dims_logical_px": tuple(round(v * LOGICAL_PER_BU, 1) for v in dims),
+    }
+    return tile
+
+
 def render_parts(coll, out_dir, mech_id, manifest):
     """Renders each part centred on its own pivot to <out_dir>/<mech>_<part>.png."""
     os.makedirs(out_dir, exist_ok=True)
@@ -1851,31 +2419,7 @@ def render_parts(coll, out_dir, mech_id, manifest):
     saved_ortho = cam.data.ortho_scale
     try:
         for name in wanted:
-            obj = mech_objs[f"{mech_id}_{name}"]
-            saved_loc = tuple(obj.location)
-            obj.location = (0.0, 0.0, 0.0)
-            obj.hide_render = False
-
-            # Frame this part on its own, keeping PX_PER_BU fixed.
-            tile = required_tile(obj, cam)
-            scene.render.resolution_x = tile
-            scene.render.resolution_y = tile
-            cam.data.ortho_scale = tile / PX_PER_BU
-
-            path = os.path.join(out_dir, f"{mech_id}_{name}.png")
-            scene.render.filepath = path
-            bpy.ops.render.render(write_still=True)
-
-            obj.hide_render = True
-            obj.location = saved_loc
-
-            dims = tuple(round(v, 4) for v in obj.dimensions)
-            manifest.setdefault(mech_id, {})[name] = {
-                "file": os.path.basename(path),
-                "tile": tile,
-                "dims_bu": dims,
-                "dims_logical_px": tuple(round(v * LOGICAL_PER_BU, 1) for v in dims),
-            }
+            render_one_part(mech_objs[f"{mech_id}_{name}"], out_dir, mech_id, name, manifest)
     finally:
         cam.data.ortho_scale = saved_ortho
         scene.render.resolution_x = TILE
