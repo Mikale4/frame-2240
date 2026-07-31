@@ -91,7 +91,8 @@ describe('the difficulty ladder', () => {
       'punishRecovery',
       'weaponIq',
       'energyDiscipline',
-      'offAxisApproach',
+      'rangeIq',
+      'tempoIq',
       'closeOnGuard',
     ] as const;
     const count = (d: Difficulty) => flags.filter((f) => AI_PROFILES[d][f]).length;

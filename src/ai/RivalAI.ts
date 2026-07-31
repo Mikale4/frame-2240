@@ -1,4 +1,5 @@
 import type { Combatant } from '../combat/Combatant';
+import type { MechDef } from '../mechs/MechDef';
 import { ActState, Btn, ProjKind, SatMode, type InputFrame } from '../combat/types';
 import type { Projectile } from '../projectiles/Projectile';
 import type { Rng } from '../core/Rng';
@@ -26,6 +27,48 @@ export interface AiConfig {
 }
 
 const TACTIC_NAMES = ['APPROACH', 'HOLD', 'RETREAT', 'STRAFE', 'EVADE'];
+
+/**
+ * What a chassis can threaten, and from how far.
+ *
+ * Range in this game is not a stat — it is `projSpeed * projLife`, because a
+ * shot dies on a timer rather than at a wall. So a rival that wants to know
+ * whether it out-ranges its opponent has to work it out, exactly as a player
+ * works it out by watching where shots stop.
+ *
+ * Derived from public weapon data both pilots can read on the select screen, so
+ * it stays inside the fairness rule. Cached per chassis: eight machines, and the
+ * numbers never change during a match.
+ */
+export interface MechReach {
+  main: number;
+  heavy: number;
+  lance: number;
+  /** Longest distance at which this chassis can put damage on something. */
+  max: number;
+  /** Distance the sword can be brought to bear from. */
+  melee: number;
+  /** Top speed under boost — whether it can dictate the range at all. */
+  topSpeed: number;
+}
+
+const REACH_CACHE = new Map<string, MechReach>();
+
+export function reachOf(def: MechDef): MechReach {
+  const hit = REACH_CACHE.get(def.id);
+  if (hit) return hit;
+  const travel = (a: { projSpeed: number; projLife: number }) => a.projSpeed * a.projLife;
+  const r: MechReach = {
+    main: travel(def.main),
+    heavy: travel(def.heavy),
+    lance: travel(def.lance),
+    max: Math.max(travel(def.main), travel(def.heavy), travel(def.lance)),
+    melee: def.meleeRange,
+    topSpeed: def.flight.boostMaxSpeed,
+  };
+  REACH_CACHE.set(def.id, r);
+  return r;
+}
 
 /**
  * What a difficulty tier actually changes.
@@ -60,8 +103,6 @@ export interface AiProfile {
   weaponIq: boolean;
   /** Hold fire to bank energy for a lance rather than trickling it away. */
   energyDiscipline: boolean;
-  /** Approach off the opponent's firing axis instead of straight down it. */
-  offAxisApproach: boolean;
   /**
    * Close the distance when the opponent turtles.
    *
@@ -72,6 +113,20 @@ export interface AiProfile {
    * off and shooting at them. Only EXTREME knows this.
    */
   closeOnGuard: boolean;
+  /**
+   * Fight at a range derived from both machines' actual reach, rather than at a
+   * fixed preferred distance.
+   *
+   * Whether standing off is winning or losing depends entirely on who out-ranges
+   * whom, and by how much — and on whether the slower machine can even hold the
+   * gap it wants. A flat `preferredRange` answers none of that.
+   */
+  rangeIq: boolean;
+  /**
+   * Play the score. Protect a health lead by giving ground; chase a deficit by
+   * forcing the distance closed.
+   */
+  tempoIq: boolean;
   /** Willingness to attack at all, before weapon choice. */
   aggression: number;
   /** Per-tick chance of spending a dash while repositioning. */
@@ -107,8 +162,9 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     punishRecovery: false,
     weaponIq: false,
     energyDiscipline: false,
-    offAxisApproach: false,
     closeOnGuard: false,
+    rangeIq: false,
+    tempoIq: false,
     aggression: 0.26,
     dashChance: 0.03,
     boostReserveDashes: 0,
@@ -122,8 +178,9 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     punishRecovery: false,
     weaponIq: false,
     energyDiscipline: false,
-    offAxisApproach: false,
     closeOnGuard: false,
+    rangeIq: false,
+    tempoIq: false,
     aggression: 0.5,
     dashChance: 0.1,
     boostReserveDashes: 1,
@@ -137,8 +194,14 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     punishRecovery: true,
     weaponIq: true,
     energyDiscipline: false,
-    offAxisApproach: false,
     closeOnGuard: false,
+    // HARD has the fundamentals — reads threats, punishes recovery, picks its
+    // weapon — but fights at a fixed preferred distance. Working out who
+    // out-ranges whom, and standing exactly there, is EXTREME's alone: measured,
+    // it is worth about two tenths of a health bar, which is most of what
+    // separates the top two tiers.
+    rangeIq: false,
+    tempoIq: false,
     aggression: 0.68,
     dashChance: 0.16,
     boostReserveDashes: 2,
@@ -156,8 +219,9 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     punishRecovery: true,
     weaponIq: true,
     energyDiscipline: true,
-    offAxisApproach: true,
     closeOnGuard: true,
+    rangeIq: true,
+    tempoIq: true,
     // Not the highest aggression on the roster, deliberately. Firing anchors
     // movement, so "attack at every opportunity" measured worse than HARD.
     // EXTREME wins on *which* shots it takes and on never being where the last
@@ -234,9 +298,61 @@ export class RivalAI {
     return this.p.reaction;
   }
 
-  /** Preferred fighting distance, in logical pixels. */
-  private get preferredRange(): number {
-    return 300 - this.skill * 90;
+  /**
+   * Preferred fighting distance, in logical pixels.
+   *
+   * Below `rangeIq` this is the old flat number. Above it, the rival works out
+   * where it actually wants to stand from four facts a player reads the same
+   * way: how far its own guns reach, how far the opponent's do, how fast each
+   * machine is, and — with `tempoIq` — who is ahead.
+   *
+   * The reasoning, in order:
+   *
+   * **Reach.** Out-ranging someone is only worth anything if you sit *outside*
+   * their reach and inside your own. Being out-ranged means standing off is a
+   * losing trade by definition, so the answer is to close, not to back away.
+   *
+   * **Speed.** Holding a gap you cannot maintain is worse than not trying: a
+   * slower machine that tries to kite simply gets caught at a bad range with no
+   * boost left. A rival that cannot out-run its opponent commits instead.
+   *
+   * **A shielded opponent has unlimited reach**, since a burst removes the
+   * lifetime that bounds every shot. There is no standing off that.
+   */
+  private preferredRangeFor(self: Combatant, foe: Combatant): number {
+    if (!this.p.rangeIq) return 300 - this.skill * 90;
+
+    const mine = reachOf(self.def);
+    const theirs = reachOf(foe.def);
+    // A burst lifts the lifetime cap off every shot they fire, so their reach is
+    // the whole arena for as long as it lasts. Kiting is not an option.
+    const theirMax = foe.satActive ? Number.POSITIVE_INFINITY : theirs.max;
+    const faster = mine.topSpeed >= theirs.topSpeed * 0.98;
+
+    let want: number;
+    if (mine.max > theirMax * 1.05 && faster) {
+      // Out-range them and able to hold the gap: sit just past their reach.
+      want = Math.min(theirMax * 1.1, mine.max * 0.9);
+    } else if (theirMax > mine.max * 1.05 || !faster) {
+      // Out-ranged, or too slow to keep away from them. Standing off loses;
+      // close to where this machine's own numbers are good.
+      want = Math.max(mine.melee * 1.25, mine.max * 0.32);
+    } else {
+      // Comparable machines: fight inside my own effective envelope.
+      want = mine.max * 0.55;
+    }
+
+    if (this.p.tempoIq) {
+      // Play the score. A lead is worth protecting with distance; a deficit will
+      // not close itself from across the yard.
+      const edge =
+        self.life / self.def.gauges.maxLife - foe.life / foe.def.gauges.maxLife;
+      if (edge > 0.15) want *= 1.22;
+      else if (edge < -0.15) want *= 0.72;
+    }
+
+    // Never so close it is standing inside them, nor further than the arena.
+    return Math.max(self.def.rig.hurtRadius * 3, Math.min(want, 900));
   }
 
   think(
@@ -521,7 +637,7 @@ export class RivalAI {
     threatened: boolean,
     foeCommitted: boolean,
   ): AiTactic {
-    const pref = this.preferredRange;
+    const pref = this.preferredRangeFor(self, foe);
     const lifeFrac = self.life / self.def.gauges.maxLife;
 
     // Someone hiding behind a guard or a Shield burst is taking a fraction of
@@ -584,7 +700,7 @@ export class RivalAI {
         // made faster tiers move *worse*, and inverted the whole difficulty
         // ladder — EXTREME lost to HARD and NORMAL lost to EASY.
         my = this.strafeDir;
-        mx = dist > this.preferredRange ? sx : -sx;
+        mx = dist > this.preferredRangeFor(self, foe) ? sx : -sx;
         break;
       case AiTactic.Hold:
         mx = 0;
@@ -622,22 +738,13 @@ export class RivalAI {
       my = self.y > arenaH * 0.5 ? -1 : 1;
     }
 
-    // Coming straight down the opponent's nose is the easiest thing in the game
-    // to shoot. At EXTREME an approach carries a vertical component so it
-    // arrives off the firing axis — the same closing distance, a worse angle to
-    // be led from.
-    // ...but only while they are actually shooting. Breaking vertical on *every*
-    // approach just makes every approach diagonal, which closes more slowly and
-    // measured as a net loss; the angle is only worth the distance when there is
-    // something being aimed down it.
-    if (
-      this.p.offAxisApproach &&
-      this.tactic === AiTactic.Approach &&
-      my === 0 &&
-      foe.act === ActState.Attack
-    ) {
-      my = self.y > foe.y ? -1 : 1;
-    }
+    // There was an off-axis approach here — carry a vertical component so the
+    // closing run does not come straight down the opponent's nose. It measured
+    // as a net loss twice, unconditionally and gated on the opponent actually
+    // firing, and it is easy to see why: every approach becomes diagonal, which
+    // closes more slowly, and the arena is wide enough that the angle saved less
+    // than the delay cost. `rangeIq` and `closeOnGuard` turned out to be the
+    // approach improvements that pay.
 
     // The boost reserve, applied to every tactic at once rather than restated in
     // each. Sustained thrust is for covering ground; whatever is set aside here

@@ -30,6 +30,25 @@ const MELEE_TRACK_RATE = 9 * DEG;
 const SAT_SPEED_BONUS_HITS = 3;
 
 /**
+ * Projectile lifetime while any saturation burst is up: effectively unlimited.
+ *
+ * Range in this game is `projSpeed * projLife` — a shot expires on a timer, not
+ * at a wall — so "unlimited range" is a lifetime long enough that the timer
+ * never runs out inside the arena. 900 ticks is fifteen seconds, further than
+ * the slowest shot on the roster travels in a whole round.
+ *
+ * Nothing leaks: `MatchSim` culls anything past the arena bounds plus a 260 px
+ * margin, so a shot that flies off the map is removed by geometry rather than by
+ * its timer.
+ *
+ * This applies to **all three modes**, not just Shoot. It is the one thing every
+ * burst has in common — the machine is over-driven, so its guns reach further —
+ * and it changes the shape of a burst rather than only its numbers: PYRE's
+ * CINDER JET normally dies at 300 px and can suddenly cross the yard.
+ */
+const SAT_UNLIMITED_LIFE = 900;
+
+/**
  * Ticks between "the barrier button is locked out" refusals.
  *
  * The lock-out lasts a whole Shield burst, so without a debounce a pilot who
@@ -1655,7 +1674,7 @@ export class Combatant implements FlightState {
         vy: Math.sin(ang) * sp,
         damage: a.damage * dmgScale,
         guardDamage: a.guardDamage * dmgScale,
-        life: a.projLife,
+        life: this.satActive ? Math.max(a.projLife, SAT_UNLIMITED_LIFE) : a.projLife,
         radius: a.projRadius,
         ownerId: this.id,
         team: this.team,
