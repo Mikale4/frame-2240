@@ -1,0 +1,342 @@
+import Phaser from 'phaser';
+import { VIEW_H, VIEW_W } from '../core/GameConfig';
+import { DIFFICULTY_NAMES, MODE_LABELS, session } from '../core/Session';
+import { InputManager } from '../input/InputManager';
+import { bigTitle, smallText } from '../ui/Menu';
+import { ROSTER } from '../data/mechs';
+import { sfx } from '../audio/Sfx';
+
+const FONT = 'ui-monospace, Consolas, monospace';
+const COLS = 4;
+/** Top of the right-hand detail column, clear of the two-row roster grid. */
+const STATS_TOP = 292;
+/** Gap between the stats block and the weapon list below it. */
+const STATS_GAP = 12;
+
+/**
+ * Roster select: pick your machine, then your rival.
+ *
+ * Two passes over the same grid rather than two screens, because the comparison
+ * that matters — how these eight differ — is the same either way, and a second
+ * layout would just be the first one again with a different title.
+ *
+ * Portrait art does not exist yet (docs/PILOT_PORTRAIT_SPEC.md); `BootScene`
+ * generates a per-mech placeholder, so this screen is complete and navigable
+ * now and the real portraits drop in by filename with no change here.
+ */
+export class MechSelectScene extends Phaser.Scene {
+  private input$!: InputManager;
+  private index = 0;
+  /**
+   * Your machine, then the rival's, then how good the rival is.
+   *
+   * Skill sits here rather than in the main menu because it is a property of the
+   * opponent you just chose, not a global setting — you decide who you are
+   * fighting and how hard they fight in one continuous flow.
+   */
+  private picking: 'player' | 'enemy' | 'skill' = 'player';
+  private armAt = 0;
+  private t = 0;
+
+  private cells: Phaser.GameObjects.Container[] = [];
+  private cursor!: Phaser.GameObjects.Rectangle;
+  private portrait!: Phaser.GameObjects.Image;
+  private heading!: Phaser.GameObjects.Text;
+  private nameText!: Phaser.GameObjects.Text;
+  private pilotText!: Phaser.GameObjects.Text;
+  private blurbText!: Phaser.GameObjects.Text;
+  private statsText!: Phaser.GameObjects.Text;
+  private armsText!: Phaser.GameObjects.Text;
+  private lockedText!: Phaser.GameObjects.Text;
+  private skillPanel!: Phaser.GameObjects.Container;
+  private skillText!: Phaser.GameObjects.Text;
+  private skillHint!: Phaser.GameObjects.Text;
+
+  constructor() {
+    super('MechSelect');
+  }
+
+  create(): void {
+    this.input$ = new InputManager(this);
+    this.input$.reset();
+    this.t = 0;
+    this.armAt = 0.18;
+    this.picking = 'player';
+    this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.playerMech));
+    this.cells = [];
+
+    // ---- background ------------------------------------------------------
+    const g = this.add.graphics();
+    for (let i = 0; i < 40; i++) {
+      const t = i / 39;
+      const c = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.ValueToColor(0x05080f),
+        Phaser.Display.Color.ValueToColor(0x181a2c),
+        100,
+        Math.round(t * 100),
+      );
+      g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1);
+      g.fillRect(0, (i * VIEW_H) / 40, VIEW_W, VIEW_H / 40 + 1);
+    }
+
+    this.heading = bigTitle(this, 'SELECT YOUR MECH', 44, 26, '#eaf2ff');
+
+    // ---- portrait and detail panel --------------------------------------
+    const px = VIEW_W * 0.20;
+    const py = VIEW_H * 0.46;
+    this.add.rectangle(px, py, 232, 232, 0x0a0e18, 0.85).setStrokeStyle(2, 0x2b3550);
+    this.portrait = this.add.image(px, py, `pilot_${ROSTER[0].id}`).setDisplaySize(224, 224);
+
+    this.nameText = this.add
+      .text(px, py + 132, '', { fontFamily: FONT, fontSize: '20px', color: '#ffd166', fontStyle: 'bold', align: 'center' })
+      .setOrigin(0.5, 0)
+      .setStroke('#070b12', 5);
+    this.pilotText = this.add
+      .text(px, py + 160, '', { fontFamily: FONT, fontSize: '12px', color: '#8fa3bd', align: 'center' })
+      .setOrigin(0.5, 0)
+      .setStroke('#070b12', 4);
+    this.blurbText = this.add
+      .text(px, py + 198, '', {
+        fontFamily: FONT,
+        fontSize: '11px',
+        color: '#7d8ea8',
+        align: 'center',
+        wordWrap: { width: 250 },
+      })
+      .setOrigin(0.5, 0)
+      .setStroke('#070b12', 4);
+
+    // ---- stats -----------------------------------------------------------
+    // The right column has ~213px between the grid and the control hint, which
+    // is not enough for two generously spaced blocks at fixed positions — the
+    // first version overlapped them. Stats are compressed to four lines and the
+    // weapon list is placed relative to whatever the stats block measures, so
+    // the layout holds even if a mech's numbers wrap differently.
+    const sx = VIEW_W * 0.62;
+    this.statsText = this.add
+      .text(sx, STATS_TOP, '', { fontFamily: FONT, fontSize: '14px', color: '#cfe0f5', lineSpacing: 4 })
+      .setOrigin(0, 0)
+      .setStroke('#070b12', 4);
+    this.armsText = this.add
+      .text(sx, STATS_TOP + 90, '', { fontFamily: FONT, fontSize: '10px', color: '#7d8ea8', lineSpacing: 3 })
+      .setOrigin(0, 0)
+      .setStroke('#070b12', 4);
+
+    // ---- roster grid -----------------------------------------------------
+    this.buildGrid();
+
+    this.cursor = this.add
+      .rectangle(0, 0, 96, 96, 0x000000, 0)
+      .setStrokeStyle(3, 0xffd166)
+      .setDepth(900);
+
+    // Sits under the heading, not at the bottom. Down there it shared a band
+    // with the weapon list, whose width varies per mech — a status line must not
+    // depend on the longest weapon name in the roster to avoid a collision.
+    this.lockedText = this.add
+      .text(VIEW_W / 2, 74, '', { fontFamily: FONT, fontSize: '13px', color: '#7fe0a0', align: 'center' })
+      .setOrigin(0.5)
+      .setStroke('#070b12', 4);
+
+    // Rival skill, shown only on the final stage.
+    this.skillPanel = this.add.container(VIEW_W / 2, VIEW_H * 0.50).setDepth(1000).setVisible(false);
+    const panelBg = this.add
+      .rectangle(0, 0, 460, 150, 0x05080f, 0.94)
+      .setStrokeStyle(3, 0xffd166);
+    this.skillText = this.add
+      .text(0, -22, '', { fontFamily: FONT, fontSize: '26px', color: '#ffd166', fontStyle: 'bold', align: 'center' })
+      .setOrigin(0.5);
+    this.skillHint = this.add
+      .text(0, 30, 'ARROWS  adjust        ENTER  FIGHT', {
+        fontFamily: FONT,
+        fontSize: '12px',
+        color: '#8fa3bd',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+    this.skillPanel.add([panelBg, this.skillText, this.skillHint]);
+
+    smallText(
+      this,
+      'ARROWS  move      ENTER or J  confirm      ESC  back',
+      VIEW_W / 2,
+      VIEW_H - 24,
+      12,
+      '#63748c',
+    );
+
+    this.refresh();
+  }
+
+  /** Two rows of four, each cell a portrait thumbnail over the mech's name. */
+  private buildGrid(): void {
+    const cellW = 108;
+    const cellH = 104;
+    const originX = VIEW_W / 2 - ((COLS - 1) * cellW) / 2 + 40;
+    const originY = VIEW_H * 0.22;
+
+    ROSTER.forEach((def, i) => {
+      const cx = originX + (i % COLS) * cellW;
+      const cy = originY + Math.floor(i / COLS) * cellH;
+      const cell = this.add.container(cx, cy);
+
+      const plate = this.add
+        .rectangle(0, 0, 92, 76, def.tint.secondary, 0.55)
+        .setStrokeStyle(2, def.tint.primary);
+      const thumb = this.add.image(0, -4, `pilot_${def.id}_thumb`).setDisplaySize(60, 60);
+      const label = this.add
+        .text(0, 44, def.name, { fontFamily: FONT, fontSize: '11px', color: '#cfe0f5' })
+        .setOrigin(0.5)
+        .setStroke('#070b12', 4);
+
+      cell.add([plate, thumb, label]);
+      cell.setData('pos', { x: cx, y: cy });
+      this.cells.push(cell);
+    });
+  }
+
+  private refresh(): void {
+    const def = ROSTER[this.index];
+    const pos = this.cells[this.index].getData('pos') as { x: number; y: number };
+    this.cursor.setPosition(pos.x, pos.y - 2);
+
+    this.portrait.setTexture(`pilot_${def.id}`);
+    this.nameText.setText(`${def.codeName}  ${def.name}`);
+    this.nameText.setColor('#' + def.tint.accent.toString(16).padStart(6, '0'));
+    this.pilotText.setText(`${def.pilot}\n${def.faction}`);
+    this.blurbText.setText(def.blurb);
+
+    const bar = (n: number) => '■'.repeat(n) + '□'.repeat(5 - n);
+    this.statsText.setText(
+      [
+        `POWER   ${bar(def.statPower)}`,
+        `SPEED   ${bar(def.statSpeed)}`,
+        `RANGE   ${bar(def.statRange)}`,
+        `LIFE ${def.gauges.maxLife}   BARRIER ${def.gauges.maxBarrier}`,
+      ].join('\n'),
+    );
+    this.armsText.setText(
+      [
+        `MAIN    ${def.main.label}`,
+        `HEAVY   ${def.heavy.label}`,
+        `LANCE   ${def.lance.label}`,
+        `SUB     ${def.sub.label}`,
+        `MELEE   ${def.meleeLock.name}  (${def.meleeLock.hits} hits)`,
+        `DRONE   ${def.supporter.name}`,
+      ].join('\n'),
+    );
+    // Placed after the text is set, so the gap is measured rather than assumed.
+    this.armsText.setY(this.statsText.y + this.statsText.height + STATS_GAP);
+
+    // Dim whichever machine is already committed, so the second pass reads as a
+    // different choice rather than a repeat of the first.
+    this.cells.forEach((cell, i) => {
+      const chosen = this.picking === 'enemy' && ROSTER[i].id === session.playerMech;
+      cell.setAlpha(chosen ? 0.42 : 1);
+    });
+
+    this.heading.setText(
+      this.picking === 'player'
+        ? 'SELECT YOUR MECH'
+        : this.picking === 'enemy'
+          ? 'SELECT YOUR RIVAL'
+          : 'RIVAL SKILL',
+    );
+
+    const mine = ROSTER.find((m) => m.id === session.playerMech)?.name ?? '';
+    const theirs = ROSTER.find((m) => m.id === session.enemyMech)?.name ?? '';
+    this.lockedText.setText(
+      this.picking === 'enemy'
+        ? `YOUR MECH:  ${mine}`
+        : this.picking === 'skill'
+          ? `${mine}   vs   ${theirs}      ${MODE_LABELS[session.mode]}`
+          : '',
+    );
+
+    this.skillPanel.setVisible(this.picking === 'skill');
+    if (this.picking === 'skill') {
+      const d = session.difficulty;
+      this.skillText.setText(`${'★'.repeat(d)}${'☆'.repeat(8 - d)}\n${d}  ${DIFFICULTY_NAMES[d]}`);
+      this.cursor.setVisible(false);
+    } else {
+      this.cursor.setVisible(true);
+    }
+  }
+
+  private move(dx: number, dy: number): void {
+    if (this.picking === 'skill') {
+      // On the last stage the same keys tune the rival instead of moving a cursor.
+      const step = dx + dy;
+      if (step === 0) return;
+      const next = session.difficulty + step;
+      if (next < 1 || next > 8) return;
+      session.difficulty = next;
+      sfx.uiMove();
+      this.refresh();
+      return;
+    }
+    const next = this.index + dx + dy * COLS;
+    if (next < 0 || next >= ROSTER.length) return;
+    this.index = next;
+    sfx.uiMove();
+    this.refresh();
+  }
+
+  private confirm(): void {
+    sfx.uiConfirm();
+    if (this.picking === 'player') {
+      session.playerMech = ROSTER[this.index].id;
+      this.picking = 'enemy';
+      // Land the cursor somewhere other than the machine just taken.
+      if (ROSTER[this.index].id === session.enemyMech) {
+        this.index = (this.index + 1) % ROSTER.length;
+      }
+      this.refresh();
+      return;
+    }
+    if (this.picking === 'enemy') {
+      session.enemyMech = ROSTER[this.index].id;
+      this.picking = 'skill';
+      this.refresh();
+      return;
+    }
+    // Straight into the match, as a fighting game would.
+    sfx.unlock();
+    session.matchIndex++;
+    this.scene.start('Battle');
+  }
+
+  private back(): void {
+    sfx.uiBack();
+    if (this.picking === 'skill') {
+      this.picking = 'enemy';
+      this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.enemyMech));
+      this.refresh();
+      return;
+    }
+    if (this.picking === 'enemy') {
+      // Step back to choosing your own machine rather than leaving outright.
+      this.picking = 'player';
+      this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.playerMech));
+      this.refresh();
+      return;
+    }
+    this.scene.start('Menu');
+  }
+
+  override update(_time: number, delta: number): void {
+    this.t += delta / 1000;
+    if (this.t < this.armAt) return;
+
+    // A slow pulse on the cursor, so the selection is findable at a glance.
+    this.cursor.setAlpha(0.65 + 0.35 * Math.sin(this.t * 5));
+
+    const ui = this.input$.readUi();
+    if (ui.left) this.move(-1, 0);
+    if (ui.right) this.move(1, 0);
+    if (ui.up) this.move(0, -1);
+    if (ui.down) this.move(0, 1);
+    if (ui.confirm) this.confirm();
+    if (ui.cancel) this.back();
+  }
+}

@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { GAME_TITLE, VIEW_H, VIEW_W } from './core/GameConfig';
 import { BootScene } from './scenes/BootScene';
 import { TitleScene } from './scenes/TitleScene';
+import { MenuScene } from './scenes/MenuScene';
+import { MechSelectScene } from './scenes/MechSelectScene';
 import { BattleScene } from './scenes/BattleScene';
 import { ResultsScene } from './scenes/ResultsScene';
 import { sfx } from './audio/Sfx';
@@ -49,7 +51,7 @@ try {
       antialias: true,
       powerPreference: 'high-performance',
     },
-    scene: [BootScene, TitleScene, BattleScene, ResultsScene],
+    scene: [BootScene, TitleScene, MenuScene, MechSelectScene, BattleScene, ResultsScene],
   });
 
   // Debug handle: lets the browser console (and automated checks) inspect the

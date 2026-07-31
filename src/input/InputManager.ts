@@ -27,6 +27,9 @@ export interface UiEdges {
   toggleHitboxes: boolean;
   up: boolean;
   down: boolean;
+  /** Horizontal menu movement, for grid layouts such as the roster select. */
+  left: boolean;
+  right: boolean;
 }
 
 const AXIS_DEADZONE = 0.35;
@@ -52,6 +55,8 @@ export class InputManager {
     toggleHitboxes: false,
     up: false,
     down: false,
+    left: false,
+    right: false,
   };
 
   padConnected = false;
@@ -173,6 +178,8 @@ export class InputManager {
       toggleHitboxes: this.active('debugHitboxes', pad),
       up: this.active('up', pad),
       down: this.active('down', pad),
+      left: this.active('left', pad),
+      right: this.active('right', pad),
     };
 
     const edges = {} as UiEdges;

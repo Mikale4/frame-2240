@@ -1,23 +1,26 @@
 import Phaser from 'phaser';
 import { GAME_SUBTITLE, GAME_TITLE, GAME_VERSION, VIEW_H, VIEW_W } from '../core/GameConfig';
-import { DIFFICULTY_NAMES, MODE_LABELS, session, type MatchMode } from '../core/Session';
 import { InputManager } from '../input/InputManager';
-import { Menu, bigTitle, smallText } from '../ui/Menu';
-import { BindingsPanel } from '../ui/BindingsPanel';
+import { bigTitle, smallText } from '../ui/Menu';
 import { MECHS } from '../data/mechs';
 import { sfx } from '../audio/Sfx';
 import { PART_SCALE } from '../render/MechRenderer';
+import { partTexture } from '../render/PartTexture';
 
-const MODES: MatchMode[] = ['vsCpu', 'aiVsAi', 'training'];
-
-/** Title screen: mode, difficulty, controls, and a slow parade of both mechs. */
+/**
+ * Attract screen: title art, a slow parade of mechs, and nothing to decide.
+ *
+ * Every option used to live here, which made the first thing a player saw a
+ * settings form. The options now live in `MenuScene`; this screen exists to be
+ * looked at, and any button moves on.
+ */
 export class TitleScene extends Phaser.Scene {
   private input$!: InputManager;
-  private menu!: Menu;
-  private bindingsPanel?: BindingsPanel;
-  private modeIdx = 0;
   private t = 0;
   private mechGroups: Phaser.GameObjects.Container[] = [];
+  private prompt!: Phaser.GameObjects.Text;
+  /** Blocks input for a beat so the button that returned here cannot re-enter. */
+  private armAt = 0;
 
   constructor() {
     super('Title');
@@ -26,11 +29,11 @@ export class TitleScene extends Phaser.Scene {
   create(): void {
     this.input$ = new InputManager(this);
     this.input$.reset();
-    this.modeIdx = Math.max(0, MODES.indexOf(session.mode));
     // Field initialisers do not re-run on a scene restart, so clear this or
     // returning to the title would animate the previous visit's dead containers.
     this.mechGroups = [];
     this.t = 0;
+    this.armAt = 0.25;
 
     // ---- background ------------------------------------------------------
     const g = this.add.graphics();
@@ -51,61 +54,30 @@ export class TitleScene extends Phaser.Scene {
     mid.setTint(0x6d7c9c).setAlpha(0.5);
 
     // ---- mech showcase ---------------------------------------------------
-    this.showcase('halcyon', VIEW_W * 0.17, VIEW_H * 0.50, 1);
-    this.showcase('nocturne', VIEW_W * 0.84, VIEW_H * 0.50, -1);
+    this.showcase('halcyon', VIEW_W * 0.17, VIEW_H * 0.52, 1);
+    this.showcase('nocturne', VIEW_W * 0.84, VIEW_H * 0.52, -1);
 
     // ---- titles ----------------------------------------------------------
-    bigTitle(this, GAME_TITLE, 74, 62, '#eaf2ff');
-    const sub = bigTitle(this, GAME_SUBTITLE, 118, 30, '#ffd166');
+    bigTitle(this, GAME_TITLE, 96, 74, '#eaf2ff');
+    const sub = bigTitle(this, GAME_SUBTITLE, 144, 30, '#ffd166');
     sub.setLetterSpacing(10);
-    smallText(this, 'ORIGINAL AERIAL MECHA COMBAT', VIEW_W / 2, 146, 12, '#7d8ea8');
+    smallText(this, 'ORIGINAL AERIAL MECHA COMBAT', VIEW_W / 2, 174, 12, '#7d8ea8');
 
-    // ---- menu ------------------------------------------------------------
-    this.menu = new Menu(
-      this,
-      [
-        {
-          label: 'MODE',
-          value: () => MODE_LABELS[MODES[this.modeIdx]],
-          onSelect: () => {
-            this.modeIdx = (this.modeIdx + 1) % MODES.length;
-            session.mode = MODES[this.modeIdx];
-          },
-        },
-        {
-          label: 'RIVAL SKILL',
-          value: () => `${session.difficulty}  ${DIFFICULTY_NAMES[session.difficulty]}`,
-          onSelect: () => {
-            session.difficulty = (session.difficulty % 8) + 1;
-          },
-        },
-        { label: 'LAUNCH', onSelect: () => this.launch() },
-        { label: 'CONTROLS', onSelect: () => this.toggleControls() },
-        {
-          label: 'AUDIO',
-          value: () => (session.muted ? 'MUTED' : 'ON'),
-          onSelect: () => {
-            session.muted = !session.muted;
-            sfx.setMuted(session.muted);
-          },
-        },
-      ],
-      VIEW_W / 2,
-      VIEW_H - 158,
-      { size: 20, gap: 30 },
-    );
+    // ---- press start -----------------------------------------------------
+    this.prompt = this.add
+      .text(VIEW_W / 2, VIEW_H - 118, 'PRESS  START', {
+        fontFamily: 'ui-monospace, Consolas, monospace',
+        fontSize: '26px',
+        color: '#ffd166',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5, 0.5)
+      .setStroke('#070b12', 6)
+      .setLetterSpacing(4)
+      .setDepth(1200);
 
-    smallText(
-      this,
-      'ARROWS / W S  select      ENTER or J  confirm',
-      VIEW_W / 2,
-      VIEW_H - 22,
-      12,
-      '#63748c',
-    );
+    smallText(this, 'ENTER  /  J  /  GAMEPAD', VIEW_W / 2, VIEW_H - 78, 12, '#63748c');
     smallText(this, `v${GAME_VERSION}`, VIEW_W - 12, VIEW_H - 10, 10, '#3f4c5e', [1, 1]);
-
-    this.buildControls();
   }
 
   /** Builds a static assembled mech from its part sprites for the title art. */
@@ -118,7 +90,8 @@ export class TitleScene extends Phaser.Scene {
     const nodes = new Map<string, Phaser.GameObjects.Container>();
     for (const part of def.rig.parts) {
       const c = this.add.container(part.x, part.y);
-      const img = this.add.image(0, 0, `mech_${mechId}_${part.name}`);
+      const tex = partTexture(this, mechId, part.name);
+      const img = this.add.image(0, 0, tex.key, tex.frame);
       img.setScale(PART_SCALE);
       c.add(img);
       nodes.set(part.name, c);
@@ -141,7 +114,7 @@ export class TitleScene extends Phaser.Scene {
     root.setData('nodes', nodes);
     this.mechGroups.push(root);
 
-    const label = this.add
+    this.add
       .text(x, y + 96, `${def.codeName}\n${def.name}`, {
         fontFamily: 'ui-monospace, Consolas, monospace',
         fontSize: '15px',
@@ -151,51 +124,10 @@ export class TitleScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0)
       .setStroke('#070b12', 5);
-    this.add
-      .text(x, y + 136, `PWR ${'●'.repeat(def.statPower)}${'○'.repeat(5 - def.statPower)}\nSPD ${'●'.repeat(def.statSpeed)}${'○'.repeat(5 - def.statSpeed)}\nRNG ${'●'.repeat(def.statRange)}${'○'.repeat(5 - def.statRange)}`, {
-        fontFamily: 'ui-monospace, Consolas, monospace',
-        fontSize: '11px',
-        color: '#8fa3bd',
-        align: 'center',
-      })
-      .setOrigin(0.5, 0)
-      .setStroke('#070b12', 4);
-    void label;
-  }
-
-  private buildControls(): void {
-    this.bindingsPanel = new BindingsPanel(this, () => {
-      this.bindingsPanel?.setVisible(false);
-    });
-    this.bindingsPanel.setVisible(false);
-  }
-
-  private toggleControls(): void {
-    if (!this.bindingsPanel) return;
-    this.bindingsPanel.setVisible(!this.bindingsPanel.isOpen);
-  }
-
-  /** First connected pad, guarded; the bindings panel captures pad buttons too. */
-  private pad(): Phaser.Input.Gamepad.Gamepad | null {
-    try {
-      const gp = this.input.gamepad;
-      if (!gp || gp.total === 0) return null;
-      const p = gp.pad1 ?? gp.getPad(0) ?? null;
-      return p && p.connected ? p : null;
-    } catch {
-      return null;
-    }
-  }
-
-  private launch(): void {
-    sfx.unlock();
-    session.matchIndex++;
-    this.scene.start('Battle');
   }
 
   override update(_time: number, delta: number): void {
     this.t += delta / 1000;
-    const ui = this.input$.readUi();
 
     // Gentle hover so the showcase mechs feel alive.
     this.mechGroups.forEach((m, i) => {
@@ -203,16 +135,16 @@ export class TitleScene extends Phaser.Scene {
       m.rotation = Math.sin(this.t * 0.9 + i) * 0.02;
     });
 
-    // While the rebinding panel is open it owns all input: it reads key edges
-    // directly so that rebinding a menu key cannot also trigger the menu.
-    if (this.bindingsPanel?.isOpen) {
-      this.bindingsPanel.update(this.pad());
-      return;
-    }
+    // Slow pulse rather than a hard blink: readable, and it never disappears at
+    // the moment someone looks at it.
+    this.prompt.setAlpha(0.55 + 0.45 * Math.sin(this.t * 3.4));
 
-    if (ui.up) this.menu.move(-1);
-    if (ui.down) this.menu.move(1);
-    if (ui.confirm) this.menu.confirm();
-    this.menu.update();
+    if (this.t < this.armAt) return;
+    const ui = this.input$.readUi();
+    if (ui.confirm) {
+      sfx.unlock();
+      sfx.uiConfirm();
+      this.scene.start('Menu');
+    }
   }
 }
