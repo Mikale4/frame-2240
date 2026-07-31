@@ -66,41 +66,42 @@ mech select → battle → results, with 8 mechs, full audio, and real art.
 
 ---
 
-## 4. THE 174 UNCOMMITTED FILES — read this
+## 4. Git state — all committed
 
-Nothing has been committed all session. `HEAD` is still **`87e89be`**
-("Add the audio session context doc…"). This is the biggest risk in the project
-right now.
+**Working tree is clean.** The session's work landed as eight commits on
+`master`, oldest first:
 
-**53 modified, 121 untracked.** Breakdown:
+| Commit | |
+| --- | --- |
+| `abc0066` | Generate the sound effect set and play it from the game |
+| `a36ce70` | Expand the roster from two mechs to eight |
+| `6625841` | Model the six new chassis, their weapons and their melee hardware |
+| `b3b6283` | Pack mech sprites into one texture atlas per chassis |
+| `6692a61` | Give each melee weapon its own motion, and each chassis its own size |
+| `3ffd851` | Add the eight pilot portraits |
+| `6901e51` | Restructure the front end as a fighting game |
+| `abc9f9c` | Wire the new assets into the battle, and drop the lock-on toggle |
 
-* `assets/sprites/mechs/` — **129 files**. 112 regenerated part PNGs, 8 atlas
-  PNGs, 8 atlas JSONs, `manifest.json`.
-* `assets/sprites/pilots/` — 16 processed portraits + 8 raw sources in `_raw/`.
-* `assets/audio/` — 71 MP3s + `_audition.html`.
-* `assets/blender/mechs.blend` — now 1 MB (8 mechs, was 386 KB).
-* **New source**: `SoundBank.ts`, `rosterExtra.ts`, `PartTexture.ts`,
-  `MechSelectScene.ts`, `MenuScene.ts`, `roster.test.ts`, `soundbank.test.ts`,
-  `node-env.d.ts`, `tools/pack_atlases.py`, `tools/blender/build_portraits.py`.
-* **Modified source**: `Sfx.ts`, `Combatant.ts`, `MatchSim.ts`, `mechs.ts`,
-  `DebugOverlay.ts`, `InputManager.ts`, `main.ts`, `MechDef.ts`,
-  `MechRenderer.ts`, `RigRotation.ts`, `BattleScene.ts`, `BootScene.ts`,
-  `TitleScene.ts`, `Hud.ts`, `Menu.ts`, `build_mechs.py`, `vite.config.ts`,
-  plus `motion.test.ts` / `rig.test.ts`.
+Nothing is pushed — all local. Git identity is unset globally, so commits passed
+`Claude <noreply@anthropic.com>` per command to match the existing history;
+do the same rather than editing the user's global config.
 
-**Suggested commit split** (the work is genuinely separable):
+**Caveat:** only the final tree was verified to build. Several files carry
+changes for more than one concern (`MechDef.ts` holds motion, cue and scale
+types; `BootScene.ts` holds audio, atlas and portrait loading), so an individual
+commit may not build standalone. Fine for review, worth knowing before bisecting.
 
-1. Audio: 71 SFX + `SoundBank.ts` + `Sfx.ts` + `soundbank.test.ts` + cue sheet.
-2. Roster data: `rosterExtra.ts` + `mechs.ts` + `MechDef.ts` + `roster.test.ts`.
-3. Mech art: Blender script + 112 sprites + `.blend` + atlases + `pack_atlases.py`.
-4. UI: `MenuScene`, `MechSelectScene`, `TitleScene`, `Menu.ts`, `InputManager.ts`.
-5. Melee motion: `Combatant.ts`, `RigRotation.ts`, `MechRenderer.ts`, `MechDef.ts`.
-6. Portraits: 16 PNGs + spec doc + `build_portraits.py`.
-7. Perf/controls: atlas wiring, `PartTexture.ts`, lock removal, dash overlap.
+### Two things that need a decision
 
-`build_portraits.py` produces helmeted 3D busts and is **superseded** — the real
-portraits are hand-authored. Keep it or delete it, but do not treat it as the
-portrait pipeline.
+* **`assets/sprites/pilots/_raw/` (14 MB) is untracked** and gitignored. Those
+  are the delivered portrait sources and **cannot be regenerated** — ChatGPT will
+  not reproduce them. They need backing up, or committing if the user decides
+  that much binary belongs in history. Adding later is trivial; removing later
+  needs a history rewrite, which is why it was left out.
+* **`tools/blender/build_portraits.py` is superseded.** It builds helmeted 3D
+  busts, which was the wrong approach — the real portraits are hand-authored
+  pixel art. It is committed as a record of the wrong turn. Do not treat it as
+  the portrait pipeline; delete it if it is only causing confusion.
 
 ---
 
