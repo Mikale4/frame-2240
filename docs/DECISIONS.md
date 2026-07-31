@@ -892,3 +892,53 @@ passive it carries.
 re-renders the eight drone sprites and patches their manifest rows, leaving the
 other 104 part renders untouched. A full `build_all` to change one part is slow
 and is a good way to disturb art that was already correct.
+
+---
+
+### D46 — Each saturation mode makes one resource free, and burning out hurts
+
+**Decision.** The three modes were reshaped around a single idea: for the length
+of the burst, one resource stops costing anything. Shield frees the barrier,
+Shoot frees energy, Speed frees boost. When the meter empties the pilot is
+stunned for 38 ticks and cannot barrier-cancel out of it.
+
+**Why the shared shape.** The old modes were three unrelated bags of
+multipliers — longer i-frames, ×1.5 damage, ×1.75 movement — and nothing tied
+them together or told you what a mode was *for*. "Your X is free right now" is
+one sentence per mode, it is legible mid-fight, and it makes each mode change
+how you play rather than only how hard you hit.
+
+* **Shield** — the guard comes up and stays up, the gauge cannot fall, and you
+  can attack from behind it. The projectile-erasing bubble stays as well. Still
+  drains the meter at double rate, which is now the price of getting the most.
+* **Shoot** — either weapon button fires main *and* heavy together, through a
+  second attack slot that only this mode ever loads. Nothing costs energy.
+* **Speed** — thrust is free, boost and dash run at ×1.85 while ordinary flight
+  and walking get a smaller ×1.25, and every melee sequence gains three swings
+  on top of the chassis's own count. Splitting the movement multiplier in two
+  was necessary: one number could make the thrusters dramatic or ordinary flight
+  controllable, never both.
+
+**Why a burnout.** Saturation used to end with no downside, so the only question
+was *when* to spend it, never whether. A stun at the end makes the last second
+of a burst a liability you have to plan around. It is deliberately the one stun
+with no barrier-cancel escape — every other stun is something an opponent did to
+you, whereas this is the bill for a burst you chose.
+
+### D47 — Saturation activation moved to Boost + Barrier
+
+**Decision.** The combo is Boost + Barrier, and it accepts "both held, either
+pressed this tick" rather than requiring a same-tick press.
+
+**Why.** It was Main + Heavy, and it was very nearly impossible to trigger by
+hand. Whichever weapon button landed first immediately began its own attack, and
+the activation check lived inside `tryStartAction`, which is never reached while
+an attack is running — so the second button was never seen. Only a press of both
+inside one 16.7ms tick worked. This was found by trying to use the feature in
+the live game and watching a full meter sit there unspent.
+
+Boost and Barrier start no attack, so the combination has nothing to race, and
+it leaves the weapon buttons free during a fight. The check now runs from `step`
+ahead of the attack dispatch, and the activation tick suppresses its own dash
+and skips `tryStartAction`, so opening a burst never also spends a dash or fires
+a barrier burst.
