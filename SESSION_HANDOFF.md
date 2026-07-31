@@ -42,7 +42,7 @@ results, 8 mechs, full audio, real art, pilot dialogue.
 
 ## 3. Current status — verified
 
-* **381 tests pass** (18 files), typecheck clean, production build clean.
+* **383 tests pass** (18 files), typecheck clean, production build clean.
 * Verified in-game at 61 fps: title → menu → select → battle → results →
   rematch → quit to title, with no console errors. Projectiles, muzzle flashes,
   impacts, explosions, barriers, saturation cutscenes and banter all render.
@@ -157,23 +157,45 @@ Came out of reading the barrier system end to end for the user. Four changes,
 * **The rival respects the lock-out.** `shouldBarrier` also gates the AI's
   attack, so every tick it reached for a barrier it could not have, it skipped
   its own offence for a shot it never fired.
+* **The refusal is audible.** A press during the lock-out emits `assistDenied`
+  (grey hex flash plus a negative buzz), debounced to one every 0.4 s so mashing
+  does not machine-gun it. A silently refused press is how a balance decision
+  gets reported as a bug. The event name has drifted into meaning "unavailable"
+  and now covers three unrelated refusals; renaming it would mean renaming the
+  audio cue key and the file behind it.
 
 ---
 
 ## 5. Open questions the user still owes an answer on
 
-1. **A forced SHIELD burst is very short** — and D57 has changed the arithmetic
-   behind this question without answering it. Shield now takes 95 % off gunfire
-   and status chip, 80 % off a piercing lance and 70 % off melee, so a second of
-   it is worth far more than it was when this was first raised; the "net loss
-   almost always" conclusion below predates that and should be re-checked before
-   acting on it.
+1. **A forced SHIELD burst is a losing trade until 75 % meter.** Re-derived by
+   measurement rather than estimate, after D57/D58 changed what a second of
+   Shield is worth. Ticks of burst against the ticks of helplessness that follow,
+   plus the 5 % max-life overheat cost:
 
-   Shield already drains the meter at
-   double rate, so forcing at ~35 % gives ~1 s of burst against a 2 s overheat —
-   a net loss almost always, where Shoot and Speed get ~2.4 s. May be the correct
-   punishment for gambling with the defensive mode, or the double drain may want
-   to not stack with the partial scaling.
+   | Meter | SHIELD burst | SHOOT / SPEED burst | Stun | Life | SHIELD net |
+   | --- | --- | --- | --- | --- | --- |
+   | 25 % | 53 (0.88 s) | 105 (1.75 s) | 119 | 50 | **-66** |
+   | 35 % | 74 (1.23 s) | 147 (2.45 s) | 119 | 50 | **-45** |
+   | 50 % | 105 (1.75 s) | 210 (3.50 s) | 119 | 50 | **-14** |
+   | 75 % | 158 (2.63 s) | 315 (5.25 s) | 119 | 50 | +39 |
+   | 100 % | 210 (3.50 s) | 420 (7.00 s) | 59 | 0 | +151 |
+
+   Shoot and Speed break even at 25 % and are positive from 35 %. Shield stays
+   negative until 75 %: you are helpless for longer than you were protected, and
+   pay 50 life on top. D57 raised the *value per second* a great deal but changed
+   no duration, so the shape is unchanged - and higher value cannot rescue it,
+   because the stun window is both longer than the protected one and strictly
+   worse than neutral.
+
+   Three ways to go. **(a)** Leave it: after D57 a *full* Shield burst is the
+   strongest defensive tool in the game, and this asymmetry is what forces
+   patience with it. **(b)** Stop the double drain stacking with the partial
+   scaling, capped at the full-burst duration so forcing at 99 % cannot beat
+   waiting. **(c)** Scale the overheat by the burst actually granted, so a short
+   burst earns a short stun - mode-independent, self-balancing, and the tidiest
+   of the three. **No answer yet.**
+
 2. **Audio duration targets.** `docs/AUDIO_CUE_SHEET.md` lists targets far
    shorter than what was generated (`fire_vulcan` wants 0.10 s, the file has
    audio across its full 0.52 s). The normalise pass removed **only silence** on

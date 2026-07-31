@@ -418,6 +418,36 @@ describe('saturation — Shield', () => {
     expect(threatened(true).barrier, 'rival pressed barrier during Shield').toBe(0);
   });
 
+  it('says so when the button is refused, instead of eating the press', () => {
+    // A refused press that makes no sound is how a balance decision gets
+    // reported as a bug. It is debounced, though: the lock-out lasts a whole
+    // burst, and a masher should not get a machine-gun of denial blips.
+    const c = make();
+    activate(c, SatMode.Shield);
+    const k = ctx();
+
+    c.step(press(Btn.Barrier), null, W, H, k.spawns, k.events);
+    const denials = () => k.events.filter((e) => e.t === 'assistDenied').length;
+    expect(denials(), 'first refusal was silent').toBe(1);
+
+    // Mashing for the next few ticks says nothing further.
+    for (let i = 0; i < 12; i++) c.step(press(Btn.Barrier), null, W, H, k.spawns, k.events);
+    expect(denials(), 'refusal was not debounced').toBe(1);
+
+    // ...but it speaks again once the debounce lapses.
+    for (let i = 0; i < 20; i++) c.step(emptyInput(), null, W, H, k.spawns, k.events);
+    c.step(press(Btn.Barrier), null, W, H, k.spawns, k.events);
+    expect(denials()).toBe(2);
+  });
+
+  it('does not refuse a barrier press when there is no burst up', () => {
+    const c = make();
+    const k = ctx();
+    c.step(press(Btn.Barrier), null, W, H, k.spawns, k.events);
+    expect(k.events.filter((e) => e.t === 'assistDenied')).toHaveLength(0);
+    expect(k.events.some((e) => e.t === 'barrier'), 'the burst should have fired').toBe(true);
+  });
+
   it('hands the barrier button back when the burst ends', () => {
     const c = make();
     activate(c, SatMode.Shield);

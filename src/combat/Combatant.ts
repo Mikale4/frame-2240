@@ -30,6 +30,15 @@ const MELEE_TRACK_RATE = 9 * DEG;
 const SAT_SPEED_BONUS_HITS = 3;
 
 /**
+ * Ticks between "the barrier button is locked out" refusals.
+ *
+ * The lock-out lasts a whole Shield burst, so without a debounce a pilot who
+ * mashes the button gets a machine-gun of denial blips. One every 0.4s says the
+ * same thing and stops saying it.
+ */
+const BARRIER_DENIED_COOLDOWN = 24;
+
+/**
  * Fraction of a hit that lands while a Shield burst is up, by how it arrives.
  *
  * These are **totals against raw damage**, not modifiers stacked onto the guard:
@@ -343,6 +352,8 @@ export class Combatant implements FlightState {
    * every trade into a parry. Only a deliberate burst opens this one.
    */
   repelTicks = 0;
+  /** Debounce on the barrier lock-out refusal. See BARRIER_DENIED_COOLDOWN. */
+  barrierDeniedCooldown = 0;
   /**
    * Melee hits taken since this machine last had control.
    *
@@ -749,6 +760,7 @@ export class Combatant implements FlightState {
     const passive = this.dronePassive;
 
     if (this.invuln > 0) this.invuln--;
+    if (this.barrierDeniedCooldown > 0) this.barrierDeniedCooldown--;
     if (this.repelTicks > 0) this.repelTicks--;
     if (this.hitstun <= 0 && this.guardBreakStun <= 0) this.meleeHitsTaken = 0;
     if (this.meleeLockout > 0) this.meleeLockout--;
@@ -992,6 +1004,20 @@ export class Combatant implements FlightState {
     if (!this.shieldActive && isPressed(input, Btn.Barrier) && this.barrier >= d.barrier.cost) {
       this.startBarrier(this.guarding, events);
       return;
+    }
+
+    // ...and say so when it is locked out, rather than letting a deliberate rule
+    // read as a dropped input. A refused press that makes no sound is the single
+    // most common way a balance decision gets reported as a bug.
+    //
+    // Reuses `assistDenied`, which already covers a refusal that has nothing to
+    // do with the assist (see `tryActivateSaturation`). The name has drifted into
+    // meaning "the thing you asked for is unavailable"; renaming it would mean
+    // renaming the audio cue key and the file behind it, which is a bigger job
+    // than it looks.
+    if (this.shieldActive && isPressed(input, Btn.Barrier) && this.barrierDeniedCooldown <= 0) {
+      this.barrierDeniedCooldown = BARRIER_DENIED_COOLDOWN;
+      events.push({ t: 'assistDenied', x: this.x, y: this.y, ownerId: this.id });
     }
 
     // Holding barrier without a burst is a guard stance. Shield saturation keeps
