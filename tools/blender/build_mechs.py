@@ -1,4 +1,4 @@
-﻿"""
+"""
 Babel Sword: Reignition - procedural multipart mech builder.
 
 Run inside Blender (the project drives it through the Blender MCP server):
@@ -150,6 +150,162 @@ CHASSIS = {
             "rightThruster": (-34, 16, -0.14),
         },
     },
+    # --- roster expansion -------------------------------------------------
+    # Pivots below are WORLD logical pixels; src/data/rosterExtra.ts stores the
+    # same points as offsets relative to each part's parent. So e.g. VESPER's
+    # mainWeapon world (61,13) = rightArm (15,5) + child (46,8). Change one and
+    # the other must follow, or the sprite and the hitbox disagree.
+
+    # Marksman: slimmest hull, longest legs, hardest pitch, oversized railgun.
+    "vesper": {
+        "pitch": 26.0,
+        "hull": (0.58, 0.32, 0.28),
+        "leg": {"thigh": 0.50, "shin": 0.54, "w": 0.14, "foot": 0.30, "hip": 0.34},
+        "weapon": "railgun",
+        "booster": "twin",
+        "pod": "compact",
+        "blade": "bayonet",
+        "pivots": {
+            "core": (0, 0, 0.0),
+            "head": (23, -9, -0.05),
+            "backpack": (-28, -20, 0.05),
+            "lowerBody": (-8, 28, 0.0),
+            "legNear": (-8, 29, -0.08),
+            "legFar": (-8, 29, 0.08),
+            "leftArm": (-2, -3, 0.19),
+            "subWeapon": (-5, -27, 0.19),
+            "rightArm": (15, 5, -0.19),
+            "mainWeapon": (61, 13, -0.19),
+            "meleeWeapon": (41, 11, -0.21),
+            "leftThruster": (-38, 0, 0.17),
+            "rightThruster": (-34, 12, -0.17),
+        },
+    },
+    # Siege walker: widest and heaviest, stubby legs, near-level stance, mortar.
+    "terramoth": {
+        "pitch": 10.0,
+        "hull": (0.88, 0.54, 0.44),
+        "leg": {"thigh": 0.30, "shin": 0.32, "w": 0.26, "foot": 0.46, "hip": 0.52},
+        "weapon": "mortar",
+        "booster": "quad",
+        "pod": "rack",
+        "blade": "pile",
+        "pivots": {
+            "core": (0, 0, 0.0),
+            "head": (20, 2, -0.05),
+            "backpack": (-34, -10, 0.05),
+            "lowerBody": (-12, 22, 0.0),
+            "legNear": (-12, 23, -0.11),
+            "legFar": (-12, 23, 0.11),
+            "leftArm": (-6, 2, 0.24),
+            "subWeapon": (-14, -26, 0.24),
+            "rightArm": (20, 12, -0.24),
+            "mainWeapon": (62, 16, -0.24),
+            "meleeWeapon": (52, 14, -0.26),
+            "leftThruster": (-44, 6, 0.15),
+            "rightThruster": (-38, 18, -0.15),
+        },
+    },
+    # Skirmisher: thinnest frame, steepest pitch, wing boosters, twin SMGs.
+    "cirrus": {
+        "pitch": 30.0,
+        "hull": (0.50, 0.28, 0.24),
+        "leg": {"thigh": 0.44, "shin": 0.48, "w": 0.12, "foot": 0.26, "hip": 0.30},
+        "weapon": "smg",
+        "booster": "wing",
+        "pod": "compact",
+        "blade": "twindagger",
+        "pivots": {
+            "core": (0, 0, 0.0),
+            "head": (19, -8, -0.045),
+            "backpack": (-22, -16, 0.045),
+            "lowerBody": (-6, 22, 0.0),
+            "legNear": (-6, 23, -0.07),
+            "legFar": (-6, 23, 0.07),
+            "leftArm": (-1, -3, 0.17),
+            "subWeapon": (-3, -23, 0.17),
+            "rightArm": (14, 4, -0.17),
+            "mainWeapon": (46, 11, -0.17),
+            "meleeWeapon": (38, 9, -0.19),
+            "leftThruster": (-32, -2, 0.15),
+            "rightThruster": (-28, 9, -0.15),
+        },
+    },
+    # Bulwark: broad shielded frame, single heavy burner, short-range breach gun.
+    "obelisk": {
+        "pitch": 12.0,
+        "hull": (0.80, 0.50, 0.40),
+        "leg": {"thigh": 0.34, "shin": 0.36, "w": 0.23, "foot": 0.42, "hip": 0.48},
+        "weapon": "breachgun",
+        "booster": "single",
+        "pod": "rack",
+        "blade": "ramshield",
+        "pivots": {
+            "core": (0, 0, 0.0),
+            "head": (21, -1, -0.05),
+            "backpack": (-30, -12, 0.05),
+            "lowerBody": (-10, 24, 0.0),
+            "legNear": (-10, 25, -0.10),
+            "legFar": (-10, 25, 0.10),
+            "leftArm": (-5, 1, 0.22),
+            "subWeapon": (-12, -24, 0.22),
+            "rightArm": (18, 9, -0.22),
+            "mainWeapon": (54, 15, -0.22),
+            "meleeWeapon": (46, 13, -0.24),
+            "leftThruster": (-40, 4, 0.14),
+            "rightThruster": (-34, 15, -0.14),
+        },
+    },
+    # Incendiary brawler: mid-weight, twin burners, wide-mouthed flame projector.
+    "pyre": {
+        "pitch": 18.0,
+        "hull": (0.70, 0.42, 0.34),
+        "leg": {"thigh": 0.40, "shin": 0.44, "w": 0.18, "foot": 0.36, "hip": 0.40},
+        "weapon": "flamer",
+        "booster": "twin",
+        "pod": "rack",
+        "blade": "cleaver",
+        "pivots": {
+            "core": (0, 0, 0.0),
+            "head": (22, -5, -0.05),
+            "backpack": (-27, -17, 0.05),
+            "lowerBody": (-9, 25, 0.0),
+            "legNear": (-9, 26, -0.09),
+            "legFar": (-9, 26, 0.09),
+            "leftArm": (-3, -1, 0.20),
+            "subWeapon": (-8, -25, 0.20),
+            "rightArm": (17, 7, -0.20),
+            "mainWeapon": (51, 15, -0.20),
+            "meleeWeapon": (44, 12, -0.22),
+            "leftThruster": (-37, 2, 0.16),
+            "rightThruster": (-33, 13, -0.16),
+        },
+    },
+    # Disruptor: lean EW frame, wing boosters, antenna mast, arc emitter.
+    "nulltide": {
+        "pitch": 28.0,
+        "hull": (0.54, 0.30, 0.26),
+        "leg": {"thigh": 0.46, "shin": 0.50, "w": 0.13, "foot": 0.28, "hip": 0.32},
+        "weapon": "arc",
+        "booster": "wing",
+        "pod": "compact",
+        "blade": "glaive",
+        "pivots": {
+            "core": (0, 0, 0.0),
+            "head": (20, -10, -0.045),
+            "backpack": (-25, -19, 0.045),
+            "lowerBody": (-7, 23, 0.0),
+            "legNear": (-7, 24, -0.075),
+            "legFar": (-7, 24, 0.075),
+            "leftArm": (-2, -4, 0.18),
+            "subWeapon": (-6, -26, 0.18),
+            "rightArm": (15, 3, -0.18),
+            "mainWeapon": (50, 12, -0.18),
+            "meleeWeapon": (40, 9, -0.20),
+            "leftThruster": (-34, -1, 0.15),
+            "rightThruster": (-30, 11, -0.15),
+        },
+    },
 }
 
 """
@@ -189,6 +345,72 @@ PALETTES = {
         "frame": (0.12, 0.09, 0.09),
         "accent": (0.10, 0.92, 0.86),
         "glow": (1.00, 0.78, 0.18),
+    },
+    # --- roster expansion -------------------------------------------------
+    # Eight machines have to be told apart instantly at gameplay scale, so the
+    # identity hues are spread around the wheel and no two sit adjacent:
+    # azure, crimson, teal, ochre, silver, violet, orange, slate.
+    # These mirror `tint` in src/data/rosterExtra.ts.
+
+    # Teal marksman, sulphur-yellow optics.
+    "vesper": {
+        "primary": (0.18, 0.66, 0.63),
+        "far": (0.05, 0.22, 0.21),
+        "secondary": (0.08, 0.33, 0.35),
+        "trim": (0.84, 0.90, 0.90),
+        "frame": (0.09, 0.13, 0.14),
+        "accent": (0.95, 0.88, 0.30),
+        "glow": (0.50, 0.96, 0.90),
+    },
+    # Ochre siege walker, hazard-amber lamps: industrial plant, not a fighter.
+    "terramoth": {
+        "primary": (0.60, 0.42, 0.18),
+        "far": (0.24, 0.16, 0.07),
+        "secondary": (0.31, 0.20, 0.09),
+        "trim": (0.88, 0.85, 0.78),
+        "frame": (0.14, 0.11, 0.08),
+        "accent": (1.00, 0.76, 0.30),
+        "glow": (1.00, 0.76, 0.30),
+    },
+    # Bare silver skirmisher - the one unpainted machine, cyan running lights.
+    "cirrus": {
+        "primary": (0.85, 0.87, 0.91),
+        "far": (0.40, 0.43, 0.48),
+        "secondary": (0.49, 0.53, 0.60),
+        "trim": (0.96, 0.98, 1.00),
+        "frame": (0.13, 0.15, 0.18),
+        "accent": (0.29, 0.84, 1.00),
+        "glow": (0.74, 0.94, 1.00),
+    },
+    # Violet bulwark with a pale shield glow.
+    "obelisk": {
+        "primary": (0.43, 0.37, 0.66),
+        "far": (0.17, 0.14, 0.30),
+        "secondary": (0.20, 0.17, 0.36),
+        "trim": (0.86, 0.84, 0.92),
+        "frame": (0.11, 0.10, 0.16),
+        "accent": (0.78, 0.71, 1.00),
+        "glow": (0.66, 0.55, 1.00),
+    },
+    # Furnace orange - deliberately clear of NOCTURNE's deep crimson.
+    "pyre": {
+        "primary": (0.91, 0.46, 0.11),
+        "far": (0.36, 0.15, 0.03),
+        "secondary": (0.48, 0.21, 0.04),
+        "trim": (0.92, 0.87, 0.80),
+        "frame": (0.15, 0.10, 0.07),
+        "accent": (1.00, 0.88, 0.40),
+        "glow": (1.00, 0.76, 0.28),
+    },
+    # Near-black slate with electric cyan: the EW frame reads as unlit hardware.
+    "nulltide": {
+        "primary": (0.14, 0.23, 0.29),
+        "far": (0.05, 0.09, 0.12),
+        "secondary": (0.07, 0.11, 0.15),
+        "trim": (0.80, 0.86, 0.90),
+        "frame": (0.08, 0.10, 0.12),
+        "accent": (0.54, 1.00, 0.88),
+        "glow": (0.36, 0.88, 1.00),
     },
 }
 
@@ -1032,6 +1254,127 @@ def build_mech(mech_id, palette_key=None):
         for i in range(3):
             o.append(add_box(f"w_rib{i}", (0.03, 0.16, 0.13),
                              piv + Vector((0.22 + i * 0.11, 0, 0.02)), coll=coll, mat=M_FRAME))
+    elif spec["weapon"] == "railgun":
+        # VESPER: twin accelerator rails over a capacitor block. The silhouette
+        # is almost all barrel - it should read as "outranges you" from across
+        # the arena.
+        o.append(add_box("w_cap", (0.42, 0.22, 0.30), piv + Vector((-0.06, 0, -0.02)),
+                         coll=coll, mat=M_SUB))
+        o.append(add_box("w_capfin", (0.30, 0.26, 0.06), piv + Vector((-0.06, 0, 0.16)),
+                         coll=coll, mat=M_ACC))
+        for i, dz in enumerate((0.075, -0.075)):
+            o.append(add_box(f"w_rail{i}", (1.24, 0.05, 0.05),
+                             piv + Vector((0.76, 0, dz)), coll=coll, mat=M_FRAME))
+        # Accelerator coils stepping down the rails.
+        for i in range(5):
+            o.append(add_cyl(f"w_coil{i}", 0.105 - i * 0.008, 0.07,
+                             piv + Vector((0.30 + i * 0.24, 0, 0)),
+                             (0, math.radians(90), 0), 14, coll=coll,
+                             mat=M_GLOW if i % 2 else M_TRIM))
+        o.append(add_box("w_spine", (1.10, 0.09, 0.09), piv + Vector((0.72, 0, 0)),
+                         coll=coll, mat=M_HULL))
+        o.append(add_cyl("w_muzzle", 0.07, 0.06, piv + Vector((1.40, 0, 0)),
+                         (0, math.radians(90), 0), 16, coll=coll, mat=M_GLOW))
+        o.append(add_box("w_scope", (0.30, 0.06, 0.07), piv + Vector((0.16, 0, 0.20)),
+                         coll=coll, mat=M_FRAME))
+        o.append(add_cyl("w_lens", 0.035, 0.03, piv + Vector((0.32, 0, 0.20)),
+                         (0, math.radians(90), 0), 12, coll=coll, mat=M_ACC))
+        o.append(add_box("w_brace", (0.16, 0.12, 0.20), piv + Vector((-0.24, 0, -0.06)),
+                         coll=coll, mat=M_HULL))
+    elif spec["weapon"] == "mortar":
+        # TERRAMOTH: a short, enormous-bore tube canted upward on recoil rams.
+        # Nothing about it says "aimed" - it says "dropped on you".
+        o.append(add_box("w_breech", (0.46, 0.36, 0.40), piv, coll=coll, mat=M_SUB))
+        o.append(add_box("w_plate", (0.10, 0.40, 0.44), piv + Vector((-0.24, 0, 0)),
+                         coll=coll, mat=M_HULL))
+        o.append(add_cyl("w_tube", 0.20, 0.74, piv + Vector((0.48, 0, 0.10)),
+                         (0, math.radians(76), 0), 20, coll=coll, mat=M_FRAME))
+        o.append(add_cyl("w_mouth", 0.235, 0.10, piv + Vector((0.66, 0, 0.44)),
+                         (0, math.radians(76), 0), 20, coll=coll, cone_r2=0.20, mat=M_HULL))
+        o.append(add_cyl("w_bore", 0.16, 0.04, piv + Vector((0.68, 0, 0.47)),
+                         (0, math.radians(76), 0), 20, coll=coll, mat=M_GLOW))
+        # Recoil rams either side of the tube.
+        for i, dy in enumerate((0.20, -0.20)):
+            o.append(add_cyl(f"w_ram{i}", 0.045, 0.52, piv + Vector((0.34, dy, -0.02)),
+                             (0, math.radians(76), 0), 10, coll=coll, mat=M_TRIM))
+        for i in range(3):
+            o.append(add_box(f"w_shell{i}", (0.12, 0.12, 0.12),
+                             piv + Vector((-0.18, -0.16, -0.20 + i * 0.14)),
+                             coll=coll, mat=M_ACC))
+    elif spec["weapon"] == "smg":
+        # CIRRUS: a matched pair of stubby machine pistols, not one big gun.
+        for i, dy in enumerate((0.11, -0.11)):
+            o.append(add_box(f"w_body{i}", (0.30, 0.09, 0.20),
+                             piv + Vector((0.02, dy, 0.02)), coll=coll, mat=M_SUB))
+            o.append(add_cyl(f"w_bar{i}", 0.036, 0.40, piv + Vector((0.36, dy, 0.04)),
+                             (0, math.radians(90), 0), 10, coll=coll, mat=M_FRAME))
+            o.append(add_cyl(f"w_muz{i}", 0.045, 0.04, piv + Vector((0.58, dy, 0.04)),
+                             (0, math.radians(90), 0), 10, coll=coll, mat=M_GLOW))
+            o.append(add_box(f"w_mag{i}", (0.09, 0.07, 0.22),
+                             piv + Vector((-0.02, dy, -0.16)), (0, math.radians(-10), 0),
+                             coll=coll, mat=M_ACC))
+            o.append(add_box(f"w_vent{i}", (0.16, 0.10, 0.04),
+                             piv + Vector((0.20, dy, 0.14)), coll=coll, mat=M_TRIM))
+        o.append(add_box("w_yoke", (0.16, 0.30, 0.10), piv + Vector((-0.10, 0, 0.02)),
+                         coll=coll, mat=M_HULL))
+    elif spec["weapon"] == "breachgun":
+        # OBELISK: wide-bore siege shotgun behind a slab of shield plate. The
+        # plate is the point - this chassis advances behind its own gun.
+        o.append(add_box("w_body", (0.40, 0.24, 0.30), piv, coll=coll, mat=M_SUB))
+        o.append(add_box("w_shield", (0.12, 0.46, 0.56), piv + Vector((0.18, 0, 0.04)),
+                         (0, math.radians(-6), 0), coll=coll, mat=M_HULL))
+        o.append(add_box("w_boss", (0.08, 0.18, 0.22), piv + Vector((0.26, 0, 0.04)),
+                         coll=coll, mat=M_ACC))
+        o.append(add_cyl("w_bore", 0.155, 0.46, piv + Vector((0.50, 0, -0.06)),
+                         (0, math.radians(90), 0), 18, coll=coll, mat=M_FRAME))
+        o.append(add_cyl("w_choke", 0.185, 0.10, piv + Vector((0.76, 0, -0.06)),
+                         (0, math.radians(90), 0), 18, coll=coll, cone_r2=0.165, mat=M_TRIM))
+        o.append(add_cyl("w_muzzle", 0.13, 0.04, piv + Vector((0.83, 0, -0.06)),
+                         (0, math.radians(90), 0), 18, coll=coll, mat=M_GLOW))
+        o.append(add_box("w_pump", (0.24, 0.10, 0.09), piv + Vector((0.44, 0, -0.22)),
+                         coll=coll, mat=M_FRAME))
+    elif spec["weapon"] == "flamer":
+        # PYRE: fuel bottles feeding a flared projector with a lit pilot flame.
+        o.append(add_box("w_body", (0.34, 0.20, 0.24), piv, coll=coll, mat=M_SUB))
+        for i, dy in enumerate((0.14, -0.14)):
+            o.append(add_cyl(f"w_tank{i}", 0.095, 0.42, piv + Vector((-0.20, dy, -0.04)),
+                             (0, math.radians(90), 0), 14, coll=coll, mat=M_ACC))
+            o.append(add_cyl(f"w_cap{i}", 0.06, 0.05, piv + Vector((-0.42, dy, -0.04)),
+                             (0, math.radians(90), 0), 10, coll=coll, mat=M_FRAME))
+        o.append(add_cyl("w_neck", 0.075, 0.44, piv + Vector((0.38, 0, 0.02)),
+                         (0, math.radians(90), 0), 14, coll=coll, mat=M_FRAME))
+        o.append(add_cyl("w_bell", 0.075, 0.24, piv + Vector((0.70, 0, 0.02)),
+                         (0, math.radians(90), 0), 18, coll=coll, cone_r2=0.20, mat=M_HULL))
+        o.append(add_cyl("w_pilot", 0.055, 0.05, piv + Vector((0.84, 0, 0.02)),
+                         (0, math.radians(90), 0), 16, coll=coll, mat=M_GLOW))
+        # Fuel line looping from the bottles to the neck.
+        for i in range(4):
+            o.append(add_box(f"w_line{i}", (0.09, 0.05, 0.05),
+                             piv + Vector((-0.04 + i * 0.11, 0.12, 0.14)),
+                             coll=coll, mat=M_TRIM))
+    elif spec["weapon"] == "arc":
+        # NULLTIDE: an emitter, not a gun - stacked tesla rings between two
+        # prongs, with no barrel at all.
+        o.append(add_box("w_body", (0.32, 0.18, 0.26), piv, coll=coll, mat=M_SUB))
+        o.append(add_box("w_stack", (0.30, 0.14, 0.16), piv + Vector((0.28, 0, 0.02)),
+                         coll=coll, mat=M_FRAME))
+        for i in range(4):
+            o.append(add_cyl(f"w_ring{i}", 0.115 - i * 0.012, 0.035,
+                             piv + Vector((0.20 + i * 0.15, 0, 0.02)),
+                             (0, math.radians(90), 0), 16, coll=coll,
+                             mat=M_GLOW if i % 2 == 0 else M_ACC))
+        for i, dz in enumerate((0.13, -0.13)):
+            o.append(add_box(f"w_prong{i}", (0.44, 0.04, 0.04),
+                             piv + Vector((0.74, 0, dz * 0.75)),
+                             (0, math.radians(-6 + i * 12), 0), coll=coll, mat=M_TRIM))
+            o.append(add_cyl(f"w_tip{i}", 0.035, 0.05,
+                             piv + Vector((0.96, 0, dz * 0.62)),
+                             (0, math.radians(90), 0), 10, coll=coll, mat=M_GLOW))
+        # The arc gap itself: the brightest thing on the machine.
+        o.append(add_cyl("w_gap", 0.045, 0.04, piv + Vector((0.92, 0, 0.02)),
+                         (0, math.radians(90), 0), 14, coll=coll, mat=M_GLOW))
+        o.append(add_box("w_coilbox", (0.16, 0.13, 0.14), piv + Vector((-0.20, 0, -0.08)),
+                         coll=coll, mat=M_HULL))
     else:
         # Rotary cannon: fat housing, six-barrel cluster, belt feed, big brake.
         o.append(add_box("w_body", (0.44, 0.26, 0.32), piv, coll=coll, mat=M_SUB))
@@ -1104,39 +1447,206 @@ def build_mech(mech_id, palette_key=None):
     M_BEAM = make_material(f"{mech_id}_beam", pal["glow"],
                            emission=2.4, roughness=0.15, metallic=0.0, detail=False)
     blade_len = 1.28
-    # Hilt: gripped, ribbed, with a pommel.
-    o.append(add_box("m_grip", (0.19, 0.10, 0.10), piv, coll=coll, mat=M_FRAME))
-    for i in range(3):
-        o.append(add_cyl(f"m_rib{i}", 0.056, 0.018, piv + Vector((-0.05 + i * 0.05, 0, 0)),
-                         (0, math.radians(90), 0), 10, coll=coll, mat=M_SUB))
-    o.append(add_box("m_pommel", (0.06, 0.09, 0.09), piv + Vector((-0.13, 0, 0)),
-                     coll=coll, mat=M_HULL))
-    # Emitter: a flared shroud the blade springs from.
-    o.append(add_wedge("m_emitter", (0.15, 0.14, 0.16), 1.5, piv + Vector((0.15, 0, 0)),
-                       (0, math.radians(90), 0), coll=coll, mat=M_HULL))
-    o.append(add_cyl("m_lens", 0.052, 0.03, piv + Vector((0.23, 0, 0)),
-                     (0, math.radians(90), 0), 14, coll=coll, mat=M_CORE))
-    for i, dz in enumerate((0.075, -0.075)):
-        o.append(add_box(f"m_prong{i}", (0.10, 0.035, 0.035),
-                         piv + Vector((0.26, 0, dz)), coll=coll, mat=M_ACC))
-    # Blade: three concentric layers, tapering to a point.
-    o.append(add_cyl("m_bloom", 0.062, blade_len, piv + Vector((0.26 + blade_len / 2, 0, 0)),
-                     (0, math.radians(90), 0), 16, coll=coll, cone_r2=0.012, mat=M_BEAM))
-    o.append(add_cyl("m_sheath", 0.038, blade_len * 0.99,
-                     piv + Vector((0.26 + blade_len / 2, 0, 0)),
-                     (0, math.radians(90), 0), 16, coll=coll, cone_r2=0.008, mat=M_BEAM))
-    o.append(add_cyl("m_core", 0.017, blade_len * 0.985,
-                     piv + Vector((0.26 + blade_len / 2, 0, 0)),
-                     (0, math.radians(90), 0), 12, coll=coll, cone_r2=0.004, mat=M_CORE))
-    parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+    if spec["blade"] == "claw":
+        # A hydraulic breaching claw: three powered tines on a wrist block, with
+        # rams behind them. Mechanical throughout - no emissive blade, because
+        # the point of this weapon is that it is not energy.
+        o.append(add_box("m_wrist", (0.22, 0.16, 0.20), piv, coll=coll, mat=M_FRAME))
+        o.append(add_box("m_block", (0.26, 0.20, 0.26), piv + Vector((0.20, 0, 0)),
+                         coll=coll, mat=M_HULL))
+        for i, dz in enumerate((0.14, 0.0, -0.14)):
+            spread = math.radians(-12 + i * 12)
+            o.append(add_box(f"m_tine{i}", (0.46, 0.06, 0.08),
+                             piv + Vector((0.56, 0, dz)), (0, spread, 0),
+                             coll=coll, mat=M_SUB))
+            o.append(add_wedge(f"m_point{i}", (0.20, 0.05, 0.07), 1.8,
+                               piv + Vector((0.86, 0, dz * 1.25)), (0, spread, 0),
+                               coll=coll, mat=M_ACC))
+            o.append(add_cyl(f"m_ram{i}", 0.035, 0.24,
+                             piv + Vector((0.30, 0.09, dz * 0.8)),
+                             (0, math.radians(90), 0), 10, coll=coll, mat=M_TRIM))
+        o.append(add_cyl("m_pivotpin", 0.06, 0.30, piv + Vector((0.34, 0, 0)),
+                         (math.radians(90), 0, 0), 12, coll=coll, mat=M_ACC))
+        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+    elif spec["blade"] == "bayonet":
+        # VESPER: a short straight beam spike clamped under the railgun. A
+        # thrusting weapon - no cutting edge, no sweep, just a point.
+        o.append(add_box("m_clamp", (0.20, 0.12, 0.14), piv, coll=coll, mat=M_FRAME))
+        o.append(add_box("m_rail", (0.34, 0.06, 0.06), piv + Vector((0.20, 0, 0.05)),
+                         coll=coll, mat=M_SUB))
+        o.append(add_wedge("m_emitter", (0.13, 0.11, 0.12), 1.6, piv + Vector((0.24, 0, -0.02)),
+                           (0, math.radians(90), 0), coll=coll, mat=M_HULL))
+        spike = 0.64
+        o.append(add_cyl("m_bloom", 0.042, spike, piv + Vector((0.30 + spike / 2, 0, -0.02)),
+                         (0, math.radians(90), 0), 14, coll=coll, cone_r2=0.006, mat=M_BEAM))
+        o.append(add_cyl("m_core", 0.015, spike * 0.98,
+                         piv + Vector((0.30 + spike / 2, 0, -0.02)),
+                         (0, math.radians(90), 0), 12, coll=coll, cone_r2=0.003, mat=M_CORE))
+        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+    elif spec["blade"] == "twindagger":
+        # CIRRUS: two short blades on a shared mount, which is what an eight-hit
+        # alternating flurry actually looks like.
+        o.append(add_box("m_mount", (0.16, 0.22, 0.12), piv, coll=coll, mat=M_FRAME))
+        for i, dy in enumerate((0.10, -0.10)):
+            o.append(add_box(f"m_hilt{i}", (0.14, 0.07, 0.08),
+                             piv + Vector((0.10, dy, 0.02)), coll=coll, mat=M_HULL))
+            o.append(add_cyl(f"m_lens{i}", 0.036, 0.025, piv + Vector((0.19, dy, 0.02)),
+                             (0, math.radians(90), 0), 12, coll=coll, mat=M_CORE))
+            dl = 0.56
+            o.append(add_cyl(f"m_bloom{i}", 0.045, dl, piv + Vector((0.22 + dl / 2, dy, 0.02)),
+                             (0, math.radians(90), 0), 14, coll=coll, cone_r2=0.010, mat=M_BEAM))
+            o.append(add_cyl(f"m_core{i}", 0.014, dl * 0.98,
+                             piv + Vector((0.22 + dl / 2, dy, 0.02)),
+                             (0, math.radians(90), 0), 10, coll=coll, cone_r2=0.003, mat=M_CORE))
+        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+    elif spec["blade"] == "cleaver":
+        # PYRE: a thick chopping blade heated to glowing, not a plasma edge.
+        # Solid metal with a molten cutting edge and heat vents down the spine.
+        o.append(add_box("m_grip", (0.20, 0.11, 0.11), piv, coll=coll, mat=M_FRAME))
+        o.append(add_box("m_guard", (0.07, 0.20, 0.20), piv + Vector((0.14, 0, 0)),
+                         coll=coll, mat=M_HULL))
+        o.append(add_box("m_blade", (0.86, 0.07, 0.34), piv + Vector((0.60, 0, 0.02)),
+                         coll=coll, mat=M_SUB))
+        o.append(add_wedge("m_tip", (0.26, 0.07, 0.34), 1.2, piv + Vector((1.14, 0, 0.02)),
+                           (0, math.radians(90), 0), coll=coll, mat=M_SUB))
+        # The edge itself is the only emissive part: heat, not energy.
+        o.append(add_box("m_edge", (1.06, 0.045, 0.05), piv + Vector((0.66, 0, -0.14)),
+                         coll=coll, mat=M_GLOW))
+        for i in range(4):
+            o.append(add_box(f"m_vent{i}", (0.07, 0.09, 0.07),
+                             piv + Vector((0.34 + i * 0.20, 0, 0.17)), coll=coll, mat=M_ACC))
+        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+    elif spec["blade"] == "glaive":
+        # NULLTIDE: a polearm. Long haft, discharge head at the far end, so its
+        # wide sweeps have somewhere to come from.
+        o.append(add_box("m_butt", (0.12, 0.09, 0.09), piv + Vector((-0.10, 0, 0)),
+                         coll=coll, mat=M_HULL))
+        o.append(add_cyl("m_haft", 0.048, 1.02, piv + Vector((0.42, 0, 0)),
+                         (0, math.radians(90), 0), 12, coll=coll, mat=M_FRAME))
+        for i in range(3):
+            o.append(add_cyl(f"m_band{i}", 0.062, 0.045, piv + Vector((0.16 + i * 0.30, 0, 0)),
+                             (0, math.radians(90), 0), 12, coll=coll, mat=M_ACC))
+        o.append(add_box("m_head", (0.20, 0.10, 0.20), piv + Vector((1.02, 0, 0.02)),
+                         coll=coll, mat=M_SUB))
+        blade = 0.62
+        o.append(add_cyl("m_bloom", 0.052, blade, piv + Vector((1.14 + blade / 2, 0, 0.06)),
+                         (0, math.radians(74), 0), 14, coll=coll, cone_r2=0.010, mat=M_BEAM))
+        o.append(add_cyl("m_core", 0.016, blade * 0.98,
+                         piv + Vector((1.14 + blade / 2, 0, 0.06)),
+                         (0, math.radians(74), 0), 10, coll=coll, cone_r2=0.003, mat=M_CORE))
+        # Discharge prongs flanking the head.
+        for i, dz in enumerate((0.12, -0.12)):
+            o.append(add_box(f"m_prong{i}", (0.16, 0.035, 0.035),
+                             piv + Vector((1.10, 0, dz)), coll=coll, mat=M_GLOW))
+        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+    elif spec["blade"] == "ramshield":
+        # OBELISK: a powered tower shield with a central ram boss. It bashes; the
+        # face is the weapon, so the silhouette is a slab, not an edge.
+        o.append(add_box("m_arm", (0.22, 0.16, 0.18), piv, coll=coll, mat=M_FRAME))
+        o.append(add_box("m_face", (0.16, 0.54, 0.86), piv + Vector((0.26, 0, 0.02)),
+                         (0, math.radians(-4), 0), coll=coll, mat=M_HULL))
+        o.append(add_box("m_rim", (0.06, 0.60, 0.92), piv + Vector((0.20, 0, 0.02)),
+                         (0, math.radians(-4), 0), coll=coll, mat=M_SUB))
+        # Ram boss: the part that actually connects.
+        o.append(add_cyl("m_boss", 0.15, 0.20, piv + Vector((0.40, 0, 0.02)),
+                         (0, math.radians(90), 0), 16, coll=coll, cone_r2=0.11, mat=M_ACC))
+        o.append(add_cyl("m_spike", 0.06, 0.16, piv + Vector((0.52, 0, 0.02)),
+                         (0, math.radians(90), 0), 12, coll=coll, cone_r2=0.02, mat=M_FRAME))
+        # Impact buffers along the leading face.
+        for i, dz in enumerate((0.30, 0.0, -0.30)):
+            o.append(add_box(f"m_buf{i}", (0.05, 0.44, 0.08),
+                             piv + Vector((0.35, 0, dz)), coll=coll, mat=M_GLOW))
+        o.append(add_box("m_strut", (0.24, 0.08, 0.10), piv + Vector((0.12, 0, -0.20)),
+                         coll=coll, mat=M_TRIM))
+        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+    elif spec["blade"] == "pile":
+        # A pile driver: a blunt ram in a guide cage. Siege equipment, not a
+        # sword - it hits once, enormously.
+        o.append(add_box("m_mount", (0.26, 0.22, 0.26), piv, coll=coll, mat=M_FRAME))
+        o.append(add_box("m_cage", (0.72, 0.26, 0.30), piv + Vector((0.46, 0, 0)),
+                         coll=coll, mat=M_HULL))
+        for i, dz in enumerate((0.17, -0.17)):
+            o.append(add_box(f"m_rail{i}", (0.80, 0.05, 0.05),
+                             piv + Vector((0.48, 0, dz)), coll=coll, mat=M_TRIM))
+        o.append(add_cyl("m_ram", 0.11, 0.86, piv + Vector((0.62, 0, 0)),
+                         (0, math.radians(90), 0), 16, coll=coll, mat=M_SUB))
+        o.append(add_cyl("m_head", 0.16, 0.18, piv + Vector((1.10, 0, 0)),
+                         (0, math.radians(90), 0), 18, coll=coll, mat=M_ACC))
+        o.append(add_cyl("m_face", 0.13, 0.04, piv + Vector((1.20, 0, 0)),
+                         (0, math.radians(90), 0), 18, coll=coll, mat=M_FRAME))
+        # Hydraulic accumulator behind the ram.
+        o.append(add_cyl("m_accum", 0.09, 0.28, piv + Vector((-0.08, 0, 0.10)),
+                         (0, math.radians(90), 0), 12, coll=coll, mat=M_GLOW))
+        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+    else:
+        # Hilt: gripped, ribbed, with a pommel.
+        o.append(add_box("m_grip", (0.19, 0.10, 0.10), piv, coll=coll, mat=M_FRAME))
+        for i in range(3):
+            o.append(add_cyl(f"m_rib{i}", 0.056, 0.018, piv + Vector((-0.05 + i * 0.05, 0, 0)),
+                             (0, math.radians(90), 0), 10, coll=coll, mat=M_SUB))
+        o.append(add_box("m_pommel", (0.06, 0.09, 0.09), piv + Vector((-0.13, 0, 0)),
+                         coll=coll, mat=M_HULL))
+        # Emitter: a flared shroud the blade springs from.
+        o.append(add_wedge("m_emitter", (0.15, 0.14, 0.16), 1.5, piv + Vector((0.15, 0, 0)),
+                           (0, math.radians(90), 0), coll=coll, mat=M_HULL))
+        o.append(add_cyl("m_lens", 0.052, 0.03, piv + Vector((0.23, 0, 0)),
+                         (0, math.radians(90), 0), 14, coll=coll, mat=M_CORE))
+        for i, dz in enumerate((0.075, -0.075)):
+            o.append(add_box(f"m_prong{i}", (0.10, 0.035, 0.035),
+                             piv + Vector((0.26, 0, dz)), coll=coll, mat=M_ACC))
+        # Blade: three concentric layers, tapering to a point.
+        o.append(add_cyl("m_bloom", 0.062, blade_len, piv + Vector((0.26 + blade_len / 2, 0, 0)),
+                         (0, math.radians(90), 0), 16, coll=coll, cone_r2=0.012, mat=M_BEAM))
+        o.append(add_cyl("m_sheath", 0.038, blade_len * 0.99,
+                         piv + Vector((0.26 + blade_len / 2, 0, 0)),
+                         (0, math.radians(90), 0), 16, coll=coll, cone_r2=0.008, mat=M_BEAM))
+        o.append(add_cyl("m_core", 0.017, blade_len * 0.985,
+                         piv + Vector((0.26 + blade_len / 2, 0, 0)),
+                         (0, math.radians(90), 0), 12, coll=coll, cone_r2=0.004, mat=M_CORE))
+        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
 
     # ---- thrusters: rear-facing bells -------------------------------------
-    twin = spec["booster"] == "twin"
+    boost = spec["booster"]
     for key, near in (("leftThruster", False), ("rightThruster", True)):
         piv = px(*P[key])
         shell = M_HULL if near else M_FAR
         o = []
-        if twin:
+        if boost == "quad":
+            # Siege walker: a stacked block of four small burners rather than one
+            # big one - lifting mass, not chasing anybody.
+            o.append(add_box(f"t_house_{key}", (0.34, 0.34, 0.44), piv, coll=coll, mat=shell))
+            o.append(add_box(f"t_plate_{key}", (0.10, 0.38, 0.48), piv + Vector((0.12, 0, 0)),
+                             coll=coll, mat=M_SUB))
+            for i, (dy, dz) in enumerate(((0.11, 0.13), (-0.11, 0.13), (0.11, -0.13), (-0.11, -0.13))):
+                o.append(add_cyl(f"t_bell_{key}{i}", 0.088, 0.22,
+                                 piv + Vector((-0.24, dy, dz)),
+                                 (0, math.radians(90), 0), 14, coll=coll,
+                                 cone_r2=0.058, mat=M_FRAME))
+                o.append(add_cyl(f"t_in_{key}{i}", 0.062, 0.04,
+                                 piv + Vector((-0.35, dy, dz)),
+                                 (0, math.radians(90), 0), 14, coll=coll, mat=M_GLOW))
+            o.append(add_box(f"t_brace_{key}", (0.24, 0.06, 0.42), piv + Vector((-0.16, 0, 0)),
+                             coll=coll, mat=M_ACC))
+        elif boost == "wing":
+            # Skirmisher / EW frame: a swept vectoring vane with the nozzle set
+            # into its trailing edge. Reads as an aircraft, not a rocket.
+            o.append(add_wedge(f"t_root_{key}", (0.24, 0.20, 0.34), 0.5, piv,
+                               (0, math.radians(-90), 0), coll=coll, mat=shell))
+            o.append(add_box(f"t_wing_{key}", (0.54, 0.06, 0.30),
+                             piv + Vector((-0.20, 0, 0.10)), (0, math.radians(14), 0),
+                             coll=coll, mat=M_SUB))
+            o.append(add_wedge(f"t_tip_{key}", (0.20, 0.05, 0.16), 1.6,
+                               piv + Vector((-0.50, 0, 0.18)), (0, math.radians(14), 0),
+                               coll=coll, mat=M_TRIM))
+            o.append(add_cyl(f"t_bell_{key}", 0.105, 0.24, piv + Vector((-0.26, 0, -0.06)),
+                             (0, math.radians(90), 0), 16, coll=coll, cone_r2=0.07, mat=M_FRAME))
+            o.append(add_cyl(f"t_inner_{key}", 0.078, 0.045, piv + Vector((-0.38, 0, -0.06)),
+                             (0, math.radians(90), 0), 16, coll=coll, mat=M_GLOW))
+            # Leading-edge strip: the running light that makes it read at speed.
+            o.append(add_box(f"t_edge_{key}", (0.50, 0.035, 0.035),
+                             piv + Vector((-0.20, 0, 0.24)), (0, math.radians(14), 0),
+                             coll=coll, mat=M_ACC))
+        elif boost == "twin":
             # Interceptor: a pair of slim high-velocity bells.
             o.append(add_wedge(f"t_house_{key}", (0.30, 0.24, 0.52), 0.40, piv,
                                (0, math.radians(-90), 0), coll=coll, mat=shell))
@@ -1405,8 +1915,12 @@ def render_assembled(coll, out_path, ortho=4.0):
 # ---------------------------------------------------------------- entry point
 
 
-def build_all(project_root):
-    """Builds both mechs, renders parts + previews, saves the .blend."""
+def build_all(project_root, only=None):
+    """Builds the roster, renders parts + previews, saves the .blend.
+
+    `only` is an optional iterable of mech ids, for iterating on a single
+    chassis without paying for a full eight-mech render.
+    """
     import json
 
     cube = bpy.data.objects.get("Cube")
@@ -1429,15 +1943,25 @@ def build_all(project_root):
 
     manifest = {}
     built = {}
-    for mech_id in ("halcyon", "nocturne"):
+    # Every chassis in CHASSIS, so adding a mech is a data edit rather than a
+    # code edit. `only` builds a subset while iterating on one machine's
+    # geometry — a full eight-mech run renders ~112 part sprites.
+    order = [m for m in CHASSIS if only is None or m in only]
+    for mech_id in order:
         coll, _parts = build_mech(mech_id)
         build_drone(mech_id)
         built[mech_id] = coll
         render_parts(coll, sprites, mech_id, manifest)
         render_assembled(coll, os.path.join(debug, f"{mech_id}_assembled.png"))
 
-    for obj in built["nocturne"].objects:
-        obj.location.x += 4.0
+    # Spread them along +X so the saved .blend shows the roster side by side
+    # instead of eight machines occupying the same space. Rendering is already
+    # done by this point, so the offset cannot affect any sprite.
+    for i, mech_id in enumerate(order):
+        if i == 0:
+            continue
+        for obj in built[mech_id].objects:
+            obj.location.x += 4.0 * i
 
     meta = {
         "px_per_bu": PX_PER_BU,

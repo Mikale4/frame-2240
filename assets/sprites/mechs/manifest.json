@@ -119,6 +119,330 @@
         -34,
         16
       ]
+    },
+    "vesper": {
+      "core": [
+        0,
+        0
+      ],
+      "head": [
+        23,
+        -9
+      ],
+      "backpack": [
+        -28,
+        -20
+      ],
+      "lowerBody": [
+        -8,
+        28
+      ],
+      "legNear": [
+        -8,
+        29
+      ],
+      "legFar": [
+        -8,
+        29
+      ],
+      "leftArm": [
+        -2,
+        -3
+      ],
+      "subWeapon": [
+        -5,
+        -27
+      ],
+      "rightArm": [
+        15,
+        5
+      ],
+      "mainWeapon": [
+        61,
+        13
+      ],
+      "meleeWeapon": [
+        41,
+        11
+      ],
+      "leftThruster": [
+        -38,
+        0
+      ],
+      "rightThruster": [
+        -34,
+        12
+      ]
+    },
+    "terramoth": {
+      "core": [
+        0,
+        0
+      ],
+      "head": [
+        20,
+        2
+      ],
+      "backpack": [
+        -34,
+        -10
+      ],
+      "lowerBody": [
+        -12,
+        22
+      ],
+      "legNear": [
+        -12,
+        23
+      ],
+      "legFar": [
+        -12,
+        23
+      ],
+      "leftArm": [
+        -6,
+        2
+      ],
+      "subWeapon": [
+        -14,
+        -26
+      ],
+      "rightArm": [
+        20,
+        12
+      ],
+      "mainWeapon": [
+        62,
+        16
+      ],
+      "meleeWeapon": [
+        52,
+        14
+      ],
+      "leftThruster": [
+        -44,
+        6
+      ],
+      "rightThruster": [
+        -38,
+        18
+      ]
+    },
+    "cirrus": {
+      "core": [
+        0,
+        0
+      ],
+      "head": [
+        19,
+        -8
+      ],
+      "backpack": [
+        -22,
+        -16
+      ],
+      "lowerBody": [
+        -6,
+        22
+      ],
+      "legNear": [
+        -6,
+        23
+      ],
+      "legFar": [
+        -6,
+        23
+      ],
+      "leftArm": [
+        -1,
+        -3
+      ],
+      "subWeapon": [
+        -3,
+        -23
+      ],
+      "rightArm": [
+        14,
+        4
+      ],
+      "mainWeapon": [
+        46,
+        11
+      ],
+      "meleeWeapon": [
+        38,
+        9
+      ],
+      "leftThruster": [
+        -32,
+        -2
+      ],
+      "rightThruster": [
+        -28,
+        9
+      ]
+    },
+    "obelisk": {
+      "core": [
+        0,
+        0
+      ],
+      "head": [
+        21,
+        -1
+      ],
+      "backpack": [
+        -30,
+        -12
+      ],
+      "lowerBody": [
+        -10,
+        24
+      ],
+      "legNear": [
+        -10,
+        25
+      ],
+      "legFar": [
+        -10,
+        25
+      ],
+      "leftArm": [
+        -5,
+        1
+      ],
+      "subWeapon": [
+        -12,
+        -24
+      ],
+      "rightArm": [
+        18,
+        9
+      ],
+      "mainWeapon": [
+        54,
+        15
+      ],
+      "meleeWeapon": [
+        46,
+        13
+      ],
+      "leftThruster": [
+        -40,
+        4
+      ],
+      "rightThruster": [
+        -34,
+        15
+      ]
+    },
+    "pyre": {
+      "core": [
+        0,
+        0
+      ],
+      "head": [
+        22,
+        -5
+      ],
+      "backpack": [
+        -27,
+        -17
+      ],
+      "lowerBody": [
+        -9,
+        25
+      ],
+      "legNear": [
+        -9,
+        26
+      ],
+      "legFar": [
+        -9,
+        26
+      ],
+      "leftArm": [
+        -3,
+        -1
+      ],
+      "subWeapon": [
+        -8,
+        -25
+      ],
+      "rightArm": [
+        17,
+        7
+      ],
+      "mainWeapon": [
+        51,
+        15
+      ],
+      "meleeWeapon": [
+        44,
+        12
+      ],
+      "leftThruster": [
+        -37,
+        2
+      ],
+      "rightThruster": [
+        -33,
+        13
+      ]
+    },
+    "nulltide": {
+      "core": [
+        0,
+        0
+      ],
+      "head": [
+        20,
+        -10
+      ],
+      "backpack": [
+        -25,
+        -19
+      ],
+      "lowerBody": [
+        -7,
+        23
+      ],
+      "legNear": [
+        -7,
+        24
+      ],
+      "legFar": [
+        -7,
+        24
+      ],
+      "leftArm": [
+        -2,
+        -4
+      ],
+      "subWeapon": [
+        -6,
+        -26
+      ],
+      "rightArm": [
+        15,
+        3
+      ],
+      "mainWeapon": [
+        50,
+        12
+      ],
+      "meleeWeapon": [
+        40,
+        9
+      ],
+      "leftThruster": [
+        -34,
+        -1
+      ],
+      "rightThruster": [
+        -30,
+        11
+      ]
     }
   },
   "chassis": {
@@ -135,6 +459,48 @@
       "booster": "single",
       "pod": "rack",
       "blade": "claw"
+    },
+    "vesper": {
+      "pitch": 26.0,
+      "weapon": "railgun",
+      "booster": "twin",
+      "pod": "compact",
+      "blade": "bayonet"
+    },
+    "terramoth": {
+      "pitch": 10.0,
+      "weapon": "mortar",
+      "booster": "quad",
+      "pod": "rack",
+      "blade": "pile"
+    },
+    "cirrus": {
+      "pitch": 30.0,
+      "weapon": "smg",
+      "booster": "wing",
+      "pod": "compact",
+      "blade": "twindagger"
+    },
+    "obelisk": {
+      "pitch": 12.0,
+      "weapon": "breachgun",
+      "booster": "single",
+      "pod": "rack",
+      "blade": "ramshield"
+    },
+    "pyre": {
+      "pitch": 18.0,
+      "weapon": "flamer",
+      "booster": "twin",
+      "pod": "rack",
+      "blade": "cleaver"
+    },
+    "nulltide": {
+      "pitch": 28.0,
+      "weapon": "arc",
+      "booster": "wing",
+      "pod": "compact",
+      "blade": "glaive"
     }
   },
   "parts": {
@@ -507,20 +873,1208 @@
       },
       "meleeWeapon": {
         "file": "nocturne_meleeWeapon.png",
-        "tile": 448,
+        "tile": 320,
         "dims_bu": [
-          1.7,
-          0.2079,
-          0.2227
+          1.149,
+          0.3,
+          0.4746
         ],
         "dims_logical_px": [
-          102.0,
-          12.5,
-          13.4
+          68.9,
+          18.0,
+          28.5
         ]
       },
       "drone": {
         "file": "nocturne_drone.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3268,
+          0.4879,
+          0.8387
+        ],
+        "dims_logical_px": [
+          19.6,
+          29.3,
+          50.3
+        ]
+      }
+    },
+    "vesper": {
+      "core": {
+        "file": "vesper_core.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5527,
+          0.3945,
+          0.847
+        ],
+        "dims_logical_px": [
+          33.2,
+          23.7,
+          50.8
+        ]
+      },
+      "head": {
+        "file": "vesper_head.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3694,
+          0.265,
+          0.3289
+        ],
+        "dims_logical_px": [
+          22.2,
+          15.9,
+          19.7
+        ]
+      },
+      "backpack": {
+        "file": "vesper_backpack.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5033,
+          0.3835,
+          0.6699
+        ],
+        "dims_logical_px": [
+          30.2,
+          23.0,
+          40.2
+        ]
+      },
+      "lowerBody": {
+        "file": "vesper_lowerBody.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5594,
+          0.36,
+          0.3485
+        ],
+        "dims_logical_px": [
+          33.6,
+          21.6,
+          20.9
+        ]
+      },
+      "legNear": {
+        "file": "vesper_legNear.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6123,
+          1.0683,
+          0.17
+        ],
+        "dims_logical_px": [
+          36.7,
+          64.1,
+          10.2
+        ]
+      },
+      "legFar": {
+        "file": "vesper_legFar.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6123,
+          1.0683,
+          0.17
+        ],
+        "dims_logical_px": [
+          36.7,
+          64.1,
+          10.2
+        ]
+      },
+      "leftArm": {
+        "file": "vesper_leftArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6604,
+          0.3684,
+          1.0612
+        ],
+        "dims_logical_px": [
+          39.6,
+          22.1,
+          63.7
+        ]
+      },
+      "subWeapon": {
+        "file": "vesper_subWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4925,
+          0.26,
+          0.3281
+        ],
+        "dims_logical_px": [
+          29.6,
+          15.6,
+          19.7
+        ]
+      },
+      "rightArm": {
+        "file": "vesper_rightArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4693,
+          0.3551,
+          1.0612
+        ],
+        "dims_logical_px": [
+          28.2,
+          21.3,
+          63.7
+        ]
+      },
+      "mainWeapon": {
+        "file": "vesper_mainWeapon.png",
+        "tile": 384,
+        "dims_bu": [
+          1.75,
+          0.26,
+          0.405
+        ],
+        "dims_logical_px": [
+          105.0,
+          15.6,
+          24.3
+        ]
+      },
+      "leftThruster": {
+        "file": "vesper_leftThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3325,
+          0.27,
+          0.665
+        ],
+        "dims_logical_px": [
+          20.0,
+          16.2,
+          39.9
+        ]
+      },
+      "rightThruster": {
+        "file": "vesper_rightThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3325,
+          0.27,
+          0.665
+        ],
+        "dims_logical_px": [
+          20.0,
+          16.2,
+          39.9
+        ]
+      },
+      "meleeWeapon": {
+        "file": "vesper_meleeWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          1.04,
+          0.1733,
+          0.2049
+        ],
+        "dims_logical_px": [
+          62.4,
+          10.4,
+          12.3
+        ]
+      },
+      "drone": {
+        "file": "vesper_drone.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3268,
+          0.4879,
+          0.8387
+        ],
+        "dims_logical_px": [
+          19.6,
+          29.3,
+          50.3
+        ]
+      }
+    },
+    "terramoth": {
+      "core": {
+        "file": "terramoth_core.png",
+        "tile": 320,
+        "dims_bu": [
+          0.578,
+          0.6145,
+          1.1493
+        ],
+        "dims_logical_px": [
+          34.7,
+          36.9,
+          69.0
+        ]
+      },
+      "head": {
+        "file": "terramoth_head.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3036,
+          0.265,
+          0.3987
+        ],
+        "dims_logical_px": [
+          18.2,
+          15.9,
+          23.9
+        ]
+      },
+      "backpack": {
+        "file": "terramoth_backpack.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4867,
+          0.5,
+          0.5446
+        ],
+        "dims_logical_px": [
+          29.2,
+          30.0,
+          32.7
+        ]
+      },
+      "lowerBody": {
+        "file": "terramoth_lowerBody.png",
+        "tile": 320,
+        "dims_bu": [
+          0.56,
+          0.54,
+          0.3485
+        ],
+        "dims_logical_px": [
+          33.6,
+          32.4,
+          20.9
+        ]
+      },
+      "legNear": {
+        "file": "terramoth_legNear.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6888,
+          0.8097,
+          0.29
+        ],
+        "dims_logical_px": [
+          41.3,
+          48.6,
+          17.4
+        ]
+      },
+      "legFar": {
+        "file": "terramoth_legFar.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6888,
+          0.8097,
+          0.29
+        ],
+        "dims_logical_px": [
+          41.3,
+          48.6,
+          17.4
+        ]
+      },
+      "leftArm": {
+        "file": "terramoth_leftArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6604,
+          0.3684,
+          1.0612
+        ],
+        "dims_logical_px": [
+          39.6,
+          22.1,
+          63.7
+        ]
+      },
+      "subWeapon": {
+        "file": "terramoth_subWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          0.655,
+          0.36,
+          0.5742
+        ],
+        "dims_logical_px": [
+          39.3,
+          21.6,
+          34.5
+        ]
+      },
+      "rightArm": {
+        "file": "terramoth_rightArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4693,
+          0.3551,
+          1.0612
+        ],
+        "dims_logical_px": [
+          28.2,
+          21.3,
+          63.7
+        ]
+      },
+      "mainWeapon": {
+        "file": "terramoth_mainWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          1.1774,
+          0.49,
+          0.9159
+        ],
+        "dims_logical_px": [
+          70.6,
+          29.4,
+          55.0
+        ]
+      },
+      "leftThruster": {
+        "file": "terramoth_leftThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.54,
+          0.396,
+          0.48
+        ],
+        "dims_logical_px": [
+          32.4,
+          23.8,
+          28.8
+        ]
+      },
+      "rightThruster": {
+        "file": "terramoth_rightThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.54,
+          0.396,
+          0.48
+        ],
+        "dims_logical_px": [
+          32.4,
+          23.8,
+          28.8
+        ]
+      },
+      "meleeWeapon": {
+        "file": "terramoth_meleeWeapon.png",
+        "tile": 384,
+        "dims_bu": [
+          1.44,
+          0.32,
+          0.39
+        ],
+        "dims_logical_px": [
+          86.4,
+          19.2,
+          23.4
+        ]
+      },
+      "drone": {
+        "file": "terramoth_drone.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3268,
+          0.4879,
+          0.8387
+        ],
+        "dims_logical_px": [
+          19.6,
+          29.3,
+          50.3
+        ]
+      }
+    },
+    "cirrus": {
+      "core": {
+        "file": "cirrus_core.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5517,
+          0.3545,
+          0.7598
+        ],
+        "dims_logical_px": [
+          33.1,
+          21.3,
+          45.6
+        ]
+      },
+      "head": {
+        "file": "cirrus_head.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3865,
+          0.265,
+          0.3076
+        ],
+        "dims_logical_px": [
+          23.2,
+          15.9,
+          18.5
+        ]
+      },
+      "backpack": {
+        "file": "cirrus_backpack.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5924,
+          0.5,
+          0.5149
+        ],
+        "dims_logical_px": [
+          35.5,
+          30.0,
+          30.9
+        ]
+      },
+      "lowerBody": {
+        "file": "cirrus_lowerBody.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5594,
+          0.32,
+          0.3485
+        ],
+        "dims_logical_px": [
+          33.6,
+          19.2,
+          20.9
+        ]
+      },
+      "legNear": {
+        "file": "cirrus_legNear.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5369,
+          0.9557,
+          0.155
+        ],
+        "dims_logical_px": [
+          32.2,
+          57.3,
+          9.3
+        ]
+      },
+      "legFar": {
+        "file": "cirrus_legFar.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5369,
+          0.9557,
+          0.155
+        ],
+        "dims_logical_px": [
+          32.2,
+          57.3,
+          9.3
+        ]
+      },
+      "leftArm": {
+        "file": "cirrus_leftArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6604,
+          0.3684,
+          1.0612
+        ],
+        "dims_logical_px": [
+          39.6,
+          22.1,
+          63.7
+        ]
+      },
+      "subWeapon": {
+        "file": "cirrus_subWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4925,
+          0.26,
+          0.3281
+        ],
+        "dims_logical_px": [
+          29.6,
+          15.6,
+          19.7
+        ]
+      },
+      "rightArm": {
+        "file": "cirrus_rightArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4693,
+          0.3551,
+          1.0612
+        ],
+        "dims_logical_px": [
+          28.2,
+          21.3,
+          63.7
+        ]
+      },
+      "mainWeapon": {
+        "file": "cirrus_mainWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          0.78,
+          0.32,
+          0.4353
+        ],
+        "dims_logical_px": [
+          46.8,
+          19.2,
+          26.1
+        ]
+      },
+      "leftThruster": {
+        "file": "cirrus_leftThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4813,
+          0.21,
+          0.8053
+        ],
+        "dims_logical_px": [
+          28.9,
+          12.6,
+          48.3
+        ]
+      },
+      "rightThruster": {
+        "file": "cirrus_rightThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4813,
+          0.21,
+          0.8053
+        ],
+        "dims_logical_px": [
+          28.9,
+          12.6,
+          48.3
+        ]
+      },
+      "meleeWeapon": {
+        "file": "cirrus_meleeWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          0.86,
+          0.29,
+          0.1239
+        ],
+        "dims_logical_px": [
+          51.6,
+          17.4,
+          7.4
+        ]
+      },
+      "drone": {
+        "file": "cirrus_drone.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3268,
+          0.4879,
+          0.8387
+        ],
+        "dims_logical_px": [
+          19.6,
+          29.3,
+          50.3
+        ]
+      }
+    },
+    "obelisk": {
+      "core": {
+        "file": "obelisk_core.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5385,
+          0.5745,
+          1.0729
+        ],
+        "dims_logical_px": [
+          32.3,
+          34.5,
+          64.4
+        ]
+      },
+      "head": {
+        "file": "obelisk_head.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3129,
+          0.265,
+          0.3915
+        ],
+        "dims_logical_px": [
+          18.8,
+          15.9,
+          23.5
+        ]
+      },
+      "backpack": {
+        "file": "obelisk_backpack.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4986,
+          0.5,
+          0.5409
+        ],
+        "dims_logical_px": [
+          29.9,
+          30.0,
+          32.5
+        ]
+      },
+      "lowerBody": {
+        "file": "obelisk_lowerBody.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5594,
+          0.5,
+          0.3485
+        ],
+        "dims_logical_px": [
+          33.6,
+          30.0,
+          20.9
+        ]
+      },
+      "legNear": {
+        "file": "obelisk_legNear.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6579,
+          0.8464,
+          0.26
+        ],
+        "dims_logical_px": [
+          39.5,
+          50.8,
+          15.6
+        ]
+      },
+      "legFar": {
+        "file": "obelisk_legFar.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6579,
+          0.8464,
+          0.26
+        ],
+        "dims_logical_px": [
+          39.5,
+          50.8,
+          15.6
+        ]
+      },
+      "leftArm": {
+        "file": "obelisk_leftArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6604,
+          0.3684,
+          1.0612
+        ],
+        "dims_logical_px": [
+          39.6,
+          22.1,
+          63.7
+        ]
+      },
+      "subWeapon": {
+        "file": "obelisk_subWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          0.655,
+          0.36,
+          0.5742
+        ],
+        "dims_logical_px": [
+          39.3,
+          21.6,
+          34.5
+        ]
+      },
+      "rightArm": {
+        "file": "obelisk_rightArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4693,
+          0.3551,
+          1.0612
+        ],
+        "dims_logical_px": [
+          28.2,
+          21.3,
+          63.7
+        ]
+      },
+      "mainWeapon": {
+        "file": "obelisk_mainWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          1.05,
+          0.46,
+          0.5892
+        ],
+        "dims_logical_px": [
+          63.0,
+          27.6,
+          35.4
+        ]
+      },
+      "leftThruster": {
+        "file": "obelisk_leftThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.635,
+          0.385,
+          0.42
+        ],
+        "dims_logical_px": [
+          38.1,
+          23.1,
+          25.2
+        ]
+      },
+      "rightThruster": {
+        "file": "obelisk_rightThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.635,
+          0.385,
+          0.42
+        ],
+        "dims_logical_px": [
+          38.1,
+          23.1,
+          25.2
+        ]
+      },
+      "meleeWeapon": {
+        "file": "obelisk_meleeWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          0.71,
+          0.6,
+          0.9212
+        ],
+        "dims_logical_px": [
+          42.6,
+          36.0,
+          55.3
+        ]
+      },
+      "drone": {
+        "file": "obelisk_drone.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3268,
+          0.4879,
+          0.8387
+        ],
+        "dims_logical_px": [
+          19.6,
+          29.3,
+          50.3
+        ]
+      }
+    },
+    "pyre": {
+      "core": {
+        "file": "pyre_core.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5419,
+          0.4945,
+          0.9754
+        ],
+        "dims_logical_px": [
+          32.5,
+          29.7,
+          58.5
+        ]
+      },
+      "head": {
+        "file": "pyre_head.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3391,
+          0.265,
+          0.3671
+        ],
+        "dims_logical_px": [
+          20.3,
+          15.9,
+          22.0
+        ]
+      },
+      "backpack": {
+        "file": "pyre_backpack.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4768,
+          0.3835,
+          0.696
+        ],
+        "dims_logical_px": [
+          28.6,
+          23.0,
+          41.8
+        ]
+      },
+      "lowerBody": {
+        "file": "pyre_lowerBody.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5594,
+          0.42,
+          0.3485
+        ],
+        "dims_logical_px": [
+          33.6,
+          25.2,
+          20.9
+        ]
+      },
+      "legNear": {
+        "file": "pyre_legNear.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6195,
+          0.929,
+          0.21
+        ],
+        "dims_logical_px": [
+          37.2,
+          55.7,
+          12.6
+        ]
+      },
+      "legFar": {
+        "file": "pyre_legFar.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6195,
+          0.929,
+          0.21
+        ],
+        "dims_logical_px": [
+          37.2,
+          55.7,
+          12.6
+        ]
+      },
+      "leftArm": {
+        "file": "pyre_leftArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6604,
+          0.3684,
+          1.0612
+        ],
+        "dims_logical_px": [
+          39.6,
+          22.1,
+          63.7
+        ]
+      },
+      "subWeapon": {
+        "file": "pyre_subWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          0.655,
+          0.36,
+          0.5742
+        ],
+        "dims_logical_px": [
+          39.3,
+          21.6,
+          34.5
+        ]
+      },
+      "rightArm": {
+        "file": "pyre_rightArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4693,
+          0.3551,
+          1.0612
+        ],
+        "dims_logical_px": [
+          28.2,
+          21.3,
+          63.7
+        ]
+      },
+      "mainWeapon": {
+        "file": "pyre_mainWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          1.31,
+          0.47,
+          0.3939
+        ],
+        "dims_logical_px": [
+          78.6,
+          28.2,
+          23.6
+        ]
+      },
+      "leftThruster": {
+        "file": "pyre_leftThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3325,
+          0.27,
+          0.665
+        ],
+        "dims_logical_px": [
+          20.0,
+          16.2,
+          39.9
+        ]
+      },
+      "rightThruster": {
+        "file": "pyre_rightThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3325,
+          0.27,
+          0.665
+        ],
+        "dims_logical_px": [
+          20.0,
+          16.2,
+          39.9
+        ]
+      },
+      "meleeWeapon": {
+        "file": "pyre_meleeWeapon.png",
+        "tile": 384,
+        "dims_bu": [
+          1.41,
+          0.2,
+          0.37
+        ],
+        "dims_logical_px": [
+          84.6,
+          12.0,
+          22.2
+        ]
+      },
+      "drone": {
+        "file": "pyre_drone.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3268,
+          0.4879,
+          0.8387
+        ],
+        "dims_logical_px": [
+          19.6,
+          29.3,
+          50.3
+        ]
+      }
+    },
+    "nulltide": {
+      "core": {
+        "file": "nulltide_core.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5524,
+          0.3745,
+          0.8036
+        ],
+        "dims_logical_px": [
+          33.1,
+          22.5,
+          48.2
+        ]
+      },
+      "head": {
+        "file": "nulltide_head.png",
+        "tile": 320,
+        "dims_bu": [
+          0.3769,
+          0.265,
+          0.3184
+        ],
+        "dims_logical_px": [
+          22.6,
+          15.9,
+          19.1
+        ]
+      },
+      "backpack": {
+        "file": "nulltide_backpack.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5837,
+          0.5,
+          0.5203
+        ],
+        "dims_logical_px": [
+          35.0,
+          30.0,
+          31.2
+        ]
+      },
+      "lowerBody": {
+        "file": "nulltide_lowerBody.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5594,
+          0.34,
+          0.3485
+        ],
+        "dims_logical_px": [
+          33.6,
+          20.4,
+          20.9
+        ]
+      },
+      "legNear": {
+        "file": "nulltide_legNear.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5687,
+          0.9954,
+          0.16
+        ],
+        "dims_logical_px": [
+          34.1,
+          59.7,
+          9.6
+        ]
+      },
+      "legFar": {
+        "file": "nulltide_legFar.png",
+        "tile": 320,
+        "dims_bu": [
+          0.5687,
+          0.9954,
+          0.16
+        ],
+        "dims_logical_px": [
+          34.1,
+          59.7,
+          9.6
+        ]
+      },
+      "leftArm": {
+        "file": "nulltide_leftArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.6604,
+          0.3684,
+          1.0612
+        ],
+        "dims_logical_px": [
+          39.6,
+          22.1,
+          63.7
+        ]
+      },
+      "subWeapon": {
+        "file": "nulltide_subWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4925,
+          0.26,
+          0.3281
+        ],
+        "dims_logical_px": [
+          29.6,
+          15.6,
+          19.7
+        ]
+      },
+      "rightArm": {
+        "file": "nulltide_rightArm.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4693,
+          0.3551,
+          1.0612
+        ],
+        "dims_logical_px": [
+          28.2,
+          21.3,
+          63.7
+        ]
+      },
+      "mainWeapon": {
+        "file": "nulltide_mainWeapon.png",
+        "tile": 320,
+        "dims_bu": [
+          1.265,
+          0.23,
+          0.2899
+        ],
+        "dims_logical_px": [
+          75.9,
+          13.8,
+          17.4
+        ]
+      },
+      "leftThruster": {
+        "file": "nulltide_leftThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4813,
+          0.21,
+          0.8053
+        ],
+        "dims_logical_px": [
+          28.9,
+          12.6,
+          48.3
+        ]
+      },
+      "rightThruster": {
+        "file": "nulltide_rightThruster.png",
+        "tile": 320,
+        "dims_bu": [
+          0.4813,
+          0.21,
+          0.8053
+        ],
+        "dims_logical_px": [
+          28.9,
+          12.6,
+          48.3
+        ]
+      },
+      "meleeWeapon": {
+        "file": "nulltide_meleeWeapon.png",
+        "tile": 448,
+        "dims_bu": [
+          1.9107,
+          0.124,
+          0.2923
+        ],
+        "dims_logical_px": [
+          114.6,
+          7.4,
+          17.5
+        ]
+      },
+      "drone": {
+        "file": "nulltide_drone.png",
         "tile": 320,
         "dims_bu": [
           0.3268,

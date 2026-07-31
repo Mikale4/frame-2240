@@ -1,0 +1,23 @@
+{
+ "ok": true,
+ "mechs": [
+  "cirrus",
+  "halcyon",
+  "nocturne",
+  "nulltide",
+  "obelisk",
+  "pyre",
+  "terramoth",
+  "vesper"
+ ],
+ "blades": {
+  "halcyon": "beam",
+  "nocturne": "claw",
+  "vesper": "bayonet",
+  "terramoth": "pile",
+  "cirrus": "twindagger",
+  "obelisk": "ramshield",
+  "pyre": "cleaver",
+  "nulltide": "glaive"
+ }
+}
