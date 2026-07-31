@@ -126,6 +126,15 @@ export interface ProjectileSpawn {
    */
   decoyShot?: boolean;
   /**
+   * Detonates against incoming enemy fire as well as against mechs.
+   *
+   * Set on mines. A charge sitting in the open is a physical object, so a shot
+   * that runs into it should take it out — and lose itself doing so. That makes
+   * a minefield a genuine screen rather than only a tripwire, and gives the
+   * opponent a way through it that costs them ammunition instead of hull.
+   */
+  intercepts?: boolean;
+  /**
    * Ignores every damage reduction on the way in — chassis defence, drone
    * armour passives, guards, and Shield saturation alike.
    *

@@ -786,6 +786,7 @@ export class Supporter {
                 MINE_DRAW,
                 Math.cos(ang) * MINE_SPREAD,
                 Math.sin(ang) * MINE_SPREAD,
+                true,
               ),
             );
           }
@@ -920,6 +921,7 @@ export class Supporter {
     visualScale: number,
     offX = 0,
     offY = 0,
+    intercepts = false,
   ): ProjectileSpawn {
     return {
       x: this.x + offX,
@@ -947,6 +949,7 @@ export class Supporter {
       // three-pixel dot as a rifle round, and as each other.
       family,
       visualScale,
+      intercepts,
     };
   }
 

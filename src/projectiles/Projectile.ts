@@ -32,6 +32,8 @@ export class Projectile {
   prevY = 0;
 
   // ---- art and motion -------------------------------------------------------
+  /** Detonates against incoming enemy fire. See `ProjectileSpawn.intercepts`. */
+  intercepts = false;
   family: ProjFamilyId = 'pellet';
   visualScale = 1;
   velMul = 1;
@@ -68,6 +70,7 @@ export class Projectile {
     this.homing = s.homing;
     this.pierceLeft = s.pierceCount;
     this.element = s.element ?? 0;
+    this.intercepts = s.intercepts ?? false;
     this.family = s.family ?? 'pellet';
     this.visualScale = s.visualScale ?? 1;
     this.velMul = s.velMul ?? 1;

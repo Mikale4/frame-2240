@@ -24,8 +24,21 @@ import { PROJ_FAMILIES, PROJ_FAMILY_IDS, type ProjFamilyId } from '../projectile
 export const PROJ_TEX = 'fx_projectiles';
 export const PROJ_HALO_FRAME = 'halo';
 
-/** Cell size in texture pixels, and the half-extent shapes are drawn to. */
-const CELL = 160;
+/**
+ * Cell size in texture pixels, and the half-extent shapes are drawn to.
+ *
+ * The gap between the two is **padding, and it is load-bearing.** Several
+ * families finish with a Canvas `shadowBlur` of up to `0.55 * R` — around forty
+ * pixels — and a blur is not clipped to the shape that cast it. At the original
+ * 160/74 there were six pixels of margin, so every one of those glows spilled
+ * into the neighbouring cells. Sampled back at a large `visualScale` (a mine is
+ * drawn at 3.4x) the bleed reads as a hard square edge around the shot, which is
+ * exactly what it is: the next cell along.
+ *
+ * `R` is unchanged, so `PROJ_CELL_SPAN` and every drawn size stay identical —
+ * this only buys room for the blur to fade out in.
+ */
+const CELL = 240;
 const R = 74;
 /** Logical pixels spanned by `2*R`, used by the renderer to size a family. */
 export const PROJ_CELL_SPAN = R * 2;

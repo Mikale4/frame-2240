@@ -199,6 +199,7 @@ export class MatchSim {
     this.resolveDroneCollisions();
     this.applyShieldSweep();
     this.stepDroneRoles();
+    this.resolveMineIntercepts();
     this.pushApart();
     this.checkEnd();
   }
@@ -243,6 +244,36 @@ export class MatchSim {
     }
   }
 
+
+  /**
+   * Mines against incoming fire: both are consumed.
+   *
+   * A charge sitting in the open is a physical object, so a shot that runs into
+   * one takes it out and is spent doing so. That turns a minefield from a
+   * tripwire into a genuine screen — and hands the opponent a way through it
+   * that costs ammunition rather than hull.
+   *
+   * Only enemy fire, and only shots that are actually moving: a mine must not
+   * eat its own side's rounds, and two mines from the same drop sitting next to
+   * each other must not annihilate each other on the tick they are laid.
+   */
+  private resolveMineIntercepts(): void {
+    const items = this.projectiles.items;
+    for (const mine of items) {
+      if (!mine.active || !mine.intercepts) continue;
+      for (const shot of items) {
+        if (!shot.active || shot === mine) continue;
+        if (shot.team === mine.team || shot.intercepts) continue;
+        // A lance is not stopped by a mine any more than it is by a guard.
+        if (shot.barrier === BarrierResponse.Pierce) continue;
+        if (Math.hypot(shot.x - mine.x, shot.y - mine.y) > mine.radius + shot.radius) continue;
+        mine.active = false;
+        shot.active = false;
+        this.events.push({ t: 'explode', x: mine.x, y: mine.y, big: false });
+        break;
+      }
+    }
+  }
 
   /**
    * The drone roles that need to see the whole field.
