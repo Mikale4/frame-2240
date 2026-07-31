@@ -87,7 +87,6 @@ describe('the difficulty ladder', () => {
   it('unlocks behaviours rather than only turning a dial', () => {
     // The point of the rewrite: EXTREME is not NORMAL with better dice.
     const flags = [
-      'perfectBarrier',
       'threatSolver',
       'punishRecovery',
       'weaponIq',
@@ -164,6 +163,76 @@ describe('what EXTREME does that the others do not', () => {
       if (ai.tactic === AiTactic.Approach) approach++;
     }
     expect(approach).toBe(120);
+  });
+});
+
+describe('resource management', () => {
+  /** Runs a mirror match and reports how the boost gauge was managed. */
+  function boostUse(d: Difficulty, seed: number): { mean: number; dry: number } {
+    const s = new MatchSim({ playerDef: HALCYON, enemyDef: HALCYON, seed, introTicks: 1 });
+    const a = new RivalAI({ difficulty: d }, new Rng(seed ^ 0x1111));
+    const b = new RivalAI({ difficulty: d }, new Rng(seed ^ 0x2222));
+    let sum = 0;
+    let dry = 0;
+    let n = 0;
+    for (let i = 0; i < 5400 && s.phase !== MatchPhase.Over; i++) {
+      s.step(
+        a.think(s.player, s.enemy, s.activeProjectiles(), W, H),
+        b.think(s.enemy, s.player, s.activeProjectiles(), W, H),
+      );
+      sum += s.player.boost / HALCYON.flight.maxBoost;
+      if (s.player.boost < HALCYON.flight.dashCost) dry++;
+      n++;
+    }
+    return { mean: sum / n, dry: dry / n };
+  }
+
+  const average = (d: Difficulty) => {
+    let mean = 0;
+    let dry = 0;
+    for (let i = 0; i < 4; i++) {
+      const r = boostUse(d, 1000 + i * 7717);
+      mean += r.mean;
+      dry += r.dry;
+    }
+    return { mean: mean / 4, dry: dry / 4 };
+  };
+
+  it('never flies the boost gauge into the ground', () => {
+    /**
+     * The regression this exists for: every tier used to hold the thruster down
+     * whenever it wanted to move, and EXTREME spent **59 % of a match** with
+     * less boost than a single dash costs — permanently unable to dodge. The
+     * gauge pays for travel *and* for evasion and the two are not
+     * interchangeable, so a share of it is reserved rather than spent.
+     */
+    for (const d of [Difficulty.Normal, Difficulty.Hard, Difficulty.Extreme]) {
+      const r = average(d);
+      expect(r.mean, `${DIFFICULTY_NAMES[d]} mean boost`).toBeGreaterThan(0.25);
+      expect(r.dry, `${DIFFICULTY_NAMES[d]} ticks unable to dash`).toBeLessThan(0.3);
+    }
+  });
+
+  it('keeps a dash in hand at the tiers that know to', () => {
+    for (const d of [Difficulty.Normal, Difficulty.Hard, Difficulty.Extreme]) {
+      expect(AI_PROFILES[d].boostReserveDashes, DIFFICULTY_NAMES[d]).toBeGreaterThan(0);
+    }
+    // ...but not so much that it never spends any. Hoarding is not management:
+    // reserving three dashes left EXTREME repositioning at walking pace and
+    // measurably behind HARD.
+    for (const d of [Difficulty.Easy, Difficulty.Normal, Difficulty.Hard, Difficulty.Extreme]) {
+      expect(AI_PROFILES[d].boostReserveDashes, DIFFICULTY_NAMES[d]).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('treats the dash as the evasion and sustained thrust as travel', () => {
+    // A dash covers 105px in the seven ticks an evasion takes, where holding
+    // boost covers 66. Every tier should reach for it harder when dodging than
+    // when merely repositioning.
+    for (const d of [Difficulty.Normal, Difficulty.Hard, Difficulty.Extreme]) {
+      const p = AI_PROFILES[d];
+      expect(p.evadeDashChance, DIFFICULTY_NAMES[d]).toBeGreaterThan(p.dashChance);
+    }
   });
 });
 

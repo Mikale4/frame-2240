@@ -50,12 +50,6 @@ export interface AiProfile {
   /** Base chance of attempting a barrier burst against a tracked shot. */
   barrierChance: number;
   /**
-   * Burst on the *optimal* tick instead of on a roll: wait until the shot is
-   * about to land, so the invulnerability window covers the impact rather than
-   * expiring before it.
-   */
-  perfectBarrier: boolean;
-  /**
    * Evade by solving for the direction that clears *every* tracked shot, rather
    * than picking a random side of the nearest one.
    */
@@ -82,6 +76,26 @@ export interface AiProfile {
   aggression: number;
   /** Per-tick chance of spending a dash while repositioning. */
   dashChance: number;
+  /**
+   * Dashes worth of boost to keep in hand rather than burn on sustained thrust.
+   *
+   * The gauge pays for two different things and they are not interchangeable.
+   * Over the seven ticks an evasion actually takes, a dash moves **105 px for 12
+   * boost** where holding the thruster moves **66 px**; sustained boost is the
+   * more efficient way to *travel* and much the worse way to *dodge*. A rival
+   * that holds boost whenever it wants to move arrives at every emergency with
+   * an empty gauge and nothing left to dodge with.
+   */
+  boostReserveDashes: number;
+  /**
+   * Per-tick chance of dashing specifically to break away from incoming fire.
+   *
+   * Separate from `dashChance`, and much higher, because this is what the dash
+   * is *for*. It is also the cheaper half of the defensive budget: a dash out of
+   * the line costs 12 boost where a barrier burst costs 30 barrier and six ticks
+   * of movement lock, so a rival that dodges well spends fewer bursts.
+   */
+  evadeDashChance: number;
 }
 
 export const AI_PROFILES: Record<Difficulty, AiProfile> = {
@@ -89,7 +103,6 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     skill: 0.1,
     reaction: 16,
     barrierChance: 0.04,
-    perfectBarrier: false,
     threatSolver: false,
     punishRecovery: false,
     weaponIq: false,
@@ -98,12 +111,13 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     closeOnGuard: false,
     aggression: 0.26,
     dashChance: 0.03,
+    boostReserveDashes: 0,
+    evadeDashChance: 0.05,
   },
   [Difficulty.Normal]: {
     skill: 0.5,
     reaction: 9,
     barrierChance: 0.35,
-    perfectBarrier: false,
     threatSolver: false,
     punishRecovery: false,
     weaponIq: false,
@@ -112,12 +126,13 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     closeOnGuard: false,
     aggression: 0.5,
     dashChance: 0.1,
+    boostReserveDashes: 1,
+    evadeDashChance: 0.18,
   },
   [Difficulty.Hard]: {
     skill: 0.78,
     reaction: 6,
     barrierChance: 0.6,
-    perfectBarrier: false,
     threatSolver: true,
     punishRecovery: true,
     weaponIq: true,
@@ -126,6 +141,8 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     closeOnGuard: false,
     aggression: 0.68,
     dashChance: 0.16,
+    boostReserveDashes: 2,
+    evadeDashChance: 0.4,
   },
   [Difficulty.Extreme]: {
     skill: 1,
@@ -135,7 +152,6 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     // could have emitted.
     reaction: 3,
     barrierChance: 1,
-    perfectBarrier: true,
     threatSolver: true,
     punishRecovery: true,
     weaponIq: true,
@@ -148,6 +164,13 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     // one landed, not on volume of fire.
     aggression: 0.72,
     dashChance: 0.18,
+    // Two dashes in hand. Three left EXTREME unable to use sustained thrust at
+    // all — it repositioned at walking pace to protect boost it never spent, and
+    // measured a third of a health bar *behind* HARD. One let the defensive
+    // ladder drain it to empty and spend barrier instead. Managing a resource
+    // means spending it well, not hoarding it and not running it dry.
+    boostReserveDashes: 2,
+    evadeDashChance: 0.7,
   },
 };
 
@@ -180,6 +203,14 @@ export class RivalAI {
    */
   private strafeDir: 1 | -1 = 1;
   private strafeTicks = 0;
+  /**
+   * Clearance the movement solver achieved on its best heading, in pixels.
+   *
+   * Negative means even the best available dodge still ends inside a shot. That
+   * is the signal the defensive ladder needs: it is the difference between "I am
+   * dodging this" and "I cannot dodge this and must spend a barrier".
+   */
+  private lastClearance = Infinity;
 
   constructor(
     private readonly cfg: AiConfig,
@@ -297,17 +328,43 @@ export class RivalAI {
     if (this.wantBoost) held.v |= 1 << Btn.Boost;
 
     // ---- Dash bursts -------------------------------------------------------
+    /**
+     * A dash is the evasion, and it is spent **on the threat, not on the
+     * tactic**.
+     *
+     * The Evade tactic persists for tens of ticks; dashing on a timer for all of
+     * them costs 12 boost every eight ticks against a 0.9/tick regen that the
+     * spending itself keeps resetting — permanently net-negative, and measured
+     * at EXTREME sitting below one dash of boost for 59 % of a match. Requiring
+     * a shot that is actually about to arrive turns it into one dash per danger,
+     * which is what the move is for and what the gauge can pay for.
+     *
+     * It may spend the reserve — that is what the reserve is *for*. Sustained
+     * thrust may not; see `chooseMovement`.
+     */
     this.dashCharge--;
+    const imminent = incoming !== null && incoming.ttc <= 10;
+    const evadeDash = this.tactic === AiTactic.Evade && imminent;
+    const floor = evadeDash ? 0 : this.boostReserve(self);
     const wantsDash =
-      (this.tactic === AiTactic.Evade || (this.tactic === AiTactic.Approach && dist > 340)) &&
+      (evadeDash || (this.tactic === AiTactic.Approach && dist > 340)) &&
       this.dashCharge <= 0 &&
-      self.boost > self.def.flight.dashCost + 12 &&
+      self.boost >= self.def.flight.dashCost + floor &&
       (mx !== 0 || my !== 0) &&
-      this.rng.chance(this.p.dashChance);
+      this.rng.chance(evadeDash ? this.p.evadeDashChance : this.p.dashChance);
     if (wantsDash) {
       pressed.v |= 1 << Btn.Boost;
       held.v |= 1 << Btn.Boost;
-      this.dashCharge = 40 - Math.round(this.skill * 18);
+      // Self-regulating: dash freely on a full tank, back off as it empties, so
+      // the rate finds its own sustainable level instead of being a fixed number
+      // that is either wasteful or timid. A flat 22 kept the gauge healthy and
+      // cost EXTREME its whole margin over HARD; scaling it restores the margin
+      // *and* the economy, because the tier that husbands boost best is then the
+      // tier that gets to dash most.
+      const frac = self.boost / self.def.flight.maxBoost;
+      this.dashCharge = evadeDash
+        ? Math.round(18 - this.skill * 8 + (1 - frac) * 18)
+        : 40 - Math.round(this.skill * 18);
     }
 
     // ---- Guard / barrier ---------------------------------------------------
@@ -348,12 +405,41 @@ export class RivalAI {
      * The window is floored at HARD's width rather than scaling down with the
      * shorter reaction, because a faster rival narrowing its own opportunity is
      * the same inverted-dial mistake as the lookahead above.
+     *
+     * There was a `perfectBarrier` flag here — press as late as possible so the
+     * invulnerability covers the impact — and it was removed because ablation
+     * showed it changing **nothing**, for a reason worth writing down: a burst
+     * grants 36 ticks of invulnerability against a 9-tick tracking window. The
+     * cover is four times longer than the whole window, so *when* inside it the
+     * button goes down cannot matter. Perfect timing is not a skill this game's
+     * numbers reward. What separates the tiers is `barrierChance` — whether the
+     * rival reaches for the gauge at all — and the ladder below it.
      */
     const barrierWindow =
       incoming !== null && incoming.ttc <= Math.max(9, this.reactionTicks + 3) && incoming.ttc >= 0;
 
+    /**
+     * The defensive ladder: **dodge, then burst, then guard.**
+     *
+     * A barrier burst costs 30 and locks movement for six ticks; a dash costs 12
+     * and leaves you free. So moving out of the way is always the first answer,
+     * and the gauge is for the shots that movement cannot solve. `cornered` is
+     * the rung-change: no boost for a dash, or the solver reporting that even its
+     * best heading still ends inside the shot.
+     *
+     * Note that being out of boost never stops the rival *trying* to evade — the
+     * Evade tactic still sets a heading and the mech still moves, just at
+     * ordinary thrust. What changes is that it stops relying on the dodge and
+     * starts spending barrier to survive.
+     */
+    const canDash = self.boost >= self.def.flight.dashCost && this.dashCharge <= 0;
+    const dodgeFails = this.p.threatSolver && this.lastClearance < 0;
+    const cornered = barrierWindow && (!canDash || dodgeFails);
+
     const shouldBarrier =
-      canBarrier && barrierWindow && this.rng.chance(this.p.barrierChance);
+      canBarrier &&
+      barrierWindow &&
+      this.rng.chance(cornered ? Math.max(this.p.barrierChance, 0.85) : this.p.barrierChance);
 
     if (shouldBarrier) {
       // Barrier burst absorbs the shot and feeds saturation — the good answer.
@@ -362,10 +448,18 @@ export class RivalAI {
       this.guardTicks = 26;
     } else if (
       !self.shieldActive &&
-      this.guardTicks > 0 &&
-      self.barrier > self.def.gauges.maxBarrier * 0.25 &&
-      incoming !== null
+      incoming !== null &&
+      self.barrier > 0 &&
+      // The bottom rung. Either riding out the moments after a burst, or —
+      // and this is the new part — cornered with too little gauge to burst at
+      // all. Holding costs nothing up front and still takes 80 % off gunfire,
+      // which beats eating the shot clean because the burst was unaffordable.
+      (this.guardTicks > 0 ||
+        (cornered && self.barrier < self.def.barrier.cost)) &&
+      self.barrier > self.def.gauges.maxBarrier * 0.08
     ) {
+      // Held, never pressed: `isPressed` is what triggers a burst, `isHeld` is
+      // what raises a guard. Setting only `held` keeps these two apart.
       held.v |= 1 << Btn.Barrier;
     }
 
@@ -497,7 +591,10 @@ export class RivalAI {
         my = Math.abs(dyRaw) > 90 ? Math.sign(dyRaw) : 0;
         break;
       case AiTactic.Evade: {
-        this.wantBoost = true;
+        // Sustained thrust is the *slow* way out of a shot's path. The dash is
+        // the evasion, and it is handled in `think`; holding boost here as well
+        // just empties the gauge before the next emergency.
+        this.wantBoost = false;
         const solved = this.p.threatSolver ? this.solveEvade(self, arenaW, arenaH) : null;
         if (solved) {
           mx = solved.x;
@@ -529,12 +626,31 @@ export class RivalAI {
     // to shoot. At EXTREME an approach carries a vertical component so it
     // arrives off the firing axis — the same closing distance, a worse angle to
     // be led from.
-    if (this.p.offAxisApproach && this.tactic === AiTactic.Approach && my === 0) {
+    // ...but only while they are actually shooting. Breaking vertical on *every*
+    // approach just makes every approach diagonal, which closes more slowly and
+    // measured as a net loss; the angle is only worth the distance when there is
+    // something being aimed down it.
+    if (
+      this.p.offAxisApproach &&
+      this.tactic === AiTactic.Approach &&
+      my === 0 &&
+      foe.act === ActState.Attack
+    ) {
       my = self.y > foe.y ? -1 : 1;
     }
 
+    // The boost reserve, applied to every tactic at once rather than restated in
+    // each. Sustained thrust is for covering ground; whatever is set aside here
+    // stays available for the dashes that actually dodge.
+    if (this.wantBoost && self.boost <= this.boostReserve(self)) this.wantBoost = false;
+
     this.dirX = mx;
     this.dirY = my;
+  }
+
+  /** Boost held back for dashes rather than spent on sustained thrust. */
+  private boostReserve(self: Combatant): number {
+    return this.p.boostReserveDashes * self.def.flight.dashCost;
   }
 
   /** The eight movement directions, plus holding position. */
@@ -599,6 +715,9 @@ export class RivalAI {
       if (score > bestScore) {
         bestScore = score;
         best = { x: dx, y: dy };
+        // The raw clearance, not the wall-penalised score — the ladder wants to
+        // know whether the shot is escapable, not whether the escape is tidy.
+        this.lastClearance = closest;
       }
     }
     return best;
