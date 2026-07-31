@@ -33,6 +33,15 @@ export interface AiConfig {
 const TACTIC_NAMES = ['APPROACH', 'HOLD', 'RETREAT', 'STRAFE', 'EVADE'];
 
 /**
+ * Below this speed a projectile is a placed hazard rather than a shot.
+ *
+ * Mines and embers are spawned with a nominal 0.001 drift so nothing downstream
+ * has to special-case a zero heading; anything genuinely fired travels an order
+ * of magnitude faster than this.
+ */
+const PLACED_SPEED = 0.35;
+
+/**
  * How much more willing a rival is to dash while its boost is free.
  *
  * A Speed burst removes the cost, so the rationing that governs the rest of a
@@ -855,6 +864,18 @@ export class RivalAI {
     const pref = this.preferredRangeFor(self, foe);
     const lifeFrac = self.life / self.def.gauges.maxLife;
 
+    /**
+     * **Standing in fire outranks every other consideration.**
+     *
+     * The Evade tactic is normally reached through `nearestThreat`, which scores
+     * an incoming shot by time-to-contact — and a placed hazard never arrives,
+     * so it produced no threat, no Evade, and no call to the movement solver.
+     * The rival would settle into `Hold` inside a burning patch and take the
+     * damage until it went out. A hazard you are already inside is the most
+     * certain damage on the field; nothing else is worth deciding first.
+     */
+    if (this.standingInHazard(self)) return AiTactic.Evade;
+
     // Someone hiding behind a guard or a Shield burst is taking a fraction of
     // anything shot at them and several times as much from a sword. Go and get
     // them rather than plinking at a wall.
@@ -1051,14 +1072,40 @@ export class RivalAI {
    * Still fair: projectile positions and velocities are on screen, and the
    * decision is gated behind the tier's reaction delay like every other one.
    */
+  /** Is the mech currently inside a placed hazard — a mine, or burning ground? */
+  private standingInHazard(self: Combatant): boolean {
+    for (const p of this.seenProjectiles) {
+      if (!p.active || p.team === self.team) continue;
+      if (Math.hypot(p.vx, p.vy) >= PLACED_SPEED) continue;
+      if (Math.hypot(p.x - self.x, p.y - self.y) < p.radius + self.def.rig.hurtRadius) return true;
+    }
+    return false;
+  }
+
   private solveEvade(self: Combatant, arenaW: number, arenaH: number): { x: number; y: number } | null {
-    const threats: Projectile[] = [];
+    /**
+     * **Placed hazards are not shots, and must not be scored like them.**
+     *
+     * A mine or a burning ember does not travel, so the question it poses is
+     * "where do I end up", not "what is the closest I come on the way". Scoring
+     * them like incoming fire froze the rival solid inside a hazard field:
+     * standing still holds a constant distance, while *every* escape route
+     * brushes past some ember en route, so holding position won the comparison
+     * and the mech sat in the flames until they went out.
+     */
+    const moving: Projectile[] = [];
+    const placed: Projectile[] = [];
     for (const p of this.seenProjectiles) {
       if (!p.active || p.team === self.team) continue;
       if (Math.hypot(p.x - self.x, p.y - self.y) > 560) continue;
-      threats.push(p);
+      (Math.hypot(p.vx, p.vy) < PLACED_SPEED ? placed : moving).push(p);
     }
-    if (threats.length === 0) return null;
+    if (moving.length === 0 && placed.length === 0) return null;
+
+    /** Already standing in something that burns. Holding position is not an option. */
+    const standingIn = placed.some(
+      (p) => Math.hypot(p.x - self.x, p.y - self.y) < p.radius + self.def.rig.hurtRadius,
+    );
 
     const HORIZON = 26;
     const step = self.def.flight.boostMaxSpeed * 0.72;
@@ -1072,24 +1119,38 @@ export class RivalAI {
       const vy = (dy / len) * step;
 
       let closest = Infinity;
+      // Moving shots: the whole path matters, because being hit anywhere along
+      // it is being hit.
       for (let t = 3; t <= HORIZON; t += 3) {
         const px = self.x + vx * t;
         const py = self.y + vy * t;
-        for (const p of threats) {
+        for (const p of moving) {
           const d = Math.hypot(p.x + p.vx * t - px, p.y + p.vy * t - py) - p.radius;
           if (d < closest) closest = d;
         }
       }
 
-      let score = closest;
-      // Flying into a wall to dodge one shot loses the next exchange. Weighted
-      // heavily enough to override any clearance a corner could offer.
       const endX = self.x + vx * HORIZON;
       const endY = self.y + vy * HORIZON;
+
+      // Placed hazards: only the destination matters. Clipping the edge of one
+      // ember to reach open ground is a trade worth making, and treating it as
+      // a failure is what caused the freeze.
+      let placedClear = Infinity;
+      for (const p of placed) {
+        const d = Math.hypot(p.x - endX, p.y - endY) - p.radius;
+        if (d < placedClear) placedClear = d;
+      }
+
+      let score = Math.min(closest, placedClear);
+      // Flying into a wall to dodge one shot loses the next exchange. Weighted
+      // heavily enough to override any clearance a corner could offer.
       if (endX < margin || endX > arenaW - margin) score -= 280;
       if (endY < margin || endY > arenaH - margin) score -= 280;
-      // Standing still is never the confident answer while under fire.
-      if (dx === 0 && dy === 0) score -= 45;
+      // Standing still is never the confident answer while under fire — and
+      // while *inside* a hazard it is not an answer at all, since the damage is
+      // arriving whether or not anything is aimed at you.
+      if (dx === 0 && dy === 0) score -= standingIn ? 4000 : 45;
 
       if (score > bestScore) {
         bestScore = score;
