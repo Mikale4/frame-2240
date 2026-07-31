@@ -240,6 +240,52 @@ export interface MeleeProfile {
 }
 
 /**
+ * What a drone physically does with its turn.
+ *
+ * Every one of these is a different *verb*, not a different number: the point is
+ * that fighting NOCTURNE's escort and fighting OBELISK's should be different
+ * problems, not the same problem in another colour.
+ */
+export type SupporterRole =
+  /** Fires its owner's sub-weapon. The original behaviour, and the baseline. */
+  | 'shooter'
+  /**
+   * Paints the target. Its owner's shots gain tracking against a painted mech.
+   *
+   * A force multiplier rather than a second gun — it makes the *pilot* better,
+   * which is the most HALCYON thing an escort could do.
+   */
+  | 'designator'
+  /** Runs a beam back to its owner that regenerates their barrier. */
+  | 'tether'
+  /**
+   * Shoots down incoming projectiles instead of shooting the enemy.
+   *
+   * A marksman's problem is being made to move. This is what lets one not.
+   */
+  | 'interceptor'
+  /** Seeds the stage with stationary proximity mines. */
+  | 'miner'
+  /**
+   * Strings a live wire between itself and its owner.
+   *
+   * Pairs with the Pincer play: cross to the far side and the tether sweeps
+   * through anything between the two machines.
+   */
+  | 'arcTether'
+  /** Raises a dome that erases enemy shots around itself and its owner. */
+  | 'dome'
+  /** Leaves burning ground that keeps applying its element after it has moved on. */
+  | 'hazard'
+  /**
+   * Projects a false silhouette that draws lock-on and fire.
+   *
+   * The only ability in the game that attacks the opponent's *information*
+   * rather than their hull.
+   */
+  | 'decoy';
+
+/**
  * What a drone does for its pilot simply by being in the air.
  *
  * Every entry is a multiplier applied only while the drone is deployed and
@@ -346,6 +392,18 @@ export interface SupporterDef {
   fireRange: number;
   /** What this drone does for its pilot while deployed and alive. */
   passive: DronePassiveDef;
+  /**
+   * What the drone physically *does*, as opposed to what it grants.
+   *
+   * The 2005 reference's supporters are not eight copies of a gun: some raise a
+   * shield, some seed the stage with mines, some fire a beam far bigger than the
+   * machine carrying it. `shooter` is the original behaviour and remains the
+   * default; every other role is its own mechanic, tied to the pilot it belongs
+   * to. See `SupporterRole`.
+   */
+  role: SupporterRole;
+  /** Role tuning. Meaning depends on `role`; see each role's implementation. */
+  roleValue?: number;
 }
 
 /** One renderable part of the mech, mirroring the reference's helper-per-part build. */

@@ -59,8 +59,8 @@ export const MUSIC_CUES: MusicCueDef[] = [
   // Pilot themes
   { name: 'theme_halcyon', present: true },
   { name: 'theme_nocturne', present: true },
-  { name: 'theme_vesper', present: false },
-  { name: 'theme_terramoth', present: false },
+  { name: 'theme_vesper', present: true },
+  { name: 'theme_terramoth', present: true },
   { name: 'theme_cirrus', present: false },
   { name: 'theme_obelisk', present: false },
   { name: 'theme_pyre', present: false },

@@ -491,6 +491,8 @@ export const HALCYON: MechDef = {
   // class, so the lighter frame keeps its supporter tucked in.
   supporter: {
     name: 'ARBITER',
+    // Paints the target; HALCYON's own shots track a painted mech.
+    role: 'designator',
     followBack: 70,
     followDown: 58,
     followAccel: 0.055,
@@ -555,6 +557,9 @@ export const NOCTURNE: MechDef = {
   // to bear, but its volley is the harder one.
   supporter: {
     name: 'WARDEN',
+    // Runs a repair beam home. Doubles down on Rook's barrier-regen passive.
+    role: 'tether',
+    roleValue: 1.6,
     followBack: 94,
     followDown: 66,
     followAccel: 0.042,

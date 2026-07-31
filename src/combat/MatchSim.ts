@@ -53,6 +53,32 @@ const MELEE_REPEL_KNOCK = 13;
 /** One second. Long enough to punish, which is the whole point of the read. */
 const MELEE_REPEL_STUN = 60;
 
+/** `arcTether`: how often the wire can bite, and for how much. */
+const ARC_TETHER_COOLDOWN = 18;
+const ARC_TETHER_DAMAGE = 34;
+
+/** How long a designator's paint outlives the drone's line of sight. */
+const DESIGNATOR_PAINT_TICKS = 45;
+
+/** Does the segment a-b pass within `r` of the point c? Used by the arc tether. */
+function segmentHitsCircle(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number,
+  r: number,
+): boolean {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 1e-6) return Math.hypot(cx - ax, cy - ay) <= r;
+  let t = ((cx - ax) * dx + (cy - ay) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(cx - (ax + dx * t), cy - (ay + dy * t)) <= r;
+}
+
 /**
  * The authoritative, engine-agnostic match simulation.
  *
@@ -172,6 +198,7 @@ export class MatchSim {
     this.resolveCollisions();
     this.resolveDroneCollisions();
     this.applyShieldSweep();
+    this.stepDroneRoles();
     this.pushApart();
     this.checkEnd();
   }
@@ -213,6 +240,123 @@ export class MatchSim {
         const s = c.supporter;
         this.events.push({ t: 'assist', x: s.x, y: s.y, angle: s.aim, ownerId: c.id, auto: true });
       }
+    }
+  }
+
+
+  /**
+   * The drone roles that need to see the whole field.
+   *
+   * `dome` erases shots around itself, `interceptor` picks one out of the air,
+   * `arcTether` electrifies the span back to its owner, and `tether` feeds the
+   * owner's barrier. All four are here rather than in `Supporter` for the same
+   * reason the drone step is: they read the projectile pool and both combatants,
+   * and threading either through the supporter's signature would be worse than
+   * doing it where both are already in hand.
+   */
+  private stepDroneRoles(): void {
+    for (const c of this.combatants) {
+      const s = c.supporter;
+      if (!s.onStation || !c.alive) continue;
+      const foe = this.opponentOf(c);
+
+      switch (c.def.supporter.role) {
+        case 'dome': {
+          // A bubble that eats shots. Deliberately erases rather than damages:
+          // the drone is the cost, and standing in the wrong place is the answer.
+          if (!s.domeActive) break;
+          const r = c.def.supporter.roleValue ?? 140;
+          for (const p of this.projectiles.items) {
+            if (!p.active || p.team === c.team) continue;
+            // A piercing lance is not stopped by a bubble, exactly as it is not
+            // stopped by a guard. The dome is a wall with the same known door.
+            if (p.barrier === BarrierResponse.Pierce) continue;
+            if (Math.hypot(p.x - s.x, p.y - s.y) > r) continue;
+            p.active = false;
+            this.events.push({ t: 'absorb', x: p.x, y: p.y, victimId: c.id, charge: 0 });
+          }
+          break;
+        }
+
+        case 'interceptor': {
+          // One shot at a time, on the ordinary weapon cooldown, at whichever
+          // incoming round is closest to landing. Precise rather than broad —
+          // the opposite trade to the dome.
+          if (!s.ready) break;
+          const range = c.def.supporter.roleValue ?? 300;
+          let best: Projectile | null = null;
+          let bestD = Infinity;
+          for (const p of this.projectiles.items) {
+            if (!p.active || p.team === c.team) continue;
+            if (p.barrier === BarrierResponse.Pierce) continue;
+            const d = Math.hypot(p.x - c.x, p.y - c.y);
+            if (d > range || d >= bestD) continue;
+            bestD = d;
+            best = p;
+          }
+          if (best) {
+            best.active = false;
+            s.cooldown = c.def.supporter.cooldown;
+            this.events.push({ t: 'absorb', x: best.x, y: best.y, victimId: c.id, charge: 0 });
+          }
+          break;
+        }
+
+        case 'arcTether': {
+          // A live wire between drone and owner. With the Pincer play the span
+          // crosses the target, which is the whole idea.
+          if (!s.tetherLive || s.arcCooldown > 0) break;
+          if (!foe.alive) break;
+          if (!segmentHitsCircle(s.x, s.y, c.x, c.y, foe.x, foe.y, foe.def.rig.hurtRadius)) break;
+          s.arcCooldown = ARC_TETHER_COOLDOWN;
+          foe.takeHit({
+            x: foe.x,
+            y: foe.y,
+            vx: Math.sign(foe.x - c.x) || 1,
+            vy: 0,
+            damage: ARC_TETHER_DAMAGE,
+            guardDamage: ARC_TETHER_DAMAGE * 0.5,
+            life: 1,
+            radius: 8,
+            ownerId: c.id,
+            team: c.team,
+            kind: ProjKind.Beam,
+            barrier: BarrierResponse.Absorb,
+            hitstop: 4,
+            hitstun: 6,
+            knockback: 2,
+            homing: 0,
+            pierceCount: 0,
+            element: Element.Shock,
+          });
+          this.events.push({ t: 'hit', x: foe.x, y: foe.y, damage: ARC_TETHER_DAMAGE, ownerId: c.id, victimId: foe.id, kind: ProjKind.Beam });
+          break;
+        }
+
+        case 'designator': {
+          // Paint refreshed while the target is in reach; it lapses on its own
+          // once the drone loses sight, so killing the escort turns the tracking
+          // off within a second rather than instantly.
+          if (!foe.alive) break;
+          if (Math.hypot(foe.x - s.x, foe.y - s.y) > c.def.supporter.fireRange) break;
+          foe.paintedTicks = Math.max(foe.paintedTicks, DESIGNATOR_PAINT_TICKS);
+          break;
+        }
+
+        case 'tether': {
+          // Barrier only, and only while the drone is holding station. See the
+          // note in `Supporter.stepRole` for why it may never touch life.
+          if (!s.tetherLive) break;
+          const rate = c.def.supporter.roleValue ?? 1.6;
+          c.barrier = Math.min(c.def.gauges.maxBarrier, c.barrier + rate);
+          break;
+        }
+
+        default:
+          break;
+      }
+
+      if (s.arcCooldown > 0) s.arcCooldown--;
     }
   }
 

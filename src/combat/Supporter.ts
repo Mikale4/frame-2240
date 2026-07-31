@@ -3,6 +3,9 @@ import type { SupporterDef } from '../mechs/MechDef';
 import type { ProjectileSpawn, SimEvent } from './types';
 import { wrapAngle } from '../core/MathUtil';
 import { playstyleFor, type DroneDoctrine } from '../ai/Playstyles';
+import type { SupporterRole } from '../mechs/MechDef';
+import { Element } from './Status';
+import { BarrierResponse, ProjKind } from './types';
 
 /**
  * The supporter drone.
@@ -195,6 +198,46 @@ const HARASS_GAP = 120;
 /** Life fraction below which the drone stops volunteering for anything. */
 const REGROUP_LIFE = 0.35;
 
+// ---- role tuning -----------------------------------------------------------
+
+/**
+ * Roles that also fire the owner's sub-weapon, drawing from the charge rack.
+ *
+ * **Most roles are additive, not replacements.** Measured: a role that costs a
+ * drone its gun has to be worth more than the gun, and four of them were not —
+ * the repair tether cost NOCTURNE 0.26 of a life bar, the decoy cost NULLTIDE
+ * 0.31. Painting, projecting a silhouette or trailing a wire are things a drone
+ * can do *while* shooting, so they do.
+ *
+ * The two exceptions are genuinely full-time jobs: a dome has to be held, and an
+ * interceptor's cooldown is already spent picking shots out of the air.
+ */
+const SPENDS_CHARGES = new Set<SupporterRole>([
+  'shooter',
+  'designator',
+  'decoy',
+  'tether',
+  'arcTether',
+  'miner',
+  'hazard',
+]);
+/** `arcTether`: shortest span that counts as a wire rather than a formation gap. */
+const ARC_MIN_SPAN = 150;
+/** `decoy`: how often a new silhouette is thrown, how long it lasts, how far out. */
+const DECOY_PERIOD = 150;
+const DECOY_LIFE = 110;
+const DECOY_THROW = 130;
+/** `miner`: cadence, lifetime and bite of a dropped charge. */
+const MINE_PERIOD = 96;
+const MINE_LIFE = 900;
+const MINE_DAMAGE = 58;
+const MINE_RADIUS = 26;
+/** `hazard`: burning ground is frequent, short and weak — the element is the point. */
+const HAZARD_PERIOD = 26;
+const HAZARD_LIFE = 210;
+const HAZARD_DAMAGE = 12;
+const HAZARD_RADIUS = 30;
+
 /** What the drone needs to know about one projectile in order to dodge it. */
 export interface DroneThreat {
   x: number;
@@ -340,6 +383,20 @@ export class Supporter {
   doctrine: DroneDoctrine = 'escort';
   /** The team-up play being run this tick, for the debug overlay and tests. */
   tactic: DroneTactic = DroneTactic.Escort;
+
+  // ---- role state ----------------------------------------------------------
+  /** Cadence counter for whichever role this drone runs. */
+  private roleTimer = 0;
+  /** `dome`: true while the bubble is up. `MatchSim` sweeps shots out of it. */
+  domeActive = false;
+  /** `decoy`: ticks the false silhouette has left, and where it is standing. */
+  decoyTicks = 0;
+  decoyX = 0;
+  decoyY = 0;
+  /** `arcTether`: true while the wire between drone and owner is live. */
+  tetherLive = false;
+  /** `arcTether`: ticks before the wire may bite again. */
+  arcCooldown = 0;
 
   /** The attack this drone was ordered to fire, held through the windup. */
   private pending: AttackDef | null = null;
@@ -520,7 +577,14 @@ export class Supporter {
     this.slew(owner, target);
 
     // A rebuilding drone is a passenger: no gun, no passive, no orders.
-    if (this.mode === DroneMode.Rebuilding) return;
+    if (this.mode === DroneMode.Rebuilding) {
+      this.roleTimer = 0;
+      this.domeActive = false;
+      this.decoyTicks = 0;
+      return;
+    }
+
+    this.stepRole(owner, target, spawns, events);
 
     switch (this.state) {
       case SupState.Windup:
@@ -552,12 +616,143 @@ export class Supporter {
         // owner's charges — `requestVolley` spends one or refuses — so
         // auto-fire is a use of the same economy the player already watches,
         // not a second free weapon bolted alongside it.
+        //
+        // Only the shooting roles go through the charge rack. A dome, a repair
+        // tether or a decoy is not a volley and must not compete for ammunition
+        // its owner is also spending on the sub-weapon button.
         if (this.ready && requestVolley && this.wantsToFire(owner, target)) {
-          const a = requestVolley();
-          if (a) this.order(a);
+          if (SPENDS_CHARGES.has(d.role)) {
+            const a = requestVolley();
+            if (a) this.order(a);
+          }
         }
         break;
     }
+  }
+
+
+  /**
+   * The drone's own verb, run once per tick.
+   *
+   * Everything here is deliberately *not* a volley: it costs no sub-charge, does
+   * not go through `order`, and does not compete with the sub-weapon button. A
+   * shooter's behaviour still lives in the ordinary firing cycle; these are the
+   * seven other things a supporter can be.
+   *
+   * Deterministic throughout — cadence comes from a counter, never a die.
+   */
+  private stepRole(
+    owner: SupporterOwner,
+    target: SupporterOwner | null,
+    spawns: ProjectileSpawn[],
+    events: SimEvent[],
+  ): void {
+    const d = this.def;
+    this.domeActive = false;
+    this.tetherLive = false;
+    if (this.roleTimer > 0) this.roleTimer--;
+    if (this.decoyTicks > 0) this.decoyTicks--;
+
+    if (!this.onStation || !owner.alive) return;
+    const live = target && target.alive;
+    const reach = live ? Math.hypot(target!.x - this.x, target!.y - this.y) : Infinity;
+
+    switch (d.role) {
+      case 'dome':
+        // Always up while on station. Its cost is that the drone has to *be*
+        // there, which is what makes shooting it down the answer.
+        this.domeActive = true;
+        break;
+
+      case 'tether':
+        // Barrier, never life. Life is the thing a fight is decided on; giving a
+        // drone the power to undo damage would make killing it mandatory rather
+        // than rewarding. Barrier regenerates anyway — this pays the delay.
+        this.tetherLive = true;
+        break;
+
+      case 'arcTether':
+        // The wire is live whenever the drone is far enough from its owner for
+        // there to be a wire. `MatchSim` does the segment test.
+        this.tetherLive = Math.hypot(this.x - owner.x, this.y - owner.y) > ARC_MIN_SPAN;
+        break;
+
+      case 'decoy':
+        // Re-projected on a cadence rather than held, so it flickers between
+        // positions and cannot simply be learned once and ignored.
+        if (this.roleTimer <= 0 && live && reach <= d.fireRange) {
+          this.roleTimer = DECOY_PERIOD;
+          this.decoyTicks = DECOY_LIFE;
+          // Thrown out to the drone's far side, away from its owner, so a
+          // fooled shot is a shot aimed at nobody rather than at the pilot.
+          const ax = this.x - owner.x;
+          const ay = this.y - owner.y;
+          const al = Math.hypot(ax, ay) || 1;
+          this.decoyX = this.x + (ax / al) * DECOY_THROW;
+          this.decoyY = this.y + (ay / al) * DECOY_THROW;
+          events.push({ t: 'assist', x: this.decoyX, y: this.decoyY, angle: this.aim, ownerId: owner.id, auto: true });
+        }
+        break;
+
+      case 'miner':
+        if (this.roleTimer <= 0 && live && reach <= d.fireRange) {
+          this.roleTimer = MINE_PERIOD;
+          spawns.push(this.areaSpawn(owner, MINE_LIFE, MINE_DAMAGE, MINE_RADIUS, Element.None));
+          events.push({ t: 'fire', x: this.x, y: this.y, angle: this.aim, kind: ProjKind.Heavy, ownerId: owner.id });
+        }
+        break;
+
+      case 'hazard':
+        // Dropped underneath itself as it moves, so the trail is a record of
+        // where the drone has been rather than an aimed attack.
+        if (this.roleTimer <= 0 && live && reach <= d.fireRange) {
+          this.roleTimer = HAZARD_PERIOD;
+          spawns.push(this.areaSpawn(owner, HAZARD_LIFE, HAZARD_DAMAGE, HAZARD_RADIUS, Element.Incendiary));
+          events.push({ t: 'fire', x: this.x, y: this.y, angle: this.aim, kind: ProjKind.Bullet, ownerId: owner.id });
+        }
+        break;
+
+      case 'designator':
+      case 'interceptor':
+      case 'shooter':
+      default:
+        // `designator` and `interceptor` both need the whole projectile field to
+        // do their job, so `MatchSim` drives them; `shooter` runs through the
+        // ordinary firing cycle above.
+        break;
+    }
+  }
+
+  /** A stationary area effect dropped at the drone's feet: mines, burning ground. */
+  private areaSpawn(
+    owner: SupporterOwner,
+    life: number,
+    damage: number,
+    radius: number,
+    element: Element,
+  ): ProjectileSpawn {
+    return {
+      x: this.x,
+      y: this.y,
+      // Not quite zero: a genuinely motionless projectile is a special case in
+      // several places that expect a heading, and this reads as a slow drift.
+      vx: 0.001,
+      vy: 0.001,
+      damage,
+      guardDamage: damage * 0.4,
+      life,
+      radius,
+      ownerId: owner.id,
+      team: this.team,
+      kind: ProjKind.Heavy,
+      barrier: BarrierResponse.Absorb,
+      hitstop: 5,
+      hitstun: 10,
+      knockback: 3,
+      homing: 0,
+      pierceCount: 0,
+      element,
+    };
   }
 
   /** True when there is something worth spending a charge on. */

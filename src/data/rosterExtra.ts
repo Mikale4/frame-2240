@@ -8,6 +8,7 @@ import type {
   MechDef,
   MechRigDef,
   SupporterDef,
+  SupporterRole,
 } from '../mechs/MechDef';
 import { DEG } from '../core/MathUtil';
 import { Element } from '../combat/Status';
@@ -222,7 +223,10 @@ const FLIGHT: FlightDef = {
  * the compiler makes every mech state its own. A drone that shipped with a
  * placeholder passive would be a silent balance bug, not a build error.
  */
-const DRONE: Omit<SupporterDef, 'name' | 'passive'> = {
+const DRONE: Omit<SupporterDef, 'name' | 'passive' | 'role'> & { role: SupporterRole } = {
+  // Every mech overrides this; the base carries the original behaviour so a new
+  // chassis that forgets to choose still flies something sensible.
+  role: 'shooter',
   followBack: 74,
   followDown: 58,
   followAccel: 0.055,
@@ -449,6 +453,9 @@ export const VESPER: MechDef = {
   supporter: {
     ...DRONE,
     name: 'SIGHTLINE',
+    // Shoots incoming fire out of the air so Doyne never has to move.
+    role: 'interceptor',
+    roleValue: 320,
     followBack: 96,
     followDown: 44,
     cooldown: 26,
@@ -689,6 +696,8 @@ export const TERRAMOTH: MechDef = {
   supporter: {
     ...DRONE,
     name: 'BULWARK',
+    // Seeds the ground with charges. A colliery pilot's answer to being slow.
+    role: 'miner',
     followBack: 58,
     followDown: 30,
     maxSpeed: 10,
@@ -934,6 +943,8 @@ export const CIRRUS: MechDef = {
   supporter: {
     ...DRONE,
     name: 'WISP',
+    // Strings a live wire home. With the Pincer play it sweeps the target.
+    role: 'arcTether',
     followBack: 62,
     followDown: 66,
     maxSpeed: 19,
@@ -1183,6 +1194,9 @@ export const OBELISK: MechDef = {
   supporter: {
     ...DRONE,
     name: 'AEGIS',
+    // Raises a bubble that erases incoming shots. Its name, and Tengku's whole kit.
+    role: 'dome',
+    roleValue: 150,
     followBack: 54,
     followDown: 40,
     maxSpeed: 12,
@@ -1423,6 +1437,8 @@ export const PYRE: MechDef = {
   supporter: {
     ...DRONE,
     name: 'EMBER',
+    // Leaves the ground burning behind it. Rasa makes the room dangerous.
+    role: 'hazard',
     followBack: 68,
     followDown: 54,
     maxSpeed: 16,
@@ -1665,6 +1681,8 @@ export const NULLTIDE: MechDef = {
   supporter: {
     ...DRONE,
     name: 'STATIC',
+    // Projects a false silhouette that draws lock-on and fire.
+    role: 'decoy',
     followBack: 88,
     followDown: 70,
     maxSpeed: 17,

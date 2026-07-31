@@ -129,6 +129,23 @@ export const DESPERATE_PROJ_SPEED = 1.85;
 export const DESPERATE_EXTRA_SHOT = 1 / 3;
 
 /**
+ * Extra damage a painted target takes from the pilot whose drone painted it.
+ *
+ * **This started as homing and homing was the wrong mechanic.** Tracking on
+ * every shot measured at +0.47 of a life bar for HALCYON — the strongest thing
+ * in the game — and cutting it to a fifth did not fix the real problem: shots
+ * that steer erode *dodging*, and dodging is where the whole defensive ladder
+ * and most of EXTREME's advantage live. With it in, EXTREME measured as **losing
+ * to HARD**, because its threat-solving and evasion were being made irrelevant.
+ *
+ * Damage is the honest version of the same idea. A painted mech is worth more to
+ * shoot at; it is not harder to get away from. ARBITER remains a force
+ * multiplier — it never fires and makes every shot Naia takes count for more —
+ * without touching the mechanic the rest of the game is built on.
+ */
+export const DESIGNATOR_DAMAGE = 1.2;
+
+/**
  * Ticks the pilot is helpless after a saturation burst burns out.
  *
  * Saturation used to end with no downside at all, so the only question was when
@@ -434,6 +451,14 @@ export class Combatant implements FlightState {
    * hitstun ends, which is the same moment the combo counter resets.
    */
   meleeHitsTaken = 0;
+  /**
+   * Ticks this machine remains painted by an enemy designator drone.
+   *
+   * A painted mech is one whose opponent's shots track it. Held on the *victim*
+   * rather than on the painter, so a shot only has to ask the thing it is aimed
+   * at whether it is lit up.
+   */
+  paintedTicks = 0;
   invuln = 0;
   guarding = false;
   guardBreakStun = 0;
@@ -863,6 +888,7 @@ export class Combatant implements FlightState {
 
     if (this.invuln > 0) this.invuln--;
     if (this.barrierDeniedCooldown > 0) this.barrierDeniedCooldown--;
+    if (this.paintedTicks > 0) this.paintedTicks--;
     if (this.repelTicks > 0) this.repelTicks--;
     if (this.hitstun <= 0 && this.guardBreakStun <= 0) this.meleeHitsTaken = 0;
     if (this.meleeLockout > 0) this.meleeLockout--;
@@ -1092,6 +1118,21 @@ export class Combatant implements FlightState {
     if (!this.lockEnabled) return null;
     const mech = target && target.alive ? target : null;
     const drone = target && target.supporter.hittable ? target.supporter : null;
+
+    /**
+     * A decoy steals the lock outright while it is up.
+     *
+     * The only ability in the game that attacks the opponent's *information*
+     * rather than their hull, and it works on a human exactly as it works on the
+     * rival — the mounts swing onto a silhouette that is not there. Short-lived
+     * and re-thrown on a cadence, so it is a recurring problem to read rather
+     * than a permanent one to suffer.
+     */
+    const sup = target?.supporter;
+    if (sup && sup.decoyTicks > 0 && target!.def.supporter.role === 'decoy') {
+      return { x: sup.decoyX, y: sup.decoyY };
+    }
+
     if (!mech) return drone ? { x: drone.x, y: drone.y } : null;
     if (!drone) return { x: mech.x, y: mech.y };
 
@@ -2021,7 +2062,10 @@ export class Combatant implements FlightState {
     // Layered defence, mirroring the reference's DefenceMulSet tiers, with the
     // drone's armour passive folded into `incomingScale`.
     const def = this.def.defence;
-    const dmg = p.damage * this.incomingScale * (this.grounded ? def.groundedMul : 1);
+    // Painted by the shooter's designator drone: worth more to shoot at, and no
+    // harder to escape. See `DESIGNATOR_DAMAGE`.
+    const paint = this.paintedTicks > 0 ? DESIGNATOR_DAMAGE : 1;
+    const dmg = p.damage * paint * this.incomingScale * (this.grounded ? def.groundedMul : 1);
 
     // A guard now stops melee too, just far less well than it stops gunfire.
     // Melee keeps its `Pierce` marking, which still means the Shield-saturation

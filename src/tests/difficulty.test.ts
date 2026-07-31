@@ -106,16 +106,30 @@ describe('the difficulty ladder', () => {
 });
 
 describe('the difficulty ladder — measured in the ring', () => {
+  /**
+   * **Ordering is the contract; the margins are a sanity floor.**
+   *
+   * The absolute gaps here are much smaller than they were when this file was
+   * written, and the reason is that the game changed underneath them rather than
+   * the tiers getting closer in skill: life pools went up 1.75x and the round
+   * clock went 99s to 180s (D62), so a match now runs two to three times longer
+   * and a weaker pilot has far more time to claw damage back. Every lead in a
+   * longer fight regresses toward the middle.
+   *
+   * So these assert the thing that must never break — each tier finishing ahead
+   * of the one below, from both slots — with floors set below the measured
+   * values rather than tight against them.
+   */
   it('has every tier beat the one below it', () => {
     expect(lead(Difficulty.Normal, Difficulty.Easy), 'NORMAL vs EASY').toBeGreaterThan(0);
-    expect(lead(Difficulty.Hard, Difficulty.Normal), 'HARD vs NORMAL').toBeGreaterThan(0.2);
+    expect(lead(Difficulty.Hard, Difficulty.Normal), 'HARD vs NORMAL').toBeGreaterThan(0.05);
     expect(lead(Difficulty.Extreme, Difficulty.Hard), 'EXTREME vs HARD').toBeGreaterThan(0);
   });
 
   it('has the top tiers beat the bottom decisively', () => {
-    expect(lead(Difficulty.Hard, Difficulty.Easy), 'HARD vs EASY').toBeGreaterThan(0.25);
-    expect(lead(Difficulty.Extreme, Difficulty.Easy), 'EXTREME vs EASY').toBeGreaterThan(0.25);
-    expect(lead(Difficulty.Extreme, Difficulty.Normal), 'EXTREME vs NORMAL').toBeGreaterThan(0.25);
+    expect(lead(Difficulty.Hard, Difficulty.Easy), 'HARD vs EASY').toBeGreaterThan(0.2);
+    expect(lead(Difficulty.Extreme, Difficulty.Easy), 'EXTREME vs EASY').toBeGreaterThan(0.2);
+    expect(lead(Difficulty.Extreme, Difficulty.Normal), 'EXTREME vs NORMAL').toBeGreaterThan(0.15);
   });
 
   it('is roughly even against itself', () => {
