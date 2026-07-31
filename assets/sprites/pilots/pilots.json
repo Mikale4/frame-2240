@@ -1,0 +1,14 @@
+{
+  "note": "Helmeted busts; faces are never shown. See build_portraits.py.",
+  "portrait_px": 256,
+  "thumb_px": 96,
+  "pilots": {
+    "halcyon": {
+      "name": "NAIA VESK",
+      "faction": "CONCORD SKYWARD",
+      "helmet": "ace",
+      "visor": "wrap",
+      "collar": "flightsuit"
+    }
+  }
+}
