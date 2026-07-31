@@ -125,8 +125,9 @@ describe('saturation preference is a lean, not an override', () => {
     s.player.life = def.gauges.maxLife * lifeFrac;
     // `chooseSatMode` is private; reach it the way a test may, since the whole
     // point of this block is that this one function stayed honest.
-    return (ai as unknown as { chooseSatMode(c: unknown, d: number): SatMode }).chooseSatMode(
+    return (ai as unknown as { chooseSatMode(c: unknown, f: unknown, d: number): SatMode }).chooseSatMode(
       s.player,
+      s.enemy,
       dist,
     );
   };
@@ -166,15 +167,55 @@ describe('desperation lets a pilot play their own game', () => {
     const s = new MatchSim({ playerDef: def, enemyDef: def, seed: 7, introTicks: 1 });
     const ai = new RivalAI({ difficulty: Difficulty.Hard }, new Rng(7));
     s.player.life = def.gauges.maxLife * lifeFrac;
-    return (ai as unknown as { chooseSatMode(c: unknown, d: number): SatMode }).chooseSatMode(
+    return (ai as unknown as { chooseSatMode(c: unknown, f: unknown, d: number): SatMode }).chooseSatMode(
       s.player,
+      s.enemy,
       dist,
     );
   };
 
-  it('gives every pilot their own preferred burst on the brink', () => {
+  it('gives every pilot their own preferred burst on a quiet brink', () => {
+    // No incoming fire, nobody turtling, mid range: nothing for the situational
+    // read to act on, so the pilot's signature move is what comes out.
     for (const m of ROSTER) {
       expect(modeAt(m.id, 0.2, 700), m.id).toBe(PLAYSTYLES[m.id].satPreference);
+    }
+  });
+
+  /**
+   * Below the line the choice is a real read, not a defaulted one — the whole
+   * point of the desperation forms is that each is worth having for a different
+   * reason. Personality picks the favourite; the fight decides whether the
+   * favourite is right this second.
+   */
+  it('answers a turtling opponent with SPEED, whoever is flying', () => {
+    // SPEED's melee is true damage, which is the one thing a guard and a Shield
+    // burst both fail to stop. Tested on a pilot who prefers SHOOT.
+    const def = ROSTER.find((m) => m.id === 'nocturne')!;
+    const s = new MatchSim({ playerDef: def, enemyDef: def, seed: 7, introTicks: 1 });
+    const ai = new RivalAI({ difficulty: Difficulty.Hard }, new Rng(7));
+    s.player.life = def.gauges.maxLife * 0.2;
+    s.enemy.guarding = true;
+    const pick = (
+      ai as unknown as { chooseSatMode(c: unknown, f: unknown, d: number): SatMode }
+    ).chooseSatMode(s.player, s.enemy, 300);
+    expect(PLAYSTYLES.nocturne.satPreference).toBe(SatMode.Shoot);
+    expect(pick).toBe(SatMode.Speed);
+  });
+
+  it('leaves the lower tiers with their favourite and no read at all', () => {
+    // Situational judgement is unlocked by tier, like every other read. Handing
+    // EASY the same judgement as EXTREME measured as NORMAL losing to EASY.
+    const def = ROSTER.find((m) => m.id === 'nocturne')!;
+    for (const tier of [Difficulty.Easy, Difficulty.Normal]) {
+      const s = new MatchSim({ playerDef: def, enemyDef: def, seed: 7, introTicks: 1 });
+      const ai = new RivalAI({ difficulty: tier }, new Rng(7));
+      s.player.life = def.gauges.maxLife * 0.2;
+      s.enemy.guarding = true;
+      const pick = (
+        ai as unknown as { chooseSatMode(c: unknown, f: unknown, d: number): SatMode }
+      ).chooseSatMode(s.player, s.enemy, 300);
+      expect(pick, `tier ${tier}`).toBe(SatMode.Shoot);
     }
   });
 

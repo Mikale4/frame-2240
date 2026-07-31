@@ -32,6 +32,15 @@ export interface AiConfig {
 const TACTIC_NAMES = ['APPROACH', 'HOLD', 'RETREAT', 'STRAFE', 'EVADE'];
 
 /**
+ * How much more willing a rival is to dash while its boost is free.
+ *
+ * A Speed burst removes the cost, so the rationing that governs the rest of a
+ * match stops applying. Large on purpose: the burst lasts a few seconds and the
+ * whole point is to spend it.
+ */
+const SPEED_BURST_DASH = 2.4;
+
+/**
  * What a chassis can threaten, and from how far.
  *
  * Range in this game is not a stat — it is `projSpeed * projLife`, because a
@@ -334,6 +343,22 @@ export class RivalAI {
    * lifetime that bounds every shot. There is no standing off that.
    */
   private preferredRangeFor(self: Combatant, foe: Combatant): number {
+    // **A Speed burst is a closing tool, and holding a firing line wastes it.**
+    //
+    // The rival used to ignore its own saturation entirely — it read `foe.satActive`
+    // for the opponent's reach and never once looked at its own — so a pilot with
+    // free, unlimited dashing kept standing at exactly the range it had been
+    // standing at. That is the whole mode thrown away: what a Speed burst buys is
+    // the ability to be somewhere else immediately, and the only thing worth
+    // spending that on is the distance to a sword.
+    //
+    // Deliberately at every tier, not gated behind `rangeIq`. "I have a movement
+    // burst, so I should move" is not a subtle read.
+    if (self.speedActive) {
+      const want = self.def.meleeRange * (self.satDesperate ? 0.75 : 0.95);
+      return Math.max(self.def.rig.hurtRadius * 3, want);
+    }
+
     // The pilot's own preference scales whatever the tier works out, so a
     // marksman stands off and a brawler crowds in at every difficulty rather
     // than only once `rangeIq` unlocks.
@@ -480,14 +505,30 @@ export class RivalAI {
     const imminent = incoming !== null && incoming.ttc <= 10;
     const evadeDash = this.tactic === AiTactic.Evade && imminent;
     const floor = evadeDash ? 0 : this.boostReserve(self);
+    // Free dashing changes what a dash is *for*.
+    //
+    // Outside a Speed burst the gauge is a budget, so the rival approaches on
+    // sustained thrust (cheaper per pixel) and saves dashes for emergencies.
+    // Inside one there is no budget, so the cheap option is the good option:
+    // dash to close, and dash out of every incoming line. This is the other half
+    // of what the mode is for — the mech that can be somewhere else for free
+    // should be somewhere else a great deal more often.
+    const free = self.boostFree;
+    const approachDash = this.tactic === AiTactic.Approach && (free || dist > 340);
     const wantsDash =
-      (evadeDash || (this.tactic === AiTactic.Approach && dist > 340)) &&
+      (evadeDash || approachDash) &&
       this.dashCharge <= 0 &&
       self.boost >= self.def.flight.dashCost + floor &&
       (mx !== 0 || my !== 0) &&
       // Twitchiness is the pilot's: CIRRUS is never still, TERRAMOTH walks.
       this.rng.chance(
-        clamp((evadeDash ? this.p.evadeDashChance : this.p.dashChance) * this.style(self).dashMul, 0, 1),
+        clamp(
+          (evadeDash ? this.p.evadeDashChance : this.p.dashChance) *
+            this.style(self).dashMul *
+            (free ? 1 + (SPEED_BURST_DASH - 1) * this.skill : 1),
+          0,
+          1,
+        ),
       );
     if (wantsDash) {
       pressed.v |= 1 << Btn.Boost;
@@ -609,7 +650,7 @@ export class RivalAI {
 
     // ---- Saturation --------------------------------------------------------
     if (!self.satActive && self.sat >= self.def.gauges.maxSaturation) {
-      const wantMode = this.chooseSatMode(self, dist);
+      const wantMode = this.chooseSatMode(self, foe, dist);
       if (self.satMode !== wantMode) {
         pressed.v |= 1 << Btn.ModeCycle;
       } else if (this.rng.chance(0.35)) {
@@ -671,15 +712,24 @@ export class RivalAI {
     // Someone hiding behind a guard or a Shield burst is taking a fraction of
     // anything shot at them and several times as much from a sword. Go and get
     // them rather than plinking at a wall.
-    if (this.p.closeOnGuard && (foe.guarding || foe.shieldActive) && dist > self.def.meleeRange) {
+    if (this.p.closeOnGuard && (foe.guarding || foe.shieldActive) && dist > self.effectiveMeleeRange) {
       return AiTactic.Approach;
     }
 
     if (threatened && foeCommitted && this.rng.chance(0.35 + this.skill * 0.35)) {
       return AiTactic.Evade;
     }
-    // Wounded rivals give ground more readily.
-    if (lifeFrac < 0.3 && this.rng.chance(0.4)) return AiTactic.Retreat;
+    // Wounded rivals give ground more readily — **unless they are mid-Speed
+    // burst**, which is the one state where being hurt is the reason to commit
+    // rather than to back off.
+    //
+    // This was the single biggest thing stopping a desperate Speed burst from
+    // doing anything. A desperate burst is by definition opened at or under a
+    // third of a life bar, so this line fired on almost every tactic re-roll
+    // inside one and sent the pilot backwards 40 % of the time — while holding
+    // free unlimited dashes and a sword that reaches across the screen.
+    const holdGround = self.speedActive && this.rng.chance(this.skill);
+    if (lifeFrac < 0.3 && !holdGround && this.rng.chance(0.4)) return AiTactic.Retreat;
 
     if (dist > pref * 1.5) return AiTactic.Approach;
     if (dist < pref * 0.45) {
@@ -710,7 +760,10 @@ export class RivalAI {
       case AiTactic.Approach:
         mx = sx;
         my = Math.abs(dyRaw) > 40 ? Math.sign(dyRaw) : 0;
-        this.wantBoost = dist > 380;
+        // Sustained thrust is rationed by distance normally, because it costs.
+        // While the gauge is free there is nothing to ration, so close under
+        // full power whatever the range.
+        this.wantBoost = self.boostFree || dist > 380;
         break;
       case AiTactic.Retreat:
         mx = -sx;
@@ -785,6 +838,10 @@ export class RivalAI {
 
   /** Boost held back for dashes rather than spent on sustained thrust. */
   private boostReserve(self: Combatant): number {
+    // Nothing to reserve when dashing is free. Holding a floor through a Speed
+    // burst is pure waste: the gauge is not being spent, so the rival was
+    // rationing a resource it could not run out of.
+    if (self.boostFree) return 0;
     return this.p.boostReserveDashes * self.def.flight.dashCost;
   }
 
@@ -862,7 +919,11 @@ export class RivalAI {
     const d = self.def;
 
     // Melee range: commit to the sword chain on its own button.
-    if (dist < d.meleeRange) {
+    //
+    // `effectiveMeleeRange`, not `def.meleeRange` — a desperate Speed burst
+    // extends the lock ninefold, and gating on the base figure meant the buff
+    // existed and the rival could not reach for it.
+    if (dist < self.effectiveMeleeRange) {
       // Melee is the one thing a guard barely stops and the only way through a
       // Shield burst, so a rival that reads the defence swings into it.
       const turtling = this.p.closeOnGuard && (foe.guarding || foe.shieldActive);
@@ -990,7 +1051,96 @@ export class RivalAI {
    * preference, which is one of the most legible personality tells in the game.
    * A pilot who prefers SPEED still takes SHIELD when they are about to die.
    */
-  private chooseSatMode(self: Combatant, dist: number): SatMode {
+  /**
+   * Which burst to spend on the brink.
+   *
+   * Above the desperation line a preference may only widen a window (D64); here
+   * it drives an actual decision, because down here every mode is worth having
+   * and the wrong one is no longer simply a loss. Two inputs, weighted together:
+   *
+   * **Who the pilot is.** A pilot whose kit is a sword wants the two modes that
+   * deliver one — SPEED for true damage and reach, SHIELD because total
+   * invulnerability is how you *get* to sword range against someone shooting at
+   * you. A pilot who fights at range wants SHOOT.
+   *
+   * **What is actually happening.** Personality picks the favourite; the fight
+   * decides whether the favourite is right this second. Someone hiding behind a
+   * guard is immune to most of SHOOT and helpless against SPEED's true damage.
+   * A screen full of incoming fire makes invulnerability worth more than either
+   * of the offensive modes. Standing off with a clear line makes SHOOT worth
+   * more than a sword you cannot reach with.
+   *
+   * Scores rather than a branch ladder: the two inputs have to be able to
+   * outvote each other, and a ladder of `if`s cannot express "usually the sword,
+   * but not while four missiles are inbound".
+   */
+  private desperationMode(self: Combatant, foe: Combatant | null, dist: number): SatMode {
+    const style = this.style(self);
+
+    // Personality. `meleeAppetite` runs about -0.2 to +0.25 across the roster,
+    // so these coefficients put it on the same scale as the situational terms.
+    let shield = style.meleeAppetite * 1.2;
+    let speed = style.meleeAppetite * 1.8;
+    let shoot = style.meleeAppetite * -1.5;
+
+    // The declared favourite still counts, and counts for more than any single
+    // situational term — this is the pilot's signature move.
+    if (style.satPreference === SatMode.Shield) shield += 1.4;
+    else if (style.satPreference === SatMode.Speed) speed += 1.4;
+    else shoot += 1.4;
+
+    // ---- the situation ---------------------------------------------------
+    //
+    // Gated on `weaponIq`, exactly as every other read in this class is. Without
+    // it the ladder compressed: a burst is a large share of a match's outcome,
+    // so handing EASY the same situational judgement as EXTREME measured as
+    // NORMAL *losing* to EASY. The lower tiers get their pilot's favourite and
+    // have to live with it, which is what being a lower tier means.
+    if (!this.p.weaponIq) {
+      if (shield >= speed && shield >= shoot) return SatMode.Shield;
+      return speed >= shoot ? SatMode.Speed : SatMode.Shoot;
+    }
+
+    if (foe) {
+      // Turtling: SHOOT is the one thing a guard and a Shield burst both stop
+      // well, and SPEED's melee ignores every reduction there is.
+      if (foe.guarding || foe.shieldActive) {
+        speed += 1.1;
+        shoot -= 0.7;
+      }
+      // Their drone is out and shooting: one more source of chip to be immune to.
+      if (foe.supporter.onStation) shield += 0.15;
+    }
+
+    // Incoming fire. Invulnerability is worth most when there is something to be
+    // invulnerable to, and closing under it is the only free approach in the game.
+    const inbound = this.seenProjectiles.reduce(
+      (n, p) => (p.active && p.team !== self.team ? n + 1 : n),
+      0,
+    );
+    shield += Math.min(1.2, inbound * 0.28);
+
+    // Range. A sword you cannot reach with is worth nothing, and the desperate
+    // SPEED reach is enormous — so this asks whether closing is plausible at all
+    // rather than whether the sword reaches from here.
+    const reach = reachOf(self.def);
+    if (dist > reach.max * 0.75) {
+      shoot += 0.7;
+      speed -= 0.3;
+    } else if (dist < 340) {
+      speed += 0.5;
+      shield += 0.25;
+    }
+
+    // Being out-run means the range is not yours to choose; standing and firing
+    // beats chasing someone you cannot catch.
+    if (foe && reachOf(foe.def).topSpeed > reach.topSpeed * 1.05) shoot += 0.35;
+
+    if (shield >= speed && shield >= shoot) return SatMode.Shield;
+    return speed >= shoot ? SatMode.Speed : SatMode.Shoot;
+  }
+
+  private chooseSatMode(self: Combatant, foe: Combatant | null, dist: number): SatMode {
     const lifeFrac = self.life / self.def.gauges.maxLife;
     const pref = this.style(self).satPreference;
 
@@ -1006,15 +1156,9 @@ export class RivalAI {
     // to prefer something else was being told to lose. Nudging the thresholds
     // keeps the characterisation legible and costs almost nothing: measured at
     // 0.585 spread against 0.555 for no playstyles at all.
-    // **At or below the desperation threshold, play your own game.**
-    //
-    // Every mode's desperation form is enormous — total invulnerability, doubled
-    // shots at speed, or a sword that reaches across the arena and ignores every
-    // defence — so the reason a preference had to be defanged above this line
-    // simply does not apply below it. CIRRUS takes SPEED on the brink because
-    // that is where SPEED stops being the worse trade and starts being a
-    // comeback, and because taking it is exactly what Mira Holloway would do.
-    if (lifeFrac <= DESPERATION_LIFE) return pref;
+    // At or below the desperation threshold, every mode's form is enormous, so
+    // the choice becomes a real read rather than a defaulted one.
+    if (lifeFrac <= DESPERATION_LIFE) return this.desperationMode(self, foe, dist);
 
     // Above it, a preference only widens the window its mode already wins in;
     // see the ablation in D64 for why it may not do more than that.

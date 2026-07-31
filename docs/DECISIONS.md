@@ -1543,3 +1543,84 @@ Two things caught only by measuring the rendered result:
   frame's shift, so lerping against it and shifting again walked the view off the
   bottom of the arena within a second. The smoothing now runs in un-shifted
   space: undo, lerp, re-apply.
+
+## D69 — The rival never read its own saturation, and a Speed burst did nothing
+
+`preferredRangeFor` consulted `foe.satActive` to work out the *opponent's* reach
+and never once looked at its own state. So a pilot holding free, unlimited
+dashing and a sword that reaches across the screen kept standing at exactly the
+range it had been standing at. The whole mode was thrown away.
+
+Four separate things had to change, and the biggest was not in the range code at
+all:
+
+* **`pickTactic` retreated on the brink.** `lifeFrac < 0.3 && chance(0.4)` fires
+  on almost every tactic re-roll inside a *desperation* burst, because a
+  desperation burst is by definition opened at or under a third of a life bar.
+  The pilot was being sent backwards 40 % of the time while holding the best
+  closing tool in the game. Now suppressed mid-Speed-burst, at a rate scaled by
+  skill.
+* **`chooseAttack` gated melee on `def.meleeRange`.** A desperate Speed burst
+  extends the lock ninefold, and the rival could not reach for it — the buff
+  existed and was unusable. Now `effectiveMeleeRange`, as is `closeOnGuard`.
+* **Preferred range collapses to sword distance while a Speed burst is up.** At
+  every tier: "I have a movement burst, so I should move" is not a subtle read.
+* **`boostReserve` rationed a free gauge.** Nothing to reserve when dashing
+  costs nothing; the approach also switches from sustained thrust to dashing,
+  because the reason to prefer thrust is that it is cheaper per pixel.
+
+Measured, CIRRUS inside a Speed burst: closes to **3–49 px** (from a mean of 312
+and rising), opens 8–43 melee sequences and lands **7–16 melee hits** per burst
+set. She takes SPEED on **7 of 7** desperate bursts.
+
+**A measurement trap worth recording.** Mean distance over a burst is a useless
+metric — it averages in the approach, so a pilot who closes faster and further
+can read as *further away*. Closest approach and melee hits landed are what
+actually answer the question.
+
+## D70 — Choosing a desperation burst is a read, not a default
+
+D66 had a desperate pilot simply take their preferred mode. That is right when
+nothing is happening and wrong the moment something is: the three desperation
+forms are enormous for *different reasons*, so which one is correct depends on
+the fight.
+
+`desperationMode` scores all three from two inputs. **Who the pilot is** —
+`meleeAppetite` pushes toward SPEED and SHIELD (the two modes that deliver a
+sword; SHIELD because total invulnerability is how you *get* to sword range
+against someone shooting at you), and the declared `satPreference` counts for
+1.4, more than any single situational term. **What is happening** — a turtling
+opponent is worth +1.1 to SPEED and −0.7 to SHOOT, because true damage is the
+one thing a guard and a Shield burst both fail to stop; inbound fire is worth up
+to +1.2 to SHIELD; range past three quarters of the chassis's reach favours
+SHOOT; being out-run favours standing and firing.
+
+Scores rather than a branch ladder, because the two inputs have to be able to
+outvote each other and no ladder of `if`s expresses "usually the sword, but not
+while four missiles are inbound".
+
+**The situational half is gated on `weaponIq`** (HARD and EXTREME), like every
+other read in the class. It was not, at first, and that broke the difficulty
+ladder outright: **NORMAL measured as *losing* to EASY**, and EXTREME's mirror
+drifted to 0.207 against a 0.2 bound. A burst is a large share of a match's
+outcome, so handing EASY the same judgement as EXTREME compressed the ladder into
+noise. The lower tiers now get their pilot's favourite and have to live with it,
+which is what being a lower tier means.
+
+Census at HARD, one row per pilot, first desperate burst of every matchup:
+
+```
+HALCYON    SHOOT 9                  NOCTURNE   SHOOT 6
+VESPER     SHOOT 3                  TERRAMOTH  SHIELD 12
+CIRRUS     SPEED 7                  OBELISK    SHIELD 13
+PYRE       SHIELD 5                 NULLTIDE   SHOOT 5, SHIELD 1
+```
+
+PYRE prefers SHOOT and reads SHIELD anyway — a close-range brawler using
+invulnerability to *reach* the range she wants. That is the read working, not
+failing.
+
+Roster spread after all of it: **0.560 at HARD, 0.525 at EXTREME**, against the
+0.555 baseline from before playstyles existed. CIRRUS sits at −0.28 at HARD and
+−0.14 at EXTREME — she improves markedly where execution can actually exploit the
+burst, which is the right shape for a high-risk pilot.
