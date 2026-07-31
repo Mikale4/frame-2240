@@ -90,7 +90,7 @@ export class DebugOverlay {
       `  aim ${((c.aim * 180) / Math.PI).toFixed(0)}deg bank ${((c.bank * 180) / Math.PI).toFixed(0)}deg face ${c.facing > 0 ? 'R' : 'L'}`,
       `  stop ${c.hitstop} stun ${c.hitstun} inv ${c.invuln} gbrk ${c.guardBreakStun}`,
       `  dash ${c.dashTicks}/${c.dashCooldown} melee ${c.meleeCount}${c.meleeHitConfirmed ? ' CONFIRM' : ''}${c.meleeChainQueued ? ' QUEUED' : ''}`,
-      `  sub ${c.subCharges}/${c.def.subCharges} lock ${c.lockEnabled ? 'on' : 'off'}`,
+      `  sub ${c.subCharges}/${c.def.subCharges}`,
       `  flight ${c.flying ? 'ON' : 'OFF'}${c.grounded ? ' GROUNDED' : ''} floor ${c.groundY.toFixed(0)}`,
     ].join('\n');
   }

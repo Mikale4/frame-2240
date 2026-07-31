@@ -7,6 +7,7 @@ import { RivalAI } from '../ai/RivalAI';
 import { Rng } from '../core/Rng';
 import { InputManager } from '../input/InputManager';
 import { MechRenderer, PART_SCALE } from '../render/MechRenderer';
+import { partTexture } from '../render/PartTexture';
 import { Effects } from '../render/Effects';
 import { Backdrop } from '../render/Backdrop';
 import { GroundPlane } from '../render/GroundPlane';
@@ -153,7 +154,8 @@ export class BattleScene extends Phaser.Scene {
     // Supporter drones. Drawn one layer under the mechs so a machine never
     // disappears behind its own escort.
     for (const def of [playerDef, enemyDef]) {
-      const drone = this.add.image(0, 0, `mech_${def.id}_drone`);
+      const dt = partTexture(this, def.id, 'drone');
+      const drone = this.add.image(0, 0, dt.key, dt.frame);
       drone.setOrigin(0.5, 0.5);
       drone.setScale(PART_SCALE);
       this.drones.push(drone);
@@ -190,6 +192,7 @@ export class BattleScene extends Phaser.Scene {
     this.uiCam.ignore(this.worldObjects);
 
     this.hud.banner('READY', 60);
+    sfx.matchReady();
 
     // Leaving the tab should not bank up a huge catch-up burst.
     this.game.events.on(Phaser.Core.Events.BLUR, this.onBlur, this);
@@ -322,6 +325,7 @@ export class BattleScene extends Phaser.Scene {
 
     if (wasPhase === MatchPhase.Intro && s.phase === MatchPhase.Fight) {
       this.hud.banner('FIGHT', 70);
+      sfx.matchFight();
     }
 
     this.consumeEvents();
@@ -347,7 +351,7 @@ export class BattleScene extends Phaser.Scene {
           if (ev.kind === ProjKind.Beam) sfx.beam();
           else if (ev.kind === ProjKind.Heavy) sfx.shootHeavy();
           else if (ev.kind === ProjKind.Missile) sfx.missile();
-          else if (ev.kind !== ProjKind.Melee) sfx.shootLight();
+          else if (ev.kind !== ProjKind.Melee) sfx.shootLight(owner?.def.id);
           this.shake = Math.max(this.shake, ev.kind === ProjKind.Beam ? 3.2 : ev.kind === ProjKind.Heavy ? 1.8 : 0.5);
           break;
         }
@@ -392,7 +396,7 @@ export class BattleScene extends Phaser.Scene {
         case 'melee': {
           const c = this.byId(ev.id);
           this.effects.melee(ev.x, ev.y, ev.angle, ev.stage, c?.def.tint.accent ?? 0xffffff);
-          sfx.melee(ev.stage);
+          sfx.melee(ev.stage, c?.def.meleeCue ?? 'blade');
           break;
         }
         case 'assist': {
@@ -408,7 +412,8 @@ export class BattleScene extends Phaser.Scene {
           const d = ELEMENTS[ev.element as Element];
           if (d) {
             this.effects.saturation(ev.x, ev.y, d.tint);
-            sfx.status();
+            // Each element has its own cue; the name doubles as the cue suffix.
+            sfx.status(d.name.toLowerCase());
             if (ev.victimId === s.enemy.id) this.hud.banner(d.name, 34);
           }
           break;
@@ -438,7 +443,7 @@ export class BattleScene extends Phaser.Scene {
         case 'takeoff': {
           const c = this.byId(ev.id);
           this.effects.dash(ev.x, ev.y + 24, Math.PI / 2, c?.def.tint.thruster ?? 0x74d6ff);
-          sfx.dash();
+          sfx.takeoff();
           break;
         }
         case 'land': {
@@ -448,6 +453,7 @@ export class BattleScene extends Phaser.Scene {
             this.effects.thruster(ev.x, ev.y + 20, dir, 0.8, c?.def.tint.accent ?? 0xffd166);
           }
           this.effects.guard(ev.x, ev.y + 22, 0xbfa88a);
+          sfx.land();
           this.shake = Math.max(this.shake, 2.4);
           break;
         }
