@@ -22,3 +22,7 @@ assets/audio/_audition.html
 # much irreplaceable-but-large source belongs in history. BACK THIS FOLDER UP
 # somewhere - regenerating it is not possible.
 assets/sprites/pilots/_raw/
+
+# Progress file written by tools/blender/rebuild_drones.py so a caller can poll
+# past the MCP request timeout. Transient build state, recreated every run.
+renders/debug/_drone_build_status.json

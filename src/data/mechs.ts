@@ -112,7 +112,7 @@ const NOCTURNE_RIG: MechRigDef = {
 /**
  * Flight feel.
  *
- * Retuned after comparing against 2005 (which used `velset` â€” instantaneous)
+ * Retuned after comparing against 2005 (which used `velset` — instantaneous)
  * and the working Iron Babel build (an instant boost impulse plus heavy drag).
  * The original values here accelerated at 0.62 toward a 5.2 cap, i.e. ~8 ticks
  * to reach top speed, which reads as floaty next to either reference.
@@ -358,7 +358,7 @@ export const HALCYON: MechDef = {
 
   /**
    * Three-stage sword chain. Chaining requires the previous stage to have
-   * connected â€” the reference gated its follow-up on a hit-confirm variable.
+   * connected — the reference gated its follow-up on a hit-confirm variable.
    * Melee ignores barriers (the reference marked it "barrier-impossible").
    */
   melee: [
@@ -480,6 +480,21 @@ export const HALCYON: MechDef = {
     cooldown: 22,
     muzzleForward: 18,
     radius: 15,
+    maxLife: 120,
+    defenceMul: 1,
+    hurtRadius: 13,
+    deployTicks: 26,
+    recallTicks: 22,
+    repair: 0.3,
+    fireRange: 760,
+    // The generalist's drone feeds the reactor, which is what HALCYON's whole
+    // kit wants: it has an answer at every range and runs out of energy using
+    // them.
+    passive: {
+      name: 'REACTOR LINK',
+      text: 'Energy regenerates 45% faster while ARBITER flies.',
+      energyRegenMul: 1.45,
+    },
   },
   lockCone: 75 * DEG,
   lockRange: 900,
@@ -529,6 +544,20 @@ export const NOCTURNE: MechDef = {
     cooldown: 30,
     muzzleForward: 21,
     radius: 18,
+    // Armoured, slow to launch and slow to recover — the heavy frame's escort
+    // is built to stay out rather than to duck in and out of the backpack.
+    maxLife: 125,
+    defenceMul: 0.9,
+    hurtRadius: 16,
+    deployTicks: 34,
+    recallTicks: 28,
+    repair: 0.24,
+    fireRange: 700,
+    passive: {
+      name: 'BARRIER FEED',
+      text: 'Barrier gauge refills at double rate while WARDEN flies.',
+      barrierRegenMul: 2,
+    },
   },
   // Broader frame reaches slightly further with the claw.
   meleeRange: 210,
@@ -546,8 +575,8 @@ export const NOCTURNE: MechDef = {
     swing: 14,
     gap: 6,
     // Heavy overhead chops: a longer, higher wind-up and a shorter, blunter
-    // sweep than the saber. Still a swing â€” the claw comes down through the
-    // target rather than being shoved into it â€” but it reads as weight.
+    // sweep than the saber. Still a swing — the claw comes down through the
+    // target rather than being shoved into it — but it reads as weight.
     arc: { windup: 96, sweep: 168, windupFrac: 0.44, alternate: true },
     damage: [62, 70, 118],
     knock: [6, 8, 16],

@@ -3,6 +3,7 @@ import { Rng } from '../core/Rng';
 import type { MechDef } from '../mechs/MechDef';
 import { Projectile, ProjectilePool, sweptHit } from '../projectiles/Projectile';
 import { Combatant } from './Combatant';
+import { SupState } from './Supporter';
 import { Element } from './Status';
 import { clampToArena } from './FlightModel';
 import { clamp } from '../core/MathUtil';
@@ -36,6 +37,16 @@ export interface MatchConfig {
 }
 
 export type MatchOutcome = 'none' | 'playerWin' | 'enemyWin' | 'draw';
+
+/**
+ * A projectile's "already hit this" set is keyed by combatant id, and a drone
+ * needs its own key in the same set — otherwise a piercing beam that clipped a
+ * mech would be treated as having already hit that mech's escort. Offsetting by
+ * a constant keeps one set rather than adding a second one to every projectile.
+ */
+function droneHitKey(ownerId: number): number {
+  return 1000 + ownerId;
+}
 
 /**
  * The authoritative, engine-agnostic match simulation.
@@ -152,6 +163,7 @@ export class MatchSim {
     for (const s of this.spawnQueue) this.projectiles.spawn(s);
     this.stepProjectiles();
     this.resolveCollisions();
+    this.resolveDroneCollisions();
     this.applyShieldSweep();
     this.pushApart();
     this.checkEnd();
@@ -173,9 +185,67 @@ export class MatchSim {
   private stepSupporters(): void {
     for (const c of this.combatants) {
       const target = this.opponentOf(c);
-      c.supporter.step(c, target, this.spawnQueue, this.events, (a, x, y, angle, spawns, events) =>
-        c.fireFromSupporter(a, x, y, angle, spawns, events),
+      const before = c.supporter.state;
+      c.supporter.step(
+        c,
+        target,
+        this.spawnQueue,
+        this.events,
+        (a, x, y, angle, spawns, events) => c.fireFromSupporter(a, x, y, angle, spawns, events),
+        // Frozen phases feed no input, and they must not let a drone start
+        // shooting on its own either — otherwise the intro would open with a
+        // volley nobody asked for.
+        this.phase === MatchPhase.Fight ? () => c.requestVolley() : undefined,
       );
+      // Only an order placed *inside* the drone's own step can be a self-started
+      // one: a salvo motion has already moved it out of Idle earlier this tick.
+      if (before === SupState.Idle && c.supporter.state === SupState.Windup) {
+        const s = c.supporter;
+        this.events.push({ t: 'assist', x: s.x, y: s.y, angle: s.aim, ownerId: c.id, auto: true });
+      }
+    }
+  }
+
+  /**
+   * Projectile-vs-drone.
+   *
+   * Kept separate from `resolveCollisions` rather than folded into its inner
+   * loop, because a drone is not a `Combatant`: it has no barrier, no guard, no
+   * status, no combo counter and no hitstun. Sharing that loop would mean
+   * threading a second entity type through five branches that do not apply to it.
+   *
+   * Mechs are resolved first, so a shot that has already killed itself on a
+   * chassis cannot also clip the escort behind it.
+   */
+  private resolveDroneCollisions(): void {
+    for (const p of this.projectiles.items) {
+      if (!p.active) continue;
+      for (const c of this.combatants) {
+        const s = c.supporter;
+        if (!s.hittable) continue;
+        if (c.team === p.team || c.id === p.ownerId) continue;
+        const key = droneHitKey(c.id);
+        if (p.hitIds.has(key)) continue;
+        if (!sweptHit(p, s.x, s.y, s.def.hurtRadius)) continue;
+
+        const result = s.takeHit(p.damage);
+        if (result === 'ignored') continue;
+        p.hitIds.add(key);
+
+        if (result === 'down') {
+          this.events.push({ t: 'droneDown', x: s.x, y: s.y, ownerId: c.id });
+          this.events.push({ t: 'explode', x: s.x, y: s.y, big: false });
+        } else {
+          this.events.push({ t: 'droneHit', x: s.x, y: s.y, damage: p.damage, ownerId: c.id });
+        }
+
+        const attacker = this.combatants.find((a) => a.id === p.ownerId);
+        if (attacker) attacker.hitstop = Math.max(attacker.hitstop, Math.floor(p.hitstop * 0.5));
+
+        if (p.pierceLeft > 0) p.pierceLeft--;
+        else p.active = false;
+        break;
+      }
     }
   }
 

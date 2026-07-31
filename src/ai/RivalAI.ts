@@ -41,6 +41,8 @@ export class RivalAI {
   private prevHeld = 0;
   private guardTicks = 0;
   private dashCharge = 0;
+  /** Debounce on the drone toggle, so a threshold cannot be strobed. */
+  private droneHold = 0;
 
   constructor(
     private readonly cfg: AiConfig,
@@ -165,6 +167,13 @@ export class RivalAI {
         pressed.v |= 1 << Btn.Main;
         held.v |= (1 << Btn.Main) | (1 << Btn.Heavy);
       }
+    }
+
+    // ---- Drone ------------------------------------------------------------
+    if (this.wantsDroneToggle(self)) {
+      pressed.v |= 1 << Btn.Sub;
+      held.v |= 1 << Btn.Sub;
+      this.droneHold = 90;
     }
 
     // ---- Offence -----------------------------------------------------------
@@ -298,16 +307,41 @@ export class RivalAI {
     const aggression = 0.24 + this.skill * 0.5;
     if (roll > aggression) return null;
 
-    // Missiles at long range, heavy at mid, vulcan up close.
-    if (dist > 420 && self.subCharges >= (d.sub.subCost ?? 1) && this.rng.chance(0.55)) {
-      return Btn.Sub;
-    }
+    // The sub-weapon is no longer on this menu: `Btn.Sub` deploys and recalls the
+    // drone rather than firing it, and the drone picks its own firing moments.
+    // Choosing it as an "attack" would have flicked the escort in and out of the
+    // backpack every time the AI wanted to shoot at range.
     if (dist > 180 && self.energy >= d.heavy.energyCost && this.rng.chance(0.4)) {
       return Btn.Heavy;
     }
     if (self.energy >= d.main.energyCost) return Btn.Main;
-    if (self.subCharges >= (d.sub.subCost ?? 1)) return Btn.Sub;
     return null;
+  }
+
+  /**
+   * Whether to press the deploy/recall button this tick.
+   *
+   * The rival wants its drone out — that is where the passive and the free
+   * volleys are — and pulls it in when it is nearly dead, letting it repair
+   * before sending it back. Weak rivals never bother: the recall thresholds
+   * scale with skill, so a rookie flies its drone until someone kills it, and an
+   * ace protects it. That is a legible difficulty difference rather than a
+   * hidden stat change.
+   */
+  private wantsDroneToggle(self: Combatant): boolean {
+    if (this.droneHold > 0) {
+      this.droneHold--;
+      return false;
+    }
+    const s = self.supporter;
+    if (s.destroyed) return false;
+
+    // Below ~level 4 the rival simply leaves it deployed.
+    const recallAt = this.skill < 0.5 ? 0 : 0.2 + (this.skill - 0.5) * 0.4;
+    const redeployAt = recallAt + 0.45;
+
+    const wantOut = s.outbound ? s.lifeFraction > recallAt : s.lifeFraction >= redeployAt;
+    return wantOut !== s.outbound;
   }
 
   private chooseSatMode(self: Combatant, dist: number): SatMode {

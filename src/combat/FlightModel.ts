@@ -39,6 +39,12 @@ export interface FlightIntent {
   speedScale: number;
   /** Multiplier applied to velocity each tick, e.g. firing anchor. */
   moveScale: number;
+  /**
+   * Multiplier on boost refill, e.g. a thermal-siphon drone. Applied to the
+   * airborne and grounded refill alike, so parking on the deck to recover still
+   * benefits from whatever is boosting the rate.
+   */
+  boostRegenScale?: number;
 }
 
 export interface FlightResult {
@@ -78,6 +84,7 @@ export function stepFlight(
   };
 
   if (s.dashCooldown > 0) s.dashCooldown--;
+  const regen = def.boostRegen * (intent.boostRegenScale ?? 1);
 
   // ---- grounded mode (FlyingMode off) -----------------------------------
   // The reference is not purely aerial: with the flight flag clear a machine
@@ -105,11 +112,11 @@ export function stepFlight(
       result.landed = wasAirborne;
       // Resting on the deck refuels the boost tank faster.
       s.boostRegenTimer = 0;
-      s.boost = Math.min(def.maxBoost, s.boost + def.boostRegen * def.groundedBoostRegen);
+      s.boost = Math.min(def.maxBoost, s.boost + regen * def.groundedBoostRegen);
     } else if (s.boostRegenTimer > 0) {
       s.boostRegenTimer--;
     } else if (s.boost < def.maxBoost) {
-      s.boost = Math.min(def.maxBoost, s.boost + def.boostRegen);
+      s.boost = Math.min(def.maxBoost, s.boost + regen);
     }
 
     if (Math.abs(s.vx) < 0.004) s.vx = 0;
@@ -211,7 +218,7 @@ export function stepFlight(
   if (s.boostRegenTimer > 0) {
     s.boostRegenTimer--;
   } else if (s.boost < def.maxBoost) {
-    s.boost = Math.min(def.maxBoost, s.boost + def.boostRegen);
+    s.boost = Math.min(def.maxBoost, s.boost + regen);
   }
 
   return result;

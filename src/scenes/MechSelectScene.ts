@@ -222,7 +222,12 @@ export class MechSelectScene extends Phaser.Scene {
         `LANCE   ${def.lance.label}`,
         `SUB     ${def.sub.label}`,
         `MELEE   ${def.meleeLock.name}  (${def.meleeLock.hits} hits)`,
-        `DRONE   ${def.supporter.name}`,
+        // The drone's passive is the least discoverable thing in the kit — it
+        // has no animation and no sound — so the select screen is the one place
+        // it can be read before the match rather than inferred during one.
+        `DRONE   ${def.supporter.name}  ${def.supporter.maxLife} HP`,
+        `        ${def.supporter.passive.name}`,
+        `        ${def.supporter.passive.text}`,
       ].join('\n'),
     );
     // Placed after the text is set, so the gap is measured rather than assumed.

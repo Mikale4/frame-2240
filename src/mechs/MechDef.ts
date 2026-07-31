@@ -211,6 +211,47 @@ export interface MeleeProfile {
 }
 
 /**
+ * What a drone does for its pilot simply by being in the air.
+ *
+ * Every entry is a multiplier applied only while the drone is deployed and
+ * alive, which is what gives the deploy/recall toggle a decision behind it:
+ * flying the drone buys the passive and the auto-fire, and risks losing both
+ * permanently. Omitted fields mean 1 — no effect — so a passive states only the
+ * one thing it changes, and adding a new lever cannot silently alter the other
+ * seven drones.
+ *
+ * Deliberately one lever each. A passive that touched three stats would be
+ * impossible to feel and impossible to balance against the others.
+ */
+export interface DronePassiveDef {
+  /** Short name, shown on the select screen and when the drone reaches station. */
+  name: string;
+  /** One-line description for the select screen. */
+  text: string;
+
+  /** Multiplier on the owner's energy regeneration. */
+  energyRegenMul?: number;
+  /** Multiplier on the owner's barrier gauge regeneration. */
+  barrierRegenMul?: number;
+  /** Multiplier on the owner's guard drain. Lower is better. */
+  guardDrainMul?: number;
+  /** Multiplier on the owner's boost regeneration. */
+  boostRegenMul?: number;
+  /** Multiplier on damage the owner deals. */
+  damageMul?: number;
+  /** Multiplier on damage the owner takes. Lower is better. */
+  defenceMul?: number;
+  /** Multiplier on the owner's passive saturation gain. */
+  satGainMul?: number;
+  /**
+   * Multiplier on the *opponent's* energy regeneration. The one outward-facing
+   * lever, and NULLTIDE's whole identity — an electronic-warfare drone that
+   * starves the other pilot rather than feeding its own.
+   */
+  enemyEnergyRegenMul?: number;
+}
+
+/**
  * The supporter drone that carries the sub-weapon.
  *
  * The 2005 reference lists it as its own screen element — "2) supporter - sub
@@ -223,7 +264,7 @@ export interface MeleeProfile {
  * so per-chassis spread and speed stay in one place.
  */
 export interface SupporterDef {
-  /** Display name, announced when the assist is ordered. */
+  /** Display name, announced when the drone reaches station. */
   name: string;
   /** Rest offset from the owner: behind its facing, and below it. */
   followBack: number;
@@ -244,8 +285,38 @@ export interface SupporterDef {
   cooldown: number;
   /** Distance from the drone's centre that the shot leaves. */
   muzzleForward: number;
-  /** Drawn size / effect scale. The drone is not hittable. */
+  /** Drawn size / effect scale. */
   radius: number;
+
+  // ---- deployment ---------------------------------------------------------
+
+  /**
+   * Hit points, and how hard they are to take off it.
+   *
+   * A fraction of a chassis's, on purpose: a drone is meant to be a resource the
+   * pilot has to protect, not a second health bar that doubles the length of a
+   * match. Around 12 % of the owner's `maxLife` puts it four to six clean hits
+   * from destruction, which is enough that a stray shot does not delete it and
+   * few enough that deliberately hunting it pays off.
+   */
+  maxLife: number;
+  /** Multiplier on damage the drone takes. Lower is tougher. */
+  defenceMul: number;
+  /** Collision radius. Smaller than `radius`, which is the drawn size. */
+  hurtRadius: number;
+  /** Ticks to fly out to station on a deploy order. */
+  deployTicks: number;
+  /** Ticks to fold back into the chassis on a recall order. */
+  recallTicks: number;
+  /** Hit points repaired per tick while stowed — the reward for recalling. */
+  repair: number;
+  /**
+   * Furthest the target may be for the drone to open fire on its own. Keeps a
+   * drone from emptying its charges across an arena it cannot reach.
+   */
+  fireRange: number;
+  /** What this drone does for its pilot while deployed and alive. */
+  passive: DronePassiveDef;
 }
 
 /** One renderable part of the mech, mirroring the reference's helper-per-part build. */

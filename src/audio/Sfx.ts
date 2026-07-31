@@ -312,6 +312,19 @@ export class Sfx {
   }
 
   /**
+   * The drone folding back into the chassis.
+   *
+   * Borrows the interface "back" cue, which is exactly the shape this wants — a
+   * descending chirp answering the rising one the launch plays — and which had
+   * no trigger in the battle scene until now.
+   */
+  droneRecall(): void {
+    if (this.play('ui_back')) return;
+    this.tone({ type: 'square', from: 1320, to: 760, dur: 0.09, gain: 0.08 });
+    this.tone({ type: 'sine', from: 900, to: 520, dur: 0.12, gain: 0.05 });
+  }
+
+  /**
    * A status element takes hold. Each element has its own cue so they stay
    * distinguishable by ear during a firefight; the synthesised fallback is a
    * single generic warble, which is the one place samples add real information.

@@ -8,6 +8,8 @@ import { VIEW_H } from '../core/GameConfig';
 const FONT = 'ui-monospace, Consolas, monospace';
 const PHASE_NAMES = ['STARTUP', 'ACTIVE', 'RECOVERY'];
 const ACT_NAMES = ['FREE', 'ATTACK', 'BARRIER', 'HITSTUN', 'GUARD', 'DOWNED', 'DEAD'];
+/** Indexed by DroneMode. */
+const DRONE_MODE_NAMES = ['STOWED', 'DEPLOYING', 'ACTIVE', 'RECALLING', 'DESTROYED'];
 
 /**
  * F1 toggles the text readout, F2 toggles hitbox/hurtbox drawing.
@@ -90,7 +92,7 @@ export class DebugOverlay {
       `  aim ${((c.aim * 180) / Math.PI).toFixed(0)}deg bank ${((c.bank * 180) / Math.PI).toFixed(0)}deg face ${c.facing > 0 ? 'R' : 'L'}`,
       `  stop ${c.hitstop} stun ${c.hitstun} inv ${c.invuln} gbrk ${c.guardBreakStun}`,
       `  dash ${c.dashTicks}/${c.dashCooldown} melee ${c.meleeCount}${c.meleeHitConfirmed ? ' CONFIRM' : ''}${c.meleeChainQueued ? ' QUEUED' : ''}`,
-      `  sub ${c.subCharges}/${c.def.subCharges}`,
+      `  sub ${c.subCharges}/${c.def.subCharges}  drone ${DRONE_MODE_NAMES[c.supporter.mode]} ${c.supporter.life.toFixed(0)}/${c.def.supporter.maxLife}${c.dronePassive ? ` [${c.dronePassive.name}]` : ''}`,
       `  flight ${c.flying ? 'ON' : 'OFF'}${c.grounded ? ' GROUNDED' : ''} floor ${c.groundY.toFixed(0)}`,
     ].join('\n');
   }

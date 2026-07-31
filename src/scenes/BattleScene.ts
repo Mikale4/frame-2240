@@ -18,6 +18,7 @@ import { DebugOverlay } from '../debug/DebugOverlay';
 import { sfx } from '../audio/Sfx';
 import { MatchPhase, ProjKind, emptyInput, type InputFrame } from '../combat/types';
 import { ELEMENTS, type Element } from '../combat/Status';
+import { DroneMode } from '../combat/Supporter';
 import type { Combatant } from '../combat/Combatant';
 import { clamp, wrapAngle } from '../core/MathUtil';
 import { depthScaleAt, depthSortAt } from '../core/Depth';
@@ -404,8 +405,47 @@ export class BattleScene extends Phaser.Scene {
           // order reads as an order rather than as a shot from nowhere.
           const c = this.byId(ev.ownerId);
           this.effects.absorb(ev.x, ev.y, c?.def.tint.glow ?? 0x7ce7ff);
+          // A drone firing on its own initiative happens every few seconds, so
+          // it gets the quiet cue and no banner. Only a salvo the pilot demanded
+          // is worth interrupting the screen for.
+          if (ev.auto) {
+            sfx.assistFire();
+          } else {
+            sfx.assist();
+            if (ev.ownerId === s.player.id) this.hud.banner(c?.def.supporter.name ?? 'ASSIST', 34);
+          }
+          break;
+        }
+        case 'droneDeploy': {
+          const c = this.byId(ev.ownerId);
+          this.effects.dash(ev.x, ev.y, 0, c?.def.tint.thruster ?? 0x74d6ff);
           sfx.assist();
-          if (ev.ownerId === s.player.id) this.hud.banner(c?.def.supporter.name ?? 'ASSIST', 34);
+          if (ev.ownerId === s.player.id) {
+            this.hud.banner(`${c?.def.supporter.name ?? 'DRONE'} DEPLOY`, 36);
+          }
+          break;
+        }
+        case 'droneRecall': {
+          const c = this.byId(ev.ownerId);
+          this.effects.guard(ev.x, ev.y, c?.def.tint.accent ?? 0x8494ad);
+          sfx.droneRecall();
+          if (ev.ownerId === s.player.id) {
+            this.hud.banner(`${c?.def.supporter.name ?? 'DRONE'} RECALL`, 36);
+          }
+          break;
+        }
+        case 'droneHit': {
+          const c = this.byId(ev.ownerId);
+          this.effects.hit(ev.x, ev.y, ProjKind.Bullet, c?.def.tint.glow ?? 0xffd166);
+          sfx.hit();
+          break;
+        }
+        case 'droneDown': {
+          const c = this.byId(ev.ownerId);
+          // Losing a drone is permanent, so it is announced for both sides —
+          // whoever shot it down has earned the news as much as its owner.
+          this.hud.banner(`${c?.def.supporter.name ?? 'DRONE'} DOWN`, 60);
+          this.shake = Math.max(this.shake, 6);
           break;
         }
         case 'status': {
@@ -483,8 +523,10 @@ export class BattleScene extends Phaser.Scene {
     const ring = this.droneRings[i];
     const s = c.supporter;
 
-    // The drone leaves with its machine. Nothing to draw for a wreck.
-    if (!c.alive) {
+    // The drone leaves with its machine, and a stowed or destroyed one is not on
+    // screen at all — `visible` is the same predicate the simulation uses to
+    // decide whether it can be shot, so what you see is exactly what you can hit.
+    if (!c.alive || !s.visible) {
       sprite.setVisible(false);
       ring.setVisible(false);
       return;
@@ -513,15 +555,19 @@ export class BattleScene extends Phaser.Scene {
       );
     }
 
-    // Readiness bar, drawn on the drone itself.
+    // Bars drawn on the drone itself.
     //
-    // A bar rather than a ring, and here rather than in the corner, because that
-    // is what the reference did: its "sub shoot charge indicator" is a short bar
+    // Bars rather than rings, and here rather than in the corner, because that is
+    // what the reference did: its "sub shoot charge indicator" is a short bar
     // sitting beside the supporter. A ring read as noise around the chassis at
     // gameplay distance; a bar is the same shape as every other gauge the player
     // already knows.
-    // Two things gate the assist: the drone's own cooldown (fast) and the sub
-    // charge economy (slow). The bar has to show whichever the player is
+    //
+    // Two of them now that the drone can be destroyed. Hit points go on top, in
+    // the same red-to-amber the chassis bar uses, because it is the one that
+    // matters permanently — the charge bar below it refills, this one does not.
+    // Two things gate a volley: the drone's own cooldown (fast) and the sub
+    // charge economy (slow). The lower bar shows whichever the player is
     // actually waiting on, or it reads full while nothing happens.
     const ready = c.subCharges > 0 && s.ready;
     const frac = ready
@@ -531,10 +577,23 @@ export class BattleScene extends Phaser.Scene {
         : clamp(c.subRecharge / Math.max(1, c.def.subRechargeTicks), 0, 1);
     const w = 26 * dz;
     const h = 3 * dz;
-    const by = s.y + 20 * dz;
+    const hpY = s.y + 20 * dz;
+    const by = hpY + h + 2 * dz;
+
     ring.setVisible(true);
     ring.setDepth(depthSortAt(s.y, 19));
     ring.clear();
+
+    // Hit points.
+    const life = s.lifeFraction;
+    ring.fillStyle(0x0a0f18, 0.75);
+    ring.fillRect(s.x - w / 2 - 1, hpY - 1, w + 2, h + 2);
+    ring.fillStyle(0x39121a, 0.9);
+    ring.fillRect(s.x - w / 2, hpY, w, h);
+    ring.fillStyle(life > 0.5 ? 0x6fe08a : life > 0.25 ? 0xffc24a : 0xff5a4a, 0.95);
+    ring.fillRect(s.x - w / 2, hpY, w * life, h);
+
+    // Charge.
     ring.fillStyle(0x0a0f18, 0.75);
     ring.fillRect(s.x - w / 2 - 1, by - 1, w + 2, h + 2);
     if (ready) {
@@ -546,6 +605,12 @@ export class BattleScene extends Phaser.Scene {
       ring.fillStyle(c.def.tint.accent, 0.95);
       ring.fillRect(s.x - w / 2, by, w * frac, h);
     }
+
+    // Launching and recalling fade the drone, so a transit reads as a transit
+    // rather than as the escort teleporting between two stations.
+    const t = s.mode === DroneMode.Deploying || s.mode === DroneMode.Recalling;
+    sprite.setAlpha(t ? 0.55 : 1);
+    ring.setAlpha(t ? 0.55 : 1);
   }
 
   // ------------------------------------------------------------------ render

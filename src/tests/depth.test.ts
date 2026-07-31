@@ -73,6 +73,13 @@ describe('depth is presentation only', () => {
       });
       s.player.y = startY;
       s.enemy.y = startY;
+      // Move the *whole machine*, escort included. `MatchSim` places each drone
+      // relative to its owner's spawn, so teleporting only the chassis leaves the
+      // drone hundreds of pixels away — above the mech in one run and below it in
+      // the other. That is a different starting configuration, not a different
+      // altitude, and it diverges the moment the drones start firing.
+      s.player.supporter.reset(s.player);
+      s.enemy.supporter.reset(s.enemy);
       const f = emptyInput();
       f.dx = 1;
       f.pressed = 1 << Btn.Main;

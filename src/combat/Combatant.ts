@@ -1,4 +1,4 @@
-﻿import type { MechDef, SwingArc } from '../mechs/MechDef';
+﻿import type { DronePassiveDef, MechDef, SwingArc } from '../mechs/MechDef';
 import type { AttackDef } from './AttackData';
 import { ATTACK_TOTAL } from './AttackData';
 import { CommandBuffer, MOTIONS, Sym, dirFrom } from './CommandBuffer';
@@ -30,8 +30,8 @@ const MELEE_TRACK_RATE = 9 * DEG;
  *
  * Two phases, matching how the reference drove its arm helper: the arm winds
  * back to `windup`, then sweeps `sweep` degrees through the target and past it.
- * The slash decelerates â€” the reference's command curve was `k*time/(time+1)`,
- * which is fast off the mark and eases into the follow-through â€” so the blade
+ * The slash decelerates — the reference's command curve was `k*time/(time+1)`,
+ * which is fast off the mark and eases into the follow-through — so the blade
  * is quickest exactly where the hit lands.
  *
  * `hitIndex` mirrors alternate swings, so a chain reads as left, right, left
@@ -103,7 +103,7 @@ export function swingReach(arc: SwingArc, t: number, _hitIndex: number): number 
   return R * (1 - Math.pow(1 - s, 3));
 }
 
-/** Velocity retained per tick while an attack is committed â€” firing anchors you. */
+/** Velocity retained per tick while an attack is committed — firing anchors you. */
 function moveScaleFor(kind: ProjKind): number {
   switch (kind) {
     case ProjKind.Beam:
@@ -159,7 +159,7 @@ export class Combatant implements FlightState {
   /**
    * True while an arm swing is playing, so the renderer carries the arm through
    * the arc. This is a separate flag rather than `attack?.kind === Melee`
-   * because the lock-on sequence never sets `attack` â€” which is exactly why the
+   * because the lock-on sequence never sets `attack` — which is exactly why the
    * blade used to be dragged into the target instead of swung.
    */
   swinging = false;
@@ -280,7 +280,7 @@ export class Combatant implements FlightState {
    * The drone that carries this machine's sub-weapon.
    *
    * Owned here so it is created and discarded with its machine, but stepped by
-   * `MatchSim` after both chassis have moved â€” keeping it out of this class's
+   * `MatchSim` after both chassis have moved — keeping it out of this class's
    * branching step() is deliberate, because an early return in a hitstun or
    * attack branch is exactly how the melee lock-on once stopped updating.
    */
@@ -305,7 +305,7 @@ export class Combatant implements FlightState {
   /**
    * Orders the drone to fire `a`, spending a sub charge.
    *
-   * Returns false â€” and emits `assistDenied` â€” when the charge is missing or the
+   * Returns false — and emits `assistDenied` — when the charge is missing or the
    * drone is still busy, so the press is always answered with feedback instead
    * of being silently swallowed.
    */
@@ -320,6 +320,55 @@ export class Combatant implements FlightState {
     s.order(a);
     events.push({ t: 'assist', x: s.x, y: s.y, angle: s.aim, ownerId: this.id });
     return true;
+  }
+
+  /**
+   * Launches or recalls the drone.
+   *
+   * This is what the assist button does now — the press is a standing decision
+   * about where the drone should be, not a request for one volley. A destroyed
+   * drone answers with the refusal cue rather than with nothing, because a dead
+   * button that makes no sound is indistinguishable from a dropped input.
+   */
+  private toggleDrone(events: SimEvent[]): void {
+    const s = this.supporter;
+    switch (s.toggle()) {
+      case 'deploy':
+        events.push({ t: 'droneDeploy', x: s.x, y: s.y, ownerId: this.id });
+        break;
+      case 'recall':
+        events.push({ t: 'droneRecall', x: s.x, y: s.y, ownerId: this.id });
+        break;
+      default:
+        events.push({ t: 'assistDenied', x: s.x, y: s.y, ownerId: this.id });
+        break;
+    }
+  }
+
+  /**
+   * The drone asking for a volley of its own accord.
+   *
+   * Hands over the sub attack, having spent its charge, or refuses. Deliberately
+   * silent on refusal: an idle drone asks every tick, and a denial cue per tick
+   * would be unbearable. "Out of charges" is already legible from the pip row.
+   */
+  requestVolley(): AttackDef | null {
+    const a = this.def.sub;
+    const cost = a.subCost ?? 1;
+    if (this.subCharges < cost) return null;
+    this.subCharges -= cost;
+    return a;
+  }
+
+  /**
+   * The drone's passive, or null when it is not earning it.
+   *
+   * One accessor rather than eight scattered checks: everything that reads a
+   * passive goes through here, so "launching, recalling, stowed, destroyed or
+   * dead means no benefit" is stated once and cannot drift apart.
+   */
+  get dronePassive(): DronePassiveDef | null {
+    return this.supporter.onStation && this.alive ? this.def.supporter.passive : null;
   }
 
   /**
@@ -377,6 +426,26 @@ export class Combatant implements FlightState {
     return this.satActive && this.satMode === SatMode.Shield;
   }
 
+  /**
+   * Multiplier on damage this machine deals, from its drone's passive.
+   *
+   * Kept separate from `satShootScale` so the two stack rather than one
+   * silently replacing the other, and so a reader can see at a glance which
+   * effect a number came from.
+   */
+  get outgoingScale(): number {
+    return this.dronePassive?.damageMul ?? 1;
+  }
+
+  /**
+   * Multiplier on damage this machine takes: its chassis defence, plus its
+   * drone's passive. The grounded bracing bonus is applied at the hit itself,
+   * since chip damage does not get it.
+   */
+  get incomingScale(): number {
+    return this.def.defence.mul * (this.dronePassive?.defenceMul ?? 1);
+  }
+
   /** World-space muzzle position for an attack. */
   muzzle(a: AttackDef): { x: number; y: number } {
     const c = Math.cos(this.aim);
@@ -418,10 +487,14 @@ export class Combatant implements FlightState {
       this.vy *= 0.9;
       this.x += this.vx;
       this.y += this.vy;
+      // A wreck still coasts, and it still has to stay in the arena: this branch
+      // used to return without clamping, so a mech killed while carrying speed
+      // drifted through the wall and kept going for the whole KO freeze.
+      clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH);
       return;
     }
 
-    this.tickTimers();
+    this.tickTimers(target);
     this.tickSaturation(events);
     this.cmd.push(input, this.facing);
 
@@ -476,8 +549,14 @@ export class Combatant implements FlightState {
     this.updateVisualAngles(input);
   }
 
-  private tickTimers(): void {
+  /**
+   * `target` is read only for the one outward-facing drone passive (NULLTIDE's
+   * jamming field). Passing it beats letting a drone reach across and mutate
+   * another combatant: every gauge is still written in exactly one place.
+   */
+  private tickTimers(target: Combatant | null): void {
     const g = this.def.gauges;
+    const passive = this.dronePassive;
 
     if (this.invuln > 0) this.invuln--;
     if (this.meleeLockout > 0) this.meleeLockout--;
@@ -500,21 +579,29 @@ export class Combatant implements FlightState {
       // Chip goes through the same defence multiplier as everything else, but
       // deliberately cannot land the killing blow: being finished by a lingering
       // burn seconds after the shooter disengaged reads as a bug, not a loss.
-      this.life = Math.max(1, this.life - chip * this.def.defence.mul);
+      this.life = Math.max(1, this.life - chip * this.incomingScale);
     }
     if (st?.energyDrain) this.energy = Math.max(0, this.energy - st.energyDrain);
 
-    // Energy regen, boosted by Shoot saturation, suppressed by Shock.
+    // Energy regen, boosted by Shoot saturation, suppressed by Shock, lifted by
+    // a friendly reactor-link drone and halved by a hostile jamming one.
+    const jam = target?.dronePassive?.enemyEnergyRegenMul ?? 1;
     const regen = st?.blocksEnergyRegen
       ? 0
-      : g.energyRegen * (this.satActive && this.satMode === SatMode.Shoot ? 2.2 : 1);
+      : g.energyRegen *
+        (this.satActive && this.satMode === SatMode.Shoot ? 2.2 : 1) *
+        (passive?.energyRegenMul ?? 1) *
+        jam;
     this.energy = Math.min(g.maxEnergy, this.energy + regen);
 
     // Barrier gauge regen after a delay.
     if (this.barrierRegenTimer > 0) {
       this.barrierRegenTimer--;
     } else if (this.barrier < g.maxBarrier) {
-      this.barrier = Math.min(g.maxBarrier, this.barrier + g.barrierRegen);
+      this.barrier = Math.min(
+        g.maxBarrier,
+        this.barrier + g.barrierRegen * (passive?.barrierRegenMul ?? 1),
+      );
     }
 
     // Sub-weapon charge economy.
@@ -545,7 +632,8 @@ export class Combatant implements FlightState {
         this.sat = 0;
       }
     } else if (this.sat < g.maxSaturation) {
-      this.sat = Math.min(g.maxSaturation, this.sat + g.satPassive);
+      const gain = g.satPassive * (this.dronePassive?.satGainMul ?? 1);
+      this.sat = Math.min(g.maxSaturation, this.sat + gain);
     }
     void events;
   }
@@ -645,7 +733,8 @@ export class Combatant implements FlightState {
     // Holding barrier without a burst is a guard stance.
     this.guarding = isHeld(input, Btn.Barrier) && this.canGuard && this.barrier > 0;
     if (this.guarding) {
-      this.barrier = Math.max(0, this.barrier - d.gauges.guardDrain);
+      const drain = d.gauges.guardDrain * (this.dronePassive?.guardDrainMul ?? 1);
+      this.barrier = Math.max(0, this.barrier - drain);
       this.barrierRegenTimer = d.gauges.barrierRegenDelay;
       if (this.barrier <= 0) this.breakGuard(events);
       this.act = ActState.GuardHold;
@@ -656,8 +745,8 @@ export class Combatant implements FlightState {
       this.begin(d.lance);
       return;
     }
-    // Sub-weapon motion variant. The reference listed the sub shoot twice â€” as a
-    // plain button and as a quarter-circle â€” and both belong to the supporter.
+    // Sub-weapon motion variant. The reference listed the sub shoot twice — as a
+    // plain button and as a quarter-circle — and both belong to the supporter.
     if (this.cmd.matches(MOTIONS.salvo)) {
       if (this.orderAssist(d.salvo, events)) return;
     }
@@ -666,10 +755,10 @@ export class Combatant implements FlightState {
       return;
     }
 
-    // Sub weapon: the drone carries it, so the chassis only gives the order and
-    // stays free to keep flying and shooting.
+    // Sub weapon: the drone carries it, so the chassis only decides *whether the
+    // drone is out*. It picks its own firing moments from there.
     if (isPressed(input, Btn.Sub)) {
-      this.orderAssist(d.sub, events);
+      this.toggleDrone(events);
       return;
     }
 
@@ -719,7 +808,7 @@ export class Combatant implements FlightState {
 
   /**
    * Opens a lock-on melee sequence. Requires a live target inside acquire range
-   * and enough energy for the opening plus a couple of swings â€” a sequence that
+   * and enough energy for the opening plus a couple of swings — a sequence that
    * fizzles immediately would just be a punish.
    */
   private startMeleeLock(target: Combatant | null, events: SimEvent[]): boolean {
@@ -892,7 +981,7 @@ export class Combatant implements FlightState {
           y: m.y,
           vx: nx * 0.001,
           vy: ny * 0.001,
-          damage: dmg * this.satShootScale,
+          damage: dmg * this.satShootScale * this.outgoingScale,
           guardDamage: dmg * 0.5,
           life: 2,
           radius: p.range,
@@ -1079,7 +1168,7 @@ export class Combatant implements FlightState {
           // Hit-confirmed chain, exactly as the reference gated its follow-up.
           this.beginMelee(events, target);
         } else {
-          // Ending a chain â€” by finisher or by dropping it â€” locks melee out
+          // Ending a chain — by finisher or by dropping it — locks melee out
           // briefly, so sword pressure cannot be maintained indefinitely.
           this.meleeLockout = Math.max(
             this.meleeLockout,
@@ -1110,7 +1199,7 @@ export class Combatant implements FlightState {
     const m = from ?? this.muzzle(a);
     const aim = from ? from.angle : this.aim;
     const speed = a.projSpeed * this.satProjSpeedScale;
-    const dmgScale = this.satShootScale;
+    const dmgScale = this.satShootScale * this.outgoingScale;
     const homing = a.homing * (this.satActive && this.satMode === SatMode.Shoot ? 1.8 : 1);
 
     const n = a.projCount;
@@ -1143,7 +1232,7 @@ export class Combatant implements FlightState {
       });
     }
 
-    // Recoil pushes the chassis back along the aim axis â€” but only when the
+    // Recoil pushes the chassis back along the aim axis — but only when the
     // chassis itself fired. A drone's shot must not shove its owner around.
     if (a.recoil && !from) {
       this.vx -= Math.cos(aim) * a.recoil;
@@ -1176,6 +1265,7 @@ export class Combatant implements FlightState {
       moveScale: a && a.kind !== ProjKind.Melee && !isPressed(input, Btn.Boost)
         ? moveScaleFor(a.kind)
         : 1,
+      boostRegenScale: this.dronePassive?.boostRegenMul ?? 1,
       flying: this.flying,
       groundY: this.groundY,
       lunging: !!(a && a.lunge && this.attackTick <= a.startup + a.active),
@@ -1269,9 +1359,10 @@ export class Combatant implements FlightState {
       return 'ignored';
     }
 
-    // Layered defence, mirroring the reference's DefenceMulSet tiers.
+    // Layered defence, mirroring the reference's DefenceMulSet tiers, with the
+    // drone's armour passive folded into `incomingScale`.
     const def = this.def.defence;
-    const dmg = p.damage * def.mul * (this.grounded ? def.groundedMul : 1);
+    const dmg = p.damage * this.incomingScale * (this.grounded ? def.groundedMul : 1);
 
     if (this.guarding && !piercing) {
       const b = this.def.barrier;

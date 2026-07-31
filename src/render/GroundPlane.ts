@@ -95,10 +95,12 @@ export class GroundPlane {
       g.fillStyle(0x05060c, 0.10 + k * 0.42);
       g.fillEllipse(c.x, DECK_Y + 3, rx * 2, ry * 2);
 
-      // Drone shadow too, so the escort is anchored to the world as well.
+      // Drone shadow too, so the escort is anchored to the world as well — but
+      // only while it is actually out there. A stowed or destroyed drone casting
+      // a shadow was the giveaway that it was still being simulated.
       const s = c.supporter;
       const sh = Math.max(0, DECK_Y - s.y);
-      if (sh <= GroundPlane.SHADOW_FADE) {
+      if (s.visible && sh <= GroundPlane.SHADOW_FADE) {
         const sk = 1 - sh / GroundPlane.SHADOW_FADE;
         const srx = c.def.supporter.radius * (0.5 + sk * 0.6) * dz;
         g.fillStyle(0x05060c, 0.07 + sk * 0.25);

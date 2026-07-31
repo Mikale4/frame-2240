@@ -212,8 +212,15 @@ const FLIGHT: FlightDef = {
   groundedBoostRegen: 2.6,
 };
 
-const DRONE: SupporterDef = {
-  name: 'DRONE',
+/**
+ * Shared drone chassis numbers.
+ *
+ * `name` and `passive` are deliberately NOT part of the base: they are the two
+ * fields that must never be inherited by accident, so the type omits them and
+ * the compiler makes every mech state its own. A drone that shipped with a
+ * placeholder passive would be a silent balance bug, not a build error.
+ */
+const DRONE: Omit<SupporterDef, 'name' | 'passive'> = {
   followBack: 74,
   followDown: 58,
   followAccel: 0.055,
@@ -225,6 +232,13 @@ const DRONE: SupporterDef = {
   cooldown: 22,
   muzzleForward: 18,
   radius: 15,
+  maxLife: 110,
+  defenceMul: 1,
+  hurtRadius: 13,
+  deployTicks: 28,
+  recallTicks: 24,
+  repair: 0.28,
+  fireRange: 720,
 };
 
 // ================================================================ VESPER
@@ -428,7 +442,25 @@ export const VESPER: MechDef = {
   subCharges: 2,
   subRechargeTicks: 165,
   // SIGHTLINE hangs far back, matching its pilot's preferred engagement range.
-  supporter: { ...DRONE, name: 'SIGHTLINE', followBack: 96, followDown: 44, cooldown: 26, maxSpeed: 13 },
+  // Thin-skinned like the chassis it serves, and the easiest drone to shoot down
+  // — VESPER pays for the roster's best damage passive with the frailest escort.
+  supporter: {
+    ...DRONE,
+    name: 'SIGHTLINE',
+    followBack: 96,
+    followDown: 44,
+    cooldown: 26,
+    maxSpeed: 13,
+    maxLife: 100,
+    defenceMul: 1.12,
+    hurtRadius: 12,
+    fireRange: 1000,
+    passive: {
+      name: 'TARGETING UPLINK',
+      text: 'Every weapon you fire hits 14% harder while SIGHTLINE flies.',
+      damageMul: 1.14,
+    },
+  },
   lockCone: 60 * DEG,
   lockRange: 1100,
   meleeRange: 180,
@@ -649,7 +681,30 @@ export const TERRAMOTH: MechDef = {
   subCharges: 3,
   subRechargeTicks: 190,
   // BULWARK is slow and sits low, shielding the walker's flank.
-  supporter: { ...DRONE, name: 'BULWARK', followBack: 58, followDown: 30, maxSpeed: 10, cooldown: 30, radius: 19 },
+  // BULWARK tucks in under the siege frame's shoulder and armours up. The
+  // toughest drone in the roster, and the slowest to bring back in — TERRAMOTH
+  // cannot flick it out of danger, so it is meant to stay out and soak.
+  supporter: {
+    ...DRONE,
+    name: 'BULWARK',
+    followBack: 58,
+    followDown: 30,
+    maxSpeed: 10,
+    cooldown: 30,
+    radius: 19,
+    maxLife: 170,
+    defenceMul: 0.82,
+    hurtRadius: 17,
+    deployTicks: 38,
+    recallTicks: 32,
+    repair: 0.2,
+    fireRange: 640,
+    passive: {
+      name: 'ARMOUR BRACE',
+      text: 'You take 14% less damage while BULWARK flies.',
+      defenceMul: 0.86,
+    },
+  },
   lockCone: 85 * DEG,
   lockRange: 820,
   meleeRange: 210,
@@ -871,7 +926,31 @@ export const CIRRUS: MechDef = {
   },
   subCharges: 3,
   subRechargeTicks: 120,
-  supporter: { ...DRONE, name: 'WISP', followBack: 62, followDown: 66, maxSpeed: 19, turretRate: 9 * DEG, cooldown: 16, radius: 12 },
+  // WISP is barely there: the fastest, smallest and flimsiest drone, in and out
+  // of the backpack in a third of a second. CIRRUS can duck it out of a firing
+  // line and put it straight back, which is the only reason it survives at all.
+  supporter: {
+    ...DRONE,
+    name: 'WISP',
+    followBack: 62,
+    followDown: 66,
+    maxSpeed: 19,
+    turretRate: 9 * DEG,
+    cooldown: 16,
+    radius: 12,
+    maxLife: 95,
+    defenceMul: 1.15,
+    hurtRadius: 10,
+    deployTicks: 18,
+    recallTicks: 15,
+    repair: 0.42,
+    fireRange: 620,
+    passive: {
+      name: 'THERMAL SIPHON',
+      text: 'Boost refills at double rate while WISP flies.',
+      boostRegenMul: 2,
+    },
+  },
   lockCone: 90 * DEG,
   lockRange: 860,
   meleeRange: 195,
@@ -1096,7 +1175,30 @@ export const OBELISK: MechDef = {
   },
   subCharges: 2,
   subRechargeTicks: 175,
-  supporter: { ...DRONE, name: 'AEGIS', followBack: 54, followDown: 40, maxSpeed: 12, cooldown: 28, radius: 18 },
+  // AEGIS flies close in against the guard frame's shoulder, where the mech's own
+  // bulk shields it. Armoured, and it makes OBELISK's guard stance sustainable
+  // rather than a brief pause.
+  supporter: {
+    ...DRONE,
+    name: 'AEGIS',
+    followBack: 54,
+    followDown: 40,
+    maxSpeed: 12,
+    cooldown: 28,
+    radius: 18,
+    maxLife: 145,
+    defenceMul: 0.88,
+    hurtRadius: 16,
+    deployTicks: 32,
+    recallTicks: 26,
+    repair: 0.26,
+    fireRange: 660,
+    passive: {
+      name: 'GUARD RELAY',
+      text: 'Holding guard costs 45% less barrier while AEGIS flies.',
+      guardDrainMul: 0.55,
+    },
+  },
   lockCone: 80 * DEG,
   lockRange: 760,
   meleeRange: 205,
@@ -1313,7 +1415,29 @@ export const PYRE: MechDef = {
   },
   subCharges: 2,
   subRechargeTicks: 145,
-  supporter: { ...DRONE, name: 'EMBER', followBack: 68, followDown: 54, maxSpeed: 16, cooldown: 20 },
+  // EMBER runs hot, like its pilot: an ordinary frame carrying an overdrive tap.
+  // PYRE already has the roster's fastest passive saturation gain, so this
+  // doubles down rather than covering a weakness — the aggressive pick.
+  supporter: {
+    ...DRONE,
+    name: 'EMBER',
+    followBack: 68,
+    followDown: 54,
+    maxSpeed: 16,
+    cooldown: 20,
+    maxLife: 130,
+    defenceMul: 0.98,
+    hurtRadius: 13,
+    deployTicks: 24,
+    recallTicks: 21,
+    repair: 0.3,
+    fireRange: 740,
+    passive: {
+      name: 'OVERDRIVE TAP',
+      text: 'Saturation builds 80% faster while EMBER flies.',
+      satGainMul: 1.8,
+    },
+  },
   lockCone: 78 * DEG,
   lockRange: 820,
   meleeRange: 198,
@@ -1533,7 +1657,31 @@ export const NULLTIDE: MechDef = {
   subCharges: 3,
   subRechargeTicks: 130,
   // STATIC ranges further out than its parent, screening the approach.
-  supporter: { ...DRONE, name: 'STATIC', followBack: 88, followDown: 70, maxSpeed: 17, turretRate: 8 * DEG, cooldown: 18, radius: 13 },
+  // STATIC is the only drone that points its effect at the other pilot. It is an
+  // electronic-warfare platform, so it stands well off, and halving an opponent's
+  // energy regeneration quietly closes off their heavy weapons entirely.
+  supporter: {
+    ...DRONE,
+    name: 'STATIC',
+    followBack: 88,
+    followDown: 70,
+    maxSpeed: 17,
+    turretRate: 8 * DEG,
+    cooldown: 18,
+    radius: 13,
+    maxLife: 110,
+    defenceMul: 1.06,
+    hurtRadius: 12,
+    deployTicks: 26,
+    recallTicks: 22,
+    repair: 0.32,
+    fireRange: 820,
+    passive: {
+      name: 'JAMMING FIELD',
+      text: "The opponent's energy regenerates at half rate while STATIC flies.",
+      enemyEnergyRegenMul: 0.5,
+    },
+  },
   lockCone: 82 * DEG,
   lockRange: 980,
   meleeRange: 192,

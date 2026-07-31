@@ -65,7 +65,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   right: 'FLY RIGHT',
   main: 'MAIN GUN',
   heavy: 'HEAVY SHOT',
-  sub: 'SUB WEAPON',
+  sub: 'DRONE DEPLOY / RECALL',
   melee: 'SWORD / MELEE',
   boost: 'BOOST / DASH / BRAKE',
   barrier: 'BARRIER / GUARD',

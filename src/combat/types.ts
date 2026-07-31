@@ -128,10 +128,22 @@ export type SimEvent =
   | { t: 'guardBreak'; x: number; y: number; id: number }
   | { t: 'dash'; x: number; y: number; angle: number; id: number }
   | { t: 'melee'; x: number; y: number; angle: number; id: number; stage: number }
-  /** The supporter drone accepted an order and is winding up. */
-  | { t: 'assist'; x: number; y: number; angle: number; ownerId: number }
+  /**
+   * The supporter drone is winding up a volley. `auto` distinguishes the drone
+   * choosing its own moment — frequent, and deliberately understated — from the
+   * pilot demanding one with the salvo motion, which is announced.
+   */
+  | { t: 'assist'; x: number; y: number; angle: number; ownerId: number; auto?: boolean }
   /** The assist was requested but unavailable — no charge, or drone busy. */
   | { t: 'assistDenied'; x: number; y: number; ownerId: number }
+  /** The drone was launched out of the chassis. */
+  | { t: 'droneDeploy'; x: number; y: number; ownerId: number }
+  /** The drone was ordered back into the chassis. */
+  | { t: 'droneRecall'; x: number; y: number; ownerId: number }
+  /** A shot connected with a drone rather than with a machine. */
+  | { t: 'droneHit'; x: number; y: number; damage: number; ownerId: number }
+  /** A drone was shot down. It does not come back this match. */
+  | { t: 'droneDown'; x: number; y: number; ownerId: number }
   /** A status element took hold on a machine. */
   | { t: 'status'; x: number; y: number; victimId: number; element: number }
   | { t: 'explode'; x: number; y: number; big: boolean }

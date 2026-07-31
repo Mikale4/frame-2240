@@ -38,7 +38,7 @@ function run(c: Combatant, input: InputFrame, ticks: number, k: ReturnType<typeo
 }
 
 describe('FlyingMode', () => {
-  it('starts airborne â€” this is an aerial fighter first', () => {
+  it('starts airborne — this is an aerial fighter first', () => {
     expect(make().flying).toBe(true);
   });
 

@@ -257,12 +257,18 @@ export class Hud {
     this.lockText.setColor(p.flying ? '#9fe0ff' : '#8effc0');
 
     // Sub-weapon pips.
+    //
+    // A destroyed drone leaves them dark for the rest of the match, whatever the
+    // charge counter says: the ammunition is irrelevant once the thing that
+    // carries it has been shot down, and a lit pip would promise a volley that
+    // will never come.
     for (let side = 0; side < 2; side++) {
       const c = side === 0 ? p : e;
       const pips = this.subPips[side];
+      const gone = c.supporter.destroyed;
       for (let i = 0; i < pips.length; i++) {
-        const ready = i < c.subCharges;
-        pips[i].setFillStyle(ready ? 0x63f2c8 : 0x24303f, 1);
+        const ready = !gone && i < c.subCharges;
+        pips[i].setFillStyle(ready ? 0x63f2c8 : gone ? 0x3a1d20 : 0x24303f, 1);
       }
     }
 

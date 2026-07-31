@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Combatant } from '../combat/Combatant';
-import { ATTACK_TOTAL } from '../combat/AttackData';
+
 import {
   ActState,
   BarrierResponse,
@@ -125,16 +125,23 @@ describe('attack state machine', () => {
     expect(new Set(angles.map((a) => a.toFixed(4))).size).toBe(angles.length);
   });
 
-  it('spends sub-weapon charges and recharges them over time', () => {
+  it('recharges spent sub-weapon charges over time', () => {
     const c = make();
     const k = ctx();
     expect(c.subCharges).toBe(HALCYON.subCharges);
-    // Press once and release; holding the button would auto-fire a second volley.
-    c.step(press(Btn.Sub), null, W, H, k.spawns, k.events);
-    run(c, emptyInput(), ATTACK_TOTAL(HALCYON.sub) + 1, null, k);
+    // The assist button is a deploy toggle now, so a charge is spent by the
+    // drone taking one — `requestVolley` — not by the chassis pressing a button.
+    expect(c.requestVolley()).toBe(HALCYON.sub);
     expect(c.subCharges).toBe(HALCYON.subCharges - 1);
     run(c, emptyInput(), HALCYON.subRechargeTicks + 2, null, k);
     expect(c.subCharges).toBe(HALCYON.subCharges);
+  });
+
+  it('refuses a volley it cannot pay for', () => {
+    const c = make();
+    c.subCharges = 0;
+    expect(c.requestVolley()).toBeNull();
+    expect(c.subCharges).toBe(0);
   });
 });
 
