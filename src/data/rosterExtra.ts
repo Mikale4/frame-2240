@@ -1443,7 +1443,7 @@ export const PYRE: MechDef = {
     followDown: 54,
     maxSpeed: 16,
     cooldown: 20,
-    maxLife: 455,
+    maxLife: 300,
     defenceMul: 0.98,
     hurtRadius: 13,
     deployTicks: 24,

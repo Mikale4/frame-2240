@@ -168,6 +168,15 @@ const SUPPORT_RISE = 40;
  */
 const MIN_OWNER_GAP = 46;
 /**
+ * Closest any drone will station itself to the machine it is fighting.
+ *
+ * Applies after every play. Screening and harassing both want to crowd; neither
+ * needs to occupy the same space as the target.
+ */
+const MIN_TARGET_GAP = 96;
+/** A hazard drone keeps clear distance — see the note at the clamp. */
+const HAZARD_TARGET_GAP = 230;
+/**
  * Furthest the drone will stray from formation, however loud the arithmetic
  * above gets. This is the difference between an escort and a second fighter:
  * without it, a busy screen sends the drone across the arena and it stops
@@ -293,6 +302,9 @@ const HAZARD_DRAW = 0.4;
  * damage for standing still.
  */
 const HAZARD_MIN_SPEED = 0.9;
+/** Embers per burst, then a reload. Five and a second and a half. */
+const HAZARD_BURST = 5;
+const HAZARD_COOLDOWN = 90;
 
 /** What the drone needs to know about one projectile in order to dodge it. */
 export interface DroneThreat {
@@ -477,6 +489,8 @@ export class Supporter {
   tetherLive = false;
   /** `arcTether`: ticks before the wire may bite again. */
   arcCooldown = 0;
+  /** `hazard`: embers laid in the current burst. */
+  private hazardBurst = 0;
 
   /** The attack this drone was ordered to fire, held through the windup. */
   private pending: AttackDef | null = null;
@@ -840,7 +854,14 @@ export class Supporter {
           reach <= d.fireRange &&
           Math.hypot(this.vx, this.vy) >= HAZARD_MIN_SPEED
         ) {
-          this.roleTimer = HAZARD_PERIOD;
+          // Five, then stop and reload. Uncapped, the drone simply held the fire
+          // button: a continuous trail laid *into* a mech is a stunlock, because
+          // every ember carries hitstun and they arrive faster than the victim
+          // recovers. The cap is what turns it from a beam into a burst.
+          this.hazardBurst++;
+          this.roleTimer =
+            this.hazardBurst >= HAZARD_BURST ? HAZARD_COOLDOWN : HAZARD_PERIOD;
+          if (this.hazardBurst >= HAZARD_BURST) this.hazardBurst = 0;
           spawns.push(
             this.areaSpawn(
               owner,
@@ -1235,9 +1256,33 @@ export class Supporter {
       oy = (oy / mag) * leash;
     }
 
-    // ---- keep out of the chassis ----------------------------------------
+    // ---- keep out of both chassis ---------------------------------------
     let px = base.x + ox;
     let py = base.y + oy;
+
+    /**
+     * **A drone may not attach itself to the mech it is fighting.**
+     *
+     * Every offensive play wants to be close, and nothing stopped them being
+     * *touching*. EMBER was the case that showed it: a hazard trail laid from
+     * inside an opponent is not area denial, it is a stunlock, because each
+     * ember carries hitstun and they land faster than the victim recovers.
+     *
+     * A hazard drone is held further off than the rest — its whole job is to
+     * make ground dangerous, which does not require standing on the target.
+     */
+    if (target && target.alive) {
+      const gap = this.def.role === 'hazard' ? HAZARD_TARGET_GAP : MIN_TARGET_GAP;
+      const tx = px - target.x;
+      const ty = py - target.y;
+      const td = Math.hypot(tx, ty);
+      if (td < gap) {
+        const ux = td > 0.001 ? tx / td : -Math.sign(target.x - owner.x) || -1;
+        const uy = td > 0.001 ? ty / td : 0;
+        px = target.x + ux * gap;
+        py = target.y + uy * gap;
+      }
+    }
     const gx = px - owner.x;
     const gy = py - owner.y;
     const gap = Math.hypot(gx, gy);
