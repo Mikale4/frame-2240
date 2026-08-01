@@ -27,6 +27,10 @@
    Add-ons → search "MCP", then N in viewport → BlenderMCP → Connect.
 4. **Do not call `preview_start` repeatedly** — each call opens a new tab and
    every new tab is a full reload. Reuse the open tab and `navigate`.
+5. **Read `docs/TESTING_PROTOCOL.md`.** It is the durable home for the rules in
+   §9 below — this handoff gets rewritten every session and that file does not.
+   Its first rule: **test by playing at EXTREME, never the default NORMAL**, per
+   the user, because `resourceIq` and `droneIq` execute at no other tier.
 
 ---
 
@@ -372,6 +376,7 @@ a machine — do not repeat it.
 | File | What it holds |
 | --- | --- |
 | `CLAUDE.md` (workspace root) | Project rules, structure, definition of done |
+| `docs/TESTING_PROTOCOL.md` | **How to verify.** Test at EXTREME; the traps, in a file that outlives this one |
 | `docs/DECISIONS.md` | **D1–D70.** D59–D70 are last session's, with the measurements |
 | `src/data/archive.ts` | The story bible: world, factions, 8 machines, 8 pilots |
 | `docs/PILOT_PORTRAIT_SPEC.md` | **Authoritative** on pilot gender, age, appearance |
