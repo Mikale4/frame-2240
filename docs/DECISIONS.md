@@ -2077,3 +2077,122 @@ The mechanic is not reverted for it. A correct rule that invalidates a tuning
 pass is a retune owed, not a rule to undo — the previous numbers were partly
 measuring an accident. The roster wants a pass now that combos actually complete,
 and HALCYON is the first thing it should look at.
+
+---
+
+## D82 — Wisp's tether: visible, wider, and allowed to stay out
+
+**Reported.** "Wisp seems to always stay by Cirrus, which defeats the purpose of
+this tether" — and, separately, "I don't see a line whenever Wisp is active."
+
+**Both were true, and the second was the more serious.** There was no code
+anywhere that drew the wire. `tetherLive` had **zero** references outside
+`src/combat/`. An ability whose entire skill is *where you stand relative to a
+line* was shipping with the line drawn nowhere.
+
+That is not unique to WISP. Auditing the eight roles: every role that spawns an
+**entity** is visible, and every role that is pure **state** is invisible.
+
+```
+  STATIC     decoy        false chassis        visible (MechRenderer)
+  BULWARK    miner        mine clusters        visible (projectiles)
+  EMBER      hazard       burning ground       visible (projectiles)
+  SIGHTLINE  interceptor  shoots down shots    visible (absorb sparks)
+  WISP       arcTether    live wire            NOTHING
+  AEGIS      dome         shot-erasing bubble  NOTHING
+  WARDEN     tether       barrier repair beam  NOTHING
+  ARBITER    designator   target paint         NOTHING
+```
+
+Four of eight abilities have no tell at all. The Archive makes it worse by
+describing visuals that were never drawn — WARDEN's "repair beam", AEGIS's
+"dome", ARBITER "paints the target". Only WISP is fixed here; the other three are
+recorded as open.
+
+### Two wrong diagnoses, both caught by measuring
+
+Worth recording because the measurement discipline is what saved them.
+
+**First guess: Cirrus fights too close for Pincer's 320 px minimum.** Measured:
+the gap gate is satisfied **87.9 %** of the time. Not the problem, and stated
+before checking.
+
+**Second guess: `flank`'s `offAxis: 78` shoves the drone off the very line that
+is the weapon.** Plausible, and wrong — that block sits inside
+`if (this.tactic === Escort)`, so it never runs during a Pincer. The change was
+a no-op and the probe returned **byte-identical** numbers, which is how it was
+caught within one run.
+
+### What was actually wrong
+
+```
+  tactic histogram      Escort 39%   Regroup 36%   Pincer 19%   Cover 6%
+  tether live                        40.4%
+  tether crossing the target         10.1%
+  arc hits                           ~3.0 per match  (~102 damage)
+```
+
+**Regroup was eating a third of the match.** `chooseTactic` returns `Regroup`
+below `REGROUP_LIFE` = 0.35 — and WISP is the frailest escort in the game once
+`defenceMul` is counted (335 hit points at 1.15 → **291 effective**, below
+EMBER's 306). It got chipped early and then went home for good.
+
+And when the play did run, the geometry was fine — mean `t` along the wire of
+0.29 is exactly what parking 210 px beyond the target produces — but the drone
+only **held** the station about half the time: 40 % of Pincer ticks the target
+was not between the two machines at all. That is a pursuit problem, not a
+geometry one, and it is deliberately not addressed here.
+
+### Three changes
+
+1. **`regroup` becomes a per-doctrine value.** A shooter that falls back still
+   shoots; a drone whose output *is* a position loses everything. `flank` — the
+   doctrine built entirely on holding an angle — drops to **0.15**. Every other
+   doctrine keeps 0.35, so the blast radius is CIRRUS and NULLTIDE.
+2. **The wire has thickness.** It was tested as a zero-width mathematical
+   segment against a 30 px hurt radius. `ARC_TETHER_WIDTH = 14` is now shared by
+   the hit test and the renderer, so the cable a player sees lying across a mech
+   is the cable that connects with it.
+3. **It is drawn.** Under the drones and mechs, at that same width, in two
+   states: *slack* when the wire exists but nothing is on it, and *hot* —
+   brighter, thicker, crackling along its length — when it is actually cutting
+   someone. The crackle is sampled off the sim tick, so a replay looks the same.
+
+### Measured
+
+Tether behaviour, 21 matches, CIRRUS against the roster at EXTREME:
+
+```
+                          before    after
+  Pincer ticks            10,724   11,036
+  crossing the target      48.7%    53.1%
+  mean perpendicular miss  200 px   156 px
+  target outside the span  39.9%    33.3%
+```
+
+Roster, six seeds a matchup, both slots, EXTREME leading:
+
+```
+                 EXTREME              HARD
+  cirrus      +0.112 -> +0.157    -0.087 -> +0.057
+  nulltide    -0.058 -> -0.004    -0.032 -> -0.057
+  pyre        +0.151 -> +0.117    +0.180 -> +0.158
+  terramoth   +0.063 -> +0.030    +0.175 -> +0.169
+  obelisk     +0.057 -> +0.027    +0.100 -> +0.056
+  nocturne    +0.009 -> +0.023    -0.013 -> -0.030
+  vesper      -0.135 -> -0.121    -0.158 -> -0.136
+  halcyon     -0.199 -> -0.229    -0.164 -> -0.218
+  spread       0.350 ->  0.386     0.344 ->  0.387
+```
+
+**The two `flank` machines gained and nothing else moved much** — CIRRUS +0.045,
+NULLTIDE +0.054 — which is exactly the intended blast radius. CIRRUS is now the
+strongest machine at EXTREME.
+
+**Cost: spread widened again, and it is entirely HALCYON.** It has now fallen
+−0.126 → −0.199 → −0.229 across three consecutive correct fixes, none of which
+were aimed at it: it gained nothing from the combo change because its chain was
+already airtight, and nothing here because its doctrine is `escort`. It is the
+clear weakest machine and the roster wants a pass. Recorded rather than patched,
+because a tuning change bundled into a mechanics commit is unattributable — which
+is the whole reason these numbers exist.

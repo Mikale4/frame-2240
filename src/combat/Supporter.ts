@@ -336,6 +336,15 @@ interface DoctrineTuning {
   caution: number;
   offAxis: number;
   /**
+   * Life fraction below which the drone stops volunteering and goes home.
+   *
+   * Per doctrine rather than global because what a drone loses by retreating is
+   * not the same for all of them. A shooter that falls back still shoots. A
+   * drone whose output *is* a position loses everything, and `flank` is the
+   * doctrine built entirely on holding one.
+   */
+  regroup: number;
+  /**
    * The team-up plays this doctrine is willing to run, in priority order.
    *
    * `Escort` and `Regroup` are always available and are not listed — one is the
@@ -352,6 +361,7 @@ const DOCTRINES: Record<DroneDoctrine, DoctrineTuning> = {
     leash: 1,
     caution: 1,
     offAxis: 0,
+    regroup: REGROUP_LIFE,
     plays: [DroneTactic.Cover, DroneTactic.Pincer, DroneTactic.Harass],
   },
   /**
@@ -367,6 +377,7 @@ const DOCTRINES: Record<DroneDoctrine, DoctrineTuning> = {
     leash: 1.9,
     caution: 0.45,
     offAxis: 0,
+    regroup: REGROUP_LIFE,
     // Harass first: a screen exists to be the thing being dealt with.
     plays: [DroneTactic.Harass, DroneTactic.Cover, DroneTactic.Pincer],
   },
@@ -376,6 +387,9 @@ const DOCTRINES: Record<DroneDoctrine, DoctrineTuning> = {
     leash: 1.5,
     caution: 1.35,
     offAxis: 78,
+    // A flank drone that goes home is not a flank drone. Its whole output is the
+    // angle it is holding, so it keeps holding it far longer than anything else.
+    regroup: 0.15,
     // Angles are the whole doctrine, and a pincer is the strongest angle there
     // is — CIRRUS and NULLTIDE both want the target facing the wrong way.
     plays: [DroneTactic.Pincer, DroneTactic.Cover],
@@ -386,6 +400,7 @@ const DOCTRINES: Record<DroneDoctrine, DoctrineTuning> = {
     leash: 0.6,
     caution: 1.6,
     offAxis: 0,
+    regroup: REGROUP_LIFE,
     // Never leaves. A shadow's value is the passive staying up, and crossing the
     // arena is how a drone stops existing.
     plays: [DroneTactic.Cover],
@@ -1119,7 +1134,7 @@ export class Supporter {
     if (!this.onStation || !target || !target.alive || !owner.alive) return DroneTactic.Escort;
     // Hurt drones go home. A dead escort helps nobody, and it is one kill from
     // being gone for the match.
-    if (this.lifeFraction < REGROUP_LIFE) return DroneTactic.Regroup;
+    if (this.lifeFraction < DOCTRINES[this.doctrine].regroup) return DroneTactic.Regroup;
 
     const plays = DOCTRINES[this.doctrine].plays;
     const gap = Math.hypot(target.x - owner.x, target.y - owner.y);

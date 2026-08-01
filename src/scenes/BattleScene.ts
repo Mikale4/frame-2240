@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ARENA_H, ARENA_W, TICK_MS, VIEW_H, VIEW_W } from '../core/GameConfig';
 import { Difficulty, session } from '../core/Session';
-import { MatchSim } from '../combat/MatchSim';
+import { ARC_TETHER_WIDTH, MatchSim, segmentHitsCircle } from '../combat/MatchSim';
 import { MECHS } from '../data/mechs';
 import { RivalAI } from '../ai/RivalAI';
 import { Rng } from '../core/Rng';
@@ -97,6 +97,15 @@ export class BattleScene extends Phaser.Scene {
   /** One supporter drone sprite per combatant, plus its readiness ring. */
   private drones: Phaser.GameObjects.Image[] = [];
   private droneRings: Phaser.GameObjects.Graphics[] = [];
+  /**
+   * The `arcTether` wire, one per side.
+   *
+   * Drawn *under* the drones and mechs so it reads as something strung between
+   * them rather than laid over the top. Until this existed the ability was
+   * completely invisible: a live cable that deals 34 a hit and whose entire skill
+   * is where you stand, with no line to stand relative to.
+   */
+  private droneTethers: Phaser.GameObjects.Graphics[] = [];
   /** One per side; only a `decoy` drone ever shows its own. */
   private decoyGhosts: MechRenderer[] = [];
   /** Per-side animation state for the decoy, keyed by combatant id. */
@@ -162,6 +171,7 @@ export class BattleScene extends Phaser.Scene {
     this.blades = [];
     this.drones = [];
     this.droneRings = [];
+    this.droneTethers = [];
     this.decoyGhosts = [];
     this.decoyAnim = {};
     this.worldObjects = [];
@@ -251,6 +261,8 @@ export class BattleScene extends Phaser.Scene {
       drone.setOrigin(0.5, 0.5);
       drone.setScale(PART_SCALE);
       this.drones.push(drone);
+      // Under the drone and the mechs: a wire is behind the things it joins.
+      this.droneTethers.push(this.add.graphics());
       this.droneRings.push(this.add.graphics());
 
       /**
@@ -305,6 +317,7 @@ export class BattleScene extends Phaser.Scene {
       ...this.renderers.map((r) => r.root),
       ...this.projLayer.objects,
       ...this.blades,
+      ...this.droneTethers,
       ...this.drones,
       ...this.droneRings,
       ...this.decoyGhosts.map((r) => r.root),
@@ -938,6 +951,58 @@ export class BattleScene extends Phaser.Scene {
         // that flicker is the tell, and it arrives too late to help much.
         const life = s.decoyTicks / 110;
         ghost.setAlpha(life > 0.2 ? 1 : life * 5);
+      }
+    }
+
+    // ---- arc tether -------------------------------------------------------
+    /**
+     * The live wire, drawn at exactly the width the hit test uses.
+     *
+     * `ARC_TETHER_WIDTH` is shared with `MatchSim`, so the cable a player sees
+     * lying across a mech is the cable that connects with it — the ability is
+     * entirely about where you stand, and it was previously drawn nowhere at all.
+     *
+     * Two states worth telling apart: **slack**, when the drone is far enough out
+     * for the wire to exist but nothing is on it, and **hot**, when it is actually
+     * cutting someone. Hot is brighter, thicker and sparks along its length,
+     * because that is the moment the play worked.
+     */
+    const tether = this.droneTethers[i];
+    if (tether) {
+      tether.clear();
+      const live = c.alive && s.visible && c.def.supporter.role === 'arcTether' && s.tetherLive;
+      if (live) {
+        const foe = this.sim.combatants.find((o) => o.team !== c.team && o.alive);
+        const hot =
+          !!foe &&
+          segmentHitsCircle(s.x, s.y, c.x, c.y, foe.x, foe.y, foe.def.rig.hurtRadius + ARC_TETHER_WIDTH);
+        const glow = c.def.tint.glow ?? 0xbdf0ff;
+        const accent = c.def.tint.accent ?? 0x4ad6ff;
+        const t = this.sim.tick;
+        // Outer bloom, then the core. Both follow the same span.
+        tether.lineStyle(hot ? ARC_TETHER_WIDTH * 2 : ARC_TETHER_WIDTH, accent, hot ? 0.34 : 0.16);
+        tether.lineBetween(s.x, s.y, c.x, c.y);
+        tether.lineStyle(hot ? 4 : 2, glow, hot ? 1 : 0.6);
+        tether.lineBetween(s.x, s.y, c.x, c.y);
+        // A cable under load is not a straight bright line; it crackles. Sampled
+        // off the tick so it is deterministic and a replay looks the same.
+        if (hot) {
+          const dx = c.x - s.x;
+          const dy = c.y - s.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const nx = -dy / len;
+          const ny = dx / len;
+          tether.lineStyle(2, 0xffffff, 0.85);
+          tether.beginPath();
+          tether.moveTo(s.x, s.y);
+          for (let k = 1; k < 8; k++) {
+            const f = k / 8;
+            const j = Math.sin(t * 0.9 + k * 2.3) * ARC_TETHER_WIDTH * 0.75;
+            tether.lineTo(s.x + dx * f + nx * j, s.y + dy * f + ny * j);
+          }
+          tether.lineTo(c.x, c.y);
+          tether.strokePath();
+        }
       }
     }
 

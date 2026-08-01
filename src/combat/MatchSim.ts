@@ -56,12 +56,21 @@ const MELEE_REPEL_STUN = 60;
 /** `arcTether`: how often the wire can bite, and for how much. */
 const ARC_TETHER_COOLDOWN = 18;
 const ARC_TETHER_DAMAGE = 34;
+/**
+ * Half-thickness of the wire, in pixels.
+ *
+ * The arc was tested as a zero-width mathematical segment against a 30 px hurt
+ * radius, which is not what a cable is and — more to the point — is not what the
+ * renderer draws. `ARC_TETHER_WIDTH` is shared by the hit test and the line, so
+ * what a player sees crossing a mech is exactly what connects with it.
+ */
+export const ARC_TETHER_WIDTH = 14;
 
 /** How long a designator's paint outlives the drone's line of sight. */
 const DESIGNATOR_PAINT_TICKS = 45;
 
 /** Does the segment a-b pass within `r` of the point c? Used by the arc tether. */
-function segmentHitsCircle(
+export function segmentHitsCircle(
   ax: number,
   ay: number,
   bx: number,
@@ -338,7 +347,18 @@ export class MatchSim {
           // crosses the target, which is the whole idea.
           if (!s.tetherLive || s.arcCooldown > 0) break;
           if (!foe.alive) break;
-          if (!segmentHitsCircle(s.x, s.y, c.x, c.y, foe.x, foe.y, foe.def.rig.hurtRadius)) break;
+          if (
+            !segmentHitsCircle(
+              s.x,
+              s.y,
+              c.x,
+              c.y,
+              foe.x,
+              foe.y,
+              foe.def.rig.hurtRadius + ARC_TETHER_WIDTH,
+            )
+          )
+            break;
           s.arcCooldown = ARC_TETHER_COOLDOWN;
           foe.takeHit({
             x: foe.x,
