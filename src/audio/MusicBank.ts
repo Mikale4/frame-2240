@@ -62,12 +62,12 @@ export const MUSIC_CUES: MusicCueDef[] = [
   { name: 'theme_vesper', present: true },
   { name: 'theme_terramoth', present: true },
   { name: 'theme_cirrus', present: true },
-  { name: 'theme_obelisk', present: false },
-  { name: 'theme_pyre', present: false },
-  { name: 'theme_nulltide', present: false },
+  { name: 'theme_obelisk', present: true },
+  { name: 'theme_pyre', present: true },
+  { name: 'theme_nulltide', present: true },
 
   // Stage themes — one arena exists (see `render/Backdrop.ts`).
-  { name: 'stage_cathedral_yard', present: false },
+  { name: 'stage_cathedral_yard', present: true },
 
   // Optional fallback, only reachable when every rolled candidate is missing.
   { name: 'battle', present: false },
