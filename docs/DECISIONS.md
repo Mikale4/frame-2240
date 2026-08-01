@@ -2707,3 +2707,94 @@ are scarce.
 * `difficulty.test.ts` still measures the ladder on HALCYON mirrors with six seed
   pairs. The assertions now pass with real margin rather than on luck, but the
   instrument has not improved.
+
+## D88 — The select screen documents the drone's ability, and Vesper is not a sniper
+
+### Four faults on the select screen, all reported by eye
+
+**The cursor was sized to the cell, not the artwork.** 96x96 sitting 2px high,
+against a portrait plate of 92x76 — so it hung 8px below the picture and cut
+through the machine's name. Now 96x80 centred on the plate, with the label moved
+from y=44 to y=49 to clear it.
+
+**The detail block ran through the control hint.** The hint appeared *inside* the
+drone description rather than below it. Fixing that by sliding the block up drove
+it into the stats instead: stacked, the two blocks wanted 195px in the 123px
+between the stats and the hint, and no amount of shaving font sizes closes 54px.
+
+The column was the real constraint. It started at `0.62 * VIEW_W` with 351px to
+wrap into, and the drone lines are whole sentences, so they wrapped two and three
+deep. Moved to `0.36` — clear of the portrait panel, which ends at 308, and clear
+of the grid above — and **split into two columns**, weapons beside drone. Each is
+now five to seven lines. Checked across all eight machines rather than the one on
+screen: worst bottom 502 against a hint at 508, no overlap anywhere.
+
+**The drone's ability was documented nowhere in the game.** The screen printed
+the drone's hit points and its *passive*, and stopped. The **role** — the thing
+that actually distinguishes eight otherwise similar escorts — appeared on no
+screen at all. A player could learn that WISP refills boost at double rate and
+still have no idea it strings a live wire across the arena.
+
+`ROLE_BRIEF` in `data/droneRoles.ts` gives all nine roles a name and a sentence,
+written against `stepDroneRoles` and `stepRole` rather than against the fiction.
+Kept in one table so the nine read as a set and can be compared; eight
+descriptions written next to eight stat blocks would drift.
+
+`interceptor`'s line says "around **you**" deliberately: the radius is measured
+from the pilot, not from the drone, and a player who assumes otherwise will
+position the escort to protect something it is not protecting.
+
+### Sightline is doing its job. Vesper is not doing its job.
+
+**Asked**: does SIGHTLINE actually help a marksman? Measured, VESPER's mean lead
+against the whole field, six seeds a matchup, both slots:
+
+```
+  screen + interceptor (current)   EXTREME -0.146   HARD -0.114
+  escort + interceptor                     -0.201        -0.156
+  shadow + interceptor                     -0.217        -0.156
+  screen + shooter                         -0.239        -0.271
+  shadow + shooter                         -0.234        -0.314
+```
+
+**The current configuration is the best of the five, on both tiers.** The
+hypothesis going in was that `screen` wastes the frailest escort on the roster —
+312 effective hit points, carrying the best damage passive — on exposure that
+interception does not need, since the radius is centred on the pilot. That was
+wrong: pulling the drone back to `escort` costs 0.055 and to `shadow` costs 0.071.
+The body-blocking is worth more than the deaths. Handing SIGHTLINE its gun back
+instead of point defence is a disaster at -0.093 to -0.157.
+
+So the drone is not why VESPER is last.
+
+### The roster is spatially homogeneous
+
+The follow-up question — does VESPER actually *play* like a marksman — has a
+harder answer. Median separation held, EXTREME, three seeds against the field:
+
+```
+  pyre       751px   in melee reach 12.1%
+  terramoth  721px                  11.1%
+  vesper     709px                  15.7%
+  halcyon    693px                  15.0%
+  nulltide   692px                  18.1%
+  nocturne   686px                  12.5%
+  obelisk    673px                  14.1%
+  cirrus     567px                  35.2%
+```
+
+**VESPER holds 709px against a field median of 693 — a 2% difference — and spends
+more of the fight inside melee reach than both heavies and the hazard machine.**
+Its `rangeMul: 1.18`, the longest reach on the roster and a negative melee
+appetite produce no distinguishable spatial behaviour.
+
+Only CIRRUS has a real spatial identity. Seven of eight machines fight at
+essentially the same distance, which makes "marksman", "brawler" and "siege
+frame" descriptions of stat blocks rather than of anything observable. That is a
+far better explanation for VESPER being the weakest machine than anything to do
+with its escort, and it is a roster-wide finding rather than a VESPER one.
+
+`preferredRangeFor` clamps its result to `[hurtRadius * 3, 900]` and both pilots
+are solving for distance at once, so a stated preference gets averaged away by
+the opponent's. Not addressed here; recorded because it reframes the balance
+work.

@@ -10,6 +10,7 @@ import {
 import { InputManager } from '../input/InputManager';
 import { bigTitle, smallText } from '../ui/Menu';
 import { ROSTER } from '../data/mechs';
+import { ROLE_BRIEF } from '../data/droneRoles';
 import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
 
@@ -17,6 +18,8 @@ const FONT = 'ui-monospace, Consolas, monospace';
 const COLS = 4;
 /** Top of the right-hand detail column, clear of the two-row roster grid. */
 const STATS_TOP = 292;
+/** Baseline of the control hint. The detail block is floored above it. */
+const HINT_Y = VIEW_H - 24;
 /** Gap between the stats block and the weapon list below it. */
 const STATS_GAP = 12;
 
@@ -64,6 +67,7 @@ export class MechSelectScene extends Phaser.Scene {
   private blurbText!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
   private armsText!: Phaser.GameObjects.Text;
+  private droneText!: Phaser.GameObjects.Text;
   private lockedText!: Phaser.GameObjects.Text;
   private skillPanel!: Phaser.GameObjects.Container;
   private skillText!: Phaser.GameObjects.Text;
@@ -133,9 +137,17 @@ export class MechSelectScene extends Phaser.Scene {
     // first version overlapped them. Stats are compressed to four lines and the
     // weapon list is placed relative to whatever the stats block measures, so
     // the layout holds even if a mech's numbers wrap differently.
-    const sx = VIEW_W * 0.62;
+    // **Wider than it was, because the column was the constraint.**
+    //
+    // At 0.62 the block had 351px to wrap into, and the drone lines are whole
+    // sentences — so they wrapped two and three deep, the block grew past the
+    // 216px between the grid and the control hint, and adding the role text
+    // tipped it into the stats above. Starting at 0.36 puts it clear of the
+    // portrait panel (which ends at 308) and clear of the grid above it, and
+    // nearly doubles the wrap width, so those sentences take one line each.
+    const sx = VIEW_W * 0.36;
     this.statsText = this.add
-      .text(sx, STATS_TOP, '', { fontFamily: FONT, fontSize: '14px', color: '#cfe0f5', lineSpacing: 4 })
+      .text(sx, STATS_TOP, '', { fontFamily: FONT, fontSize: '13px', color: '#cfe0f5', lineSpacing: 3 })
       .setOrigin(0, 0)
       .setStroke('#070b12', 4);
     this.armsText = this.add
@@ -148,7 +160,26 @@ export class MechSelectScene extends Phaser.Scene {
         // line is the longest thing here and the only one whose length is not
         // bounded by a short weapon name, so without this it is silently clipped
         // mid-sentence at the right margin.
-        wordWrap: { width: VIEW_W - sx - 14 },
+        wordWrap: { width: 288 },
+      })
+      .setOrigin(0, 0)
+      .setStroke('#070b12', 4);
+
+    /**
+     * The drone gets its own column beside the weapons, not more rows below.
+     *
+     * Stacked, the two blocks needed 177px in a 123px gap between the stats and
+     * the control hint, and no amount of shaving font sizes closes 54px. Side by
+     * side each is about five lines, and the width freed up by moving the whole
+     * column left is what pays for it.
+     */
+    this.droneText = this.add
+      .text(sx + 300, STATS_TOP + 90, '', {
+        fontFamily: FONT,
+        fontSize: '10px',
+        color: '#7d8ea8',
+        lineSpacing: 3,
+        wordWrap: { width: VIEW_W - sx - 314 },
       })
       .setOrigin(0, 0)
       .setStroke('#070b12', 4);
@@ -156,8 +187,17 @@ export class MechSelectScene extends Phaser.Scene {
     // ---- roster grid -----------------------------------------------------
     this.buildGrid();
 
+    /**
+     * Sized to the portrait plate, not to the cell.
+     *
+     * It was 96x96 sitting 2px high, against a plate of 92x76 — so it hung 8px
+     * below the artwork and cut straight through the machine's name underneath.
+     * A selection box that overlaps the label reads as a misaligned box rather
+     * than as a highlight. 96x80 centred on the plate leaves an even 2px of
+     * margin all the way round.
+     */
     this.cursor = this.add
-      .rectangle(0, 0, 96, 96, 0x000000, 0)
+      .rectangle(0, 0, 96, 80, 0x000000, 0)
       .setStrokeStyle(3, 0xffd166)
       .setDepth(900);
 
@@ -191,7 +231,7 @@ export class MechSelectScene extends Phaser.Scene {
       this,
       'ARROWS  move      ENTER or J  confirm      ESC  back',
       VIEW_W / 2,
-      VIEW_H - 24,
+      HINT_Y,
       12,
       '#63748c',
     );
@@ -215,8 +255,10 @@ export class MechSelectScene extends Phaser.Scene {
         .rectangle(0, 0, 92, 76, def.tint.secondary, 0.55)
         .setStrokeStyle(2, def.tint.primary);
       const thumb = this.add.image(0, -4, `pilot_${def.id}_thumb`).setDisplaySize(60, 60);
+      // Clear of the selection box, which frames the 76px plate at +/-40. At 44
+      // the label's own stroked height ran back up under the box's bottom edge.
       const label = this.add
-        .text(0, 44, def.name, { fontFamily: FONT, fontSize: '11px', color: '#cfe0f5' })
+        .text(0, 49, def.name, { fontFamily: FONT, fontSize: '11px', color: '#cfe0f5' })
         .setOrigin(0.5)
         .setStroke('#070b12', 4);
 
@@ -228,8 +270,10 @@ export class MechSelectScene extends Phaser.Scene {
 
   private refresh(): void {
     const def = ROSTER[this.index];
+    const role = ROLE_BRIEF[def.supporter.role];
     const pos = this.cells[this.index].getData('pos') as { x: number; y: number };
-    this.cursor.setPosition(pos.x, pos.y - 2);
+    // Centred on the plate, which is centred on the cell — no offset.
+    this.cursor.setPosition(pos.x, pos.y);
 
     this.portrait.setTexture(`pilot_${def.id}`);
     this.nameText.setText(`${def.codeName}  ${def.name}`);
@@ -253,16 +297,46 @@ export class MechSelectScene extends Phaser.Scene {
         `LANCE   ${def.lance.label}`,
         `SUB     ${def.sub.label}`,
         `MELEE   ${def.meleeLock.name}  (${def.meleeLock.hits} hits)`,
-        // The drone's passive is the least discoverable thing in the kit — it
-        // has no animation and no sound — so the select screen is the one place
-        // it can be read before the match rather than inferred during one.
-        `DRONE   ${def.supporter.name}  ${def.supporter.maxLife} HP`,
-        `        ${def.supporter.passive.name} (while deployed)`,
-        `        ${def.supporter.passive.text}`,
       ].join('\n'),
     );
-    // Placed after the text is set, so the gap is measured rather than assumed.
-    this.armsText.setY(this.statsText.y + this.statsText.height + STATS_GAP);
+    /**
+     * The drone, in **both** halves.
+     *
+     * This screen printed the passive alone, which meant the thing that actually
+     * distinguishes eight otherwise similar escorts — the *role* — was
+     * documented nowhere in the game. A player could learn that WISP refills
+     * boost at double rate and still have no idea it strings a live wire across
+     * the arena that deals damage to anything caught on it.
+     */
+    this.droneText.setText(
+      [
+        `DRONE  ${def.supporter.name}  ${def.supporter.maxLife} HP`,
+        role.name,
+        role.text,
+        '',
+        `${def.supporter.passive.name} (while deployed)`,
+        def.supporter.passive.text,
+      ].join('\n'),
+    );
+    /**
+     * Positioned after the text is set, so the block is measured rather than
+     * assumed — and floored so it can never reach the control hint.
+     *
+     * The natural position is directly under the stats. That was already close
+     * to the hint at the bottom of the screen, and the drone lines wrap to two
+     * or three rows depending on the machine, so the longest ones ran straight
+     * through it: the hint appeared *inside* the drone description rather than
+     * below it. Adding the role text made a near-miss into a collision.
+     *
+     * Taking the higher of the two positions keeps the measured layout whenever
+     * it fits and slides the block up only for the machines that need it.
+     */
+    const wanted = this.statsText.y + this.statsText.height + STATS_GAP;
+    const tallest = Math.max(this.armsText.height, this.droneText.height);
+    const ceiling = HINT_Y - 14 - tallest;
+    const top = Math.min(wanted, ceiling);
+    this.armsText.setY(top);
+    this.droneText.setY(top);
 
     // Dim whichever machine is already committed, so the second pass reads as a
     // different choice rather than a repeat of the first.
