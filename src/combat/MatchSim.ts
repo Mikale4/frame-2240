@@ -2,7 +2,7 @@ import { ARENA_H, ARENA_W, DECK_Y, ROUND_TIME_TICKS, TICK_HZ } from '../core/Gam
 import { Rng } from '../core/Rng';
 import type { MechDef } from '../mechs/MechDef';
 import { Projectile, ProjectilePool, sweptHit } from '../projectiles/Projectile';
-import { Combatant } from './Combatant';
+import { Combatant, DESIGNATOR_HOMING } from './Combatant';
 import { SupState } from './Supporter';
 import { Element } from './Status';
 import { clampToArena } from './FlightModel';
@@ -68,6 +68,22 @@ export const ARC_TETHER_WIDTH = 14;
 
 /** How long a designator's paint outlives the drone's line of sight. */
 const DESIGNATOR_PAINT_TICKS = 45;
+
+/**
+ * Hull the barrier feed also returns, per tick.
+ *
+ * **This reverses a standing decision, deliberately.** `Supporter.stepRole` used
+ * to read "barrier, never life", on the reasoning that a drone able to undo
+ * damage makes killing it mandatory rather than rewarding. Overruled by design:
+ * WARDEN is a repair unit and should look like one.
+ *
+ * Deliberately tiny. At 0.05 a tick this is 3 hull a second — 0.17 % of
+ * NOCTURNE's pool — so it is a trickle that rewards holding the drone alive
+ * across a whole match, not a heal that wins an exchange. It cannot outpace any
+ * weapon in the game, which is the property that keeps "kill the escort" a good
+ * play rather than a forced one.
+ */
+export const TETHER_LIFE_RATE = 0.05;
 
 /** Does the segment a-b pass within `r` of the point c? Used by the arc tether. */
 export function segmentHitsCircle(
@@ -395,11 +411,13 @@ export class MatchSim {
         }
 
         case 'tether': {
-          // Barrier only, and only while the drone is holding station. See the
-          // note in `Supporter.stepRole` for why it may never touch life.
+          // Barrier fast, hull slow, and only while the drone is holding
+          // station. The outer loop has already refused a dead owner, so
+          // neither line can bring a wreck back.
           if (!s.tetherLive) break;
           const rate = c.def.supporter.roleValue ?? 1.6;
           c.barrier = Math.min(c.def.gauges.maxBarrier, c.barrier + rate);
+          c.life = Math.min(c.def.gauges.maxLife, c.life + TETHER_LIFE_RATE);
           break;
         }
 
@@ -459,14 +477,28 @@ export class MatchSim {
       if (!p.active) continue;
       let tx: number | null = null;
       let ty: number | null = null;
-      if (p.homing > 0) {
-        const target = p.team === Team.Player ? this.enemy : this.player;
-        if (target.alive) {
-          tx = target.x;
-          ty = target.y;
-        }
+      const target = p.team === Team.Player ? this.enemy : this.player;
+      /**
+       * Paint adds guidance to the painter's own rounds.
+       *
+       * Gated on the shooter actually running a designator rather than on the
+       * paint alone. In a duel the two are equivalent, but a mine or any other
+       * zero-homing thing that is not meant to fly must never start steering
+       * because somebody else's drone lit the target up.
+       *
+       * Read live, never written back, so the bonus dies with the paint.
+       */
+      const shooter = p.team === Team.Player ? this.player : this.enemy;
+      const guided =
+        target.paintedTicks > 0 && shooter.def.supporter.role === 'designator'
+          ? DESIGNATOR_HOMING
+          : 0;
+      const guide = p.homing + guided;
+      if (guide > 0 && target.alive) {
+        tx = target.x;
+        ty = target.y;
       }
-      p.step(tx, ty);
+      p.step(tx, ty, guide);
       // Off-arena cleanup with a generous margin so homing shots can loop back.
       if (
         p.x < -260 ||

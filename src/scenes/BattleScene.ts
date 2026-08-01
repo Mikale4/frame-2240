@@ -1235,7 +1235,13 @@ export class BattleScene extends Phaser.Scene {
         const glow = c.def.tint.glow ?? 0xbdf0ff;
         const accent = c.def.tint.accent ?? 0x8fe6ff;
         const t = this.sim.tick;
-        const full = c.barrier >= c.def.gauges.maxBarrier - 0.001;
+        // Standby means "nothing left to give", so it now needs *both* gauges
+        // topped. Checking barrier alone would dim the cable during the exact
+        // stretch it is trickling hull back — which is the lie the standby state
+        // exists to prevent. In practice this means the beam is bright for most
+        // of a match, because hull does not come back on its own.
+        const full =
+          c.barrier >= c.def.gauges.maxBarrier - 0.001 && c.life >= c.def.gauges.maxLife - 0.001;
         const a = full ? 0.3 : 1;
 
         /**
@@ -1674,6 +1680,24 @@ export class BattleScene extends Phaser.Scene {
       // ---- supporter drone -------------------------------------------
       this.drawDrone(i, c, dt);
       this.drawPaint(i, c);
+
+      // WARDEN's repair, on the machine receiving it.
+      //
+      // Gated on exactly the condition `MatchSim` heals under — drone on
+      // station, tether live, and hull actually below maximum — so the motes are
+      // present when and only when hull is coming back. Emitting them off the
+      // tether alone would show a repair during the stretch the machine is
+      // already full, which is the same lie the standby cable exists to avoid.
+      if (
+        c.alive &&
+        c.def.supporter.role === 'tether' &&
+        c.supporter.onStation &&
+        c.supporter.tetherLive &&
+        c.life < c.def.gauges.maxLife &&
+        Math.random() < 0.4
+      ) {
+        this.effects.repairMote(c.x, c.y, c.def.barrier.radius);
+      }
 
       // Sustained barrier bubble and saturation aura.
       if (c.invuln > 0) {

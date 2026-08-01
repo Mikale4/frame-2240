@@ -795,9 +795,11 @@ export class Supporter {
         break;
 
       case 'tether':
-        // Barrier, never life. Life is the thing a fight is decided on; giving a
-        // drone the power to undo damage would make killing it mandatory rather
-        // than rewarding. Barrier regenerates anyway — this pays the delay.
+        // Barrier fast, hull slow. This used to be barrier and *only* barrier,
+        // on the reasoning that a drone able to undo damage makes killing it
+        // mandatory rather than rewarding; that was overruled by design, and
+        // `TETHER_LIFE_RATE` in `MatchSim` carries the trickle and the note on
+        // why it is as small as it is.
         this.tetherLive = true;
         break;
 

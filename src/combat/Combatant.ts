@@ -146,6 +146,29 @@ export const DESPERATE_EXTRA_SHOT = 1 / 3;
 export const DESIGNATOR_DAMAGE = 1.2;
 
 /**
+ * Extra turn rate, in radians per tick, that the painter's rounds steer at
+ * while the paint is up.
+ *
+ * **Re-added by design after the note above rejected it.** Read that note first:
+ * tracking on every shot measured at +0.47 of a life bar for HALCYON, cutting it
+ * to a fifth did not fix it, and EXTREME measured as losing to HARD because
+ * steering shots erode dodging — which is where most of EXTREME's advantage
+ * lives. `Projectile.step` even says out loud that the AI's dodge prediction
+ * reads a straight line from current velocity.
+ *
+ * Two things are different this time. It is far smaller than the versions that
+ * failed — 0.012 against missile homing of 0.048–0.062, so roughly 20° of total
+ * correction across a typical flight rather than a lock. And HALCYON is now the
+ * **weakest** machine on the roster at −0.229, where it was the strongest when
+ * this was last tried.
+ *
+ * Neither of those is an argument that it works. **Measure the difficulty ladder,
+ * not just the roster spread** — the ladder is what it broke last time, and a
+ * roster table alone would not have caught that.
+ */
+export const DESIGNATOR_HOMING = 0.012;
+
+/**
  * Ticks the pilot is helpless after a saturation burst burns out.
  *
  * Saturation used to end with no downside at all, so the only question was when

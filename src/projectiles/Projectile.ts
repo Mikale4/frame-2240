@@ -88,14 +88,20 @@ export class Projectile {
   }
 
   /** Advances one tick, optionally homing toward `tx,ty`. */
-  step(tx: number | null, ty: number | null): void {
+  /**
+   * @param guide Turn rate to steer at, defaulting to the shot's own `homing`.
+   *   Passed explicitly so a designator's paint can add guidance to a round that
+   *   carries none of its own, without mutating the projectile — the bonus has
+   *   to lapse the instant the paint does, and a written-back field would not.
+   */
+  step(tx: number | null, ty: number | null, guide: number = this.homing): void {
     this.prevX = this.x;
     this.prevY = this.y;
 
-    if (this.homing > 0 && tx !== null && ty !== null) {
+    if (guide > 0 && tx !== null && ty !== null) {
       const speed = Math.hypot(this.vx, this.vy);
       const want = Math.atan2(ty - this.y, tx - this.x);
-      const next = approachAngle(this.angle, want, this.homing);
+      const next = approachAngle(this.angle, want, guide);
       // Missiles also build speed as they run, so late salvos still threaten.
       const s = Math.min(speed * 1.012, speed + 0.1);
       this.vx = Math.cos(next) * s;

@@ -1023,6 +1023,52 @@ export class Effects {
     });
   }
 
+  /**
+   * WARDEN's repair, on the machine receiving it.
+   *
+   * Motes spawned on a ring around the chassis and drifting **inward**, which is
+   * the whole point: every other particle effect in this game moves outward,
+   * because everything else is something leaving a machine — thrust, sparks,
+   * debris, an explosion. Reversing the direction is the cheapest possible way
+   * to say *arriving* rather than *escaping*, and it reads before any colour
+   * choice does.
+   *
+   * Cool green rather than the tint of whoever is being repaired. Hull coming
+   * back is the one thing on screen that is unambiguously good, and it should
+   * not have to be told apart from a chassis colour.
+   *
+   * @param radius Where the motes start; pass the barrier radius so the effect
+   *   scales with the frame rather than being a fixed halo on every machine.
+   */
+  repairMote(x: number, y: number, radius: number): void {
+    const a = Math.random() * Math.PI * 2;
+    const r = radius * (1.15 + Math.random() * 0.5);
+    // Solved so the mote arrives at the hull rather than stopping short or
+    // overshooting into the middle: drag 0.9 over ~22 ticks travels close
+    // enough to `speed / (1 - drag)` for the difference not to read.
+    const speed = r * 0.075;
+    this.emit({
+      key: TEX.spark,
+      x: x + Math.cos(a) * r,
+      y: y + Math.sin(a) * r,
+      life: 22,
+      // Measured at the first size: 8 alive and each **8–12 display px** on a
+      // 32 px source, against a 150 px chassis and 144 other live particles.
+      // Present, and invisible — the same trap as the paint reticle. Sized up
+      // and made to *shrink* as it arrives, so a mote reads as being taken in
+      // rather than as a dot sliding across the hull.
+      scaleFrom: 0.9,
+      scaleTo: 0.28,
+      tint: 0x8effc0,
+      alpha: 1,
+      vx: -Math.cos(a) * speed,
+      vy: -Math.sin(a) * speed,
+      drag: 0.9,
+      rotation: a,
+      fadePow: 0.7,
+    });
+  }
+
   explode(x: number, y: number, big: boolean, tint: number): void {
     const n = big ? 34 : 14;
     this.emit({

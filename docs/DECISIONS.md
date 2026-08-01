@@ -2364,3 +2364,162 @@ the first version stated and the geometry quietly broke.
 for TERRAMOTH against an observed ~170 × 160 — it includes children parked far
 off, and anything sized from it would be wildly too big. The extents above were
 derived from the screenshot instead.
+
+## D85 — Warden heals, Arbiter guides, and the AI learns to commit
+
+Three requested changes, and then the measurement that came out of them, which
+turned out to matter more than any of them.
+
+### Warden's tether returns hull
+
+**Requested**, and it reverses the standing "barrier, never life" decision in
+`Supporter.stepRole` — recorded there and now rewritten rather than left
+contradicting the code. `TETHER_LIFE_RATE = 0.05`, 3 hull a second, alongside the
+barrier feed.
+
+Measured, six seeds a matchup, both slots:
+
+```
+  NOCTURNE  EXTREME -0.024 -> +0.046   (+0.070)
+            HARD    -0.036 -> +0.031   (+0.067)
+  spread    EXTREME  0.406 ->  0.396
+            HARD     0.410 ->  0.402
+```
+
+Both tiers, same direction, near-identical magnitude, and the roster spread
+*narrowed*. The comment first written for it called this "a trickle, not a heal
+that wins an exchange" — at +0.070 that overstated its own smallness, and the
+comment was corrected rather than the number.
+
+### Arbiter's paint guides the painter's rounds
+
+**Requested**, and it re-adds a mechanic `DESIGNATOR_DAMAGE`'s note explicitly
+rejected — see that note first. `DESIGNATOR_HOMING = 0.012` rad/tick, read live
+in `stepProjectiles` and never written back, so the bonus dies with the paint.
+Gated on the shooter owning a designator rather than on the paint alone, so a
+mine never starts flying because somebody else's drone lit the target up.
+
+```
+  HALCYON   EXTREME -0.229 -> -0.051   (+0.178)
+            HARD    -0.177 -> +0.024   (+0.201)
+  spread    EXTREME  0.396 ->  0.302
+```
+
+0.302 is the narrowest roster spread measured on this project. It also makes the
+stale `mechs.ts` comment — "HALCYON's own shots track a painted mech" — true
+instead of deleted.
+
+**A wrong call, recorded because it was nearly acted on.** This was first
+reported as reproducing the documented failure exactly: `difficulty.test.ts` went
+red with `EXTREME vs HARD: -0.017`. That reading came from the test's **6 seed
+pairs**, and at 24 pairs the change measures `+0.022 ±0.050` against a baseline
+of `+0.045 ±0.044` — no significant difference. The failure was a small sample
+read as signal, which is the exact trap the protocol's own history is made of.
+
+### The measurement that mattered
+
+Chasing that led to measuring the ladder properly, 24 seed pairs with error bars:
+
+```
+  HARD vs NORMAL     +0.265 ±0.051
+  EXTREME vs NORMAL  +0.364 ±0.052
+  HARD vs EASY       +0.440 ±0.045
+  EXTREME vs EASY    +0.409 ±0.055      <- below HARD's
+  EXTREME vs HARD    +0.045 ±0.044      <- inside its own error bar
+```
+
+**The top rung of the difficulty ladder was flat, and had been.** HARD pulls
++0.265 clear of NORMAL; EXTREME managed +0.045 over HARD. `difficulty.test.ts`
+asserts `EXTREME vs HARD > 0` on six pairs, so it had been passing on luck — and
+that is why it flickered across a homing sweep (0.002 fail, 0.006 pass, 0.008
+pass, 0.012 fail) that no monotonic effect could explain.
+
+A per-lever ablation of EXTREME, 20 pairs, mirror machines:
+
+```
+  threatSolver     +0.236   real -- but HARD has it
+  punishRecovery   +0.159   real -- but HARD has it
+  weaponIq         -0.129   actively harmful, at every tier that has it
+  energyDiscipline +0.058   noise      rangeIq   +0.039   noise
+  droneIq          +0.050   noise      tempoIq   +0.031   noise
+  statusIq         +0.041   noise      closeOnGuard +0.026 noise
+  frameIq          -0.045   noise      resourceIq +0.009  noise
+  leadShots        -0.067   noise
+  reaction 3->6    +0.041   noise      skill 1->0.78 +0.045 noise
+```
+
+**The two levers that pay are both already at HARD.** Everything EXTREME adds on
+top — six exclusive flags, and halving reaction time — is individually
+indistinguishable from zero. `RivalAI.ts` claims `rangeIq` is "worth about two
+tenths of a health bar, which is most of what separates the top two tiers"; it is
+worth +0.039 ±0.066, and that comment has been the project's stated explanation
+for the top of the ladder.
+
+### Why knowledge measured as nothing — and it is not what it looks like
+
+The first reading of that table was "knowledge is worth nothing in this game."
+That was wrong, and the code says why. `rangeIq`, `tempoIq`, `droneIq` and part
+of `statusIq` all write to **the same variable** — `want`, the distance the rival
+would like to stand at — which is then clamped:
+
+```ts
+  if (!this.p.rangeIq) return (300 - this.skill * 90) * styleMul;
+  if (this.p.droneIq && self.supporter.rebuilding) want *= 1.2;
+  if (this.p.tempoIq) { ... want *= 1.22 ... want *= 0.72 }
+  return Math.max(self.def.rig.hurtRadius * 3, Math.min(want, 900));
+```
+
+Four insights, one output channel, and they partly cancel — `droneIq` pushes
+`want` up while `tempoIq` pulls it down. That also explains the **non-additivity**
+seen when re-tiering: taking `punishRecovery` (+0.159) away from HARD opened the
+rung by +0.07, not +0.159, because the survivors still write to the same scalar.
+
+The knowledge was never worthless. It had nowhere to go. The whole decision
+output of the class was five movement modes, and no amount of knowing things can
+be expressed in "move toward" or "move away".
+
+### Plans
+
+`AiPlan` — a committed multi-tick intent with an entry condition, a body that
+outranks the ordinary tactic choice, and an abort. Gated on **`planIq`**, a new
+capability true at EXTREME alone: the knowledge flags say what a tier *sees*,
+`planIq` says whether it can hold an intent about what it saw.
+
+`Execute` is the surviving plan. `frameIq` already read the recovery window;
+now it can spend it — 46 ticks committed to a helpless opponent, aborting the
+tick they recover, blocked from re-entry for 40, and dropped entirely below 18 %
+life because commitment into a lost fight is sunk cost with a health bar.
+
+```
+  plans off              EXTREME vs HARD +0.012   vs NORMAL +0.381
+  Execute only                           +0.114             +0.214
+  Execute + GuardBreak                   +0.076             +0.244
+  all three                              +0.086             +0.249
+```
+
+**`Breach` and `GuardBreak` were built, measured, and are not here.** Both lower
+the top rung. A plan that commits tens of ticks against an opponent who was never
+going to punish the alternative is worse than reacting, and `Breach`'s entry
+condition is mech-symmetric, so in a mirror it fires for both sides at every tier
+and cancels. Removed rather than disabled behind a flag, because dead code that
+once measured badly is an invitation to switch it back on. The lesson is that a
+plan earns its keep in its **entry condition**, not its body.
+
+`Execute` alone takes the rung from +0.012 to +0.114 — nine times, and the reason
+the suite is green again without `difficulty.test.ts` being touched. The
+assertion stopped failing because the quantity stopped being noise.
+
+**The cost is real and is not hidden**: `EXTREME vs NORMAL` falls from +0.381 to
++0.214. Committing against an erratic opponent is worth less than reacting to
+one. It still clears the 0.15 floor, and buying a live top rung with some of a
+rung that was never in doubt is the trade this was asked for — but it is a trade.
+
+### Still open
+
+* `weaponIq` at **-0.129** is bug-shaped, not tuning-shaped, and drags every tier
+  that has it. Untouched here.
+* `difficulty.test.ts` measures the tiers with **HALCYON mirror matches**, so any
+  change to HALCYON's kit can redden the ladder test. That coupling is why a drone
+  change turned the suite red, and it is still there.
+* Its six seed pairs still cannot resolve an effect of this size; the assertions
+  pass comfortably now, but the instrument has not improved.

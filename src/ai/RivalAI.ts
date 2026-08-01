@@ -26,6 +26,51 @@ export const enum AiTactic {
   Evade = 4,
 }
 
+/**
+ * A **plan**: a committed multi-tick intent, as opposed to a tactic.
+ *
+ * This exists because the per-lever ablation found something the tuning could
+ * not fix. Every "knowledge" flag EXTREME has — `rangeIq`, `tempoIq`,
+ * `droneIq`, `resourceIq` — measured as **noise**, and reading the code says
+ * why: all four write to the same variable, `want`, the distance the rival
+ * would like to stand at, which is then clamped. Four different insights
+ * produced one slightly different number, and they partly cancelled each other
+ * (`droneIq` pushes `want` up 1.2x while `tempoIq` can pull it down 0.72x).
+ *
+ * Knowledge was not worthless. It had **nowhere to go**. The whole decision
+ * output of this class was five movement modes plus button presses, and no
+ * amount of knowing things can be expressed in "move toward" or "move away".
+ *
+ * A plan has an entry condition, a body that outranks the ordinary tactic
+ * choice, and an abort. That is the channel knowledge needed: `rangeIq` can now
+ * decide *how to close* rather than how far to stand off, and `resourceIq` can
+ * decide *to commit* rather than nudging a radius.
+ *
+ * Commitment is the point. A plan re-decided every tick is a scalar with extra
+ * steps.
+ */
+export const enum AiPlan {
+  None = 0,
+  /**
+   * `frameIq` — they are helpless *now*. Convert the whole window; this is the
+   * most certain damage on the field and it is measured in tens of ticks.
+   */
+  Execute = 1,
+}
+
+/** For the debug overlay — a plan you cannot see is a plan you cannot debug. */
+export const PLAN_NAMES = ['-', 'EXECUTE'];
+
+/**
+ * Master switch for the plan layer, so an ablation can price the whole thing
+ * against the tuning it replaces. Ships on; only the measurement harness
+ * touches it.
+ */
+let plansEnabled = true;
+export function setPlansEnabled(on: boolean): void {
+  plansEnabled = on;
+}
+
 export interface AiConfig {
   difficulty: Difficulty;
 }
@@ -168,6 +213,15 @@ export interface AiProfile {
    */
   frameIq: boolean;
   /**
+   * Can commit to a **plan** — see `AiPlan`.
+   *
+   * Separate from the knowledge flags on purpose. Those say what a tier can
+   * *see*; this says whether it can hold an intent across tens of ticks and act
+   * on what it saw. Measured, that distinction is worth more than every
+   * knowledge flag on this AI put together.
+   */
+  planIq: boolean;
+  /**
    * Reads the opponent's gauges — barrier, boost, energy, and how much of a
    * burst is left to run.
    *
@@ -234,6 +288,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     tempoIq: false,
     statusIq: false,
     frameIq: false,
+    planIq: false,
     resourceIq: false,
     droneIq: false,
     leadShots: false,
@@ -255,6 +310,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     tempoIq: false,
     statusIq: false,
     frameIq: false,
+    planIq: false,
     resourceIq: false,
     droneIq: false,
     leadShots: false,
@@ -285,6 +341,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     // and the drone valuation, which is where EXTREME pulls away.
     statusIq: true,
     frameIq: true,
+    planIq: false,
     resourceIq: false,
     droneIq: false,
     leadShots: true,
@@ -310,6 +367,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     tempoIq: true,
     statusIq: true,
     frameIq: true,
+    planIq: true,
     resourceIq: true,
     droneIq: true,
     leadShots: true,
@@ -332,6 +390,12 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
 export class RivalAI {
   tactic: AiTactic = AiTactic.Approach;
   private tacticTicks = 0;
+  /** The committed intent, if any. Outranks the tactic while it holds. */
+  plan: AiPlan = AiPlan.None;
+  /** Ticks the current plan has left before it must re-justify itself. */
+  private planTicks = 0;
+  /** Blocks re-entering a plan the instant it ends, so it cannot chatter. */
+  private planCooldown = 0;
   /** Buffered decision, released after the reaction delay. */
   private reactTimer = 0;
   private dirX = 0;
@@ -514,6 +578,16 @@ export class RivalAI {
     const foeCommitted =
       foe.act === ActState.Attack && foe.attack !== null && foe.attack.kind !== ProjKind.Melee;
     const foeMelee = foe.attack?.kind === ProjKind.Melee;
+
+    // ---- Plan ---------------------------------------------------------------
+    // Runs every tick, unlike the tactic. A plan's *entry* is a rare event and
+    // its abort has to be immediate — noticing a helpless opponent 30 ticks late
+    // is noticing nothing, and staying committed 30 ticks after they recovered
+    // is how a commitment becomes a mistake.
+    this.stepPlan(self, foe, dist);
+    // Entering a plan re-decides the tactic now rather than waiting out the
+    // throttle, otherwise the body ignores it for up to 50 ticks.
+    if (this.plan !== AiPlan.None) this.tacticTicks = 0;
 
     // ---- Tactic selection (throttled, so it does not twitch every tick) ----
     this.tacticTicks--;
@@ -854,6 +928,97 @@ export class RivalAI {
     return { x: ax / len, y: ay / len };
   }
 
+  /**
+   * Chooses a plan, or keeps the one running.
+   *
+   * Ordered by how certain the payoff is: a helpless opponent is guaranteed
+   * damage, a guard about to break is near-certain, and a breach is a bet. Each
+   * entry condition is deliberately narrow — a plan that fires constantly is a
+   * tactic, and tactics are what already exist.
+   */
+  private stepPlan(self: Combatant, foe: Combatant, dist: number): void {
+    if (!plansEnabled) {
+      this.plan = AiPlan.None;
+      return;
+    }
+    if (this.planCooldown > 0) this.planCooldown--;
+
+    // ---- abort ------------------------------------------------------------
+    if (this.plan !== AiPlan.None) {
+      this.planTicks--;
+      const dead = !foe.alive || !self.alive;
+      // Self-preservation still outranks every plan. Committing into a fight
+      // that is already lost is not commitment, it is the sunk-cost fallacy
+      // with a health bar.
+      const desperate = self.life / self.def.gauges.maxLife < 0.18 && !foe.helpless;
+      const gone = this.plan === AiPlan.Execute && !foe.helpless;
+      if (this.planTicks <= 0 || dead || desperate || gone) {
+        this.plan = AiPlan.None;
+        this.planCooldown = 40;
+      }
+      return;
+    }
+
+    if (this.planCooldown > 0) return;
+
+    // ---- entry ------------------------------------------------------------
+    //
+    // **Planning is EXTREME's capability, and `planIq` is what says so.**
+    //
+    // `Breach` and `GuardBreak` are gated on `rangeIq`/`resourceIq`, which HARD
+    // does not have, so they were already exclusive. `Execute` is gated on
+    // `frameIq`, which HARD *does* have — so the second most valuable plan on
+    // the board was being handed to the tier EXTREME is supposed to pull away
+    // from, and measured with it the rung stayed shut. The flags still say what
+    // a tier *knows*; `planIq` says whether it can commit to a plan about it.
+    if (!this.p.planIq) return;
+
+    // EXECUTE. `frameIq` already reads the recovery window; now it can spend it.
+    // A helpless machine cannot guard, dodge or answer, and the window is tens
+    // of ticks, so this is the most certain damage available anywhere.
+    if (this.p.frameIq && foe.helpless && dist < self.effectiveMeleeRange * 3.4) {
+      this.plan = AiPlan.Execute;
+      this.planTicks = 46;
+      return;
+    }
+
+    /**
+     * **`GuardBreak` and `Breach` were built, measured, and are not here.**
+     *
+     * Both were written to the same shape as `Execute` and both failed to earn
+     * a place, on 20 seed pairs, both slots:
+     *
+     * ```
+     *   plans off                    EXTREME vs HARD +0.012   vs NORMAL +0.381
+     *   Execute only                                 +0.114             +0.214
+     *   Execute + GuardBreak                         +0.076             +0.244
+     *   all three                                    +0.086             +0.249
+     * ```
+     *
+     * Adding either one *lowers* the top rung. They are not merely flat: a plan
+     * that commits tens of ticks against an opponent who was never going to
+     * punish the alternative is worse than reacting, and `Breach`'s entry
+     * condition is mech-symmetric, so in a mirror it fires for both sides at
+     * every tier and cancels.
+     *
+     * Recorded rather than left in behind a disabled flag, because dead code
+     * that once measured badly is an invitation to switch it back on. The
+     * implementations are in git if the entry conditions are ever worth
+     * narrowing — the lesson is that the *entry condition*, not the plan body,
+     * is where a plan earns its keep.
+     */
+  }
+
+  /** What the running plan wants the body to do this tick. */
+  private planTactic(self: Combatant, dist: number): AiTactic {
+    switch (this.plan) {
+      case AiPlan.Execute:
+        return dist > self.effectiveMeleeRange * 0.8 ? AiTactic.Approach : AiTactic.Hold;
+      default:
+        return AiTactic.Approach;
+    }
+  }
+
   private pickTactic(
     self: Combatant,
     foe: Combatant,
@@ -875,6 +1040,11 @@ export class RivalAI {
      * certain damage on the field; nothing else is worth deciding first.
      */
     if (this.standingInHazard(self)) return AiTactic.Evade;
+
+    // A live plan outranks the ordinary read. This is the whole point of having
+    // one: the rival stops re-litigating its intent every time `pickTactic`
+    // comes round and actually sees a commitment through.
+    if (this.plan !== AiPlan.None) return this.planTactic(self, dist);
 
     // Someone hiding behind a guard or a Shield burst is taking a fraction of
     // anything shot at them and several times as much from a sword. Go and get
