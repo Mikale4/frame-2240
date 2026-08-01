@@ -356,6 +356,7 @@ export class BattleScene extends Phaser.Scene {
         { label: 'RESUME', onSelect: () => this.closePause() },
         ...audioMenuItems(),
         { label: 'RESTART MATCH', onSelect: () => this.restart() },
+        { label: 'MECH SELECT', onSelect: () => this.toMechSelect() },
         { label: 'QUIT TO TITLE', onSelect: () => this.toTitle() },
       ],
       VIEW_W / 2,
@@ -382,6 +383,21 @@ export class BattleScene extends Phaser.Scene {
   private restart(): void {
     session.matchIndex++;
     this.scene.restart();
+  }
+
+  /**
+   * Back to the roster, keeping the mode.
+   *
+   * `MechSelect` reads `session.mode`, which nobody has touched since the menu
+   * set it, so this lands on the right screen for all three modes without a
+   * branch — `aiVsAi` still gets both skill dials, `training` still gets none.
+   *
+   * No `matchIndex++` here: `MechSelect.start()` already bumps it, so picking
+   * the same two machines again still gets a fresh seed rather than replaying
+   * the identical fight.
+   */
+  private toMechSelect(): void {
+    this.scene.start('MechSelect');
   }
 
   private toTitle(): void {

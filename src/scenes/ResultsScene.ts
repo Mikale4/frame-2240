@@ -72,10 +72,18 @@ export class ResultsScene extends Phaser.Scene {
       this,
       [
         { label: 'REMATCH', onSelect: () => this.rematch() },
+        // Widening scope, top to bottom: same fight again, different fight,
+        // done fighting. Losing a matchup and wanting a different machine is the
+        // commonest thing to want here, and it used to cost a trip through the
+        // title screen and the whole menu to say so.
+        { label: 'MECH SELECT', onSelect: () => this.scene.start('MechSelect') },
         { label: 'RETURN TO TITLE', onSelect: () => this.scene.start('Title') },
       ],
       VIEW_W / 2,
-      VIEW_H - 130,
+      // Raised by one gap's worth now the list is three long, so the last row
+      // does not sit on top of the hint line at VIEW_H - 34. Keeps the block's
+      // centre where two rows put it.
+      VIEW_H - 150,
       { size: 22, gap: 38 },
     );
 
