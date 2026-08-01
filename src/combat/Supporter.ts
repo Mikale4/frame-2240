@@ -245,8 +245,14 @@ const DECOY_SPEED = 2.6;
 /** How often the projection fires, and how fast its harmless rounds travel. */
 const DECOY_FIRE_PERIOD = 22;
 const DECOY_SHOT_SPEED = 13;
-/** One in twenty, for one second. Enough that ignoring it is not free. */
-const DECOY_STUN_CHANCE = 0.05;
+/**
+ * Three in twenty, for one second.
+ *
+ * The decoy's rounds do no damage, so this is the entire reason to respect them
+ * — and at one in twenty a decoy would usually throw its whole volley without
+ * landing anything, which made ignoring it very nearly free.
+ */
+const DECOY_STUN_CHANCE = 0.15;
 const DECOY_STUN_TICKS = 60;
 /** `miner`: a cluster of large, long-lived charges rather than one small one. */
 const MINE_PERIOD = 110;

@@ -1689,7 +1689,11 @@ export const NULLTIDE: MechDef = {
     turretRate: 8 * DEG,
     cooldown: 18,
     radius: 13,
-    maxLife: 110,
+    // 385 is 110 × 3.5. STATIC was the one drone the D63 scaling pass missed —
+    // the other seven all took the multiplier and this one kept its pre-D63
+    // value at every commit since, leaving it 2.7× frailer than the next
+    // weakest escort against pools that had all tripled around it.
+    maxLife: 385,
     defenceMul: 1.06,
     hurtRadius: 12,
     deployTicks: 26,

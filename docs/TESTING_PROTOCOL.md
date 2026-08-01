@@ -87,10 +87,39 @@ Four tricks, all required:
 1. **`computer{action:'key'}` does not reach Phaser.** Dispatch `KeyboardEvent`
    on `window`, keyed by physical `code`.
 2. **Hold keys ~220 ms.** Menus read *held* state, not key-down edges.
-3. **Freeze by hijacking `requestAnimationFrame`**, not by pausing — Escape lays
-   a scrim over the thing you wanted to see. Restore it afterwards.
+3. **Freeze with `game.loop.sleep()` and resume with `game.loop.wake()`.** Not by
+   pausing — Escape lays a scrim over the thing you wanted to see.
+
+   **Do not hijack `requestAnimationFrame` to freeze.** Earlier notes recommended
+   it; it is a trap. Phaser's `TimeStep` schedules itself *recursively*, so the
+   moment a stub returns without invoking the callback the loop stops scheduling
+   and is dead for good. Restoring `window.requestAnimationFrame` does **not**
+   bring it back, and neither does `loop.wake()` — `loop.running` keeps reporting
+   `true` while `loop.frame` sits still. Worse, a plain rAF probe still reports a
+   healthy ~50 fps, because that is measuring *your own* loop, not Phaser's. The
+   only recovery short of a reload is:
+
+   ```js
+   const raf = game.loop.raf;
+   raf.stop();
+   raf.start(game.loop.step.bind(game.loop), false);
+   ```
+
 4. **You cannot read the canvas back** — the context has no
    `preserveDrawingBuffer`. Screenshot instead.
+5. **`window.__BSR__` is the Phaser game instance.** This is the way into
+   everything: `__BSR__.scene.getScene('Battle').sim` is the live `MatchSim`, so
+   combatant and supporter state can be sampled directly instead of guessed at
+   from pixels. It sidesteps the HMR module-instance problem entirely.
+6. **`getScene('Battle')` returns the dormant scene after a match ends**, still
+   holding its finished `sim` — `phase` 3 and a stale `tick`. Always check
+   `scene.isActive()` and `cameras.main` before trusting anything read from it.
+7. **`BattleScene` has two cameras**: the world camera (`cameras.main`, zoom
+   ~0.44) and a `ui` camera at zoom 1. A debug overlay added without being put in
+   an ignore list is drawn *twice*, slightly offset. Add it in screen space with
+   `setScrollFactor(0)` and then `cameras.main.ignore([...])` so only the UI
+   camera draws it. World→screen is
+   `(x - cam.worldView.x) * cam.zoom`.
 
 A working key helper:
 
