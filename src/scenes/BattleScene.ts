@@ -106,6 +106,46 @@ export class BattleScene extends Phaser.Scene {
    * is where you stand, with no line to stand relative to.
    */
   private droneTethers: Phaser.GameObjects.Graphics[] = [];
+  /**
+   * AEGIS's dome, one per side.
+   *
+   * The bubble erases every non-piercing shot within `roleValue` px of the
+   * drone, and it too was drawn nowhere: a 150 px wall deciding whether a whole
+   * volley arrives, with nothing on screen to say it was there. The **rim** is
+   * the load-bearing part — `MatchSim` cuts at exactly that radius, so the edge
+   * is drawn crisply and at exactly that radius. A player has to be able to see
+   * where the wall stops.
+   */
+  private droneDomes: Phaser.GameObjects.Graphics[] = [];
+  /**
+   * Verlet rope points for WARDEN's feed cable, one array per side.
+   *
+   * **Render-only.** `MatchSim` does not know this exists and must not: the
+   * tether's effect has no geometry at all — it adds barrier while the drone is
+   * on station, from wherever it happens to be. The straight line was accurate
+   * and lifeless. A cable that hangs, lags behind the drone and swings when the
+   * machine moves says "physical line between two bodies" in a way a segment
+   * never will, and costs the simulation nothing.
+   *
+   * Deliberately *not* applied to WISP's arc: that one is a weapon, drawn taut
+   * and crackling, and the two escorts read better for being different objects.
+   */
+  private tetherRope: { x: number; y: number; px: number; py: number }[][] = [];
+  /**
+   * Recent dome impacts per side: which way the rim was struck, and how much
+   * flare is left. A shield that swallows a salvo without reacting reads as
+   * scenery rather than as the thing that just saved its owner.
+   */
+  private domeHits: { ang: number; life: number }[][] = [];
+  /**
+   * ARBITER's paint, one per side, drawn on the machine **wearing** it.
+   *
+   * Indexed by the victim, because that is where `paintedTicks` lives and where
+   * the mark belongs: being painted multiplies incoming damage, so the machine
+   * carrying it is the one that needs to know. The line home is drawn too — a
+   * debuff with no visible author teaches nobody to shoot the drone.
+   */
+  private paintMarks: Phaser.GameObjects.Graphics[] = [];
   /** One per side; only a `decoy` drone ever shows its own. */
   private decoyGhosts: MechRenderer[] = [];
   /** Per-side animation state for the decoy, keyed by combatant id. */
@@ -172,6 +212,10 @@ export class BattleScene extends Phaser.Scene {
     this.drones = [];
     this.droneRings = [];
     this.droneTethers = [];
+    this.droneDomes = [];
+    this.domeHits = [];
+    this.tetherRope = [];
+    this.paintMarks = [];
     this.decoyGhosts = [];
     this.decoyAnim = {};
     this.worldObjects = [];
@@ -263,6 +307,23 @@ export class BattleScene extends Phaser.Scene {
       this.drones.push(drone);
       // Under the drone and the mechs: a wire is behind the things it joins.
       this.droneTethers.push(this.add.graphics());
+      // Built for every mech and left empty on the six that raise no dome and
+      // paint nobody, which is cheaper than branching the render path on a role
+      // — the same trade the decoy ghost below already makes.
+      //
+      // **Additive**, like the blades, the projectile layer and every effect in
+      // `Effects`. Drawn in NORMAL blend these read as circles someone drew on
+      // the screen; drawn additively they read as light, which is what every
+      // other energy effect in this game already is. It is the single largest
+      // difference between the two, far more than any alpha.
+      const dome = this.add.graphics();
+      dome.setBlendMode(Phaser.BlendModes.ADD);
+      this.droneDomes.push(dome);
+      this.domeHits.push([]);
+      this.tetherRope.push([]);
+      const paint = this.add.graphics();
+      paint.setBlendMode(Phaser.BlendModes.ADD);
+      this.paintMarks.push(paint);
       this.droneRings.push(this.add.graphics());
 
       /**
@@ -318,8 +379,10 @@ export class BattleScene extends Phaser.Scene {
       ...this.projLayer.objects,
       ...this.blades,
       ...this.droneTethers,
+      ...this.droneDomes,
       ...this.drones,
       ...this.droneRings,
+      ...this.paintMarks,
       ...this.decoyGhosts.map((r) => r.root),
       this.effects.container,
       ...this.debug.worldObjects,
@@ -668,10 +731,23 @@ export class BattleScene extends Phaser.Scene {
           sfx.guard();
           this.shake = Math.max(this.shake, 1.6);
           break;
-        case 'absorb':
+        case 'absorb': {
           this.effects.absorb(ev.x, ev.y, 0x7ce7ff);
           sfx.absorb();
+          // Flare the dome's rim where the round actually met it. `absorb` is
+          // also raised by the interceptor and by a barrier, so this is gated on
+          // the role rather than on the event: only a dome has a rim to light.
+          const di = this.sim.combatants.findIndex((o) => o.id === ev.victimId);
+          if (di >= 0 && this.sim.combatants[di].def.supporter.role === 'dome') {
+            const ds = this.sim.combatants[di].supporter;
+            const hits = this.domeHits[di];
+            hits.push({ ang: Math.atan2(ev.y - ds.y, ev.x - ds.x), life: 1 });
+            // A wide salvo lands a dozen rounds in a handful of ticks; keeping
+            // the last few is enough to read as a shield under fire.
+            if (hits.length > 8) hits.shift();
+          }
           break;
+        }
         case 'barrier': {
           const c = this.byId(ev.id);
           this.effects.barrier(ev.x, ev.y, c?.def.barrier.radius ?? 46, 0x8fe6ff);
@@ -935,7 +1011,7 @@ export class BattleScene extends Phaser.Scene {
     } as unknown as Combatant;
   }
 
-  private drawDrone(i: number, c: Combatant): void {
+  private drawDrone(i: number, c: Combatant, dt: number): void {
     const sprite = this.drones[i];
     const ring = this.droneRings[i];
     const s = c.supporter;
@@ -951,6 +1027,132 @@ export class BattleScene extends Phaser.Scene {
         // that flicker is the tell, and it arrives too late to help much.
         const life = s.decoyTicks / 110;
         ghost.setAlpha(life > 0.2 ? 1 : life * 5);
+      }
+    }
+
+    // ---- dome -------------------------------------------------------------
+    /**
+     * AEGIS's bubble, drawn at exactly the radius `MatchSim` cuts at.
+     *
+     * The shared number is the point. `roleValue` decides which shots stop
+     * existing, so the rim a player sees is the rim their volley dies on — the
+     * ability is entirely about where the drone is standing, and it was
+     * previously drawn nowhere at all.
+     *
+     * Three layers, in order of how much each is doing: a fill so faint it only
+     * tints what is inside, a rim heavy enough to locate at a glance, and
+     * meridians that turn so the thing reads as a shell rather than as a range
+     * circle on a map.
+     */
+    const dome = this.droneDomes[i];
+    if (dome) {
+      dome.clear();
+      const hits = this.domeHits[i];
+      for (const h of hits) h.life -= dt * 3.6;
+      while (hits.length && hits[0].life <= 0) hits.shift();
+
+      const up = c.alive && s.onStation && c.def.supporter.role === 'dome' && s.domeActive;
+      if (up) {
+        const r = c.def.supporter.roleValue ?? 140;
+        const glow = c.def.tint.glow ?? 0xbdf0ff;
+        const accent = c.def.tint.accent ?? 0x4ad6ff;
+        const t = this.sim.tick;
+        // Above the deck, below the mechs. The fight happens inside this shell
+        // and a bubble drawn over the top of both machines would bury it.
+        dome.setDepth(19.5);
+
+        /**
+         * A **closed shell**, not a cage — and the simulation is what settles
+         * that. `stepDroneRoles` erases every non-piercing shot anywhere inside
+         * `roleValue`; there are no gaps to thread. Drawing a lattice of bright
+         * bars with empty space between them would be describing an ability the
+         * game does not have.
+         *
+         * So the surface has to be *there*. Three things put it there, and the
+         * order matters:
+         *
+         * 1. **Fresnel falloff** — concentric shells brightening toward the rim.
+         *    This is the one doing the real work. A sphere seen from outside
+         *    shows more of itself at the edge, where the line of sight runs
+         *    along the surface, and almost none through the middle. A flat fill
+         *    is what made the first cut look like a drawn circle.
+         * 2. **A hard rim** at exactly the radius `MatchSim` cuts at, so the
+         *    boundary a player judges their approach against is the boundary
+         *    their rounds die on.
+         * 3. **Seams** — meridians *and* latitudes, turning together. Meridians
+         *    alone are ambiguous: they are equally a globe and a birdcage. The
+         *    latitude rings are what force one reading, because a horizontal
+         *    ring squashed by perspective only makes sense on a solid of
+         *    revolution.
+         */
+        // The weight here is what decides cage-versus-shell, and it is bounded
+        // hard on both sides. Too faint and the seams dominate and the thing
+        // reads as a birdcage, which is a lie about an ability with no gaps in
+        // it. Too heavy — 14 shells at 0.16 and a 0.06 fill were tried — and the
+        // additive interior washes the machine standing inside its own dome into
+        // a white silhouette, which costs more legibility than the surface buys.
+        // These numbers are the ones that were looked at and kept.
+        const SHELLS = 9;
+        for (let k = 0; k < SHELLS; k++) {
+          const f = k / (SHELLS - 1);
+          // Pow 2.6 keeps the middle nearly clear and stacks the light into the
+          // last fifth of the radius, which is where a real shell would show.
+          dome.lineStyle(4 + f * 7, accent, 0.012 + 0.075 * Math.pow(f, 2.6));
+          dome.strokeCircle(s.x, s.y, r * (0.46 + 0.54 * f));
+        }
+        // Faint interior tint, so the volume is enclosed rather than a ring
+        // floating in front of the arena.
+        dome.fillStyle(accent, 0.035);
+        dome.fillCircle(s.x, s.y, r);
+
+        // The rim itself. Breathing slowly, because a shield holding is not a
+        // static object.
+        const pulse = Math.sin(t * 0.06);
+        dome.lineStyle(9, accent, 0.2 + pulse * 0.05);
+        dome.strokeCircle(s.x, s.y, r);
+        dome.lineStyle(2.5, glow, 0.85 + pulse * 0.15);
+        dome.strokeCircle(s.x, s.y, r);
+
+        // ---- seams, all on one rotation ------------------------------------
+        const spin = t * 0.008;
+        // Longitude: ellipses collapsing and reopening on |cos| as they swing
+        // round the far side.
+        dome.lineStyle(1.5, glow, 0.22);
+        for (let k = 0; k < 6; k++) {
+          const a = spin + (k * Math.PI) / 6;
+          dome.strokeEllipse(s.x, s.y, Math.abs(Math.cos(a)) * r * 2, r * 2);
+        }
+        // Latitude: horizontal rings, each at the height and width its own
+        // circle of latitude projects to, squashed by a fixed viewing tilt.
+        // These are what make it a sphere rather than a cylinder of bars.
+        const TILT = 0.3;
+        for (const lat of [-0.95, -0.62, -0.3, 0, 0.3, 0.62, 0.95]) {
+          const cw = Math.cos(lat) * r;
+          dome.lineStyle(1.5, glow, lat === 0 ? 0.26 : 0.18);
+          dome.strokeEllipse(s.x, s.y - Math.sin(lat) * r, cw * 2, cw * 2 * TILT);
+        }
+
+        // A specular cap up and to the left, where this arena's key light is.
+        // Small, offset, and the last cue that the thing has a near side.
+        dome.fillStyle(0xffffff, 0.05);
+        dome.fillEllipse(s.x - r * 0.34, s.y - r * 0.4, r * 0.5, r * 0.34);
+
+        // ---- impacts --------------------------------------------------------
+        // A patch of surface lighting up where the round met it, spreading and
+        // dimming. Two arcs at slightly different radii so the flare has skin
+        // depth rather than sitting on a single hairline.
+        for (const h of hits) {
+          const f = Math.max(0, Math.min(1, h.life));
+          const span = 0.12 + 0.3 * f;
+          dome.lineStyle(4 + f * 9, glow, f * 0.5);
+          dome.beginPath();
+          dome.arc(s.x, s.y, r * 0.985, h.ang - span, h.ang + span);
+          dome.strokePath();
+          dome.lineStyle(2 + f * 3, 0xffffff, f * 0.9);
+          dome.beginPath();
+          dome.arc(s.x, s.y, r, h.ang - span * 0.6, h.ang + span * 0.6);
+          dome.strokePath();
+        }
       }
     }
 
@@ -970,7 +1172,11 @@ export class BattleScene extends Phaser.Scene {
     const tether = this.droneTethers[i];
     if (tether) {
       tether.clear();
-      const live = c.alive && s.visible && c.def.supporter.role === 'arcTether' && s.tetherLive;
+      // `onStation`, not `visible`. `visible` is true through a rebuild, and
+      // `MatchSim.stepDroneRoles` gates every role on `onStation` — so drawing
+      // on the looser predicate puts a wire on screen during the one window
+      // where it provably does nothing.
+      const live = c.alive && s.onStation && c.def.supporter.role === 'arcTether' && s.tetherLive;
       if (live) {
         const foe = this.sim.combatants.find((o) => o.team !== c.team && o.alive);
         const hot =
@@ -1002,6 +1208,127 @@ export class BattleScene extends Phaser.Scene {
           }
           tether.lineTo(c.x, c.y);
           tether.strokePath();
+        }
+      }
+
+      /**
+       * WARDEN's repair beam, on the same graphics because a mech has exactly
+       * one drone role and the two can never be strung at once.
+       *
+       * Deliberately a different language from the arc above: that one is a
+       * weapon and crackles, this is a feed and flows. The charges travel
+       * **toward the machine**, because the direction carries the whole message
+       * — the beam is giving barrier, not draining it.
+       *
+       * It drops to standby once the barrier is capped. `MatchSim` still adds
+       * and clamps there, so a beam running at full strength would be claiming
+       * work that is not happening — exactly the class of lie this whole change
+       * is meant to remove.
+       */
+      const feeding = c.alive && s.onStation && c.def.supporter.role === 'tether' && s.tetherLive;
+      const rope = this.tetherRope[i];
+      if (!feeding) {
+        // Dropped, so the next hookup re-seeds straight instead of snapping in
+        // from wherever the cable was hanging when the drone last went down.
+        rope.length = 0;
+      } else {
+        const glow = c.def.tint.glow ?? 0xbdf0ff;
+        const accent = c.def.tint.accent ?? 0x8fe6ff;
+        const t = this.sim.tick;
+        const full = c.barrier >= c.def.gauges.maxBarrier - 0.001;
+        const a = full ? 0.3 : 1;
+
+        /**
+         * A hanging cable, integrated rather than drawn.
+         *
+         * Verlet: each point remembers where it was, so its velocity is implicit
+         * and the constraint pass is just "put the beads back a rest-length
+         * apart". Ends pinned to the drone and the machine, everything between
+         * left to fall and catch up — which is what produces the lag when the
+         * drone breaks station and the swing when it stops.
+         *
+         * Fixed-step on purpose. Verlet with a variable `dt` changes its own
+         * stiffness frame to frame and can throw the rope; the loop is 60 Hz and
+         * this is presentation, so a fixed tick is both stabler and cheaper than
+         * making it correct under a varying one.
+         */
+        const N = 18;
+        const span = Math.hypot(c.x - s.x, c.y - s.y);
+        if (rope.length !== N) {
+          rope.length = 0;
+          for (let k = 0; k < N; k++) {
+            const f = k / (N - 1);
+            const x = s.x + (c.x - s.x) * f;
+            const y = s.y + (c.y - s.y) * f;
+            rope.push({ x, y, px: x, py: y });
+          }
+        }
+
+        const GRAVITY = 0.5;
+        const DRAG = 0.93;
+        for (let k = 1; k < N - 1; k++) {
+          const p = rope[k];
+          const vx = (p.x - p.px) * DRAG;
+          const vy = (p.y - p.py) * DRAG;
+          p.px = p.x;
+          p.py = p.y;
+          p.x += vx;
+          p.y += vy + GRAVITY;
+        }
+        // Slack just over 1 so the cable hangs slightly rather than hanging
+        // dead straight — enough to read as rope, not enough to droop into the
+        // arena floor at the spans an escort actually holds.
+        const rest = (span / (N - 1)) * 1.05;
+        for (let pass = 0; pass < 8; pass++) {
+          rope[0].x = s.x;
+          rope[0].y = s.y;
+          rope[N - 1].x = c.x;
+          rope[N - 1].y = c.y;
+          for (let k = 0; k < N - 1; k++) {
+            const p0 = rope[k];
+            const p1 = rope[k + 1];
+            let dx = p1.x - p0.x;
+            let dy = p1.y - p0.y;
+            const d = Math.hypot(dx, dy) || 1;
+            const push = ((d - rest) / d) * 0.5;
+            dx *= push;
+            dy *= push;
+            if (k !== 0) {
+              p0.x += dx;
+              p0.y += dy;
+            }
+            if (k + 1 !== N - 1) {
+              p1.x -= dx;
+              p1.y -= dy;
+            }
+          }
+        }
+
+        const strokeRope = (width: number, colour: number, alpha: number): void => {
+          tether.lineStyle(width, colour, alpha);
+          tether.beginPath();
+          tether.moveTo(rope[0].x, rope[0].y);
+          for (let k = 1; k < N; k++) tether.lineTo(rope[k].x, rope[k].y);
+          tether.strokePath();
+        };
+        strokeRope(9, accent, 0.16 * a);
+        strokeRope(3, glow, 0.6 * a);
+
+        if (!full) {
+          // Three charges running the cable toward the machine. Walked along the
+          // *rope* rather than along the straight span, so they ride the sag
+          // instead of cutting the corner it makes.
+          for (let k = 0; k < 3; k++) {
+            const f = (t * 0.014 + k / 3) % 1;
+            const at = f * (N - 1);
+            const lo = Math.min(N - 2, Math.floor(at));
+            const frac = at - lo;
+            const x = rope[lo].x + (rope[lo + 1].x - rope[lo].x) * frac;
+            const y = rope[lo].y + (rope[lo + 1].y - rope[lo].y) * frac;
+            const p = Math.sin(f * Math.PI);
+            tether.fillStyle(0xffffff, 0.45 + p * 0.5);
+            tether.fillCircle(x, y, 2.4 + p * 2.6);
+          }
         }
       }
     }
@@ -1094,6 +1421,69 @@ export class BattleScene extends Phaser.Scene {
     const t = s.mode === DroneMode.Deploying || s.mode === DroneMode.Recalling;
     sprite.setAlpha(t ? 0.55 : 1);
     ring.setAlpha(t ? 0.55 : 1);
+  }
+
+  /**
+   * ARBITER's paint, drawn on the machine wearing it.
+   *
+   * `paintedTicks` multiplies every hit the painted machine takes by
+   * `DESIGNATOR_DAMAGE`, and it was the last of the three roles that were pure
+   * state and therefore invisible: HALCYON's whole kit turned on a debuff with
+   * no mark, no source and no way to learn that shooting the drone turns it off.
+   *
+   * Drawn **over** the mech, unlike the dome and the tethers. A reticle behind
+   * the machine it is locked onto is not a reticle.
+   */
+  private drawPaint(i: number, c: Combatant): void {
+    const g = this.paintMarks[i];
+    if (!g) return;
+    g.clear();
+    if (!c.alive || c.paintedTicks <= 0) return;
+
+    // The mark is in the *painter's* colour: it is something being done to this
+    // machine, not something it is doing.
+    const painter = this.sim.combatants.find((o) => o.team !== c.team);
+    const tint = painter?.def.tint.accent ?? 0xff6a4a;
+    const t = this.sim.tick;
+    // The paint lapses on its own once the drone loses sight, which is what
+    // makes killing the escort worth doing — so the last third of it visibly
+    // decays rather than snapping off.
+    const fade = Math.min(1, c.paintedTicks / 15);
+    const r = c.def.rig.hurtRadius + 16;
+    g.setDepth(41);
+
+    // Four brackets rather than a ring: a closed circle around a mech is what
+    // this game already uses for a barrier, and the two must not be confused.
+    g.lineStyle(2, tint, 0.9 * fade);
+    for (let k = 0; k < 4; k++) {
+      const a0 = -t * 0.02 + (k * Math.PI) / 2;
+      g.beginPath();
+      g.arc(c.x, c.y, r, a0 - 0.3, a0 + 0.3);
+      g.strokePath();
+    }
+    // An inner ring breathing inward — a lock tightening, not a gauge.
+    const pull = 0.5 + 0.5 * Math.sin(t * 0.12);
+    g.lineStyle(1, 0xffffff, (0.2 + pull * 0.35) * fade);
+    g.strokeCircle(c.x, c.y, r * (0.6 + pull * 0.12));
+
+    // The line home. A debuff with no visible author teaches nobody which
+    // machine to shoot, and the answer here is always "the drone".
+    //
+    // Drawn at alpha 0.2 first time out, which was a repeat of the mistake this
+    // whole change exists to fix: the command buffer proved the line was there
+    // and nothing on screen showed it. It is a sight-line, so it stays thin —
+    // but it has to actually arrive.
+    // The mark itself outlives the drone by design — paint lapses over its own
+    // 45 ticks, which is what makes killing the escort pay. The *line* does not:
+    // it is drawn only while the drone is on station and actually refreshing
+    // the paint, so the mark visibly loses its source before it fades.
+    const ps = painter?.supporter;
+    if (painter?.alive && ps?.onStation && painter.def.supporter.role === 'designator') {
+      g.lineStyle(3, tint, 0.16 * fade);
+      g.lineBetween(ps.x, ps.y, c.x, c.y);
+      g.lineStyle(1, tint, 0.62 * fade);
+      g.lineBetween(ps.x, ps.y, c.x, c.y);
+    }
   }
 
   // ------------------------------------------------------------------ render
@@ -1260,7 +1650,8 @@ export class BattleScene extends Phaser.Scene {
       }
 
       // ---- supporter drone -------------------------------------------
-      this.drawDrone(i, c);
+      this.drawDrone(i, c, dt);
+      this.drawPaint(i, c);
 
       // Sustained barrier bubble and saturation aura.
       if (c.invuln > 0) {

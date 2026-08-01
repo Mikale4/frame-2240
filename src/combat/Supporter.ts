@@ -697,9 +697,17 @@ export class Supporter {
     this.slew(owner, target);
 
     // A rebuilding drone is a passenger: no gun, no passive, no orders.
+    //
+    // Every latched role flag has to be cleared here, not just some of them.
+    // `stepRole` is what normally re-derives them each tick and it does not run
+    // on this path, so anything left set stays set for the whole rebuild.
+    // `tetherLive` was missed: `MatchSim` never noticed because its own gate is
+    // `onStation`, but the renderer read the flag directly and drew WARDEN's
+    // repair beam — and WISP's live wire — running from a wreck.
     if (this.mode === DroneMode.Rebuilding) {
       this.roleTimer = 0;
       this.domeActive = false;
+      this.tetherLive = false;
       this.decoyTicks = 0;
       return;
     }

@@ -152,9 +152,9 @@ the user reports VESPER winning confidently at EXTREME.
 
 ## 8. Known-open defects
 
-### 8a. Four drone roles have no visual at all — one now fixed
+### 8a. Four drone roles had no visual at all — **all now fixed (D82, D83)**
 
-Every drone role that spawns an **entity** is visible; every role that is pure
+Every drone role that spawns an **entity** was visible; every role that is pure
 **state** was invisible. `tetherLive`, `domeActive` and `paintedTicks` had **zero**
 references in `src/render/`, `src/scenes/` or `src/ui/`.
 
@@ -164,14 +164,20 @@ references in `src/render/`, `src/scenes/` or `src/ui/`.
 | BULWARK | `miner` | ✅ projectiles |
 | EMBER | `hazard` | ✅ projectiles |
 | SIGHTLINE | `interceptor` | ✅ absorb sparks |
-| WISP | `arcTether` | ✅ **fixed in D82** |
-| **AEGIS** | **`dome`** | ❌ **nothing** |
-| **WARDEN** | **`tether`** | ❌ **nothing** |
-| **ARBITER** | **`designator`** | ❌ **nothing** |
+| WISP | `arcTether` | ✅ **D82** |
+| AEGIS | `dome` | ✅ **D83** — additive fresnel shell, rim at the cut radius |
+| WARDEN | `tether` | ✅ **D83** — 18-point Verlet rope, 86 px sag |
+| ARBITER | `designator` | ✅ **D83** — brackets on the victim + sight-line home |
 
-The Archive describes all three as visible things — WARDEN's "repair beam",
-AEGIS's "dome", ARBITER "paints the target". Fixing them is pure rendering: no
-simulation change, nothing to re-measure.
+All eight looked at on screen, not merely measured. **Two things D83 found on the
+way, both now fixed:** `tetherLive` went stale through a rebuild and drew WISP's
+D82 wire and WARDEN's feed out of a wreck, and the three render gates were on
+`s.visible` where `MatchSim` gates on `s.onStation`.
+
+**Still open, and the user's call:** the code comment and the Archive both call
+WARDEN a **"repair beam"** and it repairs nothing — it refills the guard gauge at
++1.6/tick and may never touch life, by explicit design. Canon wording. Belongs
+with the EMBER item in §7.
 
 ### 8b. WISP does not hold its Pincer station
 

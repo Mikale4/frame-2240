@@ -2196,3 +2196,140 @@ already airtight, and nothing here because its doctrine is `escort`. It is the
 clear weakest machine and the roster wants a pass. Recorded rather than patched,
 because a tuning change bundled into a mechanics commit is unattributable — which
 is the whole reason these numbers exist.
+
+## D83 — The last three invisible drone roles: a shell, a cable, and a mark
+
+**Closes the open half of D82.** That entry fixed WISP and recorded the rest:
+every drone role that spawns an **entity** was visible, every role that is pure
+**state** was drawn nowhere. AEGIS's `dome`, WARDEN's `tether` and ARBITER's
+`designator` were the three left, and the Archive describes all three as visible
+things the game never drew.
+
+No simulation change was intended here and none of the three abilities changed.
+What changed is that they can now be seen.
+
+### Additive, or none of it works
+
+The first cut drew the dome in NORMAL blend and it read as a circle somebody had
+drawn on the screen rather than as a shield. Every other energy effect in this
+game — the blades, `ProjectileLayer`, all of `Effects` — is
+`BlendModes.ADD`. Matching that mattered far more than any alpha value did. The
+dome and the paint are both additive now.
+
+### Closed shell, not a cage — and the simulation settles it
+
+Asked directly whether the bubble was meant to read as a closed sphere or a
+spherical cage. `stepDroneRoles` erases every non-piercing shot *anywhere*
+inside `roleValue`; there are no gaps to thread. A lattice of bright bars with
+empty space between them would be describing an ability the game does not have,
+so it had to read closed.
+
+Three things put the surface there, in order of how much each does:
+
+1. **Fresnel falloff** — nine concentric shells brightening toward the rim on a
+   2.6 power. This is the one doing the work: a sphere shows most of itself at
+   the edge, where the line of sight runs along the surface. The flat fill in the
+   first cut is exactly why it looked like a drawn circle.
+2. **A hard rim** at exactly the radius `MatchSim` cuts at, so the boundary a
+   player judges an approach against is the boundary their rounds die on.
+3. **Seams** — meridians *and* latitudes, on one rotation. Meridians alone are
+   ambiguous: equally a globe and a birdcage. The squashed latitude rings are
+   what force one reading, because a horizontal ring in perspective only makes
+   sense on a solid of revolution.
+
+**The weight is bounded on both sides, and both bounds were found by looking.**
+Too faint and the seams dominate and it reads as a cage. Too heavy — 14 shells at
+0.16 with a 0.06 fill was tried and photographed — and the additive interior
+washes the machine standing inside its own dome into a white silhouette. That
+costs more legibility than the surface buys. The kept numbers are the ones that
+were looked at.
+
+### The cable is integrated, not drawn
+
+**Reported:** the feed line "should probably be more string-like with string like
+physics instead of a straight line."
+
+WARDEN's line is now an 18-point Verlet rope, ends pinned to the drone and the
+machine, everything between left to fall and catch up. Measured at 452 px span it
+departs **86 px** from the straight chord. Fixed-step on purpose: Verlet under a
+varying `dt` changes its own stiffness frame to frame.
+
+**Render-only, and it has to be.** The tether's effect has no geometry at all —
+it adds barrier while the drone is on station, from wherever it happens to be.
+The straight line was accurate and lifeless; the rope is a lie about nothing,
+because there was no geometry to be honest about.
+
+Deliberately **not** applied to WISP's arc. That one is a weapon, drawn taut and
+crackling; a slack cable and a live wire read better as different objects.
+
+### `tetherLive` went stale through a rebuild — including WISP's, shipped in D82
+
+Found by measuring rather than by eye, and it is the reason the render gates
+changed. `Supporter.step` early-returns for a rebuilding drone and clears
+`roleTimer`, `domeActive` and `decoyTicks` — but not `tetherLive`. `stepRole` is
+what normally re-derives that flag every tick and it does not run on that path,
+so the flag stays set for the whole rebuild.
+
+`MatchSim` never noticed, because its own gate is `onStation`. The renderer read
+the flag directly. Caught live:
+
+```
+  rebuilding: true   onStation: false   tetherLive: true   tetherBuf: 63
+```
+
+Sixty-three draw commands of repair beam running out of a wreck. **The same
+defect was in WISP's arc from D82** — a live weapon wire drawn from a drone being
+rebuilt.
+
+Fixed in both places, because either alone would have been enough and neither
+alone is right:
+
+* `Supporter` now clears `tetherLive` on the rebuild path with the rest of the
+  latched role state. This is the root cause.
+* The three render gates moved from `s.visible` to **`s.onStation`** — the same
+  predicate `stepDroneRoles` uses. `visible` is deliberately a superset that
+  includes a rebuilding drone, so drawing on it puts an effect on screen during
+  the exact window it provably does nothing.
+
+505 tests still pass, which is the expected result: the simulation never read the
+stale flag.
+
+### The paint outlives its source; the sight-line does not
+
+`paintedTicks` lapses over its own 45 ticks after the drone stops refreshing it,
+and that decay is what makes killing ARBITER pay. So the mark keeps drawing while
+it fades, and the **line home** is gated on `onStation` — the mark visibly loses
+its author before it fades out. Brackets rather than a ring, because a closed
+circle around a mech already means barrier in this game.
+
+**The sight-line was the same mistake this entry exists to fix, made again.** It
+shipped at alpha 0.2 in the first cut, and the command buffer proved it was
+there —
+
+```
+  lineStyle(1, 0xff6a50, 0.2)  moveTo(725.8, 415.5)  lineTo(1146.5, 393.4)
+```
+
+— while nothing on screen showed it. Drawn, and invisible. It is now a 3 px
+bloom under a 1 px core at 0.62.
+
+### Raised, not changed
+
+**WARDEN is called a "repair beam" in both the code comment and the Archive, and
+it repairs nothing.** It refills the guard gauge at +1.6/tick — 96 a second into a
+100 pool — and may never touch life, by an explicit design decision recorded in
+`Supporter.stepRole`. The word sets up an expectation the mechanic deliberately
+refuses. Canon wording, so it is the user's call, and it joins the EMBER item in
+the handoff's open questions.
+
+**Whether a defensive escort should run Pincer at all** was raised and is *not*
+settled here. Two facts were checked rather than argued: NOCTURNE's doctrine is
+already `escort`, the tightest-but-one on the roster, and `tether` is in
+`SPENDS_CHARGES` — WARDEN keeps its gun, so closing to its 700 `fireRange` buys
+it real shots while the barrier feed has no range term to lose. The exposure
+argument survives that, but it is a balance question and §9 says measure it.
+Recorded as a candidate.
+
+**A number put on screen by the harness is not a number the game produced.** A
+590 px tether span looked like a drone abandoning its station and was an artifact
+of a probe teleporting the opponent every 100 ms. The settled span is ~130 px.
