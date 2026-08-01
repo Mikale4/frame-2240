@@ -65,10 +65,20 @@ export const enum AiPlan {
    * gauge regenerates, so it is worth committing to rather than noticing.
    */
   Starve = 2,
+  /**
+   * `resourceIq` — their burst is ending, and **burnout is certain**.
+   *
+   * `Combatant.burnOut` runs at the end of every saturation burst without
+   * exception, stunning the pilot. So the window is not a prediction: it is on a
+   * timer both sides can read. This plan spends the last of their burst getting
+   * into position, so `Execute` lands on the stun instead of starting to walk
+   * toward it.
+   */
+  Vigil = 3,
 }
 
 /** For the debug overlay — a plan you cannot see is a plan you cannot debug. */
-export const PLAN_NAMES = ['-', 'EXECUTE', 'STARVE'];
+export const PLAN_NAMES = ['-', 'EXECUTE', 'STARVE', 'VIGIL'];
 
 /**
  * Master switch for the plan layer, so an ablation can price the whole thing
@@ -90,7 +100,7 @@ export function setPlansEnabled(on: boolean): void {
  * that had also disabled `rangeIq` and `resourceIq`, and the number was quoted
  * as the plan's value. This exists so a plan can be removed and nothing else.
  */
-const planMask = new Set<AiPlan>([AiPlan.Execute, AiPlan.Starve]);
+const planMask = new Set<AiPlan>([AiPlan.Execute, AiPlan.Starve, AiPlan.Vigil]);
 export function setPlanMask(plans: AiPlan[]): void {
   planMask.clear();
   for (const p of plans) planMask.add(p);
@@ -419,7 +429,21 @@ export class RivalAI {
   plan: AiPlan = AiPlan.None;
   /** Ticks the current plan has left before it must re-justify itself. */
   private planTicks = 0;
-  /** Blocks re-entering a plan the instant it ends, so it cannot chatter. */
+  /**
+   * Blocks entering *any* plan for a beat after one ends.
+   *
+   * **Global on purpose, and this was measured the hard way.** It looks like a
+   * bug: `Vigil` waits out a burst precisely so `Execute` can punish the
+   * burnout, and a shared cooldown locks `Execute` out of the window it was
+   * waiting for. Changing it to a per-plan cooldown to "fix" that cost
+   * `Execute + Starve` **0.081 of a life bar** against HARD (+0.092 -> +0.011)
+   * on identical seeds.
+   *
+   * The rate limit is doing real work. Without it the rival is inside some plan
+   * almost continuously, and being permanently committed is the exact failure
+   * that removed three plans already. A plan is worth something *because* it is
+   * rare.
+   */
   private planCooldown = 0;
   /** Buffered decision, released after the reaction delay. */
   private reactTimer = 0;
@@ -968,6 +992,27 @@ export class RivalAI {
     }
     if (this.planCooldown > 0) this.planCooldown--;
 
+    /**
+     * `Execute` preempts everything, cooldown included.
+     *
+     * The global cooldown creates a fixed budget of commitments per match, and
+     * every cheaper plan spends it on a lesser window — measured, each addition
+     * crowded `Execute` out and cost the rung. A helpless opponent is the most
+     * certain damage on the field and must never be skipped because the rival
+     * is mid-commitment to something smaller, or resting after one.
+     */
+    const canExecute =
+      planMask.has(AiPlan.Execute) &&
+      this.p.planIq &&
+      this.p.frameIq &&
+      foe.helpless &&
+      dist < self.effectiveMeleeRange * 3.4;
+    if (canExecute && this.plan !== AiPlan.Execute) {
+      this.plan = AiPlan.Execute;
+      this.planTicks = 46;
+      return;
+    }
+
     // ---- abort ------------------------------------------------------------
     if (this.plan !== AiPlan.None) {
       this.planTicks--;
@@ -1034,6 +1079,22 @@ export class RivalAI {
       return;
     }
 
+    // VIGIL. Their burst is nearly out and burnout is on a timer, not a guess.
+    // Close now so the stun is punished from inside reach rather than from
+    // wherever the fight happened to leave us.
+    if (
+      planMask.has(AiPlan.Vigil) &&
+      this.p.resourceIq &&
+      foe.satActive &&
+      foe.satTicks > 0 &&
+      foe.satTicks < 46 &&
+      dist < self.effectiveMeleeRange * 5
+    ) {
+      this.plan = AiPlan.Vigil;
+      this.planTicks = 50;
+      return;
+    }
+
     /**
      * **`GuardBreak` and `Breach` were built, measured, and are not here.**
      *
@@ -1066,6 +1127,7 @@ export class RivalAI {
     switch (this.plan) {
       case AiPlan.Execute:
       case AiPlan.Starve:
+      case AiPlan.Vigil:
         // Both are "be on them, now". A machine that cannot act and a machine
         // that cannot dodge want the same answer.
         return dist > self.effectiveMeleeRange * 0.8 ? AiTactic.Approach : AiTactic.Hold;

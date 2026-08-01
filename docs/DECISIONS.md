@@ -2604,3 +2604,106 @@ commits tens of ticks to a payoff that was **not certain**. The two that ship
 both trigger on a state where the opponent has already lost an option — cannot
 act, or cannot dodge. That is the entry condition test for anything added next,
 and it is a stronger predictor than any reasoning about what the behaviour does.
+
+## D87 — Vigil, preemption, and the discovery that commitment is a scarce resource
+
+`EXTREME vs HARD` now measures **+0.147 +/-0.055**, from +0.012 with no plans at
+all. Twelve times the baseline, and comfortably outside its own error bar for the
+first time.
+
+Getting there required a mistake and the finding that came out of it.
+
+### The plan cooldown is load-bearing, not a bug
+
+`Vigil` waits out an opponent's saturation burst so `Execute` can punish the
+burnout — and the global 40-tick cooldown `Vigil` set on ending locked `Execute`
+out of exactly the window it had been waiting for. That looks like an obvious
+bug, and it was "fixed" by making the cooldown per-plan.
+
+Measured on identical seeds, that fix cost `Execute + Starve` **0.081 of a life
+bar** against HARD:
+
+```
+  global cooldown      EXTREME vs HARD +0.092 +/-0.044
+  per-plan cooldown                    +0.011 +/-0.057
+```
+
+Caught only because the control row of the next batch disagreed with the previous
+run. **Always re-run the control.** A batch whose baseline has moved is measuring
+the baseline, not the batch.
+
+The rate limit is doing real work. Without it the rival is inside some plan
+almost continuously, and permanent commitment is precisely what removed three
+plans already. **A plan is worth something because it is rare.**
+
+### Commitment is a budget, and cheap plans spend it
+
+That reframes every failure so far. A global cooldown means a fixed number of
+commitments per match, so each additional plan does not compete on merit — it
+competes for **scarcity**, and spends the budget on a lesser window. Every plan
+added on top of the shipped pair lowered the rung:
+
+```
+  Execute + Starve                     +0.092
+  + Vigil                              +0.066
+  + Counterpunch                       +0.028
+  + both                               +0.007
+```
+
+Not one of them was bad in isolation. They were crowding `Execute` out.
+
+### Preemption, and the handoff that makes Vigil work
+
+The fix is targeted rather than blanket: `Execute` — and only `Execute` — may
+interrupt a running plan and ignore the cooldown. A helpless opponent is the most
+certain damage on the field and must never be skipped because the rival is
+mid-commitment to something smaller.
+
+```
+  Execute + Starve, preempting         +0.061 +/-0.041
+  + Vigil                              +0.147 +/-0.055   <- ships
+  + Counterpunch                       +0.020
+  + both                               +0.067
+```
+
+Preemption **alone is slightly negative** (+0.092 -> +0.061). It only pays with
+`Vigil`, and `Vigil` only pays with preemption: neither is worth anything without
+the other, which is why either measured alone would have been discarded. The two
+form a mechanism — `Vigil` spends the tail of a burst getting into range for a
+burnout that is on a timer rather than a guess, and preemption is what lets
+`Execute` collect it the tick it lands.
+
+That is the first interaction on this AI where two levers are worth more together
+than the sum of their parts, and it argues for pricing candidates in small
+*combinations* rather than strictly one at a time from now on.
+
+### Where the plan set stands
+
+Seven built, three ship:
+
+```
+  EXECUTE       ships, and preempts everything
+  STARVE        ships
+  VIGIL         ships -- worth +0.086, and only alongside preemption
+  BREACH        removed (D85)
+  GUARDBREAK    removed (D85)
+  DRONE-HUNT    removed (D86)
+  COUNTERPUNCH  removed -- +0.020 against +0.061; still crowds Execute out
+```
+
+`Counterpunch` deserves a note, because its premise was sound: a pilot who has
+burst their barrier and cannot afford another has no defensive answer when the
+invulnerability lapses. It is a real window and the rival now simply does not
+spend a commitment on it. The lesson is not that the read was wrong — it is that
+**a correct read is not sufficient justification for a plan** while commitments
+are scarce.
+
+### Still open
+
+* `EXTREME vs NORMAL` sits at +0.275, down from +0.381 with no plans. Plans still
+  cost against an erratic opponent. Above the 0.15 floor, and the trade was asked
+  for, but it has not been recovered.
+* `weaponIq` remains at **-0.129**, untouched, dragging every tier that has it.
+* `difficulty.test.ts` still measures the ladder on HALCYON mirrors with six seed
+  pairs. The assertions now pass with real margin rather than on luck, but the
+  instrument has not improved.
