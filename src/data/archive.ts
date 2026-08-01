@@ -14,6 +14,30 @@
  *
  * Pilot genders and ages are fixed by `docs/PILOT_PORTRAIT_SPEC.md` and must
  * agree with it. Four women, four men.
+ *
+ * **The Archive is complete on purpose.** An earlier draft left deliberate holes
+ * — the EW-14's provenance, Io Senna's history, Rook's inquiry — as campaign
+ * material. That is now written out in full, because the campaign's plan for
+ * this screen is *progressive disclosure*, not omission: entries will start
+ * redacted and unlock as the player reaches the dialogue, event or investigation
+ * that earns them. You cannot redact a paragraph that was never written, so the
+ * complete corpus is the prerequisite for the feature rather than a spoiler of
+ * it. Anything added here should be written whole and then gated later.
+ *
+ * **The present is CE 43.** Every dated event below is relative to that, and the
+ * timeline is load-bearing now that the three gaps resolve into one incident:
+ *
+ *   pre-era  the Descent; the ground closes over four generations
+ *   CE 25    the Emberline Pact forms from seven yards
+ *   CE 27    the Seven Yards War opens
+ *   CE 30    the settlement; thirty AV-13 airframes pass to Emberline
+ *   CE 31    STILLWAKE. The EW programme is tested on an inhabited yard
+ *   CE 32    the war formally ends; the court of inquiry sits
+ *   CE 33    Rook crosses to Emberline; Senna and the fourteenth frame vanish
+ *   CE 34    Ironwake arms the Pattern 3s
+ *   CE 37    the EW-14's threat rating is entered as provisional
+ *   CE 38    Doyne requests detached duty
+ *   CE 43    now
  */
 
 export interface ArchiveEntry {
@@ -40,14 +64,16 @@ export interface ArchiveEntry {
 export const WORLD_ENTRY: ArchiveEntry = {
   id: 'world',
   title: 'THE SKYWARD',
-  subtitle: 'Standing orders, common era 41',
+  subtitle: 'Standing orders, common era 43',
   tagline: 'Everything worth having is above the cloud deck.',
   body: [
     'The ground has not been survivable for four generations. What is left of it ' +
       'is weather — a permanent grey ceiling of storm and particulate that begins ' +
       'about two thousand metres up and does not end. Above that ceiling the air ' +
       'is clear, cold and thin, and every structure humanity still owns is bolted ' +
-      'to a spar, a mast or a gantry hanging in it.',
+      'to a spar, a mast or a gantry hanging in it. The era is counted from the ' +
+      'year the last ground city was abandoned; everything before that is filed ' +
+      'as the Descent.',
     'These structures are called yards. They are cathedral-scale lattices of ' +
       'girder and plate, built outward rather than upward, and they exist because ' +
       'the ore convoys have to dock somewhere. A yard is a port, a foundry, a ' +
@@ -58,9 +84,115 @@ export const WORLD_ENTRY: ArchiveEntry = {
       'frame is a pilot, a reactor and as many thrusters as the airframe will ' +
       'carry, and it fights in three dimensions inside a structure that was built ' +
       'to hold cranes.',
-    'There has not been a declared war in eleven years. There has also not been a ' +
-      'week without a contested docking, a disputed claim or a yard changing ' +
-      'hands. The five powers below all maintain that the other four started it.',
+    'There has not been a declared war since the Seven Yards War closed in 32 CE. ' +
+      'There has also not been a week without a contested docking, a disputed ' +
+      'claim or a yard changing hands. The five powers below all maintain that the ' +
+      'other four started it, and this is inherited rather than argued: it is what ' +
+      'they each say about the Descent as well.',
+  ],
+};
+
+/**
+ * How the ground was lost. The Archive's second page, and the piece every other
+ * entry quietly rests on — the yards, the ore, the convoys and the grievance all
+ * come from here.
+ */
+export const DESCENT_ENTRY: ArchiveEntry = {
+  id: 'descent',
+  title: 'THE DESCENT',
+  subtitle: 'Before the era · cause of record',
+  tagline: 'Nobody did it. Everybody did it. Both statements are in the record.',
+  body: [
+    'It was not a war and it was not a single day. For roughly a century before ' +
+      'the era, the lower atmosphere was worked industrially — some nine hundred ' +
+      'processing stacks at their peak, owned by everyone, venting continuously ' +
+      'into air that was assumed to be large enough not to notice. The assumption ' +
+      'held for four generations of operators and then stopped holding within one.',
+    'What closed the ground was particulate. Enough of it, suspended long enough, ' +
+      'to hold heat in the middle air and drive a storm layer that never fully ' +
+      'discharges and never fully clears. There was no threshold anyone crossed ' +
+      'deliberately, which is precisely the difficulty: no operator\'s stack was ' +
+      'responsible and the sum of them was. The last ground city was abandoned in ' +
+      'good order, over eleven months, with the lights still working.',
+    'The ore is the part nobody says out loud. The floating seams that Ironwake ' +
+      'cuts, that the convoys carry and that every yard exists to receive, are ' +
+      'mineral rafts precipitated out of the storm layer itself — a century of ' +
+      'stack output, condensed, drifting and now the only resource above the ' +
+      'cloud deck worth fighting over. The five powers are living on what killed ' +
+      'the ground, and they are mining it.',
+    'Concord\'s doctrine calls the Descent an industrial accident. Emberline calls ' +
+      'it a Concord accident. Ironwake, who cut the seams before anyone armed ' +
+      'them and knows exactly what the ore is, has never issued a position, and ' +
+      'the Colliery\'s silence on the question is the loudest thing in the record.',
+  ],
+};
+
+/** The last declared war, and the standoff it left behind. */
+export const WAR_ENTRY: ArchiveEntry = {
+  id: 'war',
+  title: 'THE SEVEN YARDS WAR',
+  subtitle: 'CE 27 – CE 32 · Concord Skyward against the Emberline Pact',
+  tagline: 'It ended in a settlement. Nobody has described it as a peace.',
+  body: [
+    'The Emberline Pact was formed in 25 CE by seven yards who had each, ' +
+      'separately, been informed by Concord Skyward that their docking rights were ' +
+      'under review. Two years later the review was carried out with frames. ' +
+      'Concord has never accepted the word invasion and has never proposed an ' +
+      'alternative one.',
+    'It was fought the way everything up here is fought: not for ground, because ' +
+      'there is none, but for the lattices the convoys must pass through. Five ' +
+      'years, no front line, and a casualty figure that both sides publish and ' +
+      'neither will reconcile. The war is the reason every machine on this roster ' +
+      'exists in the form it does.',
+    'The settlement of 30 CE transferred thirty AV-13 airframes to the Pact as ' +
+      'reparation, which Concord regarded as a generous disposal of an obsolete ' +
+      'mark and Emberline regarded as thirty free spars. Within two years they had ' +
+      'been stripped and rebuilt into something Concord would not certify. The ' +
+      'formal end came in 32 CE, eighteen months after the fighting had already ' +
+      'stopped, and after STILLWAKE.',
+    'The Pact held seven yards when it was formed and holds nine now. Its stated ' +
+      'intention is thirteen. Concord\'s standing orders describe the current ' +
+      'arrangement as a cessation, which is a word chosen carefully by people who ' +
+      'expect to need it again.',
+  ],
+};
+
+/**
+ * The incident. This is the hinge the Archive's three former mysteries all turn
+ * on — the EW-14, Io Senna and Rook's inquiry are one event seen from three
+ * sides, and the campaign is expected to unlock them in that order.
+ */
+export const STILLWAKE_ENTRY: ArchiveEntry = {
+  id: 'stillwake',
+  title: 'STILLWAKE',
+  subtitle: 'CE 31 · Concord Skyward · electronic warfare trial',
+  tagline: 'The programme worked. That was the finding.',
+  body: [
+    'Concord\'s electronic-warfare programme was not designed against frames. A ' +
+      'frame carries a pilot who can glide, and jamming one produces an ' +
+      'inconvenience. A yard carries nine thousand people and holds its altitude ' +
+      'by continuous reactor output across a hundred and forty lift spars, and the ' +
+      'programme was designed against that. Fourteen airframes were built. The ' +
+      'operational question was whether a single frame could put a yard\'s spar ' +
+      'network into cascade from outside its defensive envelope.',
+    'On the eleventh of the fourth, 31 CE, that question was tested against ' +
+      'Stillwake Yard, which was in Pact hands and was inhabited. The cascade took ' +
+      'four minutes to propagate and a further nineteen to become unrecoverable. ' +
+      'The yard did not fall; it settled, over most of a day, into the storm layer ' +
+      'and through it. Two thousand two hundred and forty people were taken off. ' +
+      'The remainder were not.',
+    'Concord\'s position, then and now, is that Stillwake was a legitimate ' +
+      'military target under review and that the loss of the lift network was not ' +
+      'the anticipated outcome of the trial. Both halves of that sentence are ' +
+      'defensible. Together they are the reason the fighting stopped eighteen ' +
+      'months before anyone signed anything: neither side could work out how to ' +
+      'continue a war in which this had happened and been survivable to admit.',
+    'The programme was closed the following year. Thirteen airframes were ' +
+      'recovered to inventory and struck. The fourteenth was not, and the pilot ' +
+      'who had flown the trial was removed from the record rather than charged — ' +
+      'a decision the court of inquiry noted, declined to overturn, and did not ' +
+      'explain. Every later mystery in this Archive is a consequence of that ' +
+      'paragraph.',
   ],
 };
 
@@ -170,8 +302,14 @@ export const MECH_ARCHIVE: ArchiveEntry[] = [
         'picking rounds out of the air so its pilot never has to break position. ' +
         'A VESPER that is allowed to stand still is the most dangerous thing at ' +
         'this altitude. Everything about fighting one is about not allowing it.',
-      'Concord does not advertise the loss rate. It is not the highest on the ' +
-        'roster. It is the highest per engagement.',
+      'The loss rate is not advertised and is not classified; it is simply never ' +
+        'quoted. Nine pilots have been certified on the AV-12. Five were lost, ' +
+        'three withdrew from certification without flying an engagement, and one ' +
+        'is still flying. That is not the highest total on the roster — the frame ' +
+        'is too rare for that — but per engagement flown it is the highest figure ' +
+        'Concord holds, by a margin it has twice reviewed and twice left alone. A ' +
+        'VESPER that is found is finished. The forty airframes built have outlived ' +
+        'the programme that could staff them.',
     ],
   },
   {
@@ -275,14 +413,21 @@ export const MECH_ARCHIVE: ArchiveEntry[] = [
   {
     id: 'nulltide',
     title: 'EW-14 NULLTIDE',
-    subtitle: 'Free Latitude · provenance disputed',
+    subtitle: 'Concord Skyward, struck from inventory · flown under Free Latitude',
     tagline: 'It does not out-shoot you. It makes you unable to shoot.',
     body: [
-      'Nobody will say where the EW-14 came from. Free Latitude claims it as ' +
-        'salvage; Concord\'s inventory has fourteen electronic-warfare airframes ' +
-        'built and thirteen accounted for, and declines to discuss the ' +
-        'discrepancy. The frame itself carries no maker\'s plate, which on a ' +
-        'Concord hull is not an oversight.',
+      'The fourteenth and last airframe of Concord\'s electronic-warfare ' +
+        'programme, and the one that flew the Stillwake trial. Thirteen were ' +
+        'recovered and struck when the programme closed in 32 CE. This one left ' +
+        'with its pilot. Free Latitude has claimed it as salvage for eleven years ' +
+        'and Concord has never once contested the claim, which is the most ' +
+        'informative thing either party has said about it.',
+      'The missing maker\'s plate is not concealment and was not removed in the ' +
+        'field. Programme airframes were never plated: an EW-14 was intended to be ' +
+        'deniable while it was still in service. The hull that is hardest to ' +
+        'identify in the sky is that way by Concord\'s own specification, and the ' +
+        'Archive is obliged to note that the design intent and the current ' +
+        'situation are indistinguishable from the outside.',
       'It wins by subtraction. Its guns carry cryogenic and electrical payloads ' +
         'that slow, drain and stall rather than destroy, and its arc glaive is ' +
         'the longest-reaching sword on the roster because the frame expects to be ' +
@@ -293,8 +438,12 @@ export const MECH_ARCHIVE: ArchiveEntry[] = [
         'indistinguishable from the real machine at any useful distance, which ' +
         'drifts, fires and cannot hurt anyone. Every round spent on it is a round ' +
         'that was aimed correctly at nothing.',
-      'The Archive lists its threat rating as provisional. It has been provisional ' +
-        'for six years.',
+      'Its threat rating was entered as provisional in 37 CE and has not been ' +
+        'revised. The rating is provisional because the assessment board could ' +
+        'not agree on what to rate: the frame in the sky is a light skirmisher ' +
+        'with poor damage output, and the frame on the Stillwake file is the only ' +
+        'weapon ever fielded that has taken a yard off the sky. They are the same ' +
+        'airframe. Nobody has been willing to sign the sentence that says so.',
     ],
   },
 ];
@@ -308,11 +457,17 @@ export const PILOT_ARCHIVE: ArchiveEntry[] = [
     subtitle: 'Concord Skyward · Instructor, 2nd Interceptor · Woman, early 30s',
     tagline: '"I am not the best pilot here. I am the one who is still here."',
     body: [
-      'Third generation Concord. Her mother flew an AV-04 and did not come back ' +
-        'from it; her grandmother signed off on the AV-01 and never flew ' +
-        'anything. Vesk grew up inside the programme and has spent her career ' +
-        'being quietly furious at how slow it is, which has not once shown in her ' +
-        'flying.',
+      'Third generation Concord. Her grandmother signed off on the AV-01 and never ' +
+        'flew anything. Her mother flew an AV-04 and did not come back from it, in ' +
+        'a spar-root failure that had been raised as a fault three years earlier, ' +
+        'scheduled for a revision in the following mark, and left in service ' +
+        'meanwhile because the revision was not finished. Eleven other AV-04 ' +
+        'airframes were grounded the same week. Vesk was nine.',
+      'She grew up inside the programme and has spent her career being quietly ' +
+        'furious at how slow it is, which has not once shown in her flying. The ' +
+        'fury and the caution are the same thing viewed from either end: she does ' +
+        'not believe a machine is safe because a committee has not yet finished ' +
+        'saying it is not.',
       'She holds the longest unbroken active record in Concord service — eleven ' +
         'years, no hull loss — and is entirely aware that this is a statement ' +
         'about her judgement rather than her hands. It is also the reason she is ' +
@@ -343,9 +498,20 @@ export const PILOT_ARCHIVE: ArchiveEntry[] = [
         'and he has arranged his entire flying around that trade: guard rather ' +
         'than dodge, absorb rather than evade, let the young ones spend ' +
         'themselves on a frame that does not care.',
-      'The scarring is from the inquiry incident and he will not discuss it. What ' +
-        'is in the record is that he brought a frame home with a failed canopy at ' +
-        'four thousand metres, and that the frame was not his.',
+      'The scarring is from Stillwake. Rook was flying escort on the trial and was ' +
+        'not briefed on what it was; his squadron was told to hold a perimeter and ' +
+        'did. When the lift network began to cascade he went into the yard against ' +
+        'a standing order and spent the next nine hours on evacuation lift, which ' +
+        'is where the burns are from. The frame he brought home at four thousand ' +
+        'metres with a failed canopy was not his because its pilot was already ' +
+        'dead in it, and he would not leave the body in the storm layer.',
+      'The court of inquiry in 32 CE cleared him of the order he had broken and ' +
+        'ended his career with the same document. He had testified to what the ' +
+        'trial was for, in open session, having worked it out afterwards from the ' +
+        'flight tapes — and Concord could neither contradict a decorated witness ' +
+        'nor keep one. He will not discuss any of it. The two thousand two hundred ' +
+        'and forty people taken off Stillwake were taken off on the lift he held ' +
+        'open, and he has never mentioned this either.',
       'He trains Emberline\'s intake personally. His pilots have the lowest ' +
         'first-year loss rate of any unit in the sky and describe him, without ' +
         'affection, as impossible to impress.',
@@ -472,32 +638,55 @@ export const PILOT_ARCHIVE: ArchiveEntry[] = [
   {
     id: 'nulltide',
     title: 'IO SENNA',
-    subtitle: 'Free Latitude · no file on record · Woman, 30s',
+    subtitle: 'Concord Skyward, struck from record · flies under Free Latitude · Woman, 30s',
     tagline: '"Data point."',
     body: [
-      'The Archive has less on Senna than on any other active pilot, and the gaps ' +
-        'are the wrong shape to be accidental. Free Latitude lists her as crew. ' +
-        'Concord has no record of her at all, which for someone flying a Concord ' +
-        'electronic-warfare airframe is a statement in itself.',
-      'What is observable: she does not raise her voice, does not pursue, does ' +
+      'Senna was Concord\'s electronic-warfare programme. Not a member of it — the ' +
+        'trials pilot the fourteen airframes were built around, certified at ' +
+        'twenty-two, and the only person who ever flew one operationally. On the ' +
+        'eleventh of the fourth, 31 CE, she flew the Stillwake trial. She was ' +
+        'twenty-four. The gaps in her file are the wrong shape to be accidental ' +
+        'because they are not gaps: the record was removed rather than lost, in ' +
+        'the year the programme closed, by an authority the inquiry declined to ' +
+        'name.',
+      'She was not charged. The finding was that the trial had been ordered, ' +
+        'correctly briefed and correctly flown, and that its consequence was a ' +
+        'failure of the yard\'s lift network rather than of the pilot — a ' +
+        'conclusion that clears her completely and that she has never once been ' +
+        'recorded accepting. She left with the airframe in 33 CE. Concord did not ' +
+        'pursue it, and the Archive is required to observe that not pursuing it ' +
+        'was also a decision.',
+      'What is observable now: she does not raise her voice, does not pursue, does ' +
         'not finish opponents who have stopped being able to fight, and appears ' +
         'to treat every engagement as a measurement rather than a contest. Pilots ' +
-        'who have fought her describe the experience as being catalogued.',
+        'who have fought her describe the experience as being catalogued. The ' +
+        'refusal to finish a helpless opponent is the only part of her flying that ' +
+        'has never varied in eleven years, and it is the one thing in this entry ' +
+        'the Archive would call a choice rather than a habit.',
       'Her method is subtraction. Cryogenic and shock payloads to take away ' +
         'movement and power, a jamming field to take away the reactor, a false ' +
         'frame to take away certainty. By the time the arc glaive is relevant the ' +
         'opponent has usually been made unable to do anything about it.',
-      'She has never been recorded speaking about herself. The single personal ' +
-        'remark in the file is secondhand: a Brightwake mechanic who says she ' +
-        'once asked, apparently in earnest, why anyone would want to be ' +
-        'remembered.',
+      'She has never been recorded speaking about Stillwake, or about herself. ' +
+        'The single personal remark in the file is secondhand: a Brightwake ' +
+        'mechanic who says she once asked, apparently in earnest, why anyone would ' +
+        'want to be remembered. He took it for detachment at the time. He has ' +
+        'since revised the interpretation and asked that the revision be recorded ' +
+        'here, which is why this line exists.',
     ],
   },
 ];
 
 /** Everything the Archive shows, in the order its sections appear. */
 export const ARCHIVE_SECTIONS = [
-  { id: 'world', label: 'THE WORLD', entries: [WORLD_ENTRY, FACTION_ENTRY] },
+  {
+    id: 'world',
+    label: 'THE WORLD',
+    // Chronological, not by importance: the Descent explains the yards, the yards
+    // explain the powers, the powers explain the war, and the war ends at
+    // Stillwake — which is where three of the roster's entries lead back to.
+    entries: [WORLD_ENTRY, DESCENT_ENTRY, FACTION_ENTRY, WAR_ENTRY, STILLWAKE_ENTRY],
+  },
   { id: 'mechs', label: 'MACHINES', entries: MECH_ARCHIVE },
   { id: 'pilots', label: 'PILOTS', entries: PILOT_ARCHIVE },
 ] as const;
