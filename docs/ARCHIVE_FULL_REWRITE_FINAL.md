@@ -120,9 +120,9 @@
 - **subtitle:** Free Latitude build copy · twenty-one recorded completions · revisions mixed
 - **tagline:** Use the measurements on the frame in front of you.
 
-**¶1.** No LT-21 production line. Pattern passed yard to yard. Builders mostly separate and no two completion sheets describe the same fit. Completion count: 20 on the Brightwake copy, 21 on the later dock copy. Use 21 until somebody brings the missing sheet. What stays is thrust. Remove the rest, then check what the thrust is still attached to. weight, final:
+**¶1.** No LT-21 production line. Pattern passed yard to yard. Builders mostly separate and no two completion sheets describe the same fit. Completion count: 20 on the Brightwake copy, 21 on the later dock copy. Use 21 until somebody brings the missing sheet. What stays is thrust. Remove the rest, then check what the thrust is still attached to. weight, final: armour, fitted: 30 kg.
 
-**¶2.** armour, fitted: 30 kg. Fastest frame in service and the most fragile. Boost recovery is twice standard because little reactor output goes elsewhere. Twin daggers: four hits on the early pattern, eight on the Holloway revision. Fit the eight. It is the longest current melee sequence. Holloway published the revision without charge; Concord called it impractical and the note beside that line says they tested it wrong.
+**¶2.** Fastest frame in service and the most fragile. Boost recovery is twice standard because little reactor output goes elsewhere. Twin daggers: four hits on the early pattern, eight on the Holloway revision. Fit the eight. It is the longest current melee sequence. Holloway published the revision without charge; Concord called it impractical and the note beside that line says they tested it wrong.
 
 **¶3.** WISP flies itself and stays out. String the charged line back to the LT-21. Put the target between them, cross once and pull the line through. The scissor. If the line becomes a tether, break away. Do not chase the drone round the frame. If WISP is shot down, rebuild once. One copy repeats the rebuild instruction twice. The second line has no initials.
 

@@ -379,8 +379,8 @@ export const MECH_ARCHIVE: ArchiveEntry[] = [
         'and no two completion sheets describe the same fit. Completion count: 20 on the ' +
         'Brightwake copy, 21 on the later dock copy. Use 21 until somebody brings the ' +
         'missing sheet. What stays is thrust. Remove the rest, then check what the thrust ' +
-        'is still attached to. weight, final:',
-      'armour, fitted: 30 kg. Fastest frame in service and the most fragile. Boost ' +
+        'is still attached to. weight, final: armour, fitted: 30 kg.',
+      'Fastest frame in service and the most fragile. Boost ' +
         'recovery is twice standard because little reactor output goes elsewhere. Twin ' +
         'daggers: four hits on the early pattern, eight on the Holloway revision. Fit the ' +
         'eight. It is the longest current melee sequence. Holloway published the revision ' +
