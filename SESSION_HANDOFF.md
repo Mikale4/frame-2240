@@ -118,8 +118,13 @@ Now 385. Decoy stun 5 % → 15 %. Measured at six seeds, both slots.
 
 ## 5. NEXT TASK — pick one
 
-1. **CAMPAIGN.** The menu row exists and is disabled. This is the obvious next
-   big feature and the reason the lore was written.
+> **Roadmap decision, 2026-08-01:** the campaign comes **after the roster doubles
+> to sixteen mechs and sixteen pilots**. Do not start CAMPAIGN before that.
+> The eight new machines are the gating work; the campaign is designed around the
+> finished roster, not the current one.
+
+1. **CAMPAIGN — deferred, see the note above.** The menu row exists and is
+   disabled. Still the reason the lore was written.
 
    **The user has specified the Archive's role in it.** Entries start *redacted*
    and unlock as the player progresses — through dialogue, exposition, special
