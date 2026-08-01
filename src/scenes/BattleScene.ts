@@ -1449,22 +1449,44 @@ export class BattleScene extends Phaser.Scene {
     // makes killing the escort worth doing — so the last third of it visibly
     // decays rather than snapping off.
     const fade = Math.min(1, c.paintedTicks / 15);
-    const r = c.def.rig.hurtRadius + 16;
+    /**
+     * Sized off `barrier.radius`, not `rig.hurtRadius`.
+     *
+     * The first cut used `hurtRadius + 16` and the mark was invisible on every
+     * machine — measured at 52 px on TERRAMOTH against a silhouette roughly 85 px
+     * to the corner, so the whole reticle was drawn *underneath* the artwork. A
+     * hit circle is not a picture of a mech; it is much smaller than one.
+     *
+     * `barrier.radius` is the project's existing per-chassis "circle that fits
+     * this machine" number — hand-tuned from 40 on CIRRUS to 56 on TERRAMOTH —
+     * so keying off it scales with the frame for free. The 1.8 puts the reticle
+     * clearly outside both the silhouette and the barrier bubble itself.
+     */
+    const r = c.def.barrier.radius * 1.8;
     g.setDepth(41);
 
-    // Four brackets rather than a ring: a closed circle around a mech is what
-    // this game already uses for a barrier, and the two must not be confused.
-    g.lineStyle(2, tint, 0.9 * fade);
+    // Four brackets and no closed ring anywhere. A circle around a mech already
+    // means barrier in this game, and a targeting mark that can be mistaken for
+    // a defensive one is worse than no mark.
+    g.lineStyle(2.5, tint, 0.9 * fade);
     for (let k = 0; k < 4; k++) {
       const a0 = -t * 0.02 + (k * Math.PI) / 2;
       g.beginPath();
       g.arc(c.x, c.y, r, a0 - 0.3, a0 + 0.3);
       g.strokePath();
     }
-    // An inner ring breathing inward — a lock tightening, not a gauge.
+    // Ticks reaching inward from each bracket, breathing in and out — the lock
+    // tightening. Radial rather than concentric, so there is nothing here that
+    // could be read as a bubble.
     const pull = 0.5 + 0.5 * Math.sin(t * 0.12);
-    g.lineStyle(1, 0xffffff, (0.2 + pull * 0.35) * fade);
-    g.strokeCircle(c.x, c.y, r * (0.6 + pull * 0.12));
+    g.lineStyle(1.5, 0xffffff, (0.3 + pull * 0.45) * fade);
+    for (let k = 0; k < 4; k++) {
+      const a0 = -t * 0.02 + (k * Math.PI) / 2;
+      const ca = Math.cos(a0);
+      const sa = Math.sin(a0);
+      const inner = r * (0.66 - pull * 0.08);
+      g.lineBetween(c.x + ca * r * 0.94, c.y + sa * r * 0.94, c.x + ca * inner, c.y + sa * inner);
+    }
 
     // The line home. A debuff with no visible author teaches nobody which
     // machine to shoot, and the answer here is always "the drone".

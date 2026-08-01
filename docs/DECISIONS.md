@@ -2333,3 +2333,34 @@ Recorded as a candidate.
 **A number put on screen by the harness is not a number the game produced.** A
 590 px tether span looked like a drone abandoning its station and was an artifact
 of a probe teleporting the opponent every 100 ms. The settled span is ~130 px.
+
+## D84 — The paint mark was drawn underneath the machine it marked
+
+**Found by being asked to show it.** D83 claimed ARBITER's paint was visible. It
+was drawn, its command buffer was non-empty, and on screen it was a few arcs
+buried inside the chassis. The screenshot is what caught it — which is the third
+time on this project that a thing measured correct and read wrong, and the second
+time in the same day's work.
+
+The radius was `rig.hurtRadius + 16`. **A hit circle is not a picture of a mech.**
+Measured live: 52 px on TERRAMOTH against a silhouette roughly 85 px to the
+corner, so the entire reticle sat under the artwork. HALCYON was the same story at
+44 px against ~72.
+
+Now sized off **`barrier.radius × 1.8`**. That field is the project's existing
+per-chassis "circle that fits this machine" number, hand-tuned from 40 on CIRRUS
+to 56 on TERRAMOTH, so the mark scales with the frame for free instead of being
+refitted per mech. Checked at both ends of the roster: 72 px on CIRRUS, 101 px on
+TERRAMOTH, clear of the silhouette in both.
+
+**The inner ring had to go with it.** At the old radius it was buried and
+harmless; at the new one it landed right on the barrier bubble, and a targeting
+mark that can be mistaken for a defensive one is worse than no mark. Replaced
+with four radial ticks reaching inward from the brackets, breathing on the same
+pulse. There is now no closed circle anywhere in the reticle, which was the rule
+the first version stated and the geometry quietly broke.
+
+**`getBounds()` on the mech root is not the silhouette.** It reported 412 × 351
+for TERRAMOTH against an observed ~170 × 160 — it includes children parked far
+off, and anything sized from it would be wildly too big. The extents above were
+derived from the screenshot instead.
