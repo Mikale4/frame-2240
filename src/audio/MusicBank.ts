@@ -55,6 +55,9 @@ export const MUSIC_CUES: MusicCueDef[] = [
   { name: 'results_win', present: true },
   { name: 'results_lose', present: true },
   { name: 'training', present: true },
+  // Awaiting generation. Until the file lands, `ArchiveScene` falls back to
+  // `menu`, which is what it played before this cue existed.
+  { name: 'archive', present: false },
 
   // Pilot themes
   { name: 'theme_halcyon', present: true },

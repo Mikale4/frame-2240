@@ -1,7 +1,7 @@
 # Music cue sheet
 
-Sixteen tracks, generated in Suno, dropped into `assets/music/` as `<name>.mp3`.
-Seven screen tracks, eight pilot themes, one stage theme.
+Seventeen tracks, generated in Suno, dropped into `assets/music/` as `<name>.mp3`.
+Eight screen tracks, eight pilot themes, one stage theme.
 Names here are load-bearing: `MusicBank` loads by name, and a file that is not
 listed is not loaded.
 
@@ -34,6 +34,12 @@ sound like one album rather than sixteen commissions. The per-pilot themes lean
 hardest on this: they have to be recognisably different people *and* recognisably
 the same game.
 
+> **One documented exception: `archive`.** Every track above scores a fight or the
+> approach to one. The Archive scores *reading*, and the house style actively
+> works against that, so it drops the J-rock and the breakbeat entirely and keeps
+> its kinship to the album through timbre instead. It is the only prompt here
+> that should not repeat the descriptors in this section.
+
 ### Practical notes for generating
 
 * **Instrumental ON for every track. No lyrics anywhere, including the title.**
@@ -61,6 +67,7 @@ the same game.
 | `results_win` | `ResultsScene` — VICTORY | 168 |
 | `results_lose` | `ResultsScene` — DEFEAT and DRAW | 140 |
 | `training` | `BattleScene` in training mode | 170 |
+| `archive` | `ArchiveScene` — the lore reader | 72 |
 
 `DRAW` shares `results_lose`: reflective suits a draw far better than a fanfare,
 and a third results track for an uncommon outcome is not worth a generation.
@@ -101,7 +108,8 @@ stage's own, is the variety the roll buys.
 
   > **As built (D60):** `pickBattleCue` rolls uniformly across the candidates
   > that *exist*, rather than rolling across all three and then falling through.
-  > The two are identical once all sixteen tracks are generated. They differ only
+  > The two are identical once every battle candidate exists — the eight pilot
+  > themes and every stage theme, which is now the case. They differ only
   > while the set is partial, and there roll-then-fall-through piles most matches
   > onto whichever candidate sits last in the list — losing exactly the variety
   > the roll is for, during the period it is least able to deliver it.
@@ -238,6 +246,47 @@ instrumental
 
 Training has no timer and no opponent, so people sit in it a long time. Lowest
 fatigue in the set.
+
+### `archive`
+
+**This is the one track that deliberately leaves the house style.** No J-rock, no
+drum and bass, no guitars. See the note below before changing it.
+
+```
+Ambient cinematic archive theme, 72 BPM, slow sparse solo piano with long pauses
+between phrases, warm analogue synth pads swelling underneath, soft low sine
+bass, faint tape hiss and distant data static, occasional single bell tone, no
+drums or the barest slow heartbeat pulse, calm reverent and unhurried, quiet
+room of old records at night, spacious reverb, deeply low key, instrumental
+```
+
+Everything else in this document exists to make sixteen separately generated
+tracks sound like one album, and every other prompt therefore repeats the shared
+J-rock and drum-and-bass descriptors. **This one must not.** The Archive is the
+only screen in the game with no opponent, no clock, no decision and nothing to
+react to — the activity is *reading*, for minutes at a time. Racing-anime pop
+rock behind a page of prose does not read as atmosphere, it reads as the game
+having forgotten which screen you are on.
+
+So: 72 BPM against `results_lose`'s 140, which was previously the slowest thing
+here by a wide margin. Piano and pads instead of guitar. Drums optional and
+barely there. The Archive is somewhere you *stay*, and the music has to survive
+being listened to rather than played over.
+
+Two threads keep it in the same world rather than sounding like a different
+game's soundtrack:
+
+* **The cold electro pads and data static** are lifted straight from
+  `theme_nulltide`, the most electronic track in the set. This is a Concord
+  records system, not a library. Keep the static faint — and note that when the
+  campaign starts gating entries behind progression, that texture becomes the
+  sound of the parts you have not unlocked yet.
+* **The piano is the counterweight**, because the Archive is mostly about people:
+  eight of its eighteen entries are pilots, and the machines are written through
+  the people who built and fly them.
+
+If Suno drifts back toward a beat, push it further down rather than pulling the
+tempo up. Too quiet is the correct failure here.
 
 ---
 

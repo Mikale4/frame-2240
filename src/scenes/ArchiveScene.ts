@@ -6,8 +6,18 @@ import { ARCHIVE_SECTIONS, type ArchiveEntry } from '../data/archive';
 import { MECHS } from '../data/mechs';
 import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
+import { musicAvailable } from '../audio/MusicBank';
 
 const FONT = 'ui-monospace, Consolas, monospace';
+
+/**
+ * Height reserved at the bottom of a page for the hint line.
+ *
+ * Used by **both** the scroll extent and the body's clip rectangle, and it has
+ * to stay that way: when only the scroll knew about it, the body still drew into
+ * the band it was supposed to stop above.
+ */
+const BODY_BOTTOM_RESERVE = 40;
 
 /**
  * The Archive: the game's story, readable outside a match.
@@ -35,6 +45,16 @@ export class ArchiveScene extends Phaser.Scene {
   private pageSub!: Phaser.GameObjects.Text;
   private pageTag!: Phaser.GameObjects.Text;
   private pageBody!: Phaser.GameObjects.Text;
+  /**
+   * Clips the body to the readable band.
+   *
+   * A `Text` object draws its whole height wherever it is put, so scrolling a
+   * long entry moved the text without ever stopping it being drawn — the last
+   * paragraph of the longest entries rendered straight through the hint line at
+   * the bottom of the frame and the two became unreadable on top of each other.
+   * The scroll maths had always reserved this band; nothing enforced it.
+   */
+  private bodyMask!: Phaser.GameObjects.Graphics;
   private scroll = 0;
   /** Where the body starts, measured under the tagline rather than assumed. */
   private bodyTop = 192;
@@ -55,7 +75,19 @@ export class ArchiveScene extends Phaser.Scene {
     this.entryIndex = 0;
     this.scroll = 0;
 
-    music.play('menu');
+    /**
+     * The Archive has its own theme — deliberately calm, and the one track that
+     * leaves the soundtrack's J-rock house style, because this is the only screen
+     * whose activity is reading rather than fighting.
+     *
+     * Until that file exists this falls back to `menu`, which is what the screen
+     * played before the cue was written. Asking for it unconditionally would be
+     * silence, not a fallback: `MusicPlayer` refuses any cue whose `present` flag
+     * is false, precisely so a missing track is never requested. Written as a
+     * fallback rather than a flag flip so that dropping the mp3 in and setting
+     * `present` is the whole job — no third edit here.
+     */
+    music.play(musicAvailable('archive') ? 'archive' : 'menu');
 
     // ---- background ------------------------------------------------------
     const g = this.add.graphics();
@@ -111,6 +143,11 @@ export class ArchiveScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setStroke('#070b12', 3)
       .setVisible(false);
+
+    // Off the display list — it exists only to be a mask.
+    this.bodyMask = this.make.graphics({ x: 0, y: 0 }, false);
+    this.pageBody.setMask(this.bodyMask.createGeometryMask());
+    this.applyBodyMask();
 
     this.hint = smallText(this, '', VIEW_W / 2, VIEW_H - 22, 11, '#63748c');
 
@@ -199,6 +236,15 @@ export class ArchiveScene extends Phaser.Scene {
     // top of the first paragraph.
     this.bodyTop = this.pageTag.y + this.pageTag.height + 14;
     this.pageBody.setY(this.bodyTop);
+    this.applyBodyMask();
+  }
+
+  /** Re-cut the clip to the current body band. `bodyTop` moves per entry. */
+  private applyBodyMask(): void {
+    this.bodyMask
+      .clear()
+      .fillStyle(0xffffff)
+      .fillRect(0, this.bodyTop, VIEW_W, VIEW_H - this.bodyTop - BODY_BOTTOM_RESERVE);
   }
 
   private refreshChrome(): void {
@@ -243,7 +289,10 @@ export class ArchiveScene extends Phaser.Scene {
     if (this.level === 'page') {
       // The longest bodies run past the frame, so a page scrolls rather than
       // shrinking the type until it cannot be read.
-      const overflow = Math.max(0, this.pageBody.height - (VIEW_H - this.bodyTop - 40));
+      const overflow = Math.max(
+        0,
+        this.pageBody.height - (VIEW_H - this.bodyTop - BODY_BOTTOM_RESERVE),
+      );
       if (ui.down) this.scroll = Math.min(overflow, this.scroll + 34);
       if (ui.up) this.scroll = Math.max(0, this.scroll - 34);
       this.pageBody.setY(this.bodyTop - this.scroll);
