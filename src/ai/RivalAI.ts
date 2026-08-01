@@ -56,10 +56,19 @@ export const enum AiPlan {
    * most certain damage on the field and it is measured in tens of ticks.
    */
   Execute = 1,
+  /**
+   * `resourceIq` — their boost cannot pay for a dash, so they cannot evade.
+   *
+   * The same shape as `Execute` and chosen for the same reason: the payoff is
+   * near-certain rather than clever. A pilot who cannot dash has lost the
+   * defensive option this game is built around, and the window closes as the
+   * gauge regenerates, so it is worth committing to rather than noticing.
+   */
+  Starve = 2,
 }
 
 /** For the debug overlay — a plan you cannot see is a plan you cannot debug. */
-export const PLAN_NAMES = ['-', 'EXECUTE'];
+export const PLAN_NAMES = ['-', 'EXECUTE', 'STARVE'];
 
 /**
  * Master switch for the plan layer, so an ablation can price the whole thing
@@ -69,6 +78,22 @@ export const PLAN_NAMES = ['-', 'EXECUTE'];
 let plansEnabled = true;
 export function setPlansEnabled(on: boolean): void {
   plansEnabled = on;
+}
+
+/**
+ * Per-plan mask, for the measurement harness only. Ships all-on.
+ *
+ * Ablating a plan by switching off the flag it is gated on does **not** isolate
+ * it: every one of those flags also drives scalar and tactic behaviour, so the
+ * delta conflates the plan with everything else the flag does. That confound
+ * silently corrupted the first `Execute` measurement — it was priced in a run
+ * that had also disabled `rangeIq` and `resourceIq`, and the number was quoted
+ * as the plan's value. This exists so a plan can be removed and nothing else.
+ */
+const planMask = new Set<AiPlan>([AiPlan.Execute, AiPlan.Starve]);
+export function setPlanMask(plans: AiPlan[]): void {
+  planMask.clear();
+  for (const p of plans) planMask.add(p);
 }
 
 export interface AiConfig {
@@ -951,7 +976,14 @@ export class RivalAI {
       // that is already lost is not commitment, it is the sunk-cost fallacy
       // with a health bar.
       const desperate = self.life / self.def.gauges.maxLife < 0.18 && !foe.helpless;
-      const gone = this.plan === AiPlan.Execute && !foe.helpless;
+      // Each plan dies the moment its premise does. This is the half that keeps
+      // commitment from turning into stubbornness.
+      const gone =
+        this.plan === AiPlan.Execute
+          ? !foe.helpless
+          : this.plan === AiPlan.Starve
+            ? foe.boost >= foe.def.flight.dashCost * 1.6 || foe.satActive
+            : false;
       if (this.planTicks <= 0 || dead || desperate || gone) {
         this.plan = AiPlan.None;
         this.planCooldown = 40;
@@ -976,9 +1008,29 @@ export class RivalAI {
     // EXECUTE. `frameIq` already reads the recovery window; now it can spend it.
     // A helpless machine cannot guard, dodge or answer, and the window is tens
     // of ticks, so this is the most certain damage available anywhere.
-    if (this.p.frameIq && foe.helpless && dist < self.effectiveMeleeRange * 3.4) {
+    if (planMask.has(AiPlan.Execute) && this.p.frameIq && foe.helpless && dist < self.effectiveMeleeRange * 3.4) {
       this.plan = AiPlan.Execute;
       this.planTicks = 46;
+      return;
+    }
+
+    // STARVE. An opponent who cannot pay for a dash cannot evade, and this game
+    // is built on evasion. `resourceIq` already read the gauge and spent the
+    // reading on a one-tick Approach; the window is worth committing to, because
+    // it closes on its own as the gauge refills.
+    //
+    // Excludes a saturated opponent: a Speed burst makes thrust free, so an
+    // empty gauge means nothing at all while it is up.
+    if (
+      planMask.has(AiPlan.Starve) &&
+      this.p.resourceIq &&
+      !foe.satActive &&
+      !foe.helpless &&
+      foe.boost < foe.def.flight.dashCost &&
+      dist < self.effectiveMeleeRange * 4
+    ) {
+      this.plan = AiPlan.Starve;
+      this.planTicks = 54;
       return;
     }
 
@@ -1013,6 +1065,9 @@ export class RivalAI {
   private planTactic(self: Combatant, dist: number): AiTactic {
     switch (this.plan) {
       case AiPlan.Execute:
+      case AiPlan.Starve:
+        // Both are "be on them, now". A machine that cannot act and a machine
+        // that cannot dodge want the same answer.
         return dist > self.effectiveMeleeRange * 0.8 ? AiTactic.Approach : AiTactic.Hold;
       default:
         return AiTactic.Approach;

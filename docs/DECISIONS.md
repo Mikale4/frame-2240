@@ -2497,6 +2497,12 @@ life because commitment into a lost fight is sunk cost with a health bar.
   all three                              +0.086             +0.249
 ```
 
+> **Corrected in D86.** Every row above ablates a plan by switching off the flag
+> it is gated on — and those flags also drive scalar and tactic behaviour, so
+> each delta conflates the plan with everything else its flag does. Re-measured
+> with a per-plan mask and the profiles left alone, `Execute` alone is
+> **+0.078**, not +0.114. The ordering held; the magnitude did not.
+
 **`Breach` and `GuardBreak` were built, measured, and are not here.** Both lower
 the top rung. A plan that commits tens of ticks against an opponent who was never
 going to punish the alternative is worse than reacting, and `Breach`'s entry
@@ -2523,3 +2529,78 @@ rung that was never in doubt is the trade this was asked for — but it is a tra
   change turned the suite red, and it is still there.
 * Its six seed pairs still cannot resolve an effect of this size; the assertions
   pass comfortably now, but the instrument has not improved.
+
+## D86 — Starve joins the plan set; Drone-Hunt does not; and D85's number was confounded
+
+### The instrument was wrong first
+
+D85 priced plans by switching off the flag each was gated on. Those flags also
+drive scalar and tactic behaviour, so every delta conflated the plan with
+everything else its flag does — and the run quoted as "Execute only" had also
+disabled `rangeIq` and `resourceIq`, whose scalars were still doing their usual
+work in the shipped build.
+
+`setPlanMask` fixes it: a plan can now be removed and nothing else. Re-measured
+that way, with the profiles left entirely alone, 20 seed pairs, both slots:
+
+```
+  NO PLANS               EXTREME vs HARD +0.012 +/-0.060   vs NORMAL +0.381
+  EXECUTE                                +0.078 +/-0.039             +0.277
+  EXECUTE + STARVE                       +0.092 +/-0.044             +0.254
+  EXECUTE + DRONE-HUNT                   +0.003 +/-0.056             +0.179
+  ALL THREE                              +0.034 +/-0.043             +0.154
+```
+
+**`Execute` alone is worth +0.066, not the +0.102 D85 implied.** The ordering
+survived; the magnitude did not. D85 is annotated rather than rewritten, because
+a decisions log that quietly restates its own numbers is worth nothing.
+
+The general lesson, which is the durable part: **ablating a capability by
+disabling the flag that gates it only isolates the capability if the flag does
+nothing else.** On this AI, none of them do nothing else.
+
+### Starve ships
+
+An opponent whose boost cannot pay for a dash cannot evade, and this game is
+built on evasion. `resourceIq` already read that gauge and spent the reading on a
+single-tick Approach; as a plan it commits 54 ticks and aborts as soon as the
+gauge recovers past 1.6 dashes, or the moment a burst makes thrust free — a Speed
+burst means an empty gauge signifies nothing at all.
+
+Worth +0.014 on top of `Execute`. Small, and it is what carries the rung past its
+own error bar for the first time: **+0.092 +/-0.044**, where 2 SE is 0.088. That
+is a marginal pass, not a comfortable one, and it should be read as such.
+
+### Drone-Hunt does not, and the codebase predicted it
+
+Priced at **-0.075** on the rung and **-0.098** against NORMAL. Removed.
+
+The striking part is that this exact failure is already written down. The
+pre-existing drone-chase branch in `pickTactic` carries this note:
+
+> the first cut said "worth crossing the yard for" ... EXTREME abandoned its
+> spacing to chase an escort and **lost 0.09 of a life bar to HARD** for it. The
+> kill is a bonus to collect, not a plan to follow.
+
+`DroneHunt` reproduced that at -0.075, having been written with a deliberately
+narrower entry condition than the version that failed before. "The kill is a
+bonus to collect, not a plan to follow" turns out to be the general rule, and the
+narrow entry did not rescue it.
+
+### Where the plan set stands
+
+Five plans have now been built and measured. Two ship:
+
+```
+  EXECUTE     +0.066   ships
+  STARVE      +0.014   ships -- carries the rung past significance
+  BREACH      -0.028   removed (D85)
+  GUARDBREAK  -0.010   removed (D85)
+  DRONE-HUNT  -0.075   removed
+```
+
+Three of five made things worse. Every one of the three shares a shape: it
+commits tens of ticks to a payoff that was **not certain**. The two that ship
+both trigger on a state where the opponent has already lost an option — cannot
+act, or cannot dodge. That is the entry condition test for anything added next,
+and it is a stronger predictor than any reasoning about what the behaviour does.
