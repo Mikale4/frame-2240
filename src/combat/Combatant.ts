@@ -1559,7 +1559,28 @@ export class Combatant implements FlightState {
           kind: ProjKind.Melee,
           barrier: BarrierResponse.Pierce,
           hitstop: last ? 14 : 7,
-          hitstun: last ? 30 : 14,
+          /**
+           * A chain has to hold itself together.
+           *
+           * This was a flat 14 for every weapon, while the interval between hits
+           * is `swing + gap` and is authored per weapon from 10 to 26. So whether
+           * a combo could be escaped was never a design choice — it was whichever
+           * side of one hardcoded number a weapon's animation happened to fall on,
+           * and it landed backwards. CIRRUS at 10 and HALCYON at 13 were airtight;
+           * OBELISK at 26, TERRAMOTH at 24 and VESPER at 21 handed the victim ten
+           * to twelve free frames after the *first* hit, which was long enough to
+           * open a melee lock of their own and swing back. Those three chains are
+           * only two hits, so in practice their finisher — the hit carrying the
+           * knockback and the 30-tick stun — essentially never landed against
+           * anyone pressing the button.
+           *
+           * Covering the cadence makes a combo a combo. It does not make it
+           * inescapable: the barrier-cancel in `stepStunned` still buys a way out
+           * for double barrier cost, which is the intended answer and the only one
+           * that should exist. Guarding the opener still prevents the stun
+           * outright, because a guarded hit never sets it.
+           */
+          hitstun: last ? 30 : Math.max(14, p.swing + p.gap + 2),
           knockback: last ? knock + p.finisherKnock : knock,
           homing: 0,
           pierceCount: 0,

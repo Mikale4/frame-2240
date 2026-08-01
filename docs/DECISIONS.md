@@ -2002,3 +2002,78 @@ rather than a screenshot. `spin` drives the arm: it ramps once over eight ticks 
 the arc's t=0 wind-up and then holds for the whole approach, and only sweeps in
 `swing`. Asserting the pose is constant from tick 10 to contact covers every frame
 of the approach, which a single captured frame would not.
+
+---
+
+## D81 — A combo holds itself together; barrier is the only way out
+
+**Decision.** Non-final melee-lock hitstun becomes
+`Math.max(14, swing + gap + 2)` rather than a flat 14.
+
+**Why.** Whether a combo could be escaped was never designed. Hitstun was one
+hardcoded constant; the interval between hits is `swing + gap`, authored per
+weapon and ranging 10 to 26. So the answer was decided by which side of 14 a
+weapon's animation happened to land on — and it landed backwards:
+
+```
+  weapon      hits  cycle  free frames after hit 1   chain landed
+  CIRRUS         8     10                        0        4 of 8
+  HALCYON        6     13                        0        4 of 6
+  NULLTIDE       5     14                        0        4 of 5
+  PYRE           3     19                        5             --
+  NOCTURNE       3     20                       10             --
+  VESPER         2     21                       14        1 of 2
+  TERRAMOTH      2     24                       14        1 of 2
+  OBELISK        2     26                       14        1 of 2
+```
+
+Twelve free frames is not a twitch. Measured in the sim, the victim used them to
+open a melee lock of its own and swing back. The three worst cases are the
+two-hit heavies, so their **finisher** — the hit carrying `finisherKnock` and the
+30-tick stun — essentially never landed against anyone pressing the button. The
+machines whose two heavy strokes *are* their melee identity were the only ones
+unable to keep a combo, while CIRRUS's eight-hit flurry was airtight.
+
+**Barrier remains the answer, and is now the only one.** `stepStunned` already
+carried a barrier-cancel out of hitstun for double cost, and it still works from
+every weapon. Guarding the opener still prevents the stun outright, because a
+guarded hit returns without setting one. What is gone is escaping a combo with
+the same button that started it, for free, because the stun happened to run out.
+
+Verified across all eight, drones disabled so their fire and hazards could not
+contaminate the stun state: mashing melee now yields **zero** free frames and no
+counter-lock anywhere, mashing barrier still escapes everywhere, and VESPER,
+TERRAMOTH and OBELISK land both hits for the first time.
+
+**This is load-bearing for desperation Speed.** D80 made the long close a
+shielded dash so the burst can arrive at all; without this, arriving only
+delivered the attacker into a melee trade it had spent its meter to reach. The
+two are one feature.
+
+**Measured, six seeds a matchup, both slots, EXTREME leading** because that is the
+tier that runs every AI trait:
+
+```
+                 EXTREME              HARD
+  pyre        +0.179 -> +0.151    +0.163 -> +0.180
+  cirrus      +0.134 -> +0.112    -0.044 -> -0.087
+  terramoth   +0.020 -> +0.063    +0.178 -> +0.175
+  obelisk     -0.005 -> +0.057    -0.033 -> +0.100
+  nocturne    -0.025 -> +0.009    -0.002 -> -0.013
+  nulltide    -0.035 -> -0.058    +0.017 -> -0.032
+  vesper      -0.142 -> -0.135    -0.198 -> -0.158
+  halcyon     -0.126 -> -0.199    -0.082 -> -0.164
+  spread       0.321 ->  0.350     0.376 ->  0.344
+```
+
+**Cost, stated plainly: EXTREME spread widened, 0.321 to 0.350.** OBELISK,
+TERRAMOTH and NOCTURNE gained, which is the fix working. HALCYON lost more than
+anyone — its own chain was already airtight so it gained nothing, while losing an
+escape it had been living on against everyone else — and is now the weakest
+machine at EXTREME, overtaking VESPER, who had held that position since the
+roster was first measured.
+
+The mechanic is not reverted for it. A correct rule that invalidates a tuning
+pass is a retune owed, not a rule to undo — the previous numbers were partly
+measuring an accident. The roster wants a pass now that combos actually complete,
+and HALCYON is the first thing it should look at.

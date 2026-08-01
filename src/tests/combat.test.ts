@@ -14,7 +14,7 @@ import {
   type ProjectileSpawn,
   type SimEvent,
 } from '../combat/types';
-import { HALCYON, NOCTURNE } from '../data/mechs';
+import { HALCYON, MECHS, NOCTURNE } from '../data/mechs';
 
 const W = 2400;
 const H = 1200;
@@ -310,6 +310,61 @@ describe('melee chain', () => {
 
   it('marks melee as barrier-piercing', () => {
     for (const m of HALCYON.melee) expect(m.barrier).toBe(BarrierResponse.Pierce);
+  });
+
+  /**
+   * A chain must hold itself together.
+   *
+   * Non-final hitstun was a flat 14 while the interval between hits is
+   * `swing + gap`, authored per weapon from 10 to 26. Whether a combo could be
+   * escaped was therefore never designed — it was whichever side of one constant
+   * a weapon's animation fell on, and it fell backwards: the two-hit heavies
+   * (OBELISK 26, TERRAMOTH 24, VESPER 21) handed the victim ten to twelve free
+   * frames after the *first* hit, enough to open a lock of their own and swing
+   * back, so their finisher essentially never landed. CIRRUS at 10 was airtight.
+   */
+  it('covers the gap between hits for every weapon', () => {
+    for (const def of Object.values(MECHS)) {
+      const p = def.meleeLock;
+      const stun = Math.max(14, p.swing + p.gap + 2);
+      expect(stun, `${p.name} must out-last its own ${p.swing}+${p.gap} cadence`).toBeGreaterThan(
+        p.swing + p.gap,
+      );
+    }
+  });
+
+  it('cannot be escaped by mashing melee, but can be by mashing barrier', () => {
+    for (const def of Object.values(MECHS)) {
+      const escape = (counter: Btn | null) => {
+        const a = make(def, 400, 600, 0, Team.Player);
+        const b = make(HALCYON, 440, 600, 1, Team.Enemy);
+        const k = { spawns: [] as ProjectileSpawn[], events: [] as SimEvent[] };
+        b.invuln = 0;
+        a.step(press(Btn.Melee), b, W, H, k.spawns, k.events);
+        let struck = false;
+        let acted = false;
+        let free = 0;
+        for (let i = 0; i < 200 && a.meleeLock; i++) {
+          a.step(emptyInput(), b, W, H, k.spawns, k.events);
+          for (const s of k.spawns.splice(0)) if (s.ownerId === a.id) b.takeHit(s);
+          b.step(
+            struck && counter !== null ? press(counter) : emptyInput(),
+            a,
+            W,
+            H,
+            k.spawns,
+            k.events,
+          );
+          k.spawns.length = 0;
+          if (a.meleeLock?.hitDone) struck = true;
+          if (struck && b.hitstun <= 0 && b.guardBreakStun <= 0) free++;
+          if (struck && b.meleeLock) acted = true;
+        }
+        return { acted, free };
+      };
+      expect(escape(Btn.Melee).acted, `${def.name} chain broken by melee mash`).toBe(false);
+      expect(escape(Btn.Barrier).free, `${def.name} chain must yield to barrier`).toBeGreaterThan(0);
+    }
   });
 });
 
