@@ -2798,3 +2798,43 @@ with its escort, and it is a roster-wide finding rather than a VESPER one.
 are solving for distance at once, so a stated preference gets averaged away by
 the opponent's. Not addressed here; recorded because it reframes the balance
 work.
+
+## D89 — The portrait column was placed by coincidence
+
+**Reported by eye**: the pilot portrait "is hugging the smaller portraits, and
+unevenly at that."
+
+Measured, it was worse than it looked. The panel sat at `VIEW_W * 0.20` and the
+grid began at `VIEW_W / 2 - ((COLS - 1) * 108) / 2 + 40`. Two independent
+expressions, no relationship between them, and the result:
+
+```
+  left margin          76px
+  gap to the grid       4px
+  panel top vs grid   +50px below it
+  panel bottom        +84px past the grid's
+```
+
+None of those numbers was chosen. They were what two unrelated fractions happened
+to produce at this viewport, and they would have been different at another.
+
+The grid's geometry — `CELL_W`, `PLATE_W`, `GRID_X`, `GRID_Y` — is now hoisted to
+module constants, and the portrait is derived from it: centred in the band left
+of the grid, top aligned to the grid's top.
+
+```
+  left margin          40px
+  gap to the grid      40px
+  panel top            81px  = grid top
+```
+
+`buildGrid` uses the same constants rather than its own local copies, so the two
+cannot drift apart again — which is the actual fix. The old code had the plate
+size written as a literal `92, 76` in one place and the cursor sized to `96, 96`
+in another, and nothing tied either to the other.
+
+**The general fault, worth naming**: a layout expressed as independent fractions
+of the viewport is not a layout, it is several layouts that happen to coexist. It
+looks deliberate at the size it was authored at and has no defined behaviour
+anywhere else. Every position on this screen that matters is now expressed
+relative to the thing it must line up with.

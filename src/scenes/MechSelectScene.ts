@@ -24,6 +24,29 @@ const HINT_Y = VIEW_H - 24;
 const STATS_GAP = 12;
 
 /**
+ * Roster grid geometry, hoisted out of `buildGrid` so the portrait column can be
+ * placed **relative to it** rather than at a fraction that happens to look close.
+ *
+ * The portrait was at `VIEW_W * 0.20`, which put its 232px panel at 76..308
+ * against a grid starting at 312 — a 4px gap on one side and a 76px margin on
+ * the other, and vertically it began 50px below the grid and ran 84px past it.
+ * Every one of those numbers was a coincidence of two independent fractions.
+ */
+const CELL_W = 108;
+const CELL_H = 104;
+const PLATE_W = 92;
+const PLATE_H = 76;
+const GRID_X = VIEW_W / 2 - ((COLS - 1) * CELL_W) / 2 + 40;
+const GRID_Y = VIEW_H * 0.22;
+/** Outer edges of the grid's artwork, which the portrait column aligns against. */
+const GRID_LEFT = GRID_X - PLATE_W / 2;
+const GRID_TOP = GRID_Y - PLATE_H / 2;
+/** The portrait panel, centred in the space left of the grid and topped to it. */
+const PORTRAIT_SIZE = 232;
+const PORTRAIT_X = GRID_LEFT / 2;
+const PORTRAIT_Y = GRID_TOP + PORTRAIT_SIZE / 2;
+
+/**
  * Roster select: pick your machine, then your rival.
  *
  * Two passes over the same grid rather than two screens, because the comparison
@@ -107,10 +130,17 @@ export class MechSelectScene extends Phaser.Scene {
     this.heading = bigTitle(this, 'SELECT YOUR MECH', 44, 26, '#eaf2ff');
 
     // ---- portrait and detail panel --------------------------------------
-    const px = VIEW_W * 0.20;
-    const py = VIEW_H * 0.46;
-    this.add.rectangle(px, py, 232, 232, 0x0a0e18, 0.85).setStrokeStyle(2, 0x2b3550);
-    this.portrait = this.add.image(px, py, `pilot_${ROSTER[0].id}`).setDisplaySize(224, 224);
+    // Centred in the band to the left of the grid, and its top aligned with the
+    // grid's top, so the two columns start on the same line and the panel has
+    // equal air either side of it.
+    const px = PORTRAIT_X;
+    const py = PORTRAIT_Y;
+    this.add
+      .rectangle(px, py, PORTRAIT_SIZE, PORTRAIT_SIZE, 0x0a0e18, 0.85)
+      .setStrokeStyle(2, 0x2b3550);
+    this.portrait = this.add
+      .image(px, py, `pilot_${ROSTER[0].id}`)
+      .setDisplaySize(PORTRAIT_SIZE - 8, PORTRAIT_SIZE - 8);
 
     this.nameText = this.add
       .text(px, py + 132, '', { fontFamily: FONT, fontSize: '20px', color: '#ffd166', fontStyle: 'bold', align: 'center' })
@@ -241,18 +271,13 @@ export class MechSelectScene extends Phaser.Scene {
 
   /** Two rows of four, each cell a portrait thumbnail over the mech's name. */
   private buildGrid(): void {
-    const cellW = 108;
-    const cellH = 104;
-    const originX = VIEW_W / 2 - ((COLS - 1) * cellW) / 2 + 40;
-    const originY = VIEW_H * 0.22;
-
     ROSTER.forEach((def, i) => {
-      const cx = originX + (i % COLS) * cellW;
-      const cy = originY + Math.floor(i / COLS) * cellH;
+      const cx = GRID_X + (i % COLS) * CELL_W;
+      const cy = GRID_Y + Math.floor(i / COLS) * CELL_H;
       const cell = this.add.container(cx, cy);
 
       const plate = this.add
-        .rectangle(0, 0, 92, 76, def.tint.secondary, 0.55)
+        .rectangle(0, 0, PLATE_W, PLATE_H, def.tint.secondary, 0.55)
         .setStrokeStyle(2, def.tint.primary);
       const thumb = this.add.image(0, -4, `pilot_${def.id}_thumb`).setDisplaySize(60, 60);
       // Clear of the selection box, which frames the 76px plate at +/-40. At 44
