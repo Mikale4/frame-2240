@@ -3094,3 +3094,73 @@ believed and then overturned — the plan ablation confounded by shared flags, t
 `bankEnergy` probe that could not read zero, and this file. The pattern is
 constant and worth stating plainly: **on this project, check the instrument
 before believing the result.**
+
+## D93 — Spatial identity does not pay for itself, measured six ways
+
+D92 rebuilt the ladder test so D91's spatial-identity work could be judged. It
+has now been judged, on a gate that resolves it, and the answer is no.
+
+### Every implementation costs the top rung
+
+`EXTREME vs HARD` measures **+0.099 +/-0.044** without any of this. With it, at
+40 seed pairs each:
+
+```
+  weighted, gated on rangeIq        +0.000
+  weighted, tier-independent        -0.013 +/-0.042
+  tiebreak, TIE_EPS 26              +0.055 +/-0.047
+  tiebreak, TIE_EPS 10              -0.067 +/-0.046
+  tiebreak, TIE_EPS  4              -0.030 +/-0.052
+```
+
+Six implementations — two weightings, three tie tolerances — **every one below
+baseline**. Individually each difference is one to two standard errors and could
+be dismissed; collectively the direction is not in doubt. The best of them,
+`TIE_EPS 26`, passes the suite at **1.2 sigma from its floor**, which is the exact
+marginal condition D92 was written to eliminate. Shipping it would have
+reintroduced the flakiness on the same day it was fixed.
+
+### The mechanism, now identified three times
+
+**EXTREME's advantage is disproportionately made of evasion quality**, so any
+constraint on how it selects a dodge taxes the top tier hardest. This is the
+third independent finding of the same shape:
+
+* Designator homing: steering shots erode dodging, and EXTREME measured as
+  *losing to HARD*.
+* The plan layer: committing to an intent costs `EXTREME vs NORMAL`, because a
+  commitment is a constraint on responding.
+* This: even choosing between "equally safe" dodges is a constraint, and 26px of
+  clearance turns out not to be equal.
+
+`solveEvade` is load-bearing to a degree nothing else in this class approaches.
+It should be treated as such: changes to it are changes to the difficulty ladder,
+whatever else they are about.
+
+### What was actually learned, and is worth keeping
+
+The diagnosis from D91 stands and is not affected by the fix failing. The eight
+machines want 332px to 876px and get none of it, because 33-58% of every fight is
+`Evade` and `Evade` has no opinion about range. A tiebreak *does* deliver
+identity to the half of the roster that wants to fight close — HALCYON's
+on-station went 18% -> 42%, TERRAMOTH 21% -> 49% — and delivers nothing to the
+half that wants distance, because **closing is achievable unilaterally and
+withdrawing is not**. A machine that wants 900px cannot have it against one that
+wants 300px and is willing to chase.
+
+That asymmetry is a property of the game, not of the AI, and it is the real
+obstacle. Any future attempt should start there rather than in the evade solver:
+spacing has to be something a marksman can *enforce* — a cost imposed on closing
+— before a preference for it can be expressed.
+
+### Method
+
+Two attempts were made to tune out of the problem, and both ended in noise: the
+`RANGE_PULL` sweep (0.25 pass, 0.15 -0.120, 0.10 pass-then-fail) and the
+`TIE_EPS` sweep above, where tightening the tolerance made the ladder *worse*,
+which is backwards and therefore was not a signal. **When consecutive
+configurations disagree in a direction the mechanism cannot explain, the
+measurement has run out of resolution and the answer is not in that dial.**
+
+The aggregate of six same-direction results was worth more than any of the
+individual comparisons, none of which was significant alone.
