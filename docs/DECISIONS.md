@@ -2838,3 +2838,95 @@ of the viewport is not a layout, it is several layouts that happen to coexist. I
 looks deliberate at the size it was authored at and has no defined behaviour
 anywhere else. Every position on this screen that matters is now expressed
 relative to the thing it must line up with.
+
+## D90 — weaponIq is not a defect, and a probe that could not measure zero
+
+Investigated `weaponIq`, which D85's ablation priced at **-0.129** — the AI
+playing measurably better without it, the last bug-shaped finding on the list.
+It is not a defect. Three corrections came out of the attempt, and the third is
+worth more than the investigation was.
+
+### The -0.129 no longer reproduces
+
+That figure was measured **before the plan layer existed**. Re-measured against
+the current AI, the whole branch is worth -0.014 — inside noise:
+
+```
+  shipped, all rules       EXTREME vs HARD +0.147 +/-0.055
+  weaponIq off entirely                    +0.161 +/-0.054
+```
+
+A behaviour's value is a property of the AI it sits in, not of the behaviour.
+Any number in this log older than a structural change to `RivalAI` should be
+re-measured before being acted on, and D85's table is now in that category.
+
+### `weaponIq` splits into three mechanisms, and two of them are excellent
+
+The flag gates situational weapon choice, the status-element read, and the
+energy-banking gate — and `energyDiscipline`'s only call site is *inside* it, so
+ablating either flag silently ablates part of the other. D85 priced them as if
+they were independent. Split with a rule mask:
+
+```
+  minus heavyOnExposed   -0.043   -> the rule is worth +0.190
+  minus heavyAtRange     -0.040   ->                   +0.187
+  minus heavyOnGuard     +0.027   ->                   +0.120
+  minus element          +0.147   ->                    0.000, byte-identical
+  minus bankEnergy       +0.174   ->                   -0.027
+```
+
+Its heavy-weapon rules are among the most valuable behaviours in the class.
+`element` produces byte-identical results in a HALCYON mirror, meaning it never
+fires there — not that it is dead roster-wide, which a mirror cannot show.
+
+### The probe that could not measure zero
+
+`bankEnergy` looked like the drag, so it was priced per machine, and the result
+was a near-perfect monotonic relationship with `energyRegen`:
+
+```
+  TERRAMOTH +0.066 regen 2.7      PYRE     -0.061 regen 3.3
+  NOCTURNE  +0.088 regen 2.9      CIRRUS   -0.079 regen 3.6
+  HALCYON   -0.006 regen 3.1      NULLTIDE -0.085 regen 3.9
+```
+
+A gate scaling with how long a machine takes to earn a heavy shot was written on
+the strength of it. **All of it was an artifact.**
+
+The probe compared `duel(seed, banking)` against `duel(seed + 3331, not
+banking)` — two *different fights*. When the rule was inert the arms still
+differed, purely from the seed, and that constant difference was being read as
+the rule's value. The tell was CIRRUS re-measuring at **exactly -0.079** after a
+change that should have disabled the rule for it entirely: an inert rule was
+reporting a large effect.
+
+Rebuilt to hold the seed and swap only which side banks:
+
+```
+  halcyon +0.024   vesper +0.000   cirrus   +0.000
+  nocturne +0.024  terramoth +0.004  pyre   +0.000
+  obelisk -0.003                    nulltide +0.000
+  ROSTER  +0.006 +/-0.005  (noise)
+```
+
+The exact zeros are the point. **An inert rule must measure exactly zero, and
+that property is the probe's own self-test.** Any A/B on this project whose two
+arms differ by anything other than the thing under test cannot report zero, and
+therefore cannot report anything.
+
+The reactor gate was reverted. It was justified by a broken measurement and
+measures nothing against a correct one.
+
+### What `bankEnergy` actually is
+
+Near-inert. It fires on `energy < mainCost * 2.5`, which for VESPER is 145 out of
+a 1150-point reactor — a condition the rival is almost never in. It is not a rule
+with a personality, it is a rule that hardly ever runs. Left alone rather than
+removed: it costs nothing, and removing near-dead code on the strength of one
+mirror measurement is how the last three hours went wrong.
+
+### Kept
+
+`setWeaponRules`, alongside `setPlanMask`. Sub-rule ablation is now twice the
+technique that found the real answer where a single flag could not, and both
+masks exist because a flag in this class never gates only one thing.

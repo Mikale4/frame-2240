@@ -101,6 +101,31 @@ export function setPlansEnabled(on: boolean): void {
  * as the plan's value. This exists so a plan can be removed and nothing else.
  */
 const planMask = new Set<AiPlan>([AiPlan.Execute, AiPlan.Starve, AiPlan.Vigil]);
+
+/**
+ * The sub-rules inside the `weaponIq` branch, maskable for measurement.
+ *
+ * `weaponIq` is not one behaviour: it is situational weapon selection, the
+ * status-element read, and the energy-banking gate, all behind a single flag —
+ * and `energyDiscipline`'s only call site lives inside it, so ablating either
+ * flag silently ablates part of the other. The whole branch measures at
+ * **-0.129**, meaning the AI plays better without it, and a single flag cannot
+ * say which part is responsible.
+ *
+ * Harness only; ships all-on.
+ */
+export type WeaponRule = 'heavyOnExposed' | 'heavyOnGuard' | 'heavyAtRange' | 'element' | 'bankEnergy';
+const weaponRules = new Set<WeaponRule>([
+  'heavyOnExposed',
+  'heavyOnGuard',
+  'heavyAtRange',
+  'element',
+  'bankEnergy',
+]);
+export function setWeaponRules(rules: WeaponRule[]): void {
+  weaponRules.clear();
+  for (const r of rules) weaponRules.add(r);
+}
 export function setPlanMask(plans: AiPlan[]): void {
   planMask.clear();
   for (const p of plans) planMask.add(p);
@@ -1561,10 +1586,10 @@ export class RivalAI {
      * commitment against a target that cannot answer, and against a guard, where
      * the main gun is reduced to a fifth.
      */
-    if (exposed && heavy) return Btn.Heavy;
-    if (foe.guarding && heavy && this.rng.chance(0.5)) return Btn.Heavy;
+    if (weaponRules.has('heavyOnExposed') && exposed && heavy) return Btn.Heavy;
+    if (weaponRules.has('heavyOnGuard') && foe.guarding && heavy && this.rng.chance(0.5)) return Btn.Heavy;
     // At range the travel time is affordable and the recovery is survivable.
-    if (dist > 300 && heavy && this.rng.chance(0.3)) return Btn.Heavy;
+    if (weaponRules.has('heavyAtRange') && dist > 300 && heavy && this.rng.chance(0.3)) return Btn.Heavy;
 
     /**
      * Do not re-apply an element that is already running.
@@ -1575,7 +1600,7 @@ export class RivalAI {
      * weapons are affordable and they carry *different* elements, the one the
      * target is not already carrying is strictly the better shot.
      */
-    if (this.p.statusIq && heavy && foe.status.active) {
+    if (weaponRules.has('element') && this.p.statusIq && heavy && foe.status.active) {
       const running = foe.status.element;
       const mainEl = d.main.element ?? Element.None;
       const heavyEl = d.heavy.element ?? Element.None;
@@ -1599,6 +1624,7 @@ export class RivalAI {
      * which on a 1000-point reactor was a third of the fight spent not shooting.
      */
     if (
+      weaponRules.has('bankEnergy') &&
       this.p.energyDiscipline &&
       !exposed &&
       !self.energyFree &&
