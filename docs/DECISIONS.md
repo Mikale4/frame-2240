@@ -1624,3 +1624,319 @@ Roster spread after all of it: **0.560 at HARD, 0.525 at EXTREME**, against the
 0.555 baseline from before playstyles existed. CIRRUS sits at −0.28 at HARD and
 −0.14 at EXTREME — she improves markedly where execution can actually exploit the
 burst, which is the right shape for a high-risk pilot.
+
+---
+
+## 2026-08-01 — Session: the soundtrack finished, Static repaired, the Archive rewritten
+
+## D71 — The generated music is tracked
+
+**Decision.** `assets/music/` goes into git. Seventeen tracks, 64 MB, against
+about 1.5 MB for the entire tracked SFX set.
+
+**Why.** The takes are not reproducible. The same Suno prompt returns different
+music, so an accident in that folder is not a rebuild, it is a loss — and until
+this commit the only copy of the score was one untracked directory on one disk.
+The size objection assumes a cost this repository does not pay: there is no
+remote, so nobody clones it and nothing crosses a wire. The generated SFX set was
+already tracked for the same reason and says so in `.gitignore`.
+
+**Cost.** Git blobs are permanent. A track committed and later re-rolled leaves
+both takes in the pack forever, so tracks go in when they are settled rather than
+as drafts.
+
+The argument was tested within the hour. `theme_cirrus` was re-downloaded and
+came back a **different song**; the take that had just been committed was still
+recoverable, and the choice between them became a decision instead of an
+accident. The replacement was amended into the same commit rather than added on
+top, so the rejected take did not become 3.5 MB of permanent dead weight.
+
+---
+
+## D72 — MECH SELECT belongs on the pause menu and the results screen
+
+**Decision.** Both menus gain a `MECH SELECT` row, between `RESTART MATCH` and
+`QUIT TO TITLE` on one and between `REMATCH` and `RETURN TO TITLE` on the other.
+
+**Why.** Both lists now read as widening scope: resume this match, restart this
+match, change the fight, stop fighting. Wanting a different matchup after losing
+one is the commonest thing to want at either moment, and saying so used to cost a
+trip out to the title screen and back in through the whole menu — four screens to
+express one decision.
+
+**No mode branch was needed.** `MechSelect` reads `session.mode`, which nothing
+has touched since the menu set it, so all three modes land on the screen they
+should: `aiVsAi` still gets both skill dials, `training` still gets none. And no
+`matchIndex` bump either — `MechSelect.start()` already does it, so picking the
+same two machines again still gets a fresh seed rather than replaying the
+identical fight.
+
+**Cost.** The results menu moved up twenty pixels. Three rows at the old anchor
+put the last one three pixels off the hint line.
+
+---
+
+## D73 — Test by playing at EXTREME, in a document that outlives the handoff
+
+**Decision.** Manual and in-browser verification is done at EXTREME, never at the
+default NORMAL. `docs/TESTING_PROTOCOL.md` is the durable home for that rule and
+for the traps that used to live only in `SESSION_HANDOFF.md`.
+
+**Why.** The tiers are not the same rival with better dice. `AI_PROFILES` gates
+whole traits behind tier, and **`resourceIq` and `droneIq` execute at no other
+tier at all** — so a fault living in either survives any amount of testing at
+NORMAL. EXTREME also produces the longest matches, which means more of everything
+happens per run. The rule came from the user; the code agrees with it.
+
+The document exists because §9 of the handoff held the most expensively learned
+material on the project and the handoff is rewritten at the end of every session.
+That is the wrong home for anything worth keeping.
+
+**One rule in it was wrong and is now corrected there.** The old advice was to
+freeze the game by hijacking `requestAnimationFrame`. Phaser's `TimeStep`
+schedules itself recursively, so the moment a stub returns without invoking the
+callback the loop stops scheduling and is dead for good. Restoring
+`window.requestAnimationFrame` does not revive it, `loop.wake()` does not either,
+and `loop.running` keeps reporting `true` while `loop.frame` sits still — while a
+plain rAF probe still reads a healthy 50 fps, because that measures *your own*
+loop. Use `game.loop.sleep()` and `wake()`. Recovery from the old trick needs
+`raf.stop()` then `raf.start(loop.step.bind(loop), false)`.
+
+---
+
+## D74 — Static never received D63's scaling, and its decoy was free to ignore
+
+**Decision.** STATIC's life pool goes 110 → 385. `DECOY_STUN_CHANCE` goes 0.05 →
+0.15.
+
+**Why the hit points are a bug and not a tuning pass.** D63 scaled every drone's
+pool by 3.5: Arbiter 120→420, Warden 125→440, Sightline 100→350, Bulwark
+170→595, Wisp 95→335, Aegis 145→510, Ember 130→455. Static went 110→110 and has
+carried its pre-D63 value at every commit in the repository, leaving it 2.7×
+frailer than the next weakest escort against mech pools that had all grown around
+it. 385 is 110 × 3.5, and the roster table in the handoff already recorded it —
+the intent was written down and the code never received it.
+
+**The mechanism is worth more than the fix.** Nobody forgot Static. The shared
+`DRONE` base template in `rosterExtra.ts` also carried `maxLife`, and D63 scaled
+it **110 → 385** along with the seven explicit per-mech values. Static spreads
+`...DRONE` and then overrode `maxLife: 110` — a value that, at the time it was
+written, was *identical to the base it was overriding*. So the override was
+invisible: it changed nothing, it looked like documentation of the default, and
+it silently shadowed the one edit that would have fixed it.
+
+**An explicit override that duplicates the default is a landmine.** It is
+indistinguishable from redundant noise until the default moves, and then it is
+the only thing that does not move with it. Static's line now reads 385, which is
+once again exactly the base value — so the override is redundant again and will
+be invisible to the next person who changes the base. It is kept, with the
+comment above it explaining why the number is what it is, because deleting it
+would remove the only record of how this happened.
+
+**Why the stun.** The projection's rounds do no damage, so the stun is the entire
+reason to respect them. At one in twenty a decoy would usually throw its whole
+volley without landing anything.
+
+Measured across the roster, six seeds per matchup, both slots:
+
+```
+                        NULLTIDE Hard   NULLTIDE Extreme   spread H / spread E
+  before                    -0.044            +0.009          0.383 / 0.368
+  after the hit points      -0.002            -0.016          0.386 / 0.332
+  after the stun as well    +0.021            -0.030          0.374 / 0.322
+```
+
+NULLTIDE stays mid-pack at both tiers and spread tightens at both, EXTREME most
+of all.
+
+**Worth recording because it nearly went the other way.** The first pass at three
+seeds read the hit-point change as a **0.068 collapse** at EXTREME. Doubling the
+seeds turned it into 0.025. Three seeds is not enough to call a change of that
+size, and reporting the first number would have been a false regression.
+
+**Also settled: the decoy does not hide the drone.** `decoyTicks` is read in four
+places — decrement, step the projection, set on spawn, and the projection's own
+animation age — and the drone's movement never consults it. Sampled over 260
+ticks of a live EXTREME match, STATIC is on camera 100 % of the time with or
+without a decoy, moves on 99–100 % of ticks either way, and never comes closer
+than the 300 px throw distance to its own projection. With a decoy up it averages
+**734 px from its owner against 173 px with none** — further forward and more
+exposed, not less.
+
+---
+
+## D75 — The Archive is complete on purpose, and the present is 43 CE
+
+**Decision.** Every deliberate gap in the lore is written out in full. The
+EW-14's provenance, Io Senna's history and Rook's court of inquiry are answered,
+and three new world entries — THE DESCENT, THE SEVEN YARDS WAR, STILLWAKE —
+carry the setting's causes.
+
+**Why.** The campaign's plan for this screen is *progressive disclosure*, not
+omission: entries will start redacted and unlock as the player reaches the
+dialogue, event or investigation that earns them. **You cannot redact a paragraph
+that was never written**, so the complete corpus is the prerequisite for the
+feature rather than a spoiler of it.
+
+**The three gaps were one gap.** Concord's electronic-warfare programme was built
+to collapse a *yard's* lift network, not to fight frames, and was tested on
+inhabited Stillwake Yard in 31 CE. The EW-14 is the fourteenth airframe, the one
+never recovered. Io Senna flew the trial and was erased from the record rather
+than charged, which is why she never finishes a helpless opponent. Halden Rook
+flew escort unbriefed, held the evacuation lift nine hours, and testified in open
+session — which is why the inquiry cleared him and ended his career with the same
+document. Answering them separately would have been three coincidences.
+
+**The Descent closes the setting's loop.** The floating seams Ironwake cuts are
+mineral rafts precipitated out of the storm layer that a century of processing
+stacks created. The five powers are mining the thing that killed the ground.
+
+**A real inconsistency was fixed on the way.** The world entry was dated common
+era 41 while Okonkwo declined a commission in 42 CE, a year that had not
+happened. The present is **43 CE** throughout and the full timeline is recorded
+in the file header, because it became load-bearing the moment three entries
+started depending on it.
+
+---
+
+## D76 — The Archive's theme leaves the soundtrack's house style
+
+**Decision.** A seventeenth cue, `archive`, at 72 BPM. Ambient piano and pads.
+No J-rock, no drum and bass, no guitars. `MUSIC_CUE_SHEET.md` records it as the
+one documented exception to the shared descriptors.
+
+**Why.** Every other track scores a fight or the approach to one. The Archive is
+the only screen with no opponent, no clock and no decision, where the activity is
+*reading* for minutes at a time. Racing-anime pop rock behind a page of prose
+does not read as atmosphere, it reads as the game having forgotten which screen
+you are on. 72 against `results_lose`'s 140, previously the slowest thing in the
+set by a wide margin.
+
+Two threads keep it in the same album rather than sounding like another game: the
+cold pads and faint data static come from `theme_nulltide`, because this is a
+Concord records system and not a library — and when the campaign gates entries,
+that texture becomes the sound of the parts not yet unlocked. The piano is the
+counterweight, since the Archive is mostly about people.
+
+**Wired as a fallback, not a flag flip.** `ArchiveScene` asks for `archive` if it
+is available and `menu` if it is not, so dropping the file in and setting
+`present` was the whole job with no third edit waiting to be forgotten.
+
+**A rendering defect surfaced with the longer entries and is fixed here.** A
+`Text` object draws its full height wherever it is placed, so scrolling a long
+entry moved the body without ever stopping it being drawn — the last paragraph
+rendered straight through the hint line and the two became mutually illegible.
+The scroll extent had always reserved forty pixels for exactly this; nothing
+enforced it. The body now carries a geometry mask cut to the same band, re-cut
+whenever `bodyTop` moves, sharing one constant with the scroll maths so the two
+cannot disagree again.
+
+---
+
+## D77 — The prose was rewritten by an outside editor, under a canon lock
+
+**Decision.** The Archive's 21 entries were rewritten externally against
+`docs/ARCHIVE_REWRITE_BRIEF.md`, through a calibration sample and two review
+rounds, and integrated by generator with a byte-for-byte round-trip check.
+
+**Why.** The lore read as machine-written because it was. The brief made that
+actionable by counting rather than asserting: over 4,871 words, thirty em dashes
+at 6.2 per thousand against a normal one to two, seventy-three negation frames of
+the "it is not X" shape across eighty-nine paragraphs, fifteen "rather than",
+twenty-three "never", and nine of twenty-one entries closing on a short
+punchline. Each line got a target.
+
+The editor's own diagnosis was sharper than the brief's and identified the real
+fault: **the Archive had one author impersonating several institutions**. Every
+entry understood procurement, private motive and political hypocrisy equally
+well. Institutional prose lies differently.
+
+Result, measured over the delivered 4,709 words:
+
+```
+  em dashes            30  ->  0
+  negation frames    15.5  ->  1.7   per thousand words
+  "never"              23  ->  0
+  ", which is/was"     12  ->  0
+  The/He/She/It        46% ->  24%   of sentence openings
+```
+
+**`archiveProse.test.ts` guards the mechanical half**, which review does not
+catch: the bodies are string fragments concatenated across source lines, and a
+seam that loses its trailing space jams two words together while one that gains a
+leading space leaves a double gap. Neither breaks the build, both show on screen,
+and the diff makes the seam invisible. It passed on integration day, which is the
+day it was written for.
+
+**Cost.** Six rounds of correspondence, and the process only works because the
+canon lock is exhaustive. See D78.
+
+---
+
+## D78 — A canon lock has to be audited against the simulation, not remembered
+
+**Decision.** Two statements in the lore were false and are corrected: HALCYON's
+saber is not the shortest chain of any sword, and NULLTIDE's arc glaive is not
+the longest-reaching.
+
+**Why this is a decision and not a typo.** Both claims had been copied into the
+rewrite brief **as canon locks**, so a careful editor would have preserved them
+faithfully and permanently. Read out of `meleeLock.hits` and `meleeRange`:
+
+```
+  HALCYON 6 hits / 200 reach      CIRRUS    8 / 195
+  NOCTURNE 3 / 210                OBELISK   2 / 205
+  VESPER   2 / 180                PYRE      3 / 198
+  TERRAMOTH 2 / 210               NULLTIDE  5 / 192
+```
+
+Six is the second-longest chain, not the shortest. 192 is third-shortest, not
+longest. HALCYON now carries the longest reach of any blade, which is true;
+NULLTIDE carries the five-hit cascade and **no reach superlative at all**,
+because inventing a replacement distinction is how the first one happened.
+
+**These matter more than an ordinary prose error** because the mech-select screen
+prints hit counts — it renders `(5 hits)` beside the weapon name — so a player
+can disprove either line in about ten seconds. Writing lore against the
+simulation is only worth doing if the lore is then correct.
+
+The brief now carries the full authoritative table so the class of error cannot
+recur. A related trap was avoided in the same pass: the delivered text described
+HALCYON's reach as "at 200", a raw engine value in a document that measures in
+metres, where PYRE's 300-metre gun is 820 engine units. A reader converting it
+would have been wrong by roughly three to one. The number was deleted rather than
+converted, because the mapping is not canon.
+
+---
+
+## D79 — The Archive is a Concord-maintained compilation
+
+**Decision.** The Archive is a records system maintained by Concord that compiles
+material from all five powers. Each entry's subtitle names its source document;
+the body may be a source document, a compilation of several, or a document with
+Archive addenda. **The Archive's editorial voice is Concord's and is therefore
+not neutral.**
+
+**Why.** The brief never answered this and several attribution problems turned on
+it. It explains how a Concord system holds an Ironwake works log, it lets the
+Archive narrate Ironwake's silence about the Descent — because the Archive is not
+Ironwake — and it is why Io Senna having no Concord file is meaningful rather
+than merely convenient.
+
+**A count was replaced by a rule.** The Archive's self-references were first
+capped at two or three across the whole document. That was a count where it
+should have been a rule: at the calibration sample's rate it would have reached
+fifteen across twenty-one entries. The explicit Archive voice now appears **only
+in entries that are genuinely compilations** — `descent`, `factions`, the
+`stillwake` addendum and the `nulltide` pilot reconstruction — and is forbidden
+in a works log or a ledger that has no narrator. The delivered rewrite used it
+four times, in exactly those four entries.
+
+**Cost.** One presentation defect survived every check and was found only by
+looking at the screen. The Free Latitude build copy demonstrates its own
+unreliability by leaving a form field empty, and a paragraph ending on the bare
+label `weight, final:` reads as truncated text rather than a blank field. The two
+fields now sit adjacent, so they parse as a pair of rows in which the second
+carries a value and the first visibly does not. No words changed. That is the
+fourth time this session that approved, tested, verified work read wrong on
+screen.
