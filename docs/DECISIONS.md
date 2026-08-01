@@ -2930,3 +2930,90 @@ mirror measurement is how the last three hours went wrong.
 `setWeaponRules`, alongside `setPlanMask`. Sub-rule ablation is now twice the
 technique that found the real answer where a single flag could not, and both
 masks exist because a flag in this class never gates only one thing.
+
+## D91 — The roster is spatially homogeneous, the cause is known, and the fix is blocked on the instrument
+
+**Requested**: give each machine real spatial identity, since D88 measured seven
+of eight fighting at the same distance. The diagnosis is solid and is the useful
+output here. The fix is reverted, and the reason it is reverted matters more than
+the fix did.
+
+### The preference is computed correctly and then thrown away
+
+`preferredRangeFor` is not broken. Sampled every tick across the whole field at
+EXTREME, the eight machines want **very** different spacing — and get none of it:
+
+```
+  mech        wants   gets   diff   on-station   APPR  HOLD  RETR  STRF  EVAD
+  nocturne      332    685   +352         15%      31     5     4     1    58
+  halcyon       350    635   +286         18%      35     9     3     2    50
+  terramoth     514    708   +195         21%      27     8     3     5    57
+  obelisk       520    650   +130         26%      25     7     5     7    57
+  cirrus        690    597    -92         22%      21    29     5     7    38
+  pyre          745    774    +29         22%      24     9     5    11    52
+  nulltide      815    616   -199         20%      29    16     8    15    33
+  vesper        876    650   -225         30%      18    11     7    14    50
+```
+
+Targets span 332 to 876 — a 2.6x spread, exactly the differentiation the stat
+blocks promise. Machines are **on station 15-30% of the time**, and **33-58% of
+every fight is spent in `Evade`**, which scores nine directions purely on threat
+clearance and has no notion of preferred range at all. Add `Approach` and the
+tactics that honour the preference are a minority: NOCTURNE spends 10% of a fight
+in Hold, Retreat or Strafe.
+
+**Half of every fight is movement with no character in it, and it averages the
+other half away.** That is the whole finding.
+
+### The fix, and the two ways it was wrong
+
+Adding a range term to `solveEvade`'s scoring — a tiebreaker among dodges that
+are equally safe, weighted well under the wall penalty — works, and works
+strongly. "Gets" became monotonic in "wants" where before it was noise, and
+on-station went from 15-30% to 46-49% on the machines that want to be close.
+
+It failed the gate twice, and both were the same mistake in different clothes:
+**identity was gated on a difficulty tier.**
+
+* **Ungated**, it steered HARD too. `rangeIq` is EXTREME-only, so at HARD
+  `preferredRangeFor` returns a flat `(300 - skill * 90) * styleMul` — one number
+  every machine shares regardless of opponent. Steering toward that dragged the
+  tier into close range against everyone: roster spread 0.79 against a 0.7
+  ceiling, **HARD vs EASY 0.440 -> 0.033**.
+* **Gated on `rangeIq`**, only EXTREME paid the positioning cost, and **EXTREME
+  vs HARD fell +0.147 -> +0.000** — the entire margin D87 exists to create.
+
+Extracting `identityRange`, computed the same way at every tier, fixed both:
+`EXTREME vs HARD` passed again and roster balance passed. **How far a machine
+likes to fight is not a measure of its pilot's competence** and must not be tiered.
+That is the durable design lesson, and it is worth more than the feature.
+
+### Why it is still reverted
+
+At that point two marginal assertions remained (EXTREME vs NORMAL 0.135 against a
+0.15 floor; the HARD mirror at 0.229 against 0.2), and tuning `RANGE_PULL` to
+clear them produced this:
+
+```
+  0.25   EXTREME vs HARD passes
+  0.15   EXTREME vs HARD -0.120
+  0.10   EXTREME vs HARD passes, EXTREME vs NORMAL 0.080
+```
+
+Non-monotonic swings far larger than the effect. `difficulty.test.ts` asserts on
+quantities with +/-0.05 standard errors using **six seed pairs**, so it cannot
+resolve a change of this size — D85 established that and it is still true. Tuning
+against it is fitting noise, which is the one thing this project's protocol
+exists to forbid.
+
+So the feature is reverted whole. It is not that it does not work; it is that
+**it cannot be shown to work with the instrument available**, and shipping an AI
+change on a gate that flickers is how the playstyle regression happened.
+
+### The next step is the instrument, not the feature
+
+Raising `difficulty.test.ts` to ~24 seed pairs with floors set from measured
+values and error bars is now a **prerequisite** for this work, not housekeeping.
+The diagnosis above is measured and will keep; `identityRange` and the evade
+scoring are in git at this commit's parent and can be restored in an afternoon
+once there is a gate that can tell whether they helped.
