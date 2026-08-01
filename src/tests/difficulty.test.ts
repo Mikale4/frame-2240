@@ -48,14 +48,80 @@ function duel(a: Difficulty, b: Difficulty, seed: number): number {
  * this harness, and an early version of these numbers was reading that bias as
  * skill. Every matchup is played once from each side and the two averaged.
  */
-function lead(a: Difficulty, b: Difficulty, pairs = 6): number {
-  let sum = 0;
+function lead(a: Difficulty, b: Difficulty, pairs: number): { mean: number; se: number } {
+  const xs: number[] = [];
   for (let i = 0; i < pairs; i++) {
     const seed = 1000 + i * 7717;
-    sum += duel(a, b, seed) - duel(b, a, seed + 3331);
+    xs.push((duel(a, b, seed) - duel(b, a, seed + 3331)) / 2);
   }
-  return sum / (pairs * 2);
+  const mean = xs.reduce((s, x) => s + x, 0) / xs.length;
+  const v = xs.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, xs.length - 1);
+  return { mean, se: Math.sqrt(v / xs.length) };
 }
+
+/**
+ * Assert a rung, and say enough on failure to tell a regression from a bad roll.
+ *
+ * A bare "expected 0.03 to be greater than 0" cannot be acted on: it does not
+ * say how precise 0.03 was, so the reader cannot tell whether the ladder broke
+ * or the dice did. Every failure here reports the standard error and how many
+ * of them separate the measurement from its floor.
+ */
+function expectRung(
+  label: string,
+  a: Difficulty,
+  b: Difficulty,
+  floor: number,
+  pairs: number,
+): void {
+  const { mean, se } = lead(a, b, pairs);
+  const sigma = se > 0 ? (mean - floor) / se : Infinity;
+  expect(
+    mean,
+    `${label}: ${mean.toFixed(3)} ±${se.toFixed(3)} (${pairs} pairs), ` +
+      `floor ${floor} is ${sigma.toFixed(1)}σ away`,
+  ).toBeGreaterThan(floor);
+}
+
+/**
+ * Sampling, and why it is not uniform.
+ *
+ * These assertions were failing and passing on luck. Calibrated at 32 pairs, the
+ * rungs and their standard errors are:
+ *
+ * ```
+ *   NORMAL v EASY     0.193 ±0.053      HARD v EASY       0.287 ±0.039
+ *   HARD v NORMAL     0.241 ±0.052      EXTREME v EASY    0.310 ±0.043
+ *   EXTREME v HARD    0.099 ±0.044      EXTREME v NORMAL  0.283 ±0.046
+ * ```
+ *
+ * At the six pairs this file used, every one of those errors is ~2.3x larger —
+ * so `EXTREME v HARD > 0` was a measurement of 0.099 ±0.102 against a floor of
+ * zero, which is close to a coin toss. That is exactly what was observed: the
+ * assertion flickered across a parameter sweep in a pattern no monotonic effect
+ * could produce, and a drone change reddened it while measuring no significant
+ * difference at 24 pairs.
+ *
+ * Common random numbers were tried and do not rescue it: pairing the two slot
+ * orders on the same seed moved the standard error from 0.053 to 0.047, because
+ * swapping which tier holds which slot changes the fight too much for the draws
+ * to cancel. The variance is intrinsic, so the only honest fix is samples.
+ *
+ * **Spent where the margin is thin.** `EXTREME v HARD` is the tight one — the top
+ * rung is the smallest gap on the ladder — and gets 40 pairs. The other five get
+ * 16. That puts every floor about **2.5 standard errors** below its measured
+ * value, against roughly 1σ before, which is the difference between an assertion
+ * that catches regressions and one that reports coin tosses.
+ *
+ * Note these seeds are fixed, so a given build always produces the same numbers:
+ * the risk being managed is not run-to-run flakiness but **sensitivity** — an
+ * unrelated change nudging a measurement across a floor it was already sitting
+ * on top of. That is what happened when a drone change reddened this file.
+ */
+const TIGHT_PAIRS = 40;
+const PAIRS = 16;
+/** The bias smoke check is one duel per sample, so it can afford more of them. */
+const BIAS_PAIRS = 24;
 
 describe('the difficulty ladder', () => {
   it('offers exactly four named tiers', () => {
@@ -121,24 +187,56 @@ describe('the difficulty ladder — measured in the ring', () => {
    * values rather than tight against them.
    */
   it('has every tier beat the one below it', () => {
-    expect(lead(Difficulty.Normal, Difficulty.Easy), 'NORMAL vs EASY').toBeGreaterThan(0);
-    expect(lead(Difficulty.Hard, Difficulty.Normal), 'HARD vs NORMAL').toBeGreaterThan(0.05);
-    expect(lead(Difficulty.Extreme, Difficulty.Hard), 'EXTREME vs HARD').toBeGreaterThan(0);
-  });
+    expectRung('NORMAL vs EASY', Difficulty.Normal, Difficulty.Easy, 0, PAIRS);
+    expectRung('HARD vs NORMAL', Difficulty.Hard, Difficulty.Normal, 0.05, PAIRS);
+    // The narrowest rung on the ladder, and the one that was flickering.
+    expectRung('EXTREME vs HARD', Difficulty.Extreme, Difficulty.Hard, 0, TIGHT_PAIRS);
+  }, 120_000);
 
   it('has the top tiers beat the bottom decisively', () => {
-    expect(lead(Difficulty.Hard, Difficulty.Easy), 'HARD vs EASY').toBeGreaterThan(0.2);
-    expect(lead(Difficulty.Extreme, Difficulty.Easy), 'EXTREME vs EASY').toBeGreaterThan(0.2);
-    expect(lead(Difficulty.Extreme, Difficulty.Normal), 'EXTREME vs NORMAL').toBeGreaterThan(0.15);
-  });
+    // Floors sit ~2.5 standard errors below the calibrated means (0.287, 0.310,
+    // 0.283), so they catch a regression rather than a bad roll.
+    expectRung('HARD vs EASY', Difficulty.Hard, Difficulty.Easy, 0.15, PAIRS);
+    expectRung('EXTREME vs EASY', Difficulty.Extreme, Difficulty.Easy, 0.15, PAIRS);
+    expectRung('EXTREME vs NORMAL', Difficulty.Extreme, Difficulty.Normal, 0.12, PAIRS);
+  }, 120_000);
 
-  it('is roughly even against itself', () => {
-    // The harness's own bias, and the noise floor everything above sits on. If
-    // this drifts far from zero the thresholds above stop meaning anything.
-    for (const d of [Difficulty.Normal, Difficulty.Hard, Difficulty.Extreme]) {
-      expect(Math.abs(lead(d, d)), DIFFICULTY_NAMES[d]).toBeLessThan(0.2);
+  it('has no meaningful slot bias', () => {
+    /**
+     * **This used to measure noise and call it symmetry.**
+     *
+     * It asserted `|lead(d, d)| < 0.2`, and `lead` compares `duel(seed)` against
+     * `duel(seed + 3331)` — *two different fights*. Between identical opponents
+     * that difference is pure sampling noise, so the assertion could never read
+     * zero however symmetric the harness was, and it passed or failed on the
+     * spread of the roll rather than on any property of the game. It is the same
+     * fault as an A/B whose arms differ by more than the thing under test.
+     *
+     * What is actually worth asserting is the harness's **slot bias**: play a
+     * true mirror and see whether the left slot wins for being the left slot.
+     * Every threshold in this file is a lead measured across two slots, so a
+     * large bias would make all of them meaningless.
+     *
+     * Measured at 32 pairs: EASY -0.143, NORMAL -0.071, HARD -0.089,
+     * EXTREME -0.022. Small, and consistently favouring the *right* slot.
+     *
+     * **A smoke check, not a gate, and the tolerance says so.** Every threshold
+     * above is a lead of the form `(duel(a,b) - duel(b,a)) / 2`, which cancels
+     * slot bias by construction — so a bias here does not invalidate them; it
+     * would only mean the harness had developed a lopsidedness worth knowing
+     * about. EASY is much the noisiest row (two weak pilots flail, and the
+     * spread is wide), so the bound is set to catch a harness that has genuinely
+     * tilted rather than to police the roll.
+     */
+    for (const d of [Difficulty.Easy, Difficulty.Normal, Difficulty.Hard, Difficulty.Extreme]) {
+      const xs: number[] = [];
+      for (let i = 0; i < BIAS_PAIRS; i++) xs.push(duel(d, d, 1000 + i * 7717));
+      const mean = xs.reduce((s, x) => s + x, 0) / xs.length;
+      expect(Math.abs(mean), `${DIFFICULTY_NAMES[d]} slot bias ${mean.toFixed(3)}`).toBeLessThan(
+        0.45,
+      );
     }
-  });
+  }, 120_000);
 });
 
 describe('what EXTREME does that the others do not', () => {

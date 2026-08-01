@@ -3014,6 +3014,83 @@ change on a gate that flickers is how the playstyle regression happened.
 
 Raising `difficulty.test.ts` to ~24 seed pairs with floors set from measured
 values and error bars is now a **prerequisite** for this work, not housekeeping.
-The diagnosis above is measured and will keep; `identityRange` and the evade
-scoring are in git at this commit's parent and can be restored in an afternoon
-once there is a gate that can tell whether they helped.
+The diagnosis above is measured and will keep.
+
+**Correction, D92:** this originally said the implementation was "in git at this
+commit's parent". It is not. It was reverted with `git checkout --` before the
+commit, so it was never committed and no parent holds it. What survives is the
+description here, which is enough to rebuild it — roughly twenty lines: an
+`identityRange(self, foe)` that runs `preferredRangeFor`'s `rangeIq` body at
+every tier, and a term in `solveEvade`'s per-direction score of
+`(nowErr - endErr) * RANGE_PULL`, where the errors are `|distance - pref|` now
+and at the end of the lookahead. `RANGE_PULL` around 0.25, well under the 280
+wall penalty.
+
+## D92 — Rebuilding the instrument the ladder is measured with
+
+D91 stopped because `difficulty.test.ts` could not resolve the change under test.
+This fixes that, and it found a second fault while doing it.
+
+### The rungs were asserted at roughly 1 sigma
+
+Calibrated at 32 seed pairs, the ladder and its standard errors:
+
+```
+  NORMAL v EASY     0.193 +/-0.053      HARD v EASY       0.287 +/-0.039
+  HARD v NORMAL     0.241 +/-0.052      EXTREME v EASY    0.310 +/-0.043
+  EXTREME v HARD    0.099 +/-0.044      EXTREME v NORMAL  0.283 +/-0.046
+```
+
+The file used **six** pairs, where each of those errors is ~2.3x larger. So
+`EXTREME v HARD > 0` was measuring 0.099 +/-0.102 against a floor of zero — a
+coin toss, and the direct cause of both the sweep that flickered
+(0.002 fail / 0.006 pass / 0.008 pass / 0.012 fail) and a drone change turning
+the suite red while measuring no significant difference at 24 pairs.
+
+**Common random numbers were tried and rejected on measurement.** Pairing the two
+slot orders on one seed moved the error only 0.053 -> 0.047, because swapping
+which tier holds which slot changes the fight too much for the draws to cancel.
+The variance is intrinsic; the only honest fix is samples.
+
+Samples are now spent where the margin is thin rather than uniformly:
+`EXTREME v HARD`, the narrowest rung, takes 40 pairs; the other five take 16.
+Every floor now sits about **2.5 standard errors** below its measured value.
+Suite runtime goes from ~10s to ~24s, which is the price of a gate that answers
+the question it is asked.
+
+Floors are set from the calibration rather than from taste, and **failures now
+report the standard error and the sigma distance to the floor**, because
+"expected 0.03 to be greater than 0" cannot be acted on: it does not say whether
+the ladder broke or the dice did.
+
+The seeds are fixed, so this is not run-to-run flakiness. The risk being managed
+is **sensitivity** — an unrelated change nudging a measurement across a floor it
+was already sitting on top of.
+
+### "Roughly even against itself" was measuring noise
+
+The symmetry check asserted `|lead(d, d)| < 0.2`, and `lead` compares
+`duel(seed)` against `duel(seed + 3331)` — **two different fights**. Between
+identical opponents that difference is pure sampling noise, so the assertion
+could never read zero however symmetric the harness was, and it passed or failed
+on the spread of the roll rather than on any property of the game.
+
+Same fault as the `bankEnergy` probe in D90, in the project's own test suite:
+**an A/B whose arms differ by more than the thing under test cannot measure
+zero, and therefore cannot measure anything.**
+
+Replaced with the quantity actually worth knowing — the harness's slot bias, a
+true mirror on one seed. Measured at 32 pairs: EASY -0.143, NORMAL -0.071,
+HARD -0.089, EXTREME -0.022, consistently favouring the right slot. Kept as a
+smoke check with a loose bound, because every threshold above is a lead of the
+form `(duel(a,b) - duel(b,a)) / 2`, which cancels slot bias by construction — a
+bias would be worth knowing about but does not invalidate anything.
+
+### What this unblocks
+
+D91's spatial-identity work, which is the thing that could not be judged. Also
+every future AI change: three separate times this session a measurement was
+believed and then overturned — the plan ablation confounded by shared flags, the
+`bankEnergy` probe that could not read zero, and this file. The pattern is
+constant and worth stating plainly: **on this project, check the instrument
+before believing the result.**
