@@ -699,6 +699,17 @@ export class Combatant implements FlightState {
   }
 
   /**
+   * True while a desperate Speed lock is still crossing the gap.
+   *
+   * The window this describes is the whole reason the mode is usable at range:
+   * the mech is committed, travelling in a straight line and unable to act, so
+   * it gets a guard it does not pay for. Ends the moment the first swing starts.
+   */
+  get desperateClosing(): boolean {
+    return this.desperateSpeed && this.meleeLock?.phase === 'close';
+  }
+
+  /**
    * Melee reach, including the Speed burst's desperation extension.
    *
    * "Across the screen" is meant literally: `DESPERATE_MELEE_RANGE` puts the
@@ -716,9 +727,14 @@ export class Combatant implements FlightState {
    * energy, Speed stops thrust costing boost. One rule per mode, expressed once
    * here so the three read as the same promise rather than three special cases
    * scattered through the step.
+   *
+   * Speed borrows the barrier rule for one window only — `desperateClosing`, the
+   * dash onto a target from across the arena. The guard raised there is part of
+   * the attack rather than a defensive choice, so charging the gauge for it would
+   * mean the move costs barrier that the pilot never elected to spend.
    */
   get barrierFree(): boolean {
-    return this.shieldActive;
+    return this.shieldActive || this.desperateClosing;
   }
   get energyFree(): boolean {
     return this.shootActive;
@@ -1348,6 +1364,10 @@ export class Combatant implements FlightState {
   /** Ends the sequence and applies the cooldown. */
   private endMeleeLock(full: boolean): void {
     const p = this.def.meleeLock;
+    // A desperate close raises a guard the pilot never asked for and never paid
+    // for. Dropping the lock has to drop it too, or a broken charge would leave
+    // a free guard standing for as long as nothing else cleared it.
+    if (this.desperateClosing && !this.shieldActive) this.guarding = false;
     this.meleeLock = null;
     this.meleeLockout = Math.max(this.meleeLockout, full ? p.lockout : Math.round(p.lockout * 0.45));
   }
@@ -1385,11 +1405,54 @@ export class Combatant implements FlightState {
     if (ml.phase === 'close') {
       ml.timer++;
       // Carry the blade back into the wind-up while closing, so the swing is
-      // already loaded by the time the mech arrives.
+      // already loaded by the time the mech arrives. This is a held pose at the
+      // start of the arc, not a stroke — the swinging belongs to `swing`.
       this.swingDriven = true;
       const ramp = Math.min(1, ml.timer / 8);
       this.spin = swingArcAngle(p.arc, 0, ml.hitIndex) * ramp;
       this.reach = swingReach(p.arc, 0, ml.hitIndex) * ramp;
+
+      /**
+       * Desperation Speed closes from anywhere on the map, and the ordinary
+       * approach cannot do it.
+       *
+       * `acquireRange` runs 380–500, so the desperation multiplier puts it at
+       * 3,420–4,500 against an arena diagonal of about 2,680 — the lock genuinely
+       * reaches everywhere, which is the point of the mode. But `thrust` is a
+       * lunge, 12–19 a tick behind a `tracking` lerp, and the plain close gave up
+       * after 22 ticks and swung anyway. That covers roughly 250 px. Every
+       * long-range desperation melee therefore spent its entire chain slashing
+       * empty air on the way in, arriving with the sequence already over and
+       * having been a stationary target for the whole approach.
+       *
+       * So the desperate close is a **dash**: straight line, no lerp, at the same
+       * multiplier desperation gives every other dash, and it does not hand over
+       * to `swing` until the target is actually in reach.
+       *
+       * The guard is what makes committing to that survivable. It is free (see
+       * `barrierFree`) and it is load-bearing rather than cosmetic: a guarded hit
+       * returns without setting hitstun, and hitstun is what breaks a lock, so the
+       * shield is the only reason a two-second approach is not cancelled by the
+       * first stray round. A piercing non-melee hit still goes through it and
+       * still stops the charge, which is the counter.
+       */
+      if (this.desperateSpeed) {
+        this.guarding = true;
+        const speed = p.thrust * DESPERATE_DASH;
+        this.vx = nx * speed;
+        this.vy = ny * speed;
+        if (dist <= p.range) {
+          if (!this.shieldActive) this.guarding = false;
+          ml.phase = 'swing';
+          ml.timer = 0;
+          ml.hitTimer = 0;
+          ml.hitDone = false;
+        }
+        // No timeout: `ml.life` bounds the sequence, and a lock that expires mid
+        // approach ends without swinging rather than swinging at nothing.
+        return true;
+      }
+
       // Thrust onto the target, lerping so it reads as a controlled approach.
       this.vx = lerp(this.vx, nx * p.thrust, p.tracking);
       this.vy = lerp(this.vy, ny * p.thrust, p.tracking);

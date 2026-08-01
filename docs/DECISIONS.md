@@ -1940,3 +1940,65 @@ fields now sit adjacent, so they parse as a pair of rows in which the second
 carries a value and the first visibly does not. No words changed. That is the
 fourth time this session that approved, tested, verified work read wrong on
 screen.
+
+---
+
+## D80 — The desperate Speed close is a shielded dash, not a lunge
+
+**Decision.** While a desperation Speed lock is closing, the mech dashes straight
+at the target at `thrust × DESPERATE_DASH`, holds a free guard, and does not begin
+its chain until the target is genuinely inside `meleeLock.range`. The 22-tick
+timeout that used to end the approach is gone for that case.
+
+**Why.** Reported from a CPU-versus-CPU match: a long-range desperation melee
+played its swing animations while still travelling, leaving the attacker exposed
+and arriving with nothing left to throw.
+
+The arithmetic is stark. `acquireRange` runs 380–500, so the desperation
+multiplier puts the lock at **3,420–4,500** against an arena diagonal of about
+**2,680** — the mode genuinely reaches everywhere, which is the whole point of it.
+But the approach was a lunge: `thrust` of 12–19 a tick behind a `tracking` lerp,
+and `if (dist <= p.range || ml.timer > 22)` handing over to `swing` regardless of
+distance once the timer expired. Twenty-two ticks of that covers roughly 250 px.
+Every desperation melee opened beyond about a fifth of the arena therefore spent
+its entire chain on empty air during the approach, then arrived with the sequence
+already over — the exact opposite of what a comeback mechanic should do, and
+worse than not having pressed the button.
+
+**The guard is the load-bearing half, not decoration.** A guarded hit returns from
+`takeHit` without setting hitstun, and hitstun is what breaks a lock, so the shield
+is the only reason a two-second committed approach is not cancelled by the first
+stray round. It is free — `barrierFree` gains `desperateClosing` — because the
+guard is part of the attack rather than a defensive choice the pilot made, and
+charging the gauge for it would mean the move silently costs barrier nobody
+elected to spend. A piercing non-melee hit still goes through it and still stops
+the charge, which is the counter.
+
+`endMeleeLock` drops the guard, or a broken charge would leave a free guard
+standing until something else happened to clear it.
+
+**Measured**, six seeds a matchup, both slots, against the D74 baseline:
+
+```
+              HARD                     EXTREME
+  cirrus    -0.061 -> -0.044        +0.113 -> +0.134
+  everyone else within +/-0.005     within +/-0.005
+  spread     0.374 ->  0.376         0.322 ->  0.321
+```
+
+Flat everywhere except CIRRUS, which is the correct shape: she is the machine
+whose playstyle takes Speed on the brink and the one with an eight-hit chain to
+cash in on actually arriving. The magnitude sits near the noise floor at six
+seeds, but it is consistent in direction across both tiers and lands on the
+predicted machine. A desperation burst is a rare event inside a match, so a small
+roster-level number is what a correct fix looks like here.
+
+**Verified in play as well as in the harness.** In a live CPU-versus-CPU match at
+EXTREME the AI opened a desperate melee at **1,144 px** and closed to **51 px**
+before the first swing, with zero swing frames recorded outside 220 px.
+
+The reported symptom — animations sweeping during travel — is pinned by a test
+rather than a screenshot. `spin` drives the arm: it ramps once over eight ticks to
+the arc's t=0 wind-up and then holds for the whole approach, and only sweeps in
+`swing`. Asserting the pose is constant from tick 10 to contact covers every frame
+of the approach, which a single captured frame would not.

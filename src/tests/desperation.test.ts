@@ -327,6 +327,128 @@ describe('desperate SPEED — reach, dash and true damage', () => {
 });
 
 /**
+ * The desperate close.
+ *
+ * A Speed burst can open a lock from anywhere on the map, and the ordinary
+ * approach could not deliver on that: `thrust` is a lunge of 12–19 a tick behind
+ * a `tracking` lerp, and the close phase gave up after 22 ticks and swung
+ * regardless of distance. A long-range desperation melee therefore ran its whole
+ * chain on empty air during the approach and arrived with the sequence over,
+ * having been a stationary target the entire way in.
+ */
+describe('desperate SPEED — the close', () => {
+  /**
+   * Puts the two machines `gap` apart with the player desperate on Speed and one
+   * tick into the approach.
+   *
+   * The extra step matters: `startMeleeLock` runs inside `tryStartAction`, which
+   * sits *after* the `stepMeleeLock` call in the same tick, so the lock exists
+   * but has not yet had a close frame when the starting tick ends.
+   */
+  const closing = (gap: number) => {
+    const s = sim({ playerDef: CIRRUS, enemyDef: VESPER });
+    toFight(s);
+    burst(s, 0.2, SatMode.Speed);
+    s.enemy.x = s.player.x + gap;
+    s.enemy.y = s.player.y;
+    s.step(press(Btn.Melee), emptyInput());
+    s.step(emptyInput(), emptyInput());
+    return s;
+  };
+
+  it('does not start swinging until the target is actually in reach', () => {
+    const s = closing(1400);
+    const range = CIRRUS.meleeLock.range;
+    let sawSwingOutOfRange = false;
+    for (let i = 0; i < 140; i++) {
+      const ml = s.player.meleeLock;
+      if (!ml) break;
+      const dist = Math.hypot(s.enemy.x - s.player.x, s.enemy.y - s.player.y);
+      if (ml.phase !== 'close' && dist > range * 1.6) sawSwingOutOfRange = true;
+      s.step(emptyInput(), emptyInput());
+    }
+    expect(sawSwingOutOfRange).toBe(false);
+  });
+
+  it('arrives, rather than expiring on the way in', () => {
+    const s = closing(1400);
+    let arrived = false;
+    for (let i = 0; i < 140; i++) {
+      const ml = s.player.meleeLock;
+      if (!ml) break;
+      if (ml.phase !== 'close') {
+        arrived = true;
+        break;
+      }
+      s.step(emptyInput(), emptyInput());
+    }
+    expect(arrived).toBe(true);
+  });
+
+  it('guards for free while closing, and stops both when it lands', () => {
+    const s = closing(1400);
+    const p = s.player;
+    expect(p.desperateClosing).toBe(true);
+    expect(p.guarding).toBe(true);
+    expect(p.barrierFree).toBe(true);
+
+    // Free means the gauge never falls, not that it is frozen — ordinary regen
+    // still runs underneath, which is why this is a floor and not an equality.
+    p.barrier = p.def.gauges.maxBarrier * 0.5;
+    let floor = p.barrier;
+    for (let i = 0; i < 140 && p.meleeLock?.phase === 'close'; i++) {
+      s.step(emptyInput(), emptyInput());
+      expect(p.barrier).toBeGreaterThanOrEqual(floor);
+      floor = p.barrier;
+    }
+    // The guard belongs to the approach, not to the pilot.
+    expect(p.desperateClosing).toBe(false);
+    expect(p.barrierFree).toBe(false);
+  });
+
+  it('holds the blade rather than sweeping it on the way in', () => {
+    // The reported symptom was swing animations playing during the approach.
+    // `spin` drives the arm: in `close` it ramps once to the arc's t=0 wind-up
+    // and then holds, and in `swing` it sweeps. So a blade that is being carried
+    // rather than swung shows a settled `spin` for the whole approach.
+    const s = closing(1400);
+    const p = s.player;
+    const spins: number[] = [];
+    for (let i = 0; i < 140 && p.meleeLock?.phase === 'close'; i++) {
+      spins.push(p.spin);
+      s.step(emptyInput(), emptyInput());
+    }
+    expect(spins.length).toBeGreaterThan(20);
+    // Past the 8-tick wind-up ramp the pose is constant all the way to contact.
+    const settled = spins.slice(10);
+    for (const v of settled) expect(v).toBeCloseTo(settled[0], 6);
+  });
+
+  it('gives a non-desperate Speed burst none of it', () => {
+    const s = sim({ playerDef: CIRRUS, enemyDef: VESPER });
+    toFight(s);
+    burst(s, 0.9, SatMode.Speed);
+    s.enemy.x = s.player.x + 200;
+    s.enemy.y = s.player.y;
+    s.step(press(Btn.Melee), emptyInput());
+    expect(s.player.desperateSpeed).toBe(false);
+    expect(s.player.desperateClosing).toBe(false);
+    expect(s.player.barrierFree).toBe(false);
+  });
+
+  it('drops the free guard if the lock breaks mid-approach', () => {
+    const s = closing(1400);
+    const p = s.player;
+    expect(p.guarding).toBe(true);
+    p.hitstun = 6; // a piercing hit is the counter to the charge
+    s.step(emptyInput(), emptyInput());
+    expect(p.meleeLock).toBeNull();
+    expect(p.guarding).toBe(false);
+    expect(p.barrierFree).toBe(false);
+  });
+});
+
+/**
  * The weapon mounts point at a target, always.
  *
  * This used to be gated on `inLockCone` — inside `lockRange` *and* within a
