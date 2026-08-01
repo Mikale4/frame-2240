@@ -1,30 +1,29 @@
 # Session Handoff — Babel Sword: Reignition
 
-> Rewritten 2026-08-01. Supersedes the previous handoff.
-> Everything marked **verified** was confirmed by running it.
+> Rewritten 2026-08-01 at the end of a long session (19 commits).
+> Supersedes the previous handoff. Everything marked **verified** was confirmed
+> by running it.
 > Read this, then `CLAUDE.md`, then **`docs/TESTING_PROTOCOL.md`**, then §11.
 
 ---
 
 ## 1. Do these before working
 
-1. **Read `docs/TESTING_PROTOCOL.md`.** It is the durable home for the rules that
-   used to live in this file's §9 — and this file gets rewritten every session,
-   which is why they moved. Its first rule: **test by playing at EXTREME**, never
-   the default NORMAL, because `resourceIq` and `droneIq` execute at no other
-   tier and a fault living in either survives any amount of testing at NORMAL.
-2. **Keep the app window foregrounded and the Browser pane visible.** When it
-   loses foreground the browser stops compositing: `requestAnimationFrame` drops
-   below 1 fps, the Phaser loop freezes, screenshots time out. **`document.hidden`
-   still reports `false`** — do not trust it. Measure rAF instead.
-3. **Start the dev server**: `npm run dev` from Bash, not `preview_start`. Ports
+1. **Read `docs/TESTING_PROTOCOL.md`.** It is the durable home for the rules in
+   §9 — this file is rewritten every session and that one is not. Its first rule:
+   **test by playing at EXTREME**, never the default NORMAL, because `resourceIq`
+   and `droneIq` execute at no other tier.
+2. **Report EXTREME first.** HARD is a corroborating second sample, not a second
+   opinion. Six seeds is close to the noise floor, so a change that moves both
+   tiers the same way is far more trustworthy than one that moves one.
+3. **Keep the app window foregrounded.** When it loses focus the browser stops
+   compositing: rAF drops under 1 fps and the Phaser loop freezes.
+   **`document.hidden` still reports `false`** — measure rAF instead.
+4. **Start the dev server**: `npm run dev` from Bash, not `preview_start`. Ports
    5173–5178 are usually taken by stale servers; read the port it chose. Last
    session used **5179**.
-4. **Do not call `preview_start` repeatedly** — each call opens a new tab and
+5. **Do not call `preview_start` repeatedly** — each call opens a new tab and
    every new tab is a full reload. Reuse the open tab and `navigate`.
-5. **Blender must be running with the MCP addon enabled** for art work. After a
-   crash-restart it comes back *disabled* — re-enable via Edit → Preferences →
-   Add-ons → search "MCP", then N in viewport → BlenderMCP → Connect.
 
 ---
 
@@ -37,18 +36,17 @@ workspace root, entirely original in code, art, audio, characters and story.
 
 **State: well past the vertical slice.** Title → menu → mech select → battle →
 results, 8 mechs, full SFX, a complete 17-track score, real art, pilot dialogue,
-four AI difficulty tiers, eight per-pilot playstyles, eight distinct drone roles,
-desperation saturation, and an Archive of 21 lore entries written as institutional
-documents.
+four AI tiers, eight playstyles, eight drone roles, desperation saturation, and
+an Archive of 21 lore entries written as institutional documents.
 
 ---
 
 ## 3. Current status — verified
 
-* **497 tests pass** (24 files), typecheck clean, production build clean.
-* **Working tree clean.** Nothing untracked. `assets/music/` is now tracked (D71).
-* No remote; `master` only. **15 commits last session**, `3fe491b`..`HEAD`.
-* Repo is 112 MB, of which 63 MB is the seventeen music tracks.
+* **505 tests pass** (24 files), typecheck clean, production build clean.
+* **Working tree clean.** Nothing untracked.
+* No remote; `master` only. **19 commits last session**, `3fe491b`..`8c3f0d9`.
+* `docs/DECISIONS.md` runs to **D82**.
 
 Git identity is unset globally; pass it per command:
 
@@ -64,55 +62,24 @@ sometimes break in the Bash tool** — prefer the Write tool then a Python appen
 
 ## 4. What landed last session
 
-Full detail in `docs/DECISIONS.md` **D71–D79**. Summary:
+Detail in `docs/DECISIONS.md` **D71–D82**.
 
-### 4a. The soundtrack is finished and tracked — D71, D76
-
-All **seventeen cues exist and play**. Only `battle` is `present: false`, and it
-is the fallback that exists for the case where no candidate is present — now
-unreachable by construction, which is what it was always meant to become.
-
-`assets/music/` is now in git. The takes are not reproducible, so an accident
-there was a loss, not a rebuild. That argument was tested within the hour when
-`theme_cirrus` was re-downloaded and came back a **different song**.
-
-The Archive got its own theme at 72 BPM, and it is the one documented cue that
-**leaves the soundtrack's J-rock house style** — see `docs/MUSIC_CUE_SHEET.md`.
-
-### 4b. The Archive was rewritten by an outside editor — D75, D77, D78, D79
-
-The lore read as machine-written, because it was. Six rounds: brief → diagnosis
-and plan → review → calibration sample → verdict → full rewrite → verdict →
-final. Every entry is now a document written by an institution rather than by an
-omniscient narrator.
-
-Measured over the delivered 4,709 words: em dashes 30 → 0, negation frames 15.5
-per thousand words → 1.7, "never" 23 → 0, sentence openers using The/He/She/It
-46 % → 24 %.
-
-**The lore is now complete and gapless on purpose.** Stillwake (31 CE) resolves
-the EW-14's provenance, Io Senna's history and Rook's inquiry into one incident.
-Three new world entries carry the setting's causes. This is the prerequisite for
-the campaign's planned unlock feature — see §5.
-
-**Two canon errors were found in the process** and both were mine: HALCYON's
-saber was described as the shortest chain (it is the second-longest) and
-NULLTIDE's glaive as the longest-reaching (it is third-shortest). Both had been
-copied into the rewrite brief *as canon locks*.
-
-### 4c. STATIC's hit points, and the override that hid the bug — D74
-
-STATIC ran at **110** where every other drone had been scaled ×3.5. Nobody forgot
-it: D63 scaled the shared `DRONE` base 110 → 385, and STATIC carried an explicit
-`maxLife: 110` that was **identical to the base it was overriding** — invisible,
-apparently redundant, and the one thing that did not move when the base did.
-
-Now 385. Decoy stun 5 % → 15 %. Measured at six seeds, both slots.
-
-### 4d. MECH SELECT, and the testing protocol — D72, D73
-
-`MECH SELECT` added to the pause menu and the results screen, in all three modes.
-`docs/TESTING_PROTOCOL.md` created.
+* **D71–D73** — the soundtrack is finished (17 cues) and tracked in git; MECH
+  SELECT added to the pause and results menus; `docs/TESTING_PROTOCOL.md`
+  created.
+* **D74** — STATIC ran at 110 hit points where every other drone was scaled ×3.5.
+  Nobody forgot it: the shared `DRONE` base was scaled 110 → 385 and STATIC
+  carried an explicit `maxLife: 110` *identical to the base it was overriding*.
+* **D75–D79** — the Archive was completed, then rewritten by an outside editor
+  across six rounds and integrated with a byte-for-byte round-trip check.
+* **D80** — the desperation Speed close is a shielded dash. It used to lunge at
+  12–19 px a tick and time out after 22 ticks, so every long-range desperation
+  melee swung at empty air the whole way in.
+* **D81** — combos hold. Non-final hitstun was a flat 14 while the interval
+  between hits is 10–26, so three machines could be melee-mashed out of their own
+  chain after the first hit. Barrier-cancel is now the only escape.
+* **D82** — WISP's tether is drawn, has thickness, and its doctrine is allowed to
+  stay out. See §8, because it exposed a class of defect.
 
 ---
 
@@ -120,130 +87,159 @@ Now 385. Decoy stun 5 % → 15 %. Measured at six seeds, both slots.
 
 > **Roadmap decision, 2026-08-01:** the campaign comes **after the roster doubles
 > to sixteen mechs and sixteen pilots**. Do not start CAMPAIGN before that.
-> The eight new machines are the gating work; the campaign is designed around the
-> finished roster, not the current one.
 
-1. **CAMPAIGN — deferred, see the note above.** The menu row exists and is
-   disabled. Still the reason the lore was written.
-
-   **The user has specified the Archive's role in it.** Entries start *redacted*
-   and unlock as the player progresses — through dialogue, exposition, special
-   events, side quests, plot investigation or story progression. The lore was
-   deliberately completed (D75) so it could be withheld. A bounded first piece
-   would be the redaction/unlock state model plus persistence, which is testable
-   before any mission exists.
-
-2. **A second arena.** CATHEDRAL YARD is hard-coded in `render/Backdrop.ts`.
-   `session.arena` and the music's stage slot already route through data, so this
-   is mostly making `Backdrop` arena-driven plus new parallax art.
-
-3. **Audit the AI-vs-AI harness.** See §6. Every balance number rests on it.
-
-4. **VESPER is the weakest machine** at both tiers. See §6.
+1. **HALCYON is now clearly the weakest machine and wants a tuning pass.** See
+   §6. This is the most concrete outstanding job.
+2. **The drone audit, in progress.** The user is inspecting each drone in
+   CPU-vs-CPU. **STATIC and WISP are done.** Six remain. Expect more of what §8
+   describes.
+3. **Make AEGIS, WARDEN and ARBITER visible** (§8). Pure rendering, no simulation
+   change, no re-measurement — and it makes the rest of the audit possible.
+4. **Eight more mechs and pilots**, the gate on the campaign.
+5. **A second arena.** `session.arena` and the music stage slot already route
+   through data; `render/Backdrop.ts` is the hard-coded part.
 
 ---
 
 ## 6. Roster balance — measured
 
-Six seeds per matchup, both slots played, after the D74 changes.
+Six seeds per matchup, both slots, at the end of the session.
 
-| | HARD | | EXTREME |
+| | EXTREME | | HARD |
 | --- | --- | --- | --- |
-| 1 | TERRAMOTH +0.179 | | PYRE +0.182 |
-| 2 | PYRE +0.165 | | CIRRUS +0.113 |
-| 3 | NULLTIDE +0.021 | | TERRAMOTH +0.024 |
-| 4 | NOCTURNE +0.003 | | OBELISK −0.004 |
-| 5 | OBELISK −0.029 | | NOCTURNE −0.023 |
-| 6 | CIRRUS −0.061 | | NULLTIDE −0.030 |
-| 7 | HALCYON −0.083 | | HALCYON −0.121 |
-| 8 | VESPER −0.195 | | VESPER −0.140 |
+| 1 | CIRRUS +0.157 | | TERRAMOTH +0.169 |
+| 2 | PYRE +0.117 | | PYRE +0.158 |
+| 3 | TERRAMOTH +0.030 | | CIRRUS +0.057 |
+| 4 | OBELISK +0.027 | | OBELISK +0.056 |
+| 5 | NOCTURNE +0.023 | | NOCTURNE −0.030 |
+| 6 | NULLTIDE −0.004 | | NULLTIDE −0.057 |
+| 7 | VESPER −0.121 | | VESPER −0.136 |
+| 8 | **HALCYON −0.229** | | **HALCYON −0.218** |
 
-spread: **HARD 0.374, EXTREME 0.322**.
+spread: **EXTREME 0.386, HARD 0.387**.
 
-**There is no single tier list.** TERRAMOTH is best against a mediocre pilot;
-CIRRUS climbs sharply against a good one, because she is the most
-execution-dependent machine in the game. Any "best mech" answer must name a tier.
+**HALCYON is the outstanding balance problem.** It has fallen **−0.126 → −0.199 →
+−0.229** across three consecutive *correct* fixes, none of which were aimed at
+it: it gained nothing from D81 because its chain was already airtight, and
+nothing from D82 because its doctrine is `escort`. Spread has widened from 0.321
+to 0.386 over the same three changes and it is almost entirely this one machine.
+
+**None of that argues for reverting anything.** The old numbers were partly
+measuring accidents. What is owed is a tuning pass, and HALCYON is where it
+starts.
 
 **Three seeds is not enough.** A three-seed run of the STATIC change read as a
-0.068 collapse at EXTREME; six seeds turned it into 0.025. Do not report a
-balance delta from three seeds.
+0.068 collapse at EXTREME; six seeds turned it into 0.025.
 
 **Still unexplained:** the harness calls VESPER vs TERRAMOTH roughly even while
-the user reports VESPER winning confidently at EXTREME. If the harness is missing
-something, every number above is suspect — including the STATIC measurements.
+the user reports VESPER winning confidently at EXTREME.
 
 ---
 
 ## 7. Open questions the user still owes an answer on
 
 1. **A forced SHIELD burst is a losing trade until 75 % meter.** Load-bearing on
-   two systems — it is why per-pilot saturation preferences had to be defanged
-   above the desperation line.
-2. **Music level.** Ships at 70 % against SFX 80 %, picked by reasoning not by
-   ear. The sliders exist; if the user lands somewhere consistently, change the
-   default.
+   two systems.
+2. **Music level.** Ships at 70 % against SFX 80 %, picked by reasoning not ear.
 3. **Audio duration targets.** `docs/AUDIO_CUE_SHEET.md` lists targets far
-   shorter than what was generated. Cutting real content needs ears.
-
-*Resolved since the last handoff:* whether to commit `assets/music/` (**yes**,
-D71) and whether the Archive should be definitive (**yes**, D75).
+   shorter than what was generated.
+4. **The Archive says EMBER is "the frailest among current escort units."** True
+   by raw hull (300 vs WISP's 335), false by damage actually absorbed — WISP is
+   **291 effective** against EMBER's **306**, because `defenceMul` is 1.15 against
+   0.98. Defensible as written; the user's call whether to correct it.
 
 ---
 
 ## 8. Known-open defects
 
-* **The hazard-evasion fix (`fc9bb25`) is unverified by eye.** Two bugs were found
-  and fixed with sound reasoning, but *both metrics built to demonstrate the rival
-  escaping turned out to be artifacts*. Needs watching.
-* **`droneDeploy` / `droneRecall` events are unreachable** — the toggle that
-  raised them is gone. Their sounds and handlers are still wired.
-* **`Supporter.Stowed` / `Recalling` are nearly dead states.** Only a downed owner
-  reaches `Stowed`.
-* **`assistDenied` covers four unrelated refusals** — drone assist, low
-  saturation, barrier lock-out, and a disabled menu row.
-* **An explicit override equal to its default is a landmine** (D74). Worth a sweep
-  for others; STATIC's own line is now 385, which is again exactly the base value.
-* Cues with no trigger: `footstep`, `melee_ignite`, `thruster_loop`, `drone_hover`.
-* Remaining gaps from `docs/REFERENCE_AUDIT.md` §4d.4: armour/shots-absorbed
-  stat, score and hit counters, mission win conditions, boss AI roles, stock
-  icons, off-screen indicators.
+### 8a. Four drone roles have no visual at all — one now fixed
 
-*Resolved since the last handoff:* STATIC being hard to find while the decoy is up
-— the simulation was verified healthy, the drone is 100 % on camera with or
-without a decoy, it sits **further forward** when one is up, and it is no longer
-made of paper (D74).
+Every drone role that spawns an **entity** is visible; every role that is pure
+**state** was invisible. `tetherLive`, `domeActive` and `paintedTicks` had **zero**
+references in `src/render/`, `src/scenes/` or `src/ui/`.
+
+| Drone | Role | Visible? |
+| --- | --- | --- |
+| STATIC | `decoy` | ✅ second `MechRenderer` |
+| BULWARK | `miner` | ✅ projectiles |
+| EMBER | `hazard` | ✅ projectiles |
+| SIGHTLINE | `interceptor` | ✅ absorb sparks |
+| WISP | `arcTether` | ✅ **fixed in D82** |
+| **AEGIS** | **`dome`** | ❌ **nothing** |
+| **WARDEN** | **`tether`** | ❌ **nothing** |
+| **ARBITER** | **`designator`** | ❌ **nothing** |
+
+The Archive describes all three as visible things — WARDEN's "repair beam",
+AEGIS's "dome", ARBITER "paints the target". Fixing them is pure rendering: no
+simulation change, nothing to re-measure.
+
+### 8b. WISP does not hold its Pincer station
+
+Measured: 40 % of Pincer ticks the target is not between the two machines at all,
+and mean perpendicular miss is 156 px against a 44 px hit threshold. The station
+geometry is correct (mean `t` of 0.29 is exactly what parking 210 px beyond the
+target produces) — the drone simply cannot keep up with it. A pursuit problem,
+deliberately not addressed in D82.
+
+### 8c. The rest
+
+* **An explicit override equal to its default is a landmine** (D74). STATIC's
+  line now reads 385, which is again exactly the base value, so the trap is armed
+  for whoever changes the base next. Worth a sweep for others.
+* **The hazard-evasion fix (`fc9bb25`) is unverified by eye.** Both metrics built
+  to demonstrate it turned out to be artifacts.
+* **`droneDeploy` / `droneRecall` events are unreachable** — the toggle that
+  raised them is gone.
+* **`Supporter.Stowed` / `Recalling` are nearly dead states.**
+* **`assistDenied` covers four unrelated refusals.**
+* Cues with no trigger: `footstep`, `melee_ignite`, `thruster_loop`, `drone_hover`.
+* Remaining gaps from `docs/REFERENCE_AUDIT.md` §4d.4.
 
 ---
 
 ## 9. Traps — see `docs/TESTING_PROTOCOL.md`
 
-That file is now authoritative and is not rewritten each session. The two rules
-that cost the most, repeated here because they are worth reading twice:
+That file is authoritative and is not rewritten each session. The two rules that
+cost the most:
 
-* **Measure AI changes; never reason about them.** Five occasions now.
-* **A passing measurement says nothing about whether a thing reads.** Four
-  separate times last session alone: the Archive body drawing through the hint
-  line, CIRRUS's blank form field reading as truncated text, and twice more. Tests
-  green, typecheck clean, page illegible. **Look at the screen.**
+* **Measure AI changes; never reason about them.** Last session added three more
+  instances, all in one investigation: CIRRUS fighting too close for Pincer
+  (the gate passes 87.9 % of the time), `offAxis` shoving the drone off the wire
+  (that branch only runs during Escort — the edit was a no-op and the probe came
+  back **byte-identical**), and a three-seed run reading as a 0.068 collapse that
+  six seeds turned into 0.025. **State a hypothesis as a hypothesis until it is
+  measured.**
+* **A passing measurement says nothing about whether a thing reads.** WISP's
+  tether was correct, tested and ablated for balance value — and drawn nowhere.
 
-One correction to older advice, now fixed in the protocol: **do not freeze the
-game by hijacking `requestAnimationFrame`.** Phaser's `TimeStep` schedules
-recursively and never restarts. Use `game.loop.sleep()` / `wake()`.
+**Driving the game from the Browser pane is unreliable and cost a lot of time.**
+Menu keys reach the game; **battle-scene keys frequently do not**. Symptoms that
+look like engine faults and are not: a sim frozen at a fixed tick is usually the
+**pause menu**, not a broken loop. Do not hijack `requestAnimationFrame` — use
+`game.loop.sleep()` / `wake()`. `window.__BSR__` is the Phaser game instance and
+`__BSR__.scene.getScene('Battle').sim` is the live `MatchSim`; prefer reading that
+over inferring from pixels. **Leave the game unpaused and restore any setting you
+touched** — stray arrow presses set MUSIC to 0 last session and it persists to
+`localStorage` under `bsr.audio.v1`.
 
 ---
 
 ## 10. Roster reference
 
-| Mech | Pilot | Gender/age | HP | Drone | Drone HP | Role | Passive |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| HALCYON `AV-07` | Naia Vesk | W, early 30s | 1750 | ARBITER | 420 | designator | energy regen ×1.45 |
-| NOCTURNE `AV-13` | Halden Rook | M, late 40s | 1750 | WARDEN | 440 | tether | barrier regen ×2 |
-| VESPER `AV-12` | Kestrel Doyne | M, late 20s | 1490 | SIGHTLINE | 350 | interceptor | damage dealt ×1.14 |
-| TERRAMOTH `HV-03` | Brunn Okonkwo | M, 50s | 2490 | BULWARK | 595 | miner | damage taken ×0.86 |
-| CIRRUS `LT-21` | Mira Holloway | W, early 20s | 1440 | WISP | 335 | arcTether | boost regen ×2 |
-| OBELISK `GD-09` | Saar Tengku | M, 40s | 2070 | AEGIS | 510 | dome | guard drain ×0.55 |
-| PYRE `IN-05` | Rasa Volkov | W, mid 20s | 1860 | EMBER | **300** | hazard | saturation gain ×1.8 |
-| NULLTIDE `EW-14` | Io Senna | W, 30s | 1610 | STATIC | **385** | decoy | *opponent's* energy regen ×0.5 |
+| Mech | Pilot | Gender/age | HP | Drone | Drone HP | eff. HP | Role | Passive |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| HALCYON `AV-07` | Naia Vesk | W, early 30s | 1750 | ARBITER | 420 | 420 | designator | energy regen ×1.45 |
+| NOCTURNE `AV-13` | Halden Rook | M, late 40s | 1750 | WARDEN | 440 | 489 | tether | barrier regen ×2 |
+| VESPER `AV-12` | Kestrel Doyne | M, late 20s | 1490 | SIGHTLINE | 350 | 312 | interceptor | damage dealt ×1.14 |
+| TERRAMOTH `HV-03` | Brunn Okonkwo | M, 50s | 2490 | BULWARK | 595 | 726 | miner | damage taken ×0.86 |
+| CIRRUS `LT-21` | Mira Holloway | W, early 20s | 1440 | WISP | 335 | **291** | arcTether | boost regen ×2 |
+| OBELISK `GD-09` | Saar Tengku | M, 40s | 2070 | AEGIS | 510 | 580 | dome | guard drain ×0.55 |
+| PYRE `IN-05` | Rasa Volkov | W, mid 20s | 1860 | EMBER | 300 | 306 | hazard | saturation gain ×1.8 |
+| NULLTIDE `EW-14` | Io Senna | W, 30s | 1610 | STATIC | 385 | 363 | decoy | *opponent's* energy regen ×0.5 |
+
+**Effective HP is `maxLife / defenceMul`** and is the number that matters. Raw
+hit points mislead — WISP is the frailest escort despite not having the lowest
+pool.
 
 Melee, authoritative — the select screen prints the hit counts, so a player can
 check the Archive against them:
@@ -258,8 +254,8 @@ check the Archive against them:
 **Pilot genders are fixed by `docs/PILOT_PORTRAIT_SPEC.md`** — four women, four
 men. **Mechs are "it"; pilots get their own pronouns.**
 
-**The present is 43 CE.** The Archive's timeline is load-bearing; the header of
-`src/data/archive.ts` carries it in full.
+**The present is 43 CE.** The header of `src/data/archive.ts` carries the full
+timeline.
 
 ---
 
@@ -269,8 +265,8 @@ men. **Mechs are "it"; pilots get their own pronouns.**
 | --- | --- |
 | `CLAUDE.md` (workspace root) | Project rules, structure, definition of done |
 | **`docs/TESTING_PROTOCOL.md`** | **How to verify. Test at EXTREME; the traps, in a file that outlives this one** |
-| `docs/DECISIONS.md` | **D1–D79.** D71–D79 are last session's |
-| `src/data/archive.ts` | The story bible: world, factions, 8 machines, 8 pilots — 21 entries |
+| `docs/DECISIONS.md` | **D1–D82.** D71–D82 are last session's |
+| `src/data/archive.ts` | The story bible: 21 entries, world, factions, machines, pilots |
 | `docs/ARCHIVE_REWRITE_BRIEF.md` | The canon lock, and the authoritative melee table |
 | `docs/ARCHIVE_FULL_REWRITE_FINAL.md` | The approved prose. **Keep in sync with `archive.ts`** |
 | `docs/PILOT_PORTRAIT_SPEC.md` | **Authoritative** on pilot gender, age, appearance |
