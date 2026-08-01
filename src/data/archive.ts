@@ -242,8 +242,8 @@ export const MECH_ARCHIVE: ArchiveEntry[] = [
         'created none at all. Vantor Aeroworks delivered it eleven years late, ' +
         'four times over budget, and it has not needed a redesign since.',
       'Its reputation is for being unremarkable, which its pilots resent and its ' +
-        'opponents do not. Every gauge on it is adequate. The beam saber is the ' +
-        'shortest chain of any sword on the roster and the most reliable. The ' +
+        'opponents do not. Every gauge on it is adequate. The beam saber has the ' +
+        'longest reach of any blade fielded and the most dependable chain. The ' +
         'lance charges fast enough to threaten and cheap enough to repeat. It has ' +
         'no trick, and so there is nothing to take away from it.',
       'The REACTOR LINK is the one genuine innovation: the ARBITER escort carries ' +
@@ -429,9 +429,9 @@ export const MECH_ARCHIVE: ArchiveEntry[] = [
         'Archive is obliged to note that the design intent and the current ' +
         'situation are indistinguishable from the outside.',
       'It wins by subtraction. Its guns carry cryogenic and electrical payloads ' +
-        'that slow, drain and stall rather than destroy, and its arc glaive is ' +
-        'the longest-reaching sword on the roster because the frame expects to be ' +
-        'fighting something that can no longer move properly.',
+        'that slow, drain and stall rather than destroy, and its arc glaive opens ' +
+        'a five-hit cascade because the frame expects to be finishing something ' +
+        'that can no longer move properly.',
       'The JAMMING FIELD halves the opponent\'s reactor regeneration outright — ' +
         'the only passive in service that reaches across and takes something ' +
         'away. The STATIC escort goes further: it projects a full false frame, ' +

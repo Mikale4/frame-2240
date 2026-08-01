@@ -123,14 +123,28 @@ flown the mech recognises the description. These are mechanics, not flavour:
 
 | Mech | Must remain true |
 | --- | --- |
-| HALCYON | Balanced/unremarkable. ARBITER drone raises energy regen ~45%. Shortest melee chain (6 hits), most reliable. |
+| HALCYON | Balanced/unremarkable. ARBITER drone raises energy regen ~45%. 6-hit melee; longest reach of any blade (200). |
 | NOCTURNE | Heavier, slower rebuild of a Concord frame. Barrier regen ×2. WARDEN drone repairs barrier. Hydraulic claw, 3-hit melee. |
 | VESPER | Longest range, second-thinnest hull, damage dealt ×1.14. SIGHTLINE drone shoots down incoming projectiles. 2-hit melee. |
 | TERRAMOTH | Heaviest and slowest. Damage taken ×0.86 (ARMOUR BRACE). Mining machine, armed later. BULWARK drone lays mines. |
 | CIRRUS | Fastest, most fragile. Boost regen ×2. 8-hit melee — longest on the roster. WISP drone strings a charged line to its owner. |
 | OBELISK | Barrier-centric; guard drain ×0.55. Purpose-built defensive frame. AEGIS drone projects a dome that erases shots. 2-hit melee. |
 | PYRE | Short range, saturation gain ×1.8. EMBER drone lays burning ground. 3-hit melee. Frailest drone. |
-| NULLTIDE | Halves *opponent's* energy regen (JAMMING FIELD). Cryo/shock payloads. Longest melee reach, 5-hit chain. STATIC drone projects a decoy. |
+| NULLTIDE | Halves *opponent's* energy regen (JAMMING FIELD). Cryo/shock payloads. 5-hit melee cascade; reach 192, which is short — claim no reach superlative. STATIC drone projects a decoy. |
+
+**Melee reference, authoritative** (from `meleeLock.hits` and `meleeRange`; the
+mech-select screen prints the hit counts, so a player can check these):
+
+| Mech | hits | reach |
+| --- | --- | --- |
+| HALCYON | 6 | 200 |
+| NOCTURNE | 3 | 210 |
+| VESPER | 2 | 180 |
+| TERRAMOTH | 2 | 210 |
+| CIRRUS | 8 | 195 |
+| OBELISK | 2 | 205 |
+| PYRE | 3 | 198 |
+| NULLTIDE | 5 | 192 |
 
 Two details people get wrong:
 
