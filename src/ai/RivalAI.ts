@@ -589,6 +589,32 @@ export class RivalAI {
    * **A shielded opponent has unlimited reach**, since a burst removes the
    * lifetime that bounds every shot. There is no standing off that.
    */
+  /**
+   * How far out a break-off has to reach before it counts as having got away.
+   *
+   * **Measured against the opponent's sword, not against your own.** The two are
+   * not the same number and the one that matters is theirs — the whole point of
+   * the disengage is to be somewhere their melee cannot follow. `DISENGAGE_REACH`
+   * was already applied to `foe.effectiveMeleeRange` in `preferredRangeFor`, but
+   * both gates that actually *drive* the break-off used `self`'s, so a
+   * short-armed skirmisher stopped running while still inside a long-armed
+   * opponent's reach. CIRRUS at 195 breaking off from TERRAMOTH at 210 quit 31px
+   * early every time.
+   *
+   * The gap is far worse than 31px against a desperate Speed burst, which
+   * multiplies the burster's reach by `DESPERATE_MELEE_RANGE` — precisely the
+   * moment a skirmisher most needs to be elsewhere, and precisely the moment the
+   * self-referential bound was most wrong.
+   *
+   * Gated on `rangeIq`, because reading an opponent's reach is knowledge and this
+   * class hands out knowledge by tier. Below it a pilot falls back on their own
+   * sense of how far a sword goes, which is the honest version of not knowing.
+   */
+  private disengageReach(self: Combatant, foe: Combatant): number {
+    const ref = this.p.rangeIq ? foe.effectiveMeleeRange : self.effectiveMeleeRange;
+    return ref * DISENGAGE_REACH;
+  }
+
   private preferredRangeFor(self: Combatant, foe: Combatant): number {
     // **A Speed burst is a closing tool, and holding a firing line wastes it.**
     //
@@ -832,12 +858,12 @@ export class RivalAI {
     const evadeDash = this.tactic === AiTactic.Evade && imminent;
     // The break-off dash. This is the whole mechanic: a skirmisher who walks out
     // of her own combo is just a slower skirmisher.
-    const breakDash = this.disengage > 0 && dist < self.effectiveMeleeRange * DISENGAGE_REACH;
+    const breakDash = this.disengage > 0 && dist < this.disengageReach(self, foe);
     // The break-off does **not** get to spend the reserve, though an evade does.
     // Letting it measured slightly worse — 145px/60 counter-hits became
     // 140px/61 — because a skirmisher who empties the tank getting out has
     // nothing left to get out with next time.
-    const floor = evadeDash ? 0 : this.boostReserve(self);
+    const floor = evadeDash || breakDash ? 0 : this.boostReserve(self);
     // Free dashing changes what a dash is *for*.
     //
     // Outside a Speed burst the gauge is a budget, so the rival approaches on
@@ -873,9 +899,29 @@ export class RivalAI {
       // *and* the economy, because the tier that husbands boost best is then the
       // tier that gets to dash most.
       const frac = self.boost / self.def.flight.maxBoost;
-      this.dashCharge = evadeDash
-        ? Math.round(18 - this.skill * 8 + (1 - frac) * 18)
-        : 40 - Math.round(this.skill * 18);
+      /**
+       * **A break-off recharges fast enough to be a break-off.**
+       *
+       * One dash is not an escape. A single hop covers ~105px against an
+       * opponent who is already inside sword reach and free to follow, so the
+       * skirmisher clears the first swing and stands in front of the second —
+       * which is what a player watching CIRRUS and NULLTIDE reported even after
+       * the direction was fixed. The move is "get out and keep going until you
+       * are out", so while `disengage` is live and they are still inside the
+       * dangerous reach, the rate is roughly the chassis's own dash cooldown
+       * rather than the ordinary two-thirds of a second.
+       *
+       * It self-limits without needing a cap: `breakDash` stops firing the
+       * moment they are past `effectiveMeleeRange * DISENGAGE_REACH`, and the
+       * boost gauge is the other bound. In practice that is two or three dashes
+       * and then the ordinary read resumes, which is the cat-and-mouse the
+       * mechanic is named for — leave, reset, come back when there is an opening.
+       */
+      this.dashCharge = breakDash
+        ? Math.round(12 - this.skill * 5)
+        : evadeDash
+          ? Math.round(18 - this.skill * 8 + (1 - frac) * 18)
+          : 40 - Math.round(this.skill * 18);
     }
 
     // ---- Guard / barrier ---------------------------------------------------
@@ -1277,6 +1323,49 @@ export class RivalAI {
      * certain damage on the field; nothing else is worth deciding first.
      */
     if (this.standingInHazard(self)) return AiTactic.Evade;
+
+    /**
+     * **The break-off. A skirmisher who has just landed a chain is leaving.**
+     *
+     * This was missing, and its absence made `hitAndRun` very nearly a no-op.
+     * The mechanic had three of its four parts: `disengage` was set when a chain
+     * ended, `preferredRangeFor` asked for `foe.effectiveMeleeRange * 2.1`, and
+     * `think` fired a dedicated break-off dash at `chance 1`. But the *direction*
+     * of that dash comes from `mx`/`my`, and those come from nothing but
+     * `this.tactic` — and no branch below ever consulted `disengage`. At least
+     * four of them return `Approach` in exactly the state a chain leaves behind:
+     * a live plan (which returns `Approach` or `Hold` unconditionally),
+     * `closeOnGuard` against an opponent who just blocked, the low-boost /
+     * low-barrier read against an opponent who just ate a combo, and the wounded
+     * -drone read. The break-off dash then fired **into** the machine it was
+     * supposed to be escaping.
+     *
+     * Measured over 21 fights each at EXTREME, dashes in the 64 ticks after a
+     * chain ended:
+     *
+     * ```
+     *   CIRRUS    toward 46%   away 54%
+     *   NULLTIDE  toward 59%   away 41%
+     *   HALCYON   toward 40%   away 60%   <- hitAndRun off; the control
+     * ```
+     *
+     * Mira and Io were dashing back into sword range about as often as a pilot
+     * with no break-off at all, which is what a player watching them reported:
+     * they finish the combo and stand there trying to start another one.
+     *
+     * Placed above the plan check deliberately. A plan is a commitment, but this
+     * is a shorter and more specific one, and "be on them now" is precisely the
+     * intent a hit-and-run pilot has just decided against. It costs little:
+     * chains land ~3.7 times a fight, so the window is about 8 % of a match and
+     * only on the two pilots who are written for it.
+     *
+     * Bounded by the same reach the dash itself uses, so it is a rule about
+     * *getting out* rather than about staying out. Once they are clear, the
+     * ordinary read resumes and they can pick their next opening.
+     */
+    if (this.disengage > 0 && this.style(self).hitAndRun && dist < this.disengageReach(self, foe)) {
+      return AiTactic.Retreat;
+    }
 
     // A live plan outranks the ordinary read. This is the whole point of having
     // one: the rival stops re-litigating its intent every time `pickTactic`

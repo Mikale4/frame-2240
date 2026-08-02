@@ -3590,3 +3590,295 @@ second-lowest on the roster (20.9 dps) while its durability is second-highest,
 and giving its main gun 64 % more reach — 528px against the 563px it actually
 fights at — measured **−0.033, i.e. nothing**. Reach is not the answer either.
 Whatever is owed it is still owed.
+
+---
+
+## D101 — The projection gets teeth, and loses the lottery
+
+**Requested**: raise the decoy's fire rate, let it stay up longer, have it move as
+well as the real NULLTIDE, and give its rounds a very small amount of damage
+with no hit stun.
+
+### What it was
+
+```
+  DECOY_LIFE          110      DECOY_PERIOD  150   -> a 40-tick hole every cycle
+  DECOY_SPEED         2.6      vs NULLTIDE's 5.7   -> under half her cruise
+  DECOY_FIRE_PERIOD   28
+  damage              0
+  DECOY_STUN_CHANCE   0.3      for 60 ticks
+```
+
+Every one of those numbers works against the ability. The silhouette drifted at
+under half the speed of the machine it was imitating, which is the one tell no
+amount of muzzle flash covers — anything moving that placidly in a firefight is
+not a pilot. It vanished for two thirds of a second every cycle, so an opponent
+who simply waited got a clean look at a single target. And its rounds did
+nothing at all except roll a three-in-twenty stun.
+
+### The stun lottery was the wrong instrument
+
+D96 chose it deliberately, trading volume for threat on the reasoning that "a
+stream of harmless rounds from a silhouette is easy to read as harmless". The
+diagnosis was right and the remedy was not. A coin flip is not pressure an
+opponent can play around — ignore the projection twenty times and you are three
+stuns down through no decision of your own — and it is **invisible**: a shot that
+does nothing nineteen times out of twenty teaches the player that it does
+nothing, which is exactly the reading D96 was trying to prevent.
+
+Chip is legible in a way a lottery is not. The life bar moves, every time.
+
+### Now
+
+```
+  DECOY_LIFE          150  == DECOY_PERIOD, so the cadence leaves no gap
+  speed               owner.topSpeed, via SupporterOwner.topSpeed
+  DECOY_FIRE_PERIOD   16
+  DECOY_DAMAGE        8, and no hitstun, hitstop, knockback or i-frames
+```
+
+Speed is expressed against the chassis rather than as a constant, so it stays
+true if NULLTIDE is ever retuned. The heading now folds two sine terms at
+different rates instead of one, so the path does not repeat on a period short
+enough to recognise — it reads as a machine picking lines and committing to
+them. Still fully deterministic: every term comes off the projection's own age.
+
+The damage is deliberately tiny and bounded by a test. A projection landing
+**every** round for its whole life does 72 damage — under 5 % of an average
+hull. It cannot win a fight; it can make standing still lose one.
+
+**`DECOY_LIFE === DECOY_PERIOD` is a statement about the cadence, not about
+uptime.** A projection is only thrown while STATIC is on station and inside
+`fireRange`, so measured in a live fight at EXTREME the silhouette is up about
+**75 %** of the time. Killing the escort is still the answer. The first draft of
+that comment claimed "always two machines"; the browser said 75 % and the
+comment was corrected rather than the measurement.
+
+**NULLTIDE −0.190 → −0.107 at EXTREME**, and +0.010 at HARD where she was
+already fine.
+
+---
+
+## D102 — The flag that was never reaching the hit
+
+Found while writing the first tests STATIC's projection has ever had — the role
+had **zero** coverage, and the whole suite stayed green while its contract was
+inverted.
+
+`Projectile.reset` did not copy `decoyShot` and `asHit` did not emit it. Pooled
+projectiles are the only kind the game actually fires, so the flag existed on the
+spawn and was gone by the time `takeHit` could read it. **Every projection round
+in the game took the ordinary damage route rather than its own branch**, for the
+entire life of the feature.
+
+The consequences are all inversions of the documented intent:
+
+* **It granted `hitInvuln`.** The comment on `ProjectileSpawn.decoyShot` exists
+  to forbid exactly this: a harmless round that opens an i-frame window has
+  NULLTIDE *shielding the pilot she is deceiving* from her own real fire. Three
+  free frames against her, every round, at four rounds a second.
+* **It cancelled their attack and cleared their melee chain**, every time one
+  landed — which made the projection an interrupt engine and not a decoy.
+
+Nothing pointed at it, and this is the part worth remembering: **a flag that
+silently does nothing looks exactly like a flag that works.** The rounds still
+did no damage, for the entirely unrelated reason that their `damage` field was
+zero, so every observable symptom matched the intended behaviour. It took giving
+the rounds damage — which made the branch matter — and then writing a test that
+asserted on the *pooled* projectile rather than on the spawn.
+
+Fixing it cost NULLTIDE 0.019 of the gain in D101, which is the honest half of
+that number: some of the first measurement was the unintended attack-cancelling.
+
+`decoy.test.ts` asserts the flag survives the pool, and asserts the i-frame
+property both by hand and end to end.
+
+---
+
+## D103 — Obelisk gets damage, and only damage
+
+**Design call, given explicitly**: OBELISK is a heavy that is meant to be slow
+and easy to hit; if it needs more, the answer is stronger attacks and **not** any
+reduction in its defensive capability.
+
+That matches what the measurements said. Its effective HP is second on the roster
+at 2407 while its output was **second-lowest at 20.9 dps** — the wrong way round
+for a machine whose blurb promises punishment. D99 had already returned its
+escort's contribution; this returns its own.
+
+```
+  BREACH GUN   58 -> 66      AEGIS BEAM   186 -> 214
+  RAM CHARGE  146 -> 170     SCATTERGUN    32 -> 37
+```
+
+Ranged only. Nothing in `defence`, `gauges`, `barrier` or the melee chain was
+touched, and the edit was scoped to the OBELISK block so no other chassis moved.
+
+**OBELISK −0.138 → −0.036 at EXTREME.** With D98 and D99 it has gone −0.187 →
+−0.036 across the pass, and for the first time it is inside the pack.
+
+---
+
+## D104 — Hit-and-run had no steering
+
+**Reported from play**, not from the harness: "they finish their combo and then
+kind of just stand there and attempt to re-engage… they do use the dash after the
+combo ends, but it seems that they dash towards the enemy mech instead of away."
+
+Correct, and the harness had never noticed.
+
+### Three of the four parts were there
+
+* `think` sets `disengage = DISENGAGE_TICKS` when a melee chain ends, for a
+  `hitAndRun` pilot. ✔
+* `preferredRangeFor` asks for `foe.effectiveMeleeRange * 2.1` while it runs. ✔
+* `think` fires a dedicated break-off dash, at `chance` **1.0**, ignoring the
+  ordinary dash cooldown. ✔
+* Nothing gave that dash a **direction**. ✘
+
+`chooseMovement` derives `mx`/`my` from one thing only — `this.tactic` — and
+`pickTactic` never consulted `disengage` at all. The intent lived in the
+*preferred range*, which only ever reaches a probabilistic roll several branches
+down, and at least four branches return `Approach` before that roll: a live plan
+(`planTactic` returns `Approach` or `Hold` unconditionally), `closeOnGuard`
+against an opponent who just blocked, the low-boost/low-barrier read against an
+opponent who just ate a combo, and the wounded-drone read. Every one of those is
+*likely* in the state a finished chain leaves behind.
+
+So the dash fired reliably and inherited whatever direction the mech already
+wanted, which was frequently straight back into the sword.
+
+### Measured, before and after
+
+Dash direction in the 64 ticks after a chain ends, 21 fights each at EXTREME:
+
+```
+                 before            after
+  CIRRUS      toward 46%        toward 19%
+  NULLTIDE    toward 59%        toward 13%
+  HALCYON     toward 40%        toward 50%     <- hitAndRun off
+```
+
+And what a player actually watches — separation from the opponent after the
+chain, plus melee hits taken while getting out:
+
+```
+                +30px  +60px  +90px   counter-melee
+  CIRRUS    before   192    302    301        52
+            after    236    382    342        41
+  NULLTIDE  before   168    210    244        71
+            after    213    298    369        61
+  HALCYON   before   164    238    287        66
+```
+
+Two things stand out. **NULLTIDE was escaping worse than a pilot with no
+hit-and-run at all** — 244px against HALCYON's 287px. And CIRRUS's separation
+*fell* between +60 and +90 (302 → 301): it had already turned round and started
+back in, which is the reported behaviour exactly.
+
+HALCYON is not a clean control, because it fights the two machines that changed;
+its numbers move with theirs.
+
+### The fix
+
+Three changes, each measured.
+
+**1. A direction.** One branch in `pickTactic`, above the plan check: while
+`disengage` is live, the pilot is `hitAndRun`, and they are still inside the
+dangerous reach, return `Retreat`. Above the plan deliberately — a plan is a
+commitment, but this is a shorter and more specific one, and "be on them now" is
+precisely the intent a hit-and-run pilot has just decided against. It is cheap:
+chains land ~3.7 times a fight, so the window is ~8 % of a match, on two of eight
+pilots.
+
+**2. More than one dash.** A single hop covers ~105px against an opponent already
+inside sword reach and free to follow, so the skirmisher cleared the first swing
+and stood in front of the second. While a break-off is live the dash recharge
+drops from ~22 ticks to roughly the chassis's own dash cooldown, and the break-off
+may now spend the boost reserve. It self-limits: `breakDash` stops the moment
+they are past the reach, so in practice it is two or three dashes.
+
+The reserve half is a **re-measurement, not a new idea**. The code already said
+"letting it measured slightly worse — 145px/60 counter-hits became 140px/61" —
+and that was measured while the dash was pointing the wrong way half the time.
+Spending the tank to travel in the wrong direction is obviously worse. With the
+direction fixed it is better on both counts. `docs/TESTING_PROTOCOL.md` says a
+behaviour's value is a property of the AI it sits in; this is that rule biting a
+comment written in good faith.
+
+**3. Measured against their sword, not ours.** `preferredRangeFor` already
+applied `DISENGAGE_REACH` to `foe.effectiveMeleeRange`, but both gates that
+actually *drive* the break-off used `self`'s — so a short-armed skirmisher quit
+running while still inside a long-armed opponent's reach. CIRRUS at 195 breaking
+from TERRAMOTH at 210 stopped 31px early, and against a desperate Speed burst,
+which multiplies the burster's reach, far more than that. Now shared through
+`disengageReach`, gated on `rangeIq` because reading an opponent's reach is
+knowledge and this class hands out knowledge by tier; below it a pilot falls back
+on their own sense of how far a sword goes.
+
+### Measured
+
+Dash direction in the 64 ticks after a chain, and separation afterwards, 21
+fights each at EXTREME:
+
+```
+                      toward     +30px  +60px  +90px   counter-melee/chain
+  CIRRUS    before      46%        192    302    301          0.68
+            after       25%        309    416    368          0.32
+  NULLTIDE  before      59%        168    210    244          0.91
+            after       14%        224    339    401          0.73
+  HALCYON   (control)   48%        180    249    296          1.02
+```
+
+**NULLTIDE was escaping worse than a pilot with no hit-and-run at all** — 244px
+against HALCYON's 287px. And CIRRUS's separation *fell* between +60 and +90
+(302 → 301): it had already turned round and started back in, which is the
+reported behaviour exactly. CIRRUS now takes under a third of the counter-melee
+per chain that the pilot without the mechanic takes.
+
+HALCYON is not a clean control — it fights the two machines that changed, so its
+numbers move with theirs.
+
+Watched live at EXTREME, CIRRUS vs HALCYON, separation sampled every 30 ticks
+after its own chain: `67 -> 408 -> 540 -> 419`. Out to 540px, then back in. That
+last number is the point — the disengage is bounded by reach rather than by the
+timer, so once clear the ordinary read resumes and it comes back when there is an
+opening.
+
+**The matchup matters for the illustration, and the first one chosen was poor.**
+TERRAMOTH was watched first, and BULWARK's minefield punishes *closing*, which
+confounds a demonstration of cat-and-mouse. HALCYON is the neutral choice — its
+escort paints rather than punishing. Broken out per opponent, though, the fix is
+not matchup-specific; CIRRUS reaches 310–511px at +60 against all seven:
+
+```
+    opponent     chains   sep+60   sep+90   counter-melee/chain
+    halcyon        11      466      275            0.36
+    nocturne       10      482      252            0.30
+    vesper         14      376      497            0.00
+    terramoth      20      442      331            0.20
+    obelisk        16      511      489            0.13
+    pyre           13      341      322            0.77
+    nulltide        7      310      467            1.00
+```
+
+TERRAMOTH is in fact one of the *easier* machines to break off from — mines
+punish the approach, not the exit. The hard ones are PYRE, whose burning ground
+is laid where you are standing, and NULLTIDE, who is running the same play.
+
+**CIRRUS −0.052 → +0.032, NULLTIDE −0.106 → −0.049.** Roster spread 0.235 →
+0.169, all 518 tests green including the boost economy and the ladder.
+
+### The lesson, which is not a new one
+
+A mechanic can be 75 % implemented, measure as present, and be worth nothing.
+Three of these four parts were individually correct and individually testable.
+Nothing in the harness asks "did the skirmisher get away", so nothing failed —
+and the roster probe reported CIRRUS at −0.052, a plausible number for a light
+frame, with no hint that its defining behaviour was inert.
+
+**It was found by a player watching the game.** That is now twice: last session
+threw away a branch built on a code comment claiming the AI never fires command
+motions, after a player said he had watched every mech fire one. The harness
+measures whether a change helps. It does not measure whether the thing you built
+is the thing you described.

@@ -1,8 +1,7 @@
 # Session Handoff — Babel Sword: Reignition
 
-> Rewritten at the end of a very long session (18 commits, D83–D96).
-> Supersedes the previous handoff. Everything marked **verified** was confirmed
-> by running it.
+> Updated after the roster tuning pass (D97–D104). Everything marked
+> **verified** was confirmed by running it.
 > Read this, then `CLAUDE.md`, then **`docs/TESTING_PROTOCOL.md`**, then §9.
 
 ---
@@ -17,8 +16,8 @@
 3. **Keep the app window foregrounded.** When it loses focus the browser stops
    compositing: rAF drops under 1 fps and the Phaser loop freezes.
    **`document.hidden` still reports `false`** — measure rAF instead.
-4. **Start the dev server**: `npm run dev` from Bash. Ports 5173–5180 are held by
-   stale servers; last session used **5181**.
+4. **Start the dev server**: `npm run dev` from Bash. It picks the first free
+   port; last session used **5180**.
 5. **Write commit messages with the Write tool, then `git commit -F`.** Backticks
    inside a shell heredoc trigger command substitution and the commit fails.
 
@@ -39,9 +38,9 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 ## 3. Current status — verified
 
-* **505 tests pass** (24 files), typecheck clean, production build clean.
+* **518 tests pass** (25 files), typecheck clean, production build clean.
 * **Working tree clean** on `master`. No other branches.
-* `docs/DECISIONS.md` runs to **D100**.
+* `docs/DECISIONS.md` runs to **D104**.
 * **Suite runtime ~35s.** Deliberate — see §8a.
 * **`tools/probe/balance.ts` is the roster instrument** (D97). A full eight-mech
   sweep is ~20s:
@@ -57,13 +56,20 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 ## 4. What landed
 
-**This session — D97–D100, the roster tuning pass.** A committed balance
-instrument with a self-test (`tools/probe/balance.ts`); TERRAMOTH's three stacked
-defensive multipliers trimmed to two, +0.256 → +0.132; a broken AEGIS dome now
-falls back on its gun rather than going inert for a third of the fight; and one
-measured negative result — a held guard banking saturation is a real fix for a
-real identity defect and it flattens the difficulty ladder, so it is reverted and
-written up. **Spread 0.459 → 0.322 at EXTREME, 0.351 → 0.275 at HARD.**
+**This session — D97–D104.** A committed balance instrument with a self-test
+(`tools/probe/balance.ts`, D97). The roster tuning pass closed out: TERRAMOTH's
+stacked armour trimmed (D98), AEGIS's broken dome falls back on its gun (D99),
+OBELISK given damage and only damage (D103), and NULLTIDE's projection rebuilt
+(D101). One measured negative result kept rather than deleted — a held guard
+banking saturation is a real fix for a real identity defect and it flattens the
+difficulty ladder (D100). Two latent faults found: `decoyShot` was being dropped
+on the way into the projectile pool so the flag had **never** taken effect
+(D102), and `hitAndRun` had no steering, so CIRRUS and NULLTIDE dashed *into*
+the opponent after their own combos (D104) — reported by a player, not by the
+harness.
+
+**Spread 0.459 → 0.169 at EXTREME, 0.351 → 0.242 at HARD**, with no machine
+outside the pack at either tier.
 
 **The session before — D83–D96.** The short version:
 
@@ -89,48 +95,36 @@ written up. **Spread 0.459 → 0.322 at EXTREME, 0.351 → 0.275 at HARD.**
 > **Roadmap:** the campaign comes **after the roster doubles to sixteen mechs and
 > sixteen pilots**. Do not start CAMPAIGN before that.
 
-### 5.1 The roster tuning pass — TERRAMOTH done, OBELISK still open
+### 5.1 The roster tuning pass — done
 
-**TERRAMOTH is fixed** (D98): it stacked three multipliers on one axis — biggest
-hull, best `defence.mul`, and the roster's only *defensive* drone passive — for
-3712 effective HP, 1.54× the next machine. Its damage was below average the whole
-time; it won by not dying. Trimming the two invisible multipliers took it from
-**+0.256 to +0.132** at EXTREME. Spread **0.459 → 0.322**.
+All three named problems are closed, and a fourth was found by playing.
 
-**OBELISK is the outstanding problem: −0.137 EXTREME, −0.173 HARD.** It is the
-only machine outside the pack at either tier. Four measurements to start from
-rather than repeat:
+* **TERRAMOTH** (D98) stacked three multipliers on one axis for 3712 effective
+  HP, 1.54x the next machine, while its damage was *below* average. Trimmed the
+  two invisible multipliers, left the hull pool alone: **+0.256 → +0.086**.
+* **OBELISK** (D99, D103) lost its escort's whole contribution for the 36.9 % of
+  each fight its dome spends rebuilding — a role with no gun and no shell. The
+  broken emitter now falls back on the charge rack. Then damage, and only damage,
+  per the design call: **−0.187 → −0.083**.
+* **NULLTIDE** (D101, D102) had a projection that drifted at half her speed,
+  vanished for two thirds of a second every cycle, and fired a stun lottery.
+  **−0.203 → −0.049.**
+* **`hitAndRun` never worked** (D104) — see below.
 
-* **Dome durability is not the lever.** `DOME_MAX` 620→900 and `DOME_RECOVER`
-  600→420 moved EXTREME by **0.001**.
-* **Dome *downtime* was part of it, and is now fixed** (D99). The shell is down
-  36.9 % of every fight and `dome` has no gun, so AEGIS was idle for a third of
-  the match. A broken emitter now falls back on the charge rack: **−0.187 →
-  −0.153**.
-* **Reach is not the answer.** Its main gun reaches 528px and it fights at 563px,
-  which looks damning. Giving it 864px measured **−0.033 — nothing.**
-* **A general saturation rule is not the answer either.** Making a held guard
-  bank meter fixed a genuine identity defect and flattened the difficulty ladder;
-  see D100 before trying it again.
+**Do not chase the remaining ±0.08.** Every value is within about two standard
+errors of the field and the ordering is not stable between tiers. There is
+nothing left here that a measurement can distinguish from noise.
 
-What is left pointing somewhere: OBELISK's output is **20.9 dps, second-lowest**,
-while its durability is second-highest, and it loses ~4.5 dps of escort gun that
-seven other machines get. It needs offence, and not by widening a number that
-already misses.
+### 5.1a What is worth knowing from the pass
 
-**NULLTIDE is now the floor at EXTREME (−0.190)** and PYRE the ceiling-adjacent
-(+0.103). Neither was in scope this pass. NULLTIDE reads fine at HARD (+0.011),
-so whatever it is, it is EXTREME-specific.
-
-### 5.2 The rest
-
-1. **Eight more mechs and pilots**, the gate on the campaign.
-2. **A second arena.** `session.arena` and the music stage slot already route
-   through data; `render/Backdrop.ts` is the hard-coded part.
-3. **Deliberate command motions for the AI** — see §8c. Real, scoped, and it
-   closes a genuine player/CPU gap.
-
----
+* **Reach was not OBELISK's problem.** Its main gun falls 35px short of the range
+  it fights at, which looks damning; giving it 64 % more measured **−0.033, i.e.
+  nothing**. Do not re-derive this.
+* **A general rule aimed at one machine is charged to all eight.** Making a held
+  guard bank saturation fixed a real identity defect and flattened
+  `EXTREME vs HARD` from +0.147 to −0.004. See D100 before trying it again.
+* **`difficulty.test.ts` is the only thing that catches that class of fault.**
+  The roster sweep called the same change an improvement.
 
 ## 6. Roster balance — measured
 
@@ -139,17 +133,20 @@ both slot orders on the same seed, real 180s round cap. Standard error ~0.045.
 
 | | EXTREME | | HARD |
 | --- | --- | --- | --- |
-| 1 | TERRAMOTH +0.132 | | PYRE +0.103 |
-| 2 | PYRE +0.103 | | CIRRUS +0.052 |
-| 3 | NOCTURNE +0.086 | | NOCTURNE +0.046 |
-| 4 | VESPER +0.051 | | NULLTIDE +0.011 |
-| 5 | HALCYON +0.002 | | HALCYON +0.001 |
-| 6 | CIRRUS −0.048 | | VESPER −0.014 |
-| 7 | OBELISK −0.137 | | TERRAMOTH −0.025 |
-| 8 | **NULLTIDE −0.190** | | **OBELISK −0.173** |
+| 1 | TERRAMOTH +0.086 | | PYRE +0.094 |
+| 2 | PYRE +0.051 | | CIRRUS +0.083 |
+| 3 | CIRRUS +0.032 | | HALCYON +0.036 |
+| 4 | VESPER +0.002 | | NOCTURNE ~0.00 |
+| 5 | NOCTURNE +0.000 | | VESPER −0.041 |
+| 6 | HALCYON −0.040 | | NULLTIDE −0.044 |
+| 7 | NULLTIDE −0.049 | | TERRAMOTH −0.075 |
+| 8 | OBELISK −0.083 | | OBELISK −0.147 |
 
-spread: **EXTREME 0.322, HARD 0.275**, from 0.459 / 0.351 at the start of the
-pass. Both inside the healthy 0.30–0.40 band.
+spread: **EXTREME 0.169, HARD 0.242**, from 0.459 / 0.351 at the start of the
+pass. **No machine is outside the pack at either tier** — the first time that has
+been true. This is *tighter* than the 0.30–0.40 band the pass was aiming at; the
+band was a target for removing outliers, and a smooth gradient with none is
+better rather than worse. Do not "restore spread" by making someone bad.
 
 **Mean fight is 46s of a 180s round**, so nearly every match is a kill rather
 than a timeout and the lead is dominated by who dies. The probe reports net kills
