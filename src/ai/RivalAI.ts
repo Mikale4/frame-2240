@@ -1566,10 +1566,28 @@ export class RivalAI {
     /**
      * Weapon chosen for the situation rather than rolled.
      *
-     * Only `Main`, `Heavy` and `Melee` can be reached by pressing a button —
-     * the lance and the spread are *command motions* (`MOTIONS.lance`,
-     * `MOTIONS.spread` in `Combatant.tryStartAction`) which the rival does not
-     * produce. An earlier pass gated this on `lance.energyCost` while returning
+     * Only `Main`, `Heavy` and `Melee` are *chosen* here — the lance and the
+     * spread are command motions (`MOTIONS.lance`, `MOTIONS.spread` in
+     * `Combatant.tryStartAction`) and nothing in this class asks for one.
+     *
+     * **That is not the same as the rival never firing them, and this comment
+     * used to claim it was.** Both motions are two steps inside a 15-tick window
+     * — a lance is `Down` then `Back`+`Heavy` — and an AI that drifts, backs off
+     * and presses Heavy produces that pattern by accident, constantly. Counted
+     * across the roster at EXTREME:
+     *
+     * ```
+     *   lances per minute:  NULLTIDE 13.0  CIRRUS 12.1  PYRE 11.7  HALCYON 10.4
+     *                       VESPER 9.0  OBELISK 8.5  NOCTURNE 8.1  TERRAMOTH 6.1
+     * ```
+     *
+     * So `reachOf` is right to include the lance: it is a weapon the rival
+     * genuinely lands several times a minute without ever deciding to. A branch
+     * was written on the strength of the old wording — correcting a reach model
+     * that was not broken — and was abandoned when a player who had simply
+     * watched the game said he had seen every mech fire one.
+     *
+     * An earlier pass gated this on `lance.energyCost` while returning
      * `Btn.Heavy`, so it demanded 265 energy to fire a 120-energy shot and spent
      * most of the fight declining to attack at all.
      */
