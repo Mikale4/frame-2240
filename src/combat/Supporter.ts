@@ -255,7 +255,16 @@ const DECOY_THROW = 300;
 /** How fast the projection drifts. Near a mech's cruising speed, not its boost. */
 const DECOY_SPEED = 2.6;
 /** How often the projection fires, and how fast its harmless rounds travel. */
-const DECOY_FIRE_PERIOD = 22;
+/**
+ * How often the projection fires, and how likely each round is to stun.
+ *
+ * Rebalanced together, deliberately: the projection's job is to make ignoring it
+ * expensive, and it did that with volume. Volume is the wrong lever — a stream
+ * of harmless rounds from a silhouette is easy to read as harmless. Fewer shots
+ * that each carry a real threat make the *decision* to ignore it the risky part,
+ * which is what a decoy is for.
+ */
+const DECOY_FIRE_PERIOD = 28;
 const DECOY_SHOT_SPEED = 13;
 /**
  * Three in twenty, for one second.
@@ -264,7 +273,7 @@ const DECOY_SHOT_SPEED = 13;
  * — and at one in twenty a decoy would usually throw its whole volley without
  * landing anything, which made ignoring it very nearly free.
  */
-const DECOY_STUN_CHANCE = 0.15;
+const DECOY_STUN_CHANCE = 0.3;
 const DECOY_STUN_TICKS = 60;
 /** `miner`: a cluster of large, long-lived charges rather than one small one. */
 const MINE_PERIOD = 110;

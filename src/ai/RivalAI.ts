@@ -662,8 +662,18 @@ export class RivalAI {
       // Fight at the edge of the sword, and close the moment they drift out.
       want = mine.melee * 1.4 * chill;
     } else if (style.meleeAppetite <= MARKSMAN_APPETITE) {
-      // As far out as the longest shot this machine can land allows.
-      want = Math.min(mine.max * 0.85, 900) * chill;
+      /**
+       * As far out as the longest shot this machine can land allows — **unless
+       * they cannot answer.**
+       *
+       * A marksman who refuses melee on principle declines free damage. A pilot
+       * who is stunned, burnt out or guard-broken is not going to punish the
+       * approach, and the whole reason to hold a line is that closing is
+       * dangerous. When it stops being dangerous, the preference stops applying:
+       * Io Senna wins by subtraction, and a helpless opponent subtracts fastest
+       * at sword range.
+       */
+      want = foe.helpless ? mine.melee * 0.9 * chill : Math.min(mine.max * 0.85, 900) * chill;
     } else if (mine.max > theirMax * 1.05 && faster) {
       // Out-range them and able to hold the gap: sit just past their reach.
       want = Math.min(theirMax * 1.1, mine.max * 0.9) * styleMul;

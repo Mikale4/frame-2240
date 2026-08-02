@@ -236,12 +236,12 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
       'nobody is looking.',
     aggressionMul: 0.94,
     rangeMul: 1.06,
-    meleeAppetite: -0.1,
+    meleeAppetite: -0.16,
     dashMul: 1.12,
     guardMul: 0.98,
     satPreference: SatMode.Shoot,
     droneDoctrine: 'flank',
-    hitAndRun: false,
+    hitAndRun: true,
   },
 };
 

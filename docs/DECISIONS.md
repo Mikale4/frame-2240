@@ -3307,3 +3307,49 @@ It costs OBELISK about 0.19 of a life bar and leaves it the weakest machine, so
 it is owed a tuning pass — and that pass should not start by making the shell
 tougher again, because the measurement above says that lever does nothing where
 it matters.
+
+## D96 — Nulltide: a jammer that takes the opening she made
+
+**Requested**: raise the projection's stun rate, slow its fire, and make Io Senna
+hold range but step in when the opponent cannot answer — disengaging with a dash
+afterwards, as CIRRUS does.
+
+### The decoy trades volume for threat
+
+`DECOY_STUN_CHANCE` 0.15 -> **0.30**, `DECOY_FIRE_PERIOD` 22 -> **28**. Changed
+together on purpose. The projection's job is to make ignoring it expensive, and
+it was doing that with volume — but volume is the wrong lever, because a stream
+of harmless rounds from a silhouette is easy to read as harmless. Fewer shots
+that each carry a real threat make the *decision* to ignore it the risky part,
+which is what a decoy is for.
+
+### Marksman by default, and not on principle
+
+`meleeAppetite` -0.10 -> **-0.16**, which crosses `MARKSMAN_APPETITE` and puts her
+on the hold-the-line branch (D94) rather than the reach calculus.
+
+That branch alone would be wrong for her. A marksman who refuses melee on
+principle declines free damage, and the entire reason to hold a line is that
+closing is dangerous — so when it stops being dangerous, the preference stops
+applying. The branch now returns melee range against a `helpless` opponent:
+stunned, burnt out or guard-broken. Io Senna wins by subtraction, and a helpless
+opponent subtracts fastest at sword range.
+
+`hitAndRun` is on, so she dashes clear after the chain like Mira.
+
+### Measured
+
+```
+  NULLTIDE  EXTREME  lead -0.185 +/-0.047   median 522px   in reach while foe stunned 48%
+            HARD     lead -0.122 +/-0.043   median 466px                              36%
+```
+
+Balance is unchanged — she was -0.193 before — so this bought character at no
+cost. She holds distance by default and is inside sword reach for nearly half of
+every window the opponent cannot answer in, which is the behaviour that was
+asked for. The buffed projection creates more of those windows itself, so the two
+halves of the change feed each other.
+
+**Still true of her, as of VESPER before the breaker:** she wants 900px and gets
+522. Withdrawing is not enforceable without a tool that enforces it, and she has
+none. That is the D93 asymmetry again and the reason SIGHTLINE's pulse exists.
