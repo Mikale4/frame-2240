@@ -3350,6 +3350,25 @@ every window the opponent cannot answer in, which is the behaviour that was
 asked for. The buffed projection creates more of those windows itself, so the two
 halves of the change feed each other.
 
-**Still true of her, as of VESPER before the breaker:** she wants 900px and gets
-522. Withdrawing is not enforceable without a tool that enforces it, and she has
-none. That is the D93 asymmetry again and the reason SIGHTLINE's pulse exists.
+### 522px is the right answer for her, and this was filed wrong first
+
+She wants 900px and holds 522, and that was originally recorded here as a
+limitation shared with VESPER. **It is not the same situation, and the
+correction matters** — the number is a symptom for one of them and correct play
+for the other.
+
+VESPER is a single threat axis. Crowd him and he has nothing, which is why
+SIGHTLINE needed a tool that *enforces* spacing (D94) rather than merely
+preferring it.
+
+NULLTIDE presents **three live threats at once** — herself, the projection, and
+the drone — and an opponent can only answer one. At 522px all three are in play,
+and the problem she sets is not range at all: dodging her rounds and dodging a
+30 %-stun round from a silhouette are *different dodges*, and the enemy has to
+choose. Backing off to 900px would buy safety she does not need and spend the
+pressure that is her actual win condition.
+
+So the gap between what `preferredRangeFor` wants and what she holds is not a
+defect here. It is the fight her kit is built to create, and the same measurement
+means opposite things on two different machines. Worth remembering before the
+next "wants X, gets Y" line is read as a bug.

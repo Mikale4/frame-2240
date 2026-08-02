@@ -233,7 +233,9 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
       'subtraction rather than damage: halves the opponent\'s energy regeneration ' +
       'while deployed, so the correct fight is a long one held at a distance she ' +
       'controls. Her drone flanks, because a jammer works best from somewhere ' +
-      'nobody is looking.',
+      'nobody is looking. She fights closer than her preference asks for, and ' +
+      'that is correct: between herself, the projection and the drone she is ' +
+      'three threats at once, and an opponent can only answer one.',
     aggressionMul: 0.94,
     rangeMul: 1.06,
     meleeAppetite: -0.16,
