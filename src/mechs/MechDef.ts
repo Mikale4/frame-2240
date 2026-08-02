@@ -404,6 +404,29 @@ export interface SupporterDef {
   role: SupporterRole;
   /** Role tuning. Meaning depends on `role`; see each role's implementation. */
   roleValue?: number;
+  /**
+   * Marks the target for the owner's own weapons, as the `designator` role does.
+   *
+   * Split out from `role` because painting is the one escort ability that
+   * genuinely *composes* — it costs the drone nothing it is otherwise doing, so
+   * an escort can paint while also intercepting, tethering or laying mines. Every
+   * other role is a full-time job and stays mutually exclusive.
+   *
+   * Defaults to whether the role is `designator`, so the eight existing escorts
+   * behave exactly as before and this field is inert unless a def opts in.
+   */
+  paints?: boolean;
+}
+
+/**
+ * Does this escort mark targets? See `SupporterDef.paints`.
+ *
+ * One predicate, used by both halves of the ability — the damage multiplier and
+ * the guidance on the painter's rounds — so the two can never disagree about who
+ * is a painter.
+ */
+export function dronePaints(d: SupporterDef): boolean {
+  return d.paints ?? d.role === 'designator';
 }
 
 /** One renderable part of the mech, mirroring the reference's helper-per-part build. */
@@ -451,6 +474,43 @@ export interface MechRigDef {
   footOffset: number;
 }
 
+/**
+ * A stance the chassis can switch into, replacing its heavy shot with a mode.
+ *
+ * VESPER's, and built as a `MechDef` field rather than a VESPER special case so
+ * the next machine that wants a stance declares one instead of editing
+ * `Combatant`. A mech with no `sniper` block behaves exactly as the roster
+ * always has: `Btn.Heavy` fires the heavy.
+ *
+ * The trade is the whole design. A sniper gives up **mobility, every other
+ * weapon, and the ability to answer anything that reaches him** in exchange for
+ * rounds that steer, travel fast and reach far. It is a commitment with a clock
+ * on it, not a free upgrade, which is why `duration` and `cooldown` are both
+ * required rather than optional.
+ */
+export interface SniperModeDef {
+  /** Ticks the stance runs before it drops on its own. */
+  duration: number;
+  /** Ticks before it may be engaged again, counted from when it ends. */
+  cooldown: number;
+  /**
+   * Multiplier on movement, thrust and dash while the stance is up.
+   *
+   * Deliberately severe. Standing still is what is being paid; if the sniper can
+   * reposition he is simply a better version of himself.
+   */
+  speedScale: number;
+  /**
+   * What the main weapon fires instead of its own while the stance is up.
+   *
+   * Auto-aim lives on the attack, as `homing` / `homingTicks`, rather than being
+   * restated here — one place a weapon declares how it steers, so the two can
+   * never disagree. The first cut duplicated it onto this interface and the
+   * duplicate was simply never read, which a test caught.
+   */
+  shot: AttackDef;
+}
+
 export interface MechDef {
   id: string;
   name: string;
@@ -479,6 +539,13 @@ export interface MechDef {
   /** Frame data for a single swing's hit; the sequence is driven by `meleeLock`. */
   melee: AttackDef[];
   meleeLock: MeleeProfile;
+  /**
+   * Optional stance replacing the heavy shot. See `SniperModeDef`.
+   *
+   * Absent on seven of eight machines, and absence is the normal case: `Btn.Heavy`
+   * fires `heavy` unless this exists.
+   */
+  sniper?: SniperModeDef;
 
   /** Sub-weapon charge economy (the reference had its own charge indicator). */
   subCharges: number;

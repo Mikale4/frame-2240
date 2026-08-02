@@ -3882,3 +3882,209 @@ threw away a branch built on a code comment claiming the AI never fires command
 motions, after a player said he had watched every mech fire one. The harness
 measures whether a change helps. It does not measure whether the thing you built
 is the thing you described.
+
+---
+
+## D105 — The projection's rounds steer, and the stun comes back
+
+**Requested**: the decoy should fire projectiles that auto-aim at the enemy for a
+while, so more of them land and the stun chance procs more often.
+
+### The stun had to be re-added first
+
+There is no stun *status* in this game. The only stun the projection ever had was
+`hitstun`, and removing it is exactly what D101 was asked to do — "its
+projectiles now also inflict a very small amount of damage, but do not trigger
+hit stun". So there was no stun chance left for auto-aim to proc more of.
+
+The concern was raised before building, with the arithmetic: at a 16-tick cadence
+the projection throws ~3.75 rounds a second, guidance means most of them land,
+and 30 % of them stunning for 60 ticks is on the order of **one fresh one-second
+stun per second**. Overruled by design, deliberately, and restored at the
+original figures. What follows is what that measured, not an argument against it.
+
+### Auto-aim, with a window
+
+```
+  DECOY_HOMING         0.055 rad/tick
+  DECOY_HOMING_TICKS   26
+  DECOY_STUN_CHANCE    0.3      (restored)
+  DECOY_STUN_TICKS     60       (restored)
+```
+
+`homingTicks` is new and general — a shot may now steer for a *window* rather
+than for its whole flight, which is the difference between a round that corrects
+onto a target and one that chases it forever. Omitting it is the old behaviour,
+so it is inert for every other weapon on the roster. It counts ticks of
+*steering*, not ticks of flight, so a round that never gets a target keeps its
+correction in hand.
+
+The guard stops the stun outright. Blocking is the counterplay, and without it
+the projection would answer its own answer.
+
+### Measured
+
+```
+  NULLTIDE   EXTREME  -0.049 -> +0.237      roster spread 0.169 -> 0.385
+```
+
+She is the strongest machine on the roster by a distance, and the spread is back
+above where the whole tuning pass started. **This is a chosen state, not a
+regression**: the instruction on being shown the number was "don't try and
+balance the roster, I want to see for myself just how much of an overpowered buff
+it really is". The levers, in the order they are worth pulling, are
+`DECOY_STUN_CHANCE`, then `DECOY_STUN_TICKS`, then `DECOY_HOMING_TICKS`.
+
+---
+
+## D106 — Paint is an ability, not a role
+
+SIGHTLINE was asked for "the same ability as halcyon", which is ARBITER's
+designator work: 20 % more damage taken by the painted target, plus guidance on
+the painter's own rounds.
+
+`SupporterRole` is a single field and every role is a full-time job, so the
+obvious reading — swap `interceptor` for `designator` — would have taken away the
+breaker pulse that D94 built specifically to solve Kestrel's spacing problem.
+That is the opposite of the intent.
+
+Painting is the one escort ability that genuinely **composes**. It costs the
+drone nothing it is not already doing: no cooldown, no charge, no position it
+would not already hold. So it came off `role` and became `SupporterDef.paints`,
+defaulting to `role === 'designator'` — which makes the field inert for all eight
+existing escorts — with one predicate, `dronePaints`, shared by both halves of
+the ability so they can never disagree about who is a painter.
+
+SIGHTLINE now intercepts, fires the breaker pulse **and** marks.
+
+---
+
+## D107 — Sniper Mode: the heavy becomes a switch
+
+**Requested**, in detail: `Btn.Heavy` stops being a shot and becomes a stance.
+While it is up VESPER moves drastically slower, his main weapon fires thin, long,
+fast, auto-aiming lances instead of its own round, and he can use nothing else.
+It runs on a clock and then recharges.
+
+### Built as data, not as a VESPER branch
+
+`MechDef.sniper?: SniperModeDef` — duration, cooldown, `speedScale`, and the
+`shot` the main weapon fires instead of its own. Seven machines declare nothing
+and behave exactly as they always have. The next chassis that wants a stance
+declares one rather than editing `Combatant`.
+
+```
+  duration    360 ticks (6s)      speedScale  0.32
+  cooldown    420 ticks (7s)      shot        LONG LANCE
+```
+
+`LONG LANCE` against his own PIERCE BEAM: radius 5 against 11 (thinner), life 120
+against 90 (longer), speed 54 against 34 (much faster), plus `homing` 0.021 for a
+45-tick window.
+
+**Auto-aim lives on the attack, not on the stance.** The first cut declared
+`homing` on `SniperModeDef` as well, and it was simply never read — the spawn
+takes its steering from the `AttackDef`. A test caught it, which is the only
+reason it is not still there. `homingTicks` was added to `AttackDef` beside
+`homing` so a weapon declares how it steers in exactly one place.
+
+### The dangerous part is the button
+
+`Btn.Heavy` is a switch on this chassis and a shot on every other one, and the
+rival reaches for a heavy constantly. `chooseAttack` has **five** separate
+`return Btn.Heavy` sites; any one of them left unguarded turns the stance into a
+strobe. Three defences, because one was not enough:
+
+* `sniperIntent` owns the button, runs before offence, and is debounced.
+* `chooseAttack` returns early on a planted chassis — one weapon, so asking for
+  anything else wastes the turn.
+* A final remap in `think`: a `Btn.Heavy` from any path becomes `Btn.Main` on a
+  stance chassis.
+
+The same hazard exists for the *player*: `MOTIONS.lance` ends in Heavy, so the
+stance check sits **above** the command motions or a drifting sniper toggles
+himself several times a minute — exactly the accident §8c documents.
+
+The rival's read is deliberately blunt, because the stance is already an enormous
+commitment: open past 620px with a healthy reactor and no incoming shot; close
+inside 380px or when the reactor is dry. Measured, it holds the stance **38.4 %**
+of a fight and opens it **1.8 times per fight**.
+
+### Visible, because a mode nobody can see is a bug report
+
+A HUD readout takes over the flight line — `SNIPER: 5s` counting down, then
+`SNIPER: RECHARGE 7s` — because a mode that is a clock is unusable if you cannot
+see the clock. In the world: a sight line along the aim reaching across the whole
+arena, a charge pulse running down it on a 40-tick cycle, and brackets clamped on
+the chassis. Additive, in the sniper's own accent, sized off `barrier.radius`
+rather than `hurtRadius` for the reason the paint reticle already records — a hit
+circle is much smaller than a picture of a mech, and a mark keyed to it draws
+underneath the artwork.
+
+Confirmed on screen at EXTREME, VESPER vs HALCYON: the readout reads `SNIPER: 5s`
+in red on his side while the opponent's still reads `FLIGHT: ON`, the sight line
+crosses the arena, the pulse is visible on it, and the brackets sit on the frame.
+
+### And it shipped with the exact bug the protocol warns about
+
+`docs/TESTING_PROTOCOL.md` §4.7: "**`BattleScene` has two cameras** … a debug
+overlay added without being put in an ignore list is drawn *twice*, slightly
+offset." The new `sniperMarks` graphics was not added to `worldObjects`, so the
+UI camera — zoom 1, unscrolled — rendered a second copy of the brackets and the
+sight line in empty space. **A player reported it as a stray empty target box
+floating in the middle of the stage**, which is precisely what it looked like.
+
+Worth recording that the first screenshot taken of this feature *contains the
+bug* — there are two yellow lines in it — and it was read as "sight line plus a
+lance in flight". The trap is documented, the documentation was read this
+session, and it still caught the next overlay added. Any new world-space
+`Graphics` must go in `worldObjects`; there is no way to test for it in node
+because the scene needs Phaser, so the only defence is the checklist.
+
+`LONGSHOT` is now unreachable and is kept, with a comment saying so — `reachOf`
+still reads it, and it remains a fair description of Kestrel's envelope.
+
+---
+
+## D108 — A marksman holds the gap open instead of preferring it
+
+**Reported from play**: "He wants to at least stay at around 900px away from his
+opponent, but keeps being put into that 500px trap which ends up closing the gap."
+
+Correct, and §8b already knew why without connecting it to him: **closing is
+achievable unilaterally, withdrawing is not.** Every pilot expresses range as a
+*preference*, which `pickTactic` then weighs against half a dozen situational
+reads — so a marksman being walked down simply loses the argument and fights
+where the other machine chose.
+
+`Playstyle.kites` makes it a behaviour rather than a preference. Inside
+`KITE_RANGE` (500px — the distance he was measured *at*, not the one he wants), or
+against an opponent whose velocity is closing faster than 1.1px/tick, retreating
+under boost outranks the ordinary read. It sits above the plan check for the same
+reason the break-off does. And `chooseMovement` puts him on the thrusters while
+he does it: withdrawing at cruise from someone who is boosting after you is not
+withdrawing, it is losing the gap more slowly.
+
+**Kestrel Doyne only.** Io Senna is also a marksman and must not have this — D96
+established that her 522px is correct play, because her three simultaneous
+threats all want to be live and backing off spends the pressure that is her win
+condition. Marksman is a preference; kiting is a behaviour, and one pilot is
+written for it.
+
+Not while planted, either: the sniper stance moves at a third speed and running
+in it only presents a slow target. `sniperIntent` drops the stance when they get
+close, and *then* the kite fires.
+
+### Measured
+
+```
+  VESPER at EXTREME       median range   p25    ticks under 500px
+    before                    ~595px       —            —
+    after                      792px     551px       20.4%
+  NULLTIDE (unchanged)         583px     300px       42.4%
+```
+
+The kite alone was worth **-0.026 -> +0.096**; working auto-aim on the stance
+shot took him to **+0.215**. He is now the second strongest machine on the roster,
+which is a much larger swing than "fix his spacing" implies and is worth deciding
+about deliberately.

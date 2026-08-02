@@ -146,6 +146,14 @@ export class BattleScene extends Phaser.Scene {
    * debuff with no visible author teaches nobody to shoot the drone.
    */
   private paintMarks: Phaser.GameObjects.Graphics[] = [];
+  /**
+   * The sniper stance's sight line, one per side.
+   *
+   * Built for every mech and left empty on the seven that have no stance — the
+   * same trade the dome and the paint reticle already make, and cheaper than
+   * branching the render path on a chassis.
+   */
+  private sniperMarks: Phaser.GameObjects.Graphics[] = [];
   /** One per side; only a `decoy` drone ever shows its own. */
   private decoyGhosts: MechRenderer[] = [];
   /** Per-side animation state for the decoy, keyed by combatant id. */
@@ -216,6 +224,7 @@ export class BattleScene extends Phaser.Scene {
     this.domeHits = [];
     this.tetherRope = [];
     this.paintMarks = [];
+    this.sniperMarks = [];
     this.decoyGhosts = [];
     this.decoyAnim = {};
     this.worldObjects = [];
@@ -324,6 +333,9 @@ export class BattleScene extends Phaser.Scene {
       const paint = this.add.graphics();
       paint.setBlendMode(Phaser.BlendModes.ADD);
       this.paintMarks.push(paint);
+      const sniper = this.add.graphics();
+      sniper.setBlendMode(Phaser.BlendModes.ADD);
+      this.sniperMarks.push(sniper);
       this.droneRings.push(this.add.graphics());
 
       /**
@@ -383,6 +395,13 @@ export class BattleScene extends Phaser.Scene {
       ...this.drones,
       ...this.droneRings,
       ...this.paintMarks,
+      // **Required, not optional.** Anything drawn in world space that is not in
+      // this list is rendered by the UI camera as well — at zoom 1 and unscrolled
+      // — so it appears a second time, larger and somewhere else entirely. The
+      // sniper brackets shipped without it and read as a stray empty target box
+      // floating in the middle of the arena. `docs/TESTING_PROTOCOL.md` §4.7
+      // records this trap; it caught the next person anyway.
+      ...this.sniperMarks,
       ...this.decoyGhosts.map((r) => r.root),
       this.effects.container,
       ...this.debug.worldObjects,
@@ -1486,6 +1505,82 @@ export class BattleScene extends Phaser.Scene {
    * Drawn **over** the mech, unlike the dome and the tethers. A reticle behind
    * the machine it is locked onto is not a reticle.
    */
+  /**
+   * The sniper stance, drawn as what it actually is: a firing line.
+   *
+   * A HUD readout tells a player the stance is up; it does not tell them what
+   * that *means* to the machine in front of them. The sight line does — it
+   * points where the shot is going, it reaches across the arena the way the
+   * round does, and it says "this thing is not moving" without a word of UI.
+   *
+   * Three parts, all additive so they read as light rather than as drawn-on
+   * shapes, which is the lesson `droneDomes` already records:
+   *
+   * * A long thin beam along the aim, brightest at the muzzle and fading out —
+   *   the reach.
+   * * A pulse travelling down it, so the line reads as charged rather than as a
+   *   static decoration.
+   * * A pair of brackets clamped on the chassis, which is the "planted" tell.
+   *
+   * Deliberately in the sniper's *own* accent colour, unlike the paint reticle:
+   * this is something the machine is doing, not something being done to it.
+   */
+  private drawSniper(i: number, c: Combatant): void {
+    const g = this.sniperMarks[i];
+    if (!g) return;
+    g.clear();
+    if (!c.alive || !c.sniperActive) return;
+
+    const tint = c.def.tint.accent;
+    const t = this.sim.tick;
+    // The last second visibly decays, so a player can see the clock running out
+    // on the screen rather than only in the corner.
+    const fade = Math.min(1, c.sniperTicks / 60);
+    const cos = Math.cos(c.aim);
+    const sin = Math.sin(c.aim);
+    const mx = c.x + cos * 46;
+    const my = c.y + sin * 46;
+    // Far enough to cross the arena from anywhere in it; the shot itself
+    // outranges the space, so the line should promise that.
+    const reach = 2600;
+    g.setDepth(41);
+
+    // The line, in two passes: a wide soft glow under a narrow bright core.
+    g.lineStyle(5, tint, 0.1 * fade);
+    g.beginPath();
+    g.moveTo(mx, my);
+    g.lineTo(mx + cos * reach, my + sin * reach);
+    g.strokePath();
+    g.lineStyle(1.25, tint, 0.42 * fade);
+    g.beginPath();
+    g.moveTo(mx, my);
+    g.lineTo(mx + cos * reach, my + sin * reach);
+    g.strokePath();
+
+    // A charge pulse running out along the line, on a 40-tick cycle.
+    const travel = ((t % 40) / 40) * 620;
+    const px = mx + cos * travel;
+    const py = my + sin * travel;
+    g.fillStyle(tint, 0.5 * fade);
+    g.fillCircle(px, py, 4.5);
+
+    // Brackets on the chassis: the "planted" tell. Sized off `barrier.radius`
+    // for the same reason the paint reticle is — a hit circle is much smaller
+    // than the picture of a mech and a mark keyed to it draws underneath the art.
+    const r = c.def.barrier.radius * 1.45;
+    const arm = r * 0.5;
+    g.lineStyle(2, tint, 0.55 * fade);
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        g.beginPath();
+        g.moveTo(c.x + sx * r, c.y + sy * r - sy * arm);
+        g.lineTo(c.x + sx * r, c.y + sy * r);
+        g.lineTo(c.x + sx * r - sx * arm, c.y + sy * r);
+        g.strokePath();
+      }
+    }
+  }
+
   private drawPaint(i: number, c: Combatant): void {
     const g = this.paintMarks[i];
     if (!g) return;
@@ -1726,6 +1821,7 @@ export class BattleScene extends Phaser.Scene {
       // ---- supporter drone -------------------------------------------
       this.drawDrone(i, c, dt);
       this.drawPaint(i, c);
+      this.drawSniper(i, c);
 
       // WARDEN's repair, on the machine receiving it.
       //

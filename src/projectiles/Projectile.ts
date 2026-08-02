@@ -21,6 +21,11 @@ export class Projectile {
   hitstun = 0;
   knockback = 0;
   homing = 0;
+  /**
+   * Ticks of steering left. `Infinity` is "for as long as it lives", which is
+   * what every homing weapon did before the field existed.
+   */
+  homingLeft = Infinity;
   pierceLeft = 0;
   /** Status element inflicted on a clean hit. */
   element = 0;
@@ -89,6 +94,7 @@ export class Projectile {
     this.hitstun = s.hitstun;
     this.knockback = s.knockback;
     this.homing = s.homing;
+    this.homingLeft = s.homingTicks ?? Infinity;
     this.pierceLeft = s.pierceCount;
     this.element = s.element ?? 0;
     this.decoyShot = s.decoyShot ?? false;
@@ -120,7 +126,12 @@ export class Projectile {
     this.prevX = this.x;
     this.prevY = this.y;
 
+    // Steering is spent, not permanent. `homingLeft` counts down only while the
+    // round is actually being guided, so a window is measured in ticks of
+    // tracking rather than in ticks of flight.
+    if (guide > 0 && this.homingLeft <= 0) guide = 0;
     if (guide > 0 && tx !== null && ty !== null) {
+      if (this.homingLeft !== Infinity) this.homingLeft--;
       const speed = Math.hypot(this.vx, this.vy);
       const want = Math.atan2(ty - this.y, tx - this.x);
       const next = approachAngle(this.angle, want, guide);
@@ -181,6 +192,7 @@ export class Projectile {
       hitstun: this.hitstun,
       knockback: this.knockback,
       homing: this.homing,
+      homingTicks: this.homingLeft === Infinity ? undefined : this.homingLeft,
       pierceCount: this.pierceLeft,
       element: this.element,
       decoyShot: this.decoyShot,

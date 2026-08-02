@@ -38,9 +38,9 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 ## 3. Current status — verified
 
-* **518 tests pass** (25 files), typecheck clean, production build clean.
+* **534 tests pass** (26 files), typecheck clean, production build clean.
 * **Working tree clean** on `master`. No other branches.
-* `docs/DECISIONS.md` runs to **D104**.
+* `docs/DECISIONS.md` runs to **D108**.
 * **Suite runtime ~35s.** Deliberate — see §8a.
 * **`tools/probe/balance.ts` is the roster instrument** (D97). A full eight-mech
   sweep is ~20s:
@@ -56,20 +56,22 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 ## 4. What landed
 
-**This session — D97–D104.** A committed balance instrument with a self-test
-(`tools/probe/balance.ts`, D97). The roster tuning pass closed out: TERRAMOTH's
-stacked armour trimmed (D98), AEGIS's broken dome falls back on its gun (D99),
-OBELISK given damage and only damage (D103), and NULLTIDE's projection rebuilt
-(D101). One measured negative result kept rather than deleted — a held guard
-banking saturation is a real fix for a real identity defect and it flattens the
-difficulty ladder (D100). Two latent faults found: `decoyShot` was being dropped
-on the way into the projectile pool so the flag had **never** taken effect
-(D102), and `hitAndRun` had no steering, so CIRRUS and NULLTIDE dashed *into*
-the opponent after their own combos (D104) — reported by a player, not by the
-harness.
+**This session — D97–D108.** Two blocks.
 
-**Spread 0.459 → 0.169 at EXTREME, 0.351 → 0.242 at HARD**, with no machine
-outside the pack at either tier.
+*The roster tuning pass (D97–D104)* — a committed balance instrument with a
+self-test (`tools/probe/balance.ts`), TERRAMOTH's stacked armour trimmed, AEGIS's
+broken dome given its gun back, OBELISK given damage only, NULLTIDE's projection
+rebuilt, and `hitAndRun` fixed after a player reported the skirmishers dashing
+*into* the opponent. Took spread **0.459 → 0.169** with no outliers. Two latent
+faults found: `decoyShot` was dropped on the way into the projectile pool so the
+flag had never taken effect (D102), and `hitAndRun` had no steering (D104).
+
+*Requested buffs (D105–D108)* — the projection's rounds now auto-aim and the
+30 %/60-tick stun is restored (D105); paint became an ability rather than a role
+so SIGHTLINE both intercepts and marks (D106); **Sniper Mode** turns VESPER's
+heavy into a stance with its own clock, slow, weapon and HUD/world indicators
+(D107); and a marksman now *holds* the gap open instead of merely preferring it
+(D108). These are deliberate power increases — see the note under §6.
 
 **The session before — D83–D96.** The short version:
 
@@ -133,20 +135,24 @@ both slot orders on the same seed, real 180s round cap. Standard error ~0.045.
 
 | | EXTREME | | HARD |
 | --- | --- | --- | --- |
-| 1 | TERRAMOTH +0.086 | | PYRE +0.094 |
-| 2 | PYRE +0.051 | | CIRRUS +0.083 |
-| 3 | CIRRUS +0.032 | | HALCYON +0.036 |
-| 4 | VESPER +0.002 | | NOCTURNE ~0.00 |
-| 5 | NOCTURNE +0.000 | | VESPER −0.041 |
-| 6 | HALCYON −0.040 | | NULLTIDE −0.044 |
-| 7 | NULLTIDE −0.049 | | TERRAMOTH −0.075 |
-| 8 | OBELISK −0.083 | | OBELISK −0.147 |
+| 1 | **NULLTIDE +0.237** | | **NULLTIDE +0.356** |
+| 2 | **VESPER +0.215** | | VESPER +0.065 |
+| 3 | PYRE +0.023 | | PYRE −0.000 |
+| 4 | TERRAMOTH −0.025 | | CIRRUS −0.019 |
+| 5 | NOCTURNE −0.054 | | NOCTURNE −0.031 |
+| 6 | HALCYON −0.120 | | HALCYON −0.073 |
+| 7 | CIRRUS −0.129 | | TERRAMOTH −0.117 |
+| 8 | OBELISK −0.148 | | OBELISK −0.181 |
 
-spread: **EXTREME 0.169, HARD 0.242**, from 0.459 / 0.351 at the start of the
-pass. **No machine is outside the pack at either tier** — the first time that has
-been true. This is *tighter* than the 0.30–0.40 band the pass was aiming at; the
-band was a target for removing outliers, and a smooth gradient with none is
-better rather than worse. Do not "restore spread" by making someone bad.
+spread: **EXTREME 0.385, HARD 0.536**.
+
+> **This is a chosen state, not a regression.** The roster was at 0.169 / 0.242
+> with no outliers after the tuning pass (D97–D104). D105 and D107–D108 are
+> requested buffs to NULLTIDE and VESPER, and the standing instruction on
+> NULLTIDE is explicit: *"don't try and balance the roster, I want to see for
+> myself just how much of an overpowered buff it really is."* **Do not quietly
+> re-tune either of them.** The levers, when the call is made, are in D105 and
+> D108.
 
 **Mean fight is 46s of a 180s round**, so nearly every match is a kill rather
 than a timeout and the lead is dominated by who dies. The probe reports net kills
@@ -256,6 +262,13 @@ four rules worth carrying:
   claimed the rival never produces command motions. A branch was built on that
   and thrown away when a player said he had watched every mech fire one.
 
+**Any new world-space `Graphics` must be added to `BattleScene.worldObjects`**,
+or the UI camera draws a second copy of it at zoom 1 somewhere else on screen.
+This is §4.7 of the protocol, it was read this session, and the sniper overlay
+shipped with the bug anyway — a player reported it as a stray empty target box in
+the middle of the stage. It cannot be caught in node, because the scene needs
+Phaser. See D107.
+
 **Driving the game from the Browser pane**: `window.__BSR__` is the Phaser game;
 `__BSR__.scene.getScene('Battle').sim` is the live `MatchSim`. Use
 `game.loop.sleep()`/`wake()`, never a rAF hijack. **`scene.start` will not take
@@ -277,7 +290,7 @@ itself. `sim.events` is cleared every tick and a 35 ms poll misses it.
 | --- | --- | --- | --- | --- | --- | --- |
 | HALCYON `AV-07` | Naia Vesk | 1750 | ARBITER | 420 | designator | energy regen ×1.45 |
 | NOCTURNE `AV-13` | Halden Rook | 1750 | WARDEN | 440 | tether | barrier regen ×2 |
-| VESPER `AV-12` | Kestrel Doyne | 1490 | SIGHTLINE | 350 | interceptor | damage dealt ×1.14 |
+| VESPER `AV-12` | Kestrel Doyne | 1490 | SIGHTLINE | 350 | interceptor + paint | damage dealt ×1.14 |
 | TERRAMOTH `HV-03` | Brunn Okonkwo | 2490 | BULWARK | 595 | miner | damage taken ×0.92 |
 | CIRRUS `LT-21` | Mira Holloway | 1440 | WISP | 335 | arcTether | boost regen ×2 |
 | OBELISK `GD-09` | Saar Tengku | 2070 | AEGIS | 510 | dome | guard drain ×0.55 |
@@ -286,6 +299,10 @@ itself. `sim.events` is cleared every tick and a 35 ms poll misses it.
 
 **Drone roles now, after last session:**
 
+* **`paints`** is now an *ability*, not a role (D106): any escort may mark, and
+  `dronePaints()` is the one predicate both halves of it read. ARBITER and
+  **SIGHTLINE** carry it; SIGHTLINE still intercepts and still fires the breaker
+  pulse.
 * **`dome`** — consumable. 900 damage of shell, 420-tick recovery. Thins and
   stutters visibly as it fails. **While the shell is rebuilding it fires the
   owner's sub-weapon instead** (D99) — the only role whose charge-rack use is
@@ -299,6 +316,11 @@ itself. `sim.events` is cleared every tick and a 35 ms poll misses it.
 * **`decoy`** — 30 % stun chance, 28-tick fire period.
 * **`dome` and `interceptor` never fire a gun** — the only two roles missing from
   `SPENDS_CHARGES`.
+
+**VESPER has SNIPER MODE** (D107) — `Btn.Heavy` is a *switch* on that chassis, not
+a shot. Anything that presses Heavy without knowing that will strobe the stance;
+there are three separate guards in `RivalAI` for exactly this, and the player-side
+check sits above the command motions because `MOTIONS.lance` ends in Heavy.
 
 **Pilot doctrine**, from `meleeAppetite`: brawler ≥ 0.15 (PYRE, CIRRUS), marksman
 ≤ −0.15 (VESPER, NULLTIDE); the rest use the reach calculus. `hitAndRun` (CIRRUS,

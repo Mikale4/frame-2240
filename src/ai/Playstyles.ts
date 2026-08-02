@@ -68,6 +68,25 @@ export interface Playstyle {
    * is what they are for.
    */
   hitAndRun: boolean;
+  /**
+   * Actively thrusts to hold the gap open, rather than merely preferring one.
+   *
+   * The distinction is the whole point, and §8b of the handoff is about why:
+   * **closing is achievable unilaterally, withdrawing is not.** Every other
+   * pilot expresses range as a *preference*, which a tactic roll then weighs
+   * against half a dozen other reads — so a marksman who wants 900px and is
+   * being walked down simply loses the argument and fights at 500.
+   *
+   * A kiter does not weigh it. Inside the trap range, or against an opponent
+   * visibly closing, retreating under boost outranks the ordinary read.
+   *
+   * **Kestrel Doyne only.** Io Senna is also a marksman and must *not* have this:
+   * D96 established that her 522px is correct play, because her three
+   * simultaneous threats all want to be live and backing off spends the pressure
+   * that is her win condition. Marksman is a preference; this is a behaviour, and
+   * exactly one pilot is written for it.
+   */
+  kites: boolean;
 }
 
 /**
@@ -112,6 +131,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     satPreference: SatMode.Shoot,
     droneDoctrine: 'escort',
     hitAndRun: false,
+    kites: false,
   },
 
   nocturne: {
@@ -128,6 +148,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     satPreference: SatMode.Shoot,
     droneDoctrine: 'escort',
     hitAndRun: false,
+    kites: false,
   },
 
   vesper: {
@@ -155,6 +176,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
      */
     droneDoctrine: 'shadow',
     hitAndRun: false,
+    kites: true,
   },
 
   terramoth: {
@@ -172,6 +194,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     satPreference: SatMode.Shield,
     droneDoctrine: 'shadow',
     hitAndRun: false,
+    kites: false,
   },
 
   cirrus: {
@@ -190,6 +213,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     satPreference: SatMode.Speed,
     droneDoctrine: 'flank',
     hitAndRun: true,
+    kites: false,
   },
 
   obelisk: {
@@ -207,6 +231,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     satPreference: SatMode.Shield,
     droneDoctrine: 'shadow',
     hitAndRun: false,
+    kites: false,
   },
 
   pyre: {
@@ -224,6 +249,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     satPreference: SatMode.Shoot,
     droneDoctrine: 'screen',
     hitAndRun: false,
+    kites: false,
   },
 
   nulltide: {
@@ -244,6 +270,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     satPreference: SatMode.Shoot,
     droneDoctrine: 'flank',
     hitAndRun: true,
+    kites: false,
   },
 };
 
@@ -259,6 +286,7 @@ export const NEUTRAL_PLAYSTYLE: Playstyle = {
   satPreference: SatMode.Shoot,
   droneDoctrine: 'escort',
   hitAndRun: false,
+  kites: false,
 };
 
 export function playstyleFor(mechId: string | undefined): Playstyle {

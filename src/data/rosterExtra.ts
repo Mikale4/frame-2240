@@ -305,6 +305,16 @@ export const VESPER: MechDef = {
     pierceCount: 1,
     muzzleForward: 44,
   }),
+  /**
+   * **Unreachable, and kept deliberately.**
+   *
+   * `Btn.Heavy` opens the sniper stance on this chassis, so LONGSHOT can never
+   * be fired — see `MechDef.sniper`. It stays because `MechDef.heavy` is
+   * required and because `reachOf` reads it when the AI works out how far this
+   * machine can threaten, which is still a fair description of Kestrel's
+   * envelope. If a future change makes reach depend on what is *firable*, this
+   * is the entry to revisit.
+   */
   heavy: attack({
     id: 'heavy',
     label: 'LONGSHOT',
@@ -445,6 +455,62 @@ export const VESPER: MechDef = {
     finalLift: 9,
     maxLife: 150,
   },
+  /**
+   * SNIPER MODE — Kestrel Doyne's answer to being crowded.
+   *
+   * `Btn.Heavy` stops being a shot and becomes a switch. LONGSHOT is gone from
+   * his kit entirely; what it bought was a second, slower gun, and what he
+   * actually lacked was a reason for anyone to respect the range he wants to
+   * hold. See D107.
+   *
+   * The trade, stated plainly: he gives up **two thirds of his movement, every
+   * other weapon he owns, and any answer at all to something that reaches him**,
+   * for six seconds of a gun that steers, crosses the arena in under a second
+   * and pierces four targets. Then seven seconds with no stance at all. It is the
+   * most committed thing on the roster and it is meant to be terrifying to walk
+   * into and trivial to punish if he calls it wrong.
+   */
+  sniper: {
+    duration: 360,
+    cooldown: 420,
+    // Drastic on purpose. At 0.32 he covers 1.6px a tick against a light frame's
+    // 6.4 — he is a turret, and choosing to become one is the decision.
+    speedScale: 0.32,
+    shot: attack({
+      id: 'sniperShot',
+      label: 'LONG LANCE',
+      startup: 7,
+      active: 1,
+      recovery: 17,
+      // Dearer per shot than RAILNEEDLE and far dearer than it looks, because
+      // the stance blocks the recovery options he would normally spend energy
+      // on. A sniper who empties the reactor is a sniper standing still with
+      // nothing to fire.
+      energyCost: 96,
+      damage: 108,
+      guardDamage: 44,
+      hitstop: 9,
+      hitstun: 15,
+      knockback: 4,
+      satGain: 15,
+      recoil: 2,
+      kind: ProjKind.Beam,
+      barrier: BarrierResponse.Pierce,
+      // Thinner and longer than PIERCE BEAM (radius 11, life 90, speed 34), and
+      // very much faster: a shot that arrives before the target can react to the
+      // muzzle flash is the entire point of a sniper.
+      projSpeed: 54,
+      projLife: 120,
+      projRadius: 5,
+      pierceCount: 4,
+      // Auto-aim, for a window. It corrects onto the target early and then
+      // commits, so a pilot who moves late still beats it — a round that steered
+      // for its whole flight at this speed would be unanswerable.
+      homing: 0.021,
+      homingTicks: 45,
+      muzzleForward: 52,
+    }),
+  },
   subCharges: 2,
   subRechargeTicks: 165,
   // SIGHTLINE hangs far back, matching its pilot's preferred engagement range.
@@ -456,6 +522,12 @@ export const VESPER: MechDef = {
     // Shoots incoming fire out of the air so Doyne never has to move.
     role: 'interceptor',
     roleValue: 320,
+    // SIGHTLINE also marks. Doyne's whole problem is that he cannot make a shot
+    // count from where he wants to stand, and the paint is the half of ARBITER's
+    // job that fixes it — 20 % more damage taken and guidance on his own rounds,
+    // which is what turns a held firing line into a threat. It costs the escort
+    // nothing it is not already doing while it screens him. See D106.
+    paints: true,
     followBack: 96,
     followDown: 44,
     cooldown: 26,

@@ -60,7 +60,11 @@ interface ProjArt {
   accel?: number;
 }
 
-const ART: Record<string, Record<WeaponKey, ProjArt>> = {
+/**
+ * `sniperShot` is a stance's weapon rather than one of the six slots, so it is
+ * optional here and applied separately below. See `MechDef.sniper`.
+ */
+const ART: Record<string, Record<WeaponKey, ProjArt> & { sniperShot?: ProjArt }> = {
   // Standard-issue circles. The baseline every other kit reads against.
   halcyon: {
     main: { family: 'pellet', scale: 0.95 },
@@ -99,6 +103,10 @@ const ART: Record<string, Record<WeaponKey, ProjArt>> = {
     spread: { family: 'shard', scale: 0.85, pattern: 'bundle', count: 5, gap: 14 },
     sub: { family: 'dart', scale: 0.85 },
     salvo: { family: 'dart', scale: 0.75 },
+    // SNIPER MODE's shot. A beam like PIERCE BEAM so it reads as the same
+    // weapon family, drawn thinner and longer — which is the silhouette the
+    // stance is described by.
+    sniperShot: { family: 'beam', scale: 1.15 },
   },
 
   // Ordnance. The mortar and cluster shell are the only spiked shapes in the
@@ -211,6 +219,20 @@ export function applyProjectileArt(roster: MechDef[]): void {
         ...(art.accel !== undefined ? { projAccel: art.accel } : homing ? { projAccel: 0 } : {}),
       };
       mech[key] = next;
+    }
+
+    // The stance's shot lives at `sniper.shot`, outside the six-slot loop, so it
+    // is dressed here. Without this it would fall back to a plain pellet and a
+    // sniper's signature round would look like a vulcan.
+    if (kit.sniperShot && mech.sniper) {
+      mech.sniper = {
+        ...mech.sniper,
+        shot: {
+          ...mech.sniper.shot,
+          family: kit.sniperShot.family,
+          visualScale: kit.sniperShot.scale,
+        },
+      };
     }
   }
 }

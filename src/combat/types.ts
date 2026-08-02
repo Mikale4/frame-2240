@@ -114,6 +114,19 @@ export interface ProjectileSpawn {
   knockback: number;
   /** Homing turn rate in radians/tick (0 = straight). */
   homing: number;
+  /**
+   * How many ticks the round steers for before it commits to its heading.
+   *
+   * Omitted means "for as long as it lives", which is what every homing weapon
+   * in the game did before this existed — so leaving it off is exactly the old
+   * behaviour and this field is inert for all of them.
+   *
+   * A *window* rather than a duration is the difference between a round that
+   * tracks you and a round that chases you forever. It lets a shot correct onto
+   * a target and then become dodgeable, which is what makes auto-aim a threat
+   * the opponent can still answer by moving late.
+   */
+  homingTicks?: number;
   /** Extra hits allowed before removal (beams/melee arcs pass through). */
   pierceCount: number;
   /**
@@ -232,6 +245,8 @@ export type SimEvent =
    */
   | { t: 'satBurnout'; x: number; y: number; id: number; overheat?: boolean }
   | { t: 'modeCycle'; id: number; mode: SatMode }
+  /** A sniper stance opened or closed. See `SniperModeDef`. */
+  | { t: 'sniper'; x: number; y: number; id: number; on: boolean }
   | { t: 'ko'; id: number }
   | { t: 'takeoff'; x: number; y: number; id: number }
   | { t: 'land'; x: number; y: number; id: number };

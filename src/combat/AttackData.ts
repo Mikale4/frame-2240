@@ -47,6 +47,15 @@ export interface AttackDef {
   projCount: number;
   spreadRad: number;
   homing: number;
+  /**
+   * Ticks this shot steers for before it commits to its heading.
+   *
+   * Omitted is "for as long as it lives", which is what every homing weapon on
+   * the roster does — so this is inert unless a weapon opts in. A *window* is
+   * what separates a round that corrects onto you from one that chases you
+   * forever; see `ProjectileSpawn.homingTicks`.
+   */
+  homingTicks?: number;
   pierceCount: number;
 
   /** Muzzle offset along the aim axis / perpendicular to it. */

@@ -396,6 +396,16 @@ export class Combatant implements FlightState {
   satDesperate = false;
   /** Ticks of helplessness left after a burst ended. See SAT_BURNOUT_TICKS. */
   satBurnout = 0;
+
+  /**
+   * Sniper stance: ticks left, and ticks until it may be engaged again.
+   *
+   * Only ever non-zero on a chassis that declares `MechDef.sniper`. See
+   * `SniperModeDef` for what the stance trades away, and D107 for why it is a
+   * mode rather than another weapon.
+   */
+  sniperTicks = 0;
+  sniperCooldown = 0;
   /**
    * How charged the meter was when this burst opened, 0..1.
    *
@@ -693,6 +703,19 @@ export class Combatant implements FlightState {
    */
   get topSpeed(): number {
     return this.def.flight.maxSpeed;
+  }
+
+  /** True while the sniper stance is up. */
+  get sniperActive(): boolean {
+    return this.sniperTicks > 0;
+  }
+
+  /**
+   * Movement multiplier from the stance. 1 when it is down, so this is inert for
+   * every chassis that has no `sniper` block.
+   */
+  get sniperSpeedScale(): number {
+    return this.sniperActive ? (this.def.sniper?.speedScale ?? 1) : 1;
   }
 
   get shieldActive(): boolean {
@@ -1010,6 +1033,16 @@ export class Combatant implements FlightState {
 
   private tickSaturation(events: SimEvent[]): void {
     const g = this.def.gauges;
+    // Sniper stance clock. Runs down whatever else is happening — the stance is
+    // a commitment, so being hit or stunned does not pause it — and hands
+    // straight over to the recharge when it expires.
+    if (this.sniperTicks > 0) {
+      this.sniperTicks--;
+      if (this.sniperTicks === 0) this.endSniper(events);
+    } else if (this.sniperCooldown > 0) {
+      this.sniperCooldown--;
+    }
+
     if (this.satActive) {
       // Shield mode burns the meter faster, as the reference did for its
       // barrier-type concentration. It also now buys the most: a free permanent
@@ -1085,6 +1118,40 @@ export class Combatant implements FlightState {
     this.coAttack = a;
     this.coTick = 0;
     this.coFired = false;
+  }
+
+  /**
+   * Opens the sniper stance.
+   *
+   * Cancels whatever the chassis was doing, because the stance replaces the
+   * whole weapon set and finishing a swing out of it would let a sniper carry a
+   * melee commitment into a state that has no melee.
+   */
+  private beginSniper(events: SimEvent[]): void {
+    const def = this.def.sniper;
+    if (!def) return;
+    this.sniperTicks = def.duration;
+    this.sniperCooldown = 0;
+    this.attack = null;
+    this.coAttack = null;
+    this.meleeCount = 0;
+    this.meleeChainQueued = false;
+    this.meleeLock = null;
+    events.push({ t: 'sniper', x: this.x, y: this.y, id: this.id, on: true });
+  }
+
+  /**
+   * Closes it, and starts the recharge.
+   *
+   * Reached three ways — the clock running out, the pilot switching it off, and
+   * a `MatchSim` reset — and all three pay the same cooldown. Dropping the
+   * stance early to escape must not be free, or the slow costs nothing.
+   */
+  private endSniper(events: SimEvent[]): void {
+    if (!this.sniperActive && this.sniperTicks === 0 && this.sniperCooldown > 0) return;
+    this.sniperTicks = 0;
+    this.sniperCooldown = this.def.sniper?.cooldown ?? 0;
+    events.push({ t: 'sniper', x: this.x, y: this.y, id: this.id, on: false });
   }
 
   private stepStunned(input: InputFrame, events: SimEvent[]): void {
@@ -1259,6 +1326,34 @@ export class Combatant implements FlightState {
         this.barrierRegenTimer = d.gauges.barrierRegenDelay;
         if (this.barrier <= 0) this.breakGuard(events);
         this.act = ActState.GuardHold;
+      }
+    }
+
+    /**
+     * The sniper stance owns `Btn.Heavy`, and it owns it before anything else
+     * reads a button.
+     *
+     * Placed above the command motions on purpose: a motion is a direction plus
+     * a button and `MOTIONS.lance` ends in Heavy, so leaving this below would
+     * have a drifting sniper toggle his own stance by accident several times a
+     * minute — which is exactly how the rival was found to be firing lances it
+     * never chose (see §8c).
+     */
+    if (d.sniper) {
+      if (isPressed(input, Btn.Heavy)) {
+        if (this.sniperActive) this.endSniper(events);
+        else if (this.sniperCooldown <= 0) this.beginSniper(events);
+        return;
+      }
+      // While the stance is up the chassis has one weapon and no answer to
+      // anything that reaches it. That is the price of the reach.
+      if (this.sniperActive) {
+        const fire =
+          isPressed(input, Btn.Main) || (isHeld(input, Btn.Main) && this.autoFireReady());
+        if (fire && (this.energyFree || this.energy >= d.sniper.shot.energyCost)) {
+          this.begin(d.sniper.shot);
+        }
+        return;
       }
     }
 
@@ -1960,6 +2055,7 @@ export class Combatant implements FlightState {
         hitstun: a.hitstun,
         knockback: a.knockback,
         homing,
+        homingTicks: a.homingTicks,
         pierceCount: a.pierceCount,
         element: a.element ?? Element.None,
         family: famId,
@@ -2029,13 +2125,13 @@ export class Combatant implements FlightState {
       // mutually exclusive with each other; only movement overlaps them.
       dash: !locked && isPressed(input, Btn.Boost),
       // Cryo bites here, so it slows flight, walking and boost alike.
-      speedScale: this.satSpeedScale * this.status.speedScale,
-      boostSpeedScale: this.satThrustScale * this.status.speedScale,
+      speedScale: this.satSpeedScale * this.status.speedScale * this.sniperSpeedScale,
+      boostSpeedScale: this.satThrustScale * this.status.speedScale * this.sniperSpeedScale,
       // A desperate Speed burst extends the dash specifically, so closing the
       // yard in one move is the thing that changed — not the top speed you
       // cruise at, which would just make the mech hard to place.
       dashSpeedScale:
-        this.satThrustScale * this.status.speedScale * (this.desperateSpeed ? DESPERATE_DASH : 1),
+        this.satThrustScale * this.status.speedScale * this.sniperSpeedScale * (this.desperateSpeed ? DESPERATE_DASH : 1),
       boostFree: this.boostFree,
       // Firing anchors you, but never so much that a simultaneous dash fizzles:
       // the dash impulse is the whole point of allowing the overlap.
@@ -2172,23 +2268,29 @@ export class Combatant implements FlightState {
      * * **No `hitInvuln`.** The reason `decoyShot` exists at all. A round that
      *   opened the usual i-frame window would have NULLTIDE *shielding* the
      *   pilot she is deceiving from her own real fire, which inverts the ability.
-     * * **No hitstun, hitstop or knockback.** The projection interrupts nothing.
-     *   It used to do the opposite — no damage and a three-in-twenty one-second
-     *   stun — and that was the wrong pressure: a coin flip the opponent cannot
-     *   play around, invisible nineteen times out of twenty.
+     * * **Stun, but no hitstop and no knockback.** The three-in-twenty
+     *   one-second stun is back at its original figures (D105), so the round can
+     *   interrupt — but it never shoves, and it never freezes the attacker's own
+     *   frame the way a real connect does. A hologram lands like a hologram.
      * * **No meter, either way.** It does not feed the victim's saturation. At
      *   this cadence a chip source that charged the bar would hand the target a
      *   burst for being shot at by a hologram.
      *
      * It does respect chassis defence and a held guard, because a shot that
      * ignored armour would be the hardest-hitting thing in NULLTIDE's kit
-     * against the frames built to resist exactly this.
+     * against the frames built to resist exactly this. **A guard stops the stun
+     * outright** — blocking is the counterplay, and without that the projection
+     * would answer its own answer.
      */
     if (p.decoyShot) {
       const guarded = this.guarding || this.shieldActive;
       const chip =
         p.damage * this.incomingScale * (guarded ? this.def.barrier.guardScale : 1);
       this.life = Math.max(0, this.life - chip);
+      if (p.hitstun > 0 && !guarded && this.invuln <= 0) {
+        this.hitstun = Math.max(this.hitstun, p.hitstun);
+        this.act = ActState.Hitstun;
+      }
       return 'hit';
     }
 

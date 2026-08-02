@@ -274,10 +274,28 @@ export class Hud {
             : '#8f7ea8',
       );
 
-      this.flightTexts[side].setText(
-        c.flying ? 'FLIGHT: ON' : c.grounded ? 'FLIGHT: OFF (LANDED)' : 'FLIGHT: OFF',
-      );
-      this.flightTexts[side].setColor(c.flying ? '#9fe0ff' : '#8effc0');
+      /**
+       * The sniper stance takes over the flight line while it is up.
+       *
+       * It shares a slot rather than adding one because the two are mutually
+       * relevant at exactly the same moment — a planted sniper's flight state is
+       * the least interesting thing on the panel, and the stance is the most.
+       * The countdown is the point: the whole mode is a clock, and a player who
+       * cannot see how much of it is left cannot decide whether to keep holding
+       * the line or bail out early.
+       */
+      if (c.sniperActive) {
+        this.flightTexts[side].setText(`SNIPER: ${Math.ceil(c.sniperTicks / 60)}s`);
+        this.flightTexts[side].setColor('#ff5c5c');
+      } else if (c.sniperCooldown > 0) {
+        this.flightTexts[side].setText(`SNIPER: RECHARGE ${Math.ceil(c.sniperCooldown / 60)}s`);
+        this.flightTexts[side].setColor('#7b6a86');
+      } else {
+        this.flightTexts[side].setText(
+          c.flying ? 'FLIGHT: ON' : c.grounded ? 'FLIGHT: OFF (LANDED)' : 'FLIGHT: OFF',
+        );
+        this.flightTexts[side].setColor(c.flying ? '#9fe0ff' : '#8effc0');
+      }
     }
 
     // Sub-weapon pips.

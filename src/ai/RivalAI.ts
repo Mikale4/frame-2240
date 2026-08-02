@@ -166,6 +166,27 @@ const PLACED_SPEED = 0.35;
  * reach inside the window the opponent needs to answer.
  */
 const DISENGAGE_TICKS = 64;
+/**
+ * Ticks the rival waits after touching its stance switch before touching it
+ * again. A toggle needs a debounce or the AI flickers it every tick it still
+ * likes the idea.
+ */
+const STANCE_COMMIT = 20;
+/** Beyond this the sniper stance is worth its cost; inside it, it is a coffin. */
+const SNIPER_OPEN_RANGE = 620;
+/** Crowded. Drop the stance and get the legs back. */
+const SNIPER_PANIC_RANGE = 380;
+/**
+ * Inside this, a kiter stops arguing about range and simply leaves.
+ *
+ * Set at the distance Kestrel Doyne was measured to actually be fighting at
+ * (~500px) rather than at the distance he wants (900px). A trigger at 900 would
+ * fire permanently and turn him into a wall-hugger; a trigger at 500 fires
+ * exactly when the gap he needs has already been taken.
+ */
+const KITE_RANGE = 500;
+/** Closing speed, px/tick, that counts as "coming for you". */
+const KITE_CLOSING_SPEED = 1.1;
 const DISENGAGE_REACH = 2.1;
 
 const BRAWLER_APPETITE = 0.15;
@@ -500,6 +521,8 @@ export class RivalAI {
   private wasInMelee = false;
   /** Ticks left of a hit-and-run pilot's break-off after landing a chain. */
   private disengage = 0;
+  /** Debounce on the sniper stance switch. See `STANCE_COMMIT`. */
+  private stanceHold = 0;
   /** Buffered decision, released after the reaction delay. */
   private reactTimer = 0;
   private dirX = 0;
@@ -610,6 +633,21 @@ export class RivalAI {
    * class hands out knowledge by tier. Below it a pilot falls back on their own
    * sense of how far a sword goes, which is the honest version of not knowing.
    */
+  /**
+   * Is the opponent actively eating the gap?
+   *
+   * Projection of the foe's velocity onto the line from them to us. Positive
+   * means closing. Read from velocity rather than from a remembered distance so
+   * it answers on the tick they commit rather than a dozen ticks after the range
+   * has already gone.
+   */
+  private foeClosing(self: Combatant, foe: Combatant): boolean {
+    const dx = self.x - foe.x;
+    const dy = self.y - foe.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return (foe.vx * dx + foe.vy * dy) / len > KITE_CLOSING_SPEED;
+  }
+
   private disengageReach(self: Combatant, foe: Combatant): number {
     const ref = this.p.rangeIq ? foe.effectiveMeleeRange : self.effectiveMeleeRange;
     return ref * DISENGAGE_REACH;
@@ -1048,12 +1086,33 @@ export class RivalAI {
       this.droneHold = 90;
     }
 
+    // ---- Sniper stance -------------------------------------------------------
+    //
+    // Handled before offence and outside `chooseAttack`, because on a chassis
+    // with a stance `Btn.Heavy` is not a shot — pressing it opens or closes the
+    // stance. A rival that reached for its heavy the ordinary way would toggle
+    // its own stance several times a minute by accident, which is precisely the
+    // fault §8c describes for command motions.
+    const stance = this.sniperIntent(self, foe, dist);
+    if (stance !== null) {
+      pressed.v |= 1 << Btn.Heavy;
+      held.v |= 1 << Btn.Heavy;
+      this.stanceHold = STANCE_COMMIT;
+    } else if (this.stanceHold > 0) {
+      this.stanceHold--;
+    }
+
     // ---- Offence -----------------------------------------------------------
     if (this.buttonHold > 0) {
       this.buttonHold--;
       if (this.queuedButton !== null) held.v |= 1 << this.queuedButton;
     } else if (self.act === ActState.Free && self.hitstun <= 0 && !shouldBarrier) {
-      const btn = this.chooseAttack(self, dist, foe);
+      const chosen = this.chooseAttack(self, dist, foe);
+      // Last line of defence: on a stance chassis `Btn.Heavy` is the switch, so
+      // any path that still asked for a heavy shot gets the main gun instead.
+      // `chooseAttack` has five separate `return Btn.Heavy` sites and one of them
+      // going unguarded would show up as a sniper flickering his own stance.
+      const btn = chosen === Btn.Heavy && self.def.sniper ? Btn.Main : chosen;
       if (btn !== null) {
         this.queuedButton = btn;
         this.buttonHold = 2;
@@ -1367,6 +1426,28 @@ export class RivalAI {
       return AiTactic.Retreat;
     }
 
+    /**
+     * **A kiter holds the gap open instead of hoping for it.**
+     *
+     * Above the plan and above every situational read below, for the reason in
+     * `Playstyle.kites`: a marksman's range is the one thing he cannot get by
+     * preferring it. Kestrel Doyne wants 900px and was measured holding ~500,
+     * because closing is unilateral and withdrawing is not — so the only way he
+     * ever stands where he is written to stand is if backing off outranks the
+     * argument rather than joining it.
+     *
+     * Not while planted: the sniper stance moves at a third speed and running in
+     * it accomplishes nothing but presenting a slow target. `sniperIntent` drops
+     * the stance when they get close, and *then* this fires.
+     */
+    if (
+      this.style(self).kites &&
+      !self.sniperActive &&
+      (dist < KITE_RANGE || this.foeClosing(self, foe))
+    ) {
+      return AiTactic.Retreat;
+    }
+
     // A live plan outranks the ordinary read. This is the whole point of having
     // one: the rival stops re-litigating its intent every time `pickTactic`
     // comes round and actually sees a commitment through.
@@ -1472,7 +1553,10 @@ export class RivalAI {
       case AiTactic.Retreat:
         mx = -sx;
         my = dyRaw > 0 ? -1 : 1;
-        this.wantBoost = dist < 160;
+        // A kiter runs on the thrusters, not on the cruise. Withdrawing at
+        // walking pace from someone who is boosting after you is not
+        // withdrawing; it is losing the gap slightly more slowly.
+        this.wantBoost = dist < 160 || (this.style(self).kites && dist < KITE_RANGE * 1.4);
         break;
       case AiTactic.Strafe:
         // Circle-strafe: mostly vertical, drifting to keep range.
@@ -1659,7 +1743,51 @@ export class RivalAI {
     return best;
   }
 
+  /**
+   * Should the rival press its stance switch this tick?
+   *
+   * Returns non-null to mean "press `Btn.Heavy`", which toggles. Null means
+   * leave it alone. A chassis with no `sniper` block always answers null, so
+   * this is inert for seven of eight machines.
+   *
+   * The read is deliberately simple, because the stance is already a huge
+   * commitment and a subtle entry condition would only make it a rarer one:
+   *
+   * * **Open** at long range, with a healthy reactor, when nothing is about to
+   *   land. A sniper who plants himself with no energy has become a slow mech
+   *   holding a gun he cannot fire.
+   * * **Close** when they get inside `SNIPER_PANIC_RANGE`, or when the reactor
+   *   is dry. Standing still at knife range is how this stance kills its own
+   *   pilot, and noticing that is the difference between a tier that understands
+   *   the mode and one that owns it.
+   */
+  private sniperIntent(self: Combatant, foe: Combatant, dist: number): true | null {
+    if (!self.def.sniper || this.stanceHold > 0) return null;
+    const shot = self.def.sniper.shot;
+    if (self.sniperActive) {
+      const crowded = dist < SNIPER_PANIC_RANGE;
+      const dry = !self.energyFree && self.energy < shot.energyCost;
+      return crowded || dry ? true : null;
+    }
+    if (self.sniperCooldown > 0) return null;
+    // Do not plant while a shot is already on its way in.
+    if (this.tactic === AiTactic.Evade) return null;
+    if (dist < SNIPER_OPEN_RANGE || !foe.alive) return null;
+    if (!self.energyFree && self.energy < shot.energyCost * 2.5) return null;
+    return true;
+  }
+
   private chooseAttack(self: Combatant, dist: number, foe: Combatant): Btn | null {
+    // On a stance chassis the heavy button is a switch, not a shot, and
+    // `sniperIntent` owns it. Returning it here would fire the stance on and off
+    // as a side effect of wanting to shoot.
+    const stanceChassis = self.def.sniper !== undefined;
+    if (stanceChassis && self.sniperActive) {
+      // One weapon while planted. `Combatant` enforces it; saying so here stops
+      // the rival wasting its turn asking for a melee it cannot start.
+      return self.energyFree || self.energy >= self.def.sniper!.shot.energyCost ? Btn.Main : null;
+    }
+
     const d = self.def;
 
     // Melee range: commit to the sword chain on its own button.

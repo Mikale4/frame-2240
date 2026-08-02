@@ -302,6 +302,35 @@ const DECOY_SHOT_SPEED = 13;
  */
 export const DECOY_FIRE_PERIOD = 16;
 export const DECOY_DAMAGE = 8;
+/**
+ * The projection's rounds steer, for a window.
+ *
+ * A silhouette firing rounds that sail past is a silhouette nobody has to
+ * respect. Auto-aim means most of what it throws arrives, which is what makes
+ * the *decision* to ignore it expensive rather than merely unwise.
+ *
+ * The window is the balancing half and it is deliberately short. `homingTicks`
+ * counts ticks of *steering*, so a round corrects onto the target early and then
+ * commits — an opponent who moves late still beats it, and a round that chased
+ * forever would be unanswerable rather than merely dangerous.
+ */
+export const DECOY_HOMING = 0.055;
+export const DECOY_HOMING_TICKS = 26;
+/**
+ * Three in twenty, for one second — restored at the original figures.
+ *
+ * **Removed in D101 and put back deliberately, at the numbers it had before.**
+ * The concern with restoring it alongside auto-aim was raised and overruled by
+ * design, and it is worth writing down what the arithmetic says so the next
+ * reader is not surprised by it: at a 16-tick cadence a projection throws ~3.75
+ * rounds a second, and with guidance most of them land, so 30 % of them stunning
+ * for 60 ticks is on the order of one fresh one-second stun per second.
+ *
+ * That is the intended behaviour, not an oversight. See D105 for what it
+ * measured.
+ */
+export const DECOY_STUN_CHANCE = 0.3;
+export const DECOY_STUN_TICKS = 60;
 /** `miner`: a cluster of large, long-lived charges rather than one small one. */
 const MINE_PERIOD = 110;
 const MINE_LIFE = 900;
@@ -1080,10 +1109,10 @@ export class Supporter {
      * the shots look exactly like Io's, they arrive from a plausible angle, and
      * answering them is a decision.
      *
-     * Each round takes a sliver of hull and **interrupts nothing** — no hitstun,
-     * no hitstop, no knockback, no i-frames. Ignoring the projection costs a
-     * trickle rather than a dice roll, and answering it costs the attention that
-     * was always the real price.
+     * Each round takes a sliver of hull, steers onto the target for a short
+     * window, and carries a three-in-twenty chance of a one-second stun. The
+     * chip is the floor and the stun is the ceiling: ignoring the projection
+     * always costs something and occasionally costs the exchange.
      */
     if (!target || !target.alive) return;
     // Slewed at the drone's own turret rate rather than snapped, exactly as a
@@ -1096,6 +1125,8 @@ export class Supporter {
     if (this.decoyFireTimer-- > 0) return;
     this.decoyFireTimer = DECOY_FIRE_PERIOD;
     const ang = this.decoyAim;
+    // Rolled at spawn out of the match generator, so a replay reproduces it.
+    const stun = this.rng.chance(DECOY_STUN_CHANCE);
     spawns.push({
       x: this.decoyX + Math.cos(ang) * 26,
       y: this.decoyY + Math.sin(ang) * 26,
@@ -1110,9 +1141,10 @@ export class Supporter {
       kind: ProjKind.Bullet,
       barrier: BarrierResponse.Absorb,
       hitstop: 0,
-      hitstun: 0,
+      hitstun: stun ? DECOY_STUN_TICKS : 0,
       knockback: 0,
-      homing: 0,
+      homing: DECOY_HOMING,
+      homingTicks: DECOY_HOMING_TICKS,
       pierceCount: 0,
       element: Element.None,
       family: 'bolt',

@@ -1,6 +1,6 @@
 import { ARENA_H, ARENA_W, DECK_Y, ROUND_TIME_TICKS, TICK_HZ } from '../core/GameConfig';
 import { Rng } from '../core/Rng';
-import type { MechDef } from '../mechs/MechDef';
+import { dronePaints, type MechDef } from '../mechs/MechDef';
 import { Projectile, ProjectilePool, sweptHit } from '../projectiles/Projectile';
 import { Combatant, DESIGNATOR_HOMING } from './Combatant';
 import { DOME_RECOVER, SupState } from './Supporter';
@@ -338,6 +338,24 @@ export class MatchSim {
       if (!s.onStation || !c.alive) continue;
       const foe = this.opponentOf(c);
 
+      /**
+       * Painting runs alongside the role rather than as one of them.
+       *
+       * Marking a target costs the escort nothing it is otherwise doing — no
+       * cooldown, no charge, no position it would not already hold — so it is
+       * the one ability that composes with a full-time job. SIGHTLINE both
+       * intercepts and paints; ARBITER paints and shoots.
+       *
+       * Refreshed only while the target is in reach, and it lapses on its own,
+       * so killing the escort turns the tracking off within a second rather than
+       * instantly. See `SupporterDef.paints`.
+       */
+      if (dronePaints(c.def.supporter) && foe.alive) {
+        if (Math.hypot(foe.x - s.x, foe.y - s.y) <= c.def.supporter.fireRange) {
+          foe.paintedTicks = Math.max(foe.paintedTicks, DESIGNATOR_PAINT_TICKS);
+        }
+      }
+
       switch (c.def.supporter.role) {
         case 'dome': {
           // A bubble that eats shots. Deliberately erases rather than damages:
@@ -503,16 +521,6 @@ export class MatchSim {
           break;
         }
 
-        case 'designator': {
-          // Paint refreshed while the target is in reach; it lapses on its own
-          // once the drone loses sight, so killing the escort turns the tracking
-          // off within a second rather than instantly.
-          if (!foe.alive) break;
-          if (Math.hypot(foe.x - s.x, foe.y - s.y) > c.def.supporter.fireRange) break;
-          foe.paintedTicks = Math.max(foe.paintedTicks, DESIGNATOR_PAINT_TICKS);
-          break;
-        }
-
         case 'tether': {
           // Barrier fast, hull slow, and only while the drone is holding
           // station. The outer loop has already refused a dead owner, so
@@ -593,7 +601,7 @@ export class MatchSim {
        */
       const shooter = p.team === Team.Player ? this.player : this.enemy;
       const guided =
-        target.paintedTicks > 0 && shooter.def.supporter.role === 'designator'
+        target.paintedTicks > 0 && dronePaints(shooter.def.supporter)
           ? DESIGNATOR_HOMING
           : 0;
       const guide = p.homing + guided;
