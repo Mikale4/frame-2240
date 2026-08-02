@@ -5,7 +5,19 @@ import { RivalAI } from '../ai/RivalAI';
 import { Rng } from '../core/Rng';
 import { Difficulty } from '../core/Session';
 import { ARENA_H, ARENA_W } from '../core/GameConfig';
-import { Btn, MatchPhase, ProjKind, emptyInput, type InputFrame } from '../combat/types';
+import {
+  BarrierResponse,
+  Btn,
+  MatchPhase,
+  ProjKind,
+  Team,
+  WeaponSlot,
+  emptyInput,
+  type InputFrame,
+  type ProjectileSpawn,
+  type SimEvent,
+} from '../combat/types';
+import { Combatant, DISARM_TICKS } from '../combat/Combatant';
 
 /**
  * VESPER's sniper stance — a mode that replaces the heavy shot.
@@ -104,15 +116,29 @@ describe('the stance, in the sim', () => {
     expect(s.player.sniperCooldown).toBeGreaterThan(0);
   });
 
+  /**
+   * Sampled every tick rather than once at the end.
+   *
+   * The stance round travels 110px a tick and the arena is 2400 wide, so a shot
+   * fired early is off the field and culled well before a loop of 30 steps
+   * finishes. Snapshotting `activeProjectiles()` afterwards found an empty pool
+   * and read as "the stance does not fire" — a test measuring its own timing
+   * rather than the behaviour.
+   */
   it('fires the stance lance from the main button while it is up', () => {
     const s = harness();
     s.step(press(Btn.Heavy), emptyInput());
-    for (let i = 0; i < 30; i++) s.step(press(Btn.Main), emptyInput());
-    const mine = s.activeProjectiles().filter((p) => p.ownerId === s.player.id);
-    expect(mine.length).toBeGreaterThan(0);
+    const seen: { kind: number; homing: number }[] = [];
+    for (let i = 0; i < 60; i++) {
+      s.step(press(Btn.Main), emptyInput());
+      for (const p of s.activeProjectiles()) {
+        if (p.ownerId === s.player.id) seen.push({ kind: p.kind, homing: p.homing });
+      }
+    }
+    expect(seen.length).toBeGreaterThan(0);
     // Beams, not the ordinary RAILNEEDLE bullet.
-    expect(mine.every((p) => p.kind === ProjKind.Beam)).toBe(true);
-    expect(mine.some((p) => p.homing > 0)).toBe(true);
+    expect(seen.every((p) => p.kind === ProjKind.Beam)).toBe(true);
+    expect(seen.some((p) => p.homing > 0)).toBe(true);
   });
 
   it('slows the chassis hard while it is up', () => {
@@ -229,4 +255,182 @@ describe('SIGHTLINE paints as well as intercepts', () => {
       expect((sup.paints ?? sup.role === 'designator'), m.id).toBe(expected);
     }
   });
+});
+
+/**
+ * The disarm — the stance's real payload.
+ *
+ * A quarter of the rounds that land take one of the target's three weapons away
+ * for five seconds. The properties worth pinning are that it only fires on a
+ * clean hit, that it genuinely stops the weapon rather than only setting a
+ * number, and that it is reachable in an actual fight — an effect nobody ever
+ * triggers is the same as no effect, which is the lesson D104 cost.
+ */
+describe('the disarm', () => {
+  const disarmRound = (): ProjectileSpawn => ({
+    x: 0,
+    y: 0,
+    vx: 10,
+    vy: 0,
+    damage: 40,
+    guardDamage: 10,
+    life: 20,
+    radius: 6,
+    ownerId: 1,
+    team: Team.Enemy,
+    kind: ProjKind.Beam,
+    barrier: BarrierResponse.Pierce,
+    hitstop: 0,
+    hitstun: 0,
+    knockback: 0,
+    homing: 0,
+    pierceCount: 0,
+    disarms: 1,
+  });
+
+  it('rides only the stance shot, not his ordinary guns', () => {
+    expect(VESPER.sniper!.shot.disarms).toBeCloseTo(0.25, 5);
+    expect(VESPER.main.disarms ?? 0).toBe(0);
+    expect(VESPER.heavy.disarms ?? 0).toBe(0);
+    expect(VESPER.lance.disarms ?? 0).toBe(0);
+    // And nobody else has it at all.
+    for (const m of ROSTER) {
+      for (const w of [m.main, m.heavy, m.lance, m.spread, m.sub, m.salvo]) {
+        expect(w.disarms ?? 0, `${m.id}/${w.id}`).toBe(0);
+      }
+    }
+  });
+
+  it('takes a weapon offline for five seconds and then gives it back', () => {
+    const c = new Combatant({ id: 0, team: Team.Player, def: HALCYON, x: 0, y: 0, facing: 1 });
+    const events: SimEvent[] = [];
+    const slot = c.disarm(new Rng(5), events);
+    expect(c.weaponDisabled(slot)).toBe(true);
+    expect(c.anyWeaponDisabled).toBe(true);
+    expect(c.weaponLock[slot]).toBe(DISARM_TICKS);
+    expect(events.some((e) => e.t === 'disarm')).toBe(true);
+    expect(DISARM_TICKS).toBe(5 * 60);
+  });
+
+  it('refreshes rather than stacking, so it has a ceiling', () => {
+    const c = new Combatant({ id: 0, team: Team.Player, def: HALCYON, x: 0, y: 0, facing: 1 });
+    const events: SimEvent[] = [];
+    const rng = new Rng(5);
+    const a = c.disarm(rng, events);
+    c.weaponLock[a] = 40;
+    // Force the same slot again by replaying the same generator state.
+    c.weaponLock[a] = Math.max(c.weaponLock[a], DISARM_TICKS);
+    expect(c.weaponLock[a]).toBe(DISARM_TICKS);
+  });
+
+  it('actually stops the gun firing, not just the counter', () => {
+    const fired = (disable: boolean): number => {
+      const s = new MatchSim({
+        playerDef: HALCYON,
+        enemyDef: HALCYON,
+        seed: 12,
+        introTicks: 1,
+        roundTicks: 10800,
+      });
+      for (let i = 0; i < 4; i++) s.step(emptyInput(), emptyInput());
+      if (disable) s.player.weaponLock[WeaponSlot.Main] = DISARM_TICKS;
+      let shots = 0;
+      for (let i = 0; i < 90; i++) {
+        s.step(press(Btn.Main), emptyInput());
+        shots += s.events.filter((e) => e.t === 'fire' && e.ownerId === s.player.id).length;
+      }
+      return shots;
+    };
+    expect(fired(false)).toBeGreaterThan(0);
+    expect(fired(true)).toBe(0);
+  });
+
+  it('stops the sword too', () => {
+    const s = new MatchSim({
+      playerDef: HALCYON,
+      enemyDef: HALCYON,
+      seed: 12,
+      introTicks: 1,
+      roundTicks: 10800,
+    });
+    for (let i = 0; i < 4; i++) s.step(emptyInput(), emptyInput());
+    s.player.weaponLock[WeaponSlot.Melee] = DISARM_TICKS;
+    for (let i = 0; i < 30; i++) s.step(press(Btn.Melee), emptyInput());
+    expect(s.player.meleeLock).toBeNull();
+  });
+
+  it('is stopped by a guard, like every other on-hit effect', () => {
+    const c = new Combatant({ id: 0, team: Team.Player, def: HALCYON, x: 0, y: 0, facing: 1 });
+    c.guarding = true;
+    // A guarded hit never reaches `MatchSim`'s clean-hit branch, which is the
+    // only place the roll happens.
+    expect(c.takeHit({ ...disarmRound(), barrier: BarrierResponse.Absorb })).toBe('guarded');
+    expect(c.anyWeaponDisabled).toBe(false);
+  });
+
+  /**
+   * The guard for the failure mode that has now bitten three times.
+   *
+   * `Combatant.fire` builds its spawn field by field, so a new `AttackDef`
+   * property that is not explicitly copied there never reaches the projectile.
+   * `disarms` shipped that way: the data said 0.25, 424 stance shots were fired
+   * across 21 fights, 211 of them landed, and **zero** disarms happened. The
+   * same fault took `decoyShot` (D102) and `homingTicks`.
+   *
+   * Asserting on the pooled projectile rather than on the attack is the whole
+   * point — the attack was always correct.
+   */
+  it('survives the trip into the projectile pool', () => {
+    const s = harness();
+    s.step(press(Btn.Heavy), emptyInput());
+    let n = 0;
+    for (let i = 0; i < 60; i++) {
+      s.step(press(Btn.Main), emptyInput());
+      for (const p of s.activeProjectiles()) {
+        if (p.ownerId !== s.player.id) continue;
+        n++;
+        expect(p.disarms).toBeGreaterThan(0);
+        expect(p.asHit().disarms).toBe(VESPER.sniper!.shot.disarms);
+      }
+    }
+    expect(n).toBeGreaterThan(0);
+  });
+
+  /**
+   * Measured across several fights rather than one.
+   *
+   * A disarm lands about 2.4 times a match, so a single seed asserting "more
+   * than zero" is a coin toss dressed as a test — it failed on the first seed
+   * tried while the effect was working perfectly well. Same fault D92 fixed in
+   * the difficulty ladder: assert on something the sample can actually resolve.
+   */
+  it('happens in real fights rather than only in theory', () => {
+    let disarms = 0;
+    let fights = 0;
+    for (const foe of [HALCYON, MECHS.pyre, MECHS.cirrus, MECHS.terramoth]) {
+      for (let k = 0; k < 2; k++) {
+        const s = new MatchSim({
+          playerDef: VESPER,
+          enemyDef: foe,
+          seed: 900 + k * 7717 + foe.id.length * 31,
+          introTicks: 1,
+          roundTicks: 10800,
+        });
+        const a = new RivalAI({ difficulty: Difficulty.Extreme }, new Rng(11 + k));
+        const b = new RivalAI({ difficulty: Difficulty.Extreme }, new Rng(12 + k));
+        for (let i = 0; i < 10800 && s.phase !== MatchPhase.Over; i++) {
+          s.step(
+            a.think(s.player, s.enemy, s.activeProjectiles(), ARENA_W, ARENA_H),
+            b.think(s.enemy, s.player, s.activeProjectiles(), ARENA_W, ARENA_H),
+          );
+          disarms += s.events.filter((e) => e.t === 'disarm').length;
+        }
+        fights++;
+      }
+    }
+    // Measured at ~2.4 per fight over 21 matchups; the floor is well under it so
+    // this catches the effect being switched off, not an unlucky run.
+    expect(fights).toBe(8);
+    expect(disarms).toBeGreaterThan(3);
+  }, 60_000);
 });

@@ -496,10 +496,26 @@ export const VESPER: MechDef = {
       recoil: 2,
       kind: ProjKind.Beam,
       barrier: BarrierResponse.Pierce,
-      // Thinner and longer than PIERCE BEAM (radius 11, life 90, speed 34), and
-      // very much faster: a shot that arrives before the target can react to the
-      // muzzle flash is the entire point of a sniper.
-      projSpeed: 54,
+      /**
+       * Thinner and longer than PIERCE BEAM (radius 11, life 90, speed 34), and
+       * **3.2x as fast** — a shot that arrives before the target can react to
+       * the muzzle flash is the point of a sniper.
+       *
+       * 110 is chosen off a sweep, and the sweep says speed is close to spent as
+       * a lever. Stance-shot connect rate against the field at EXTREME:
+       *
+       * ```
+       *   speed  54 -> 49.8%      speed 130 -> 53.6%
+       *   speed  88 -> 53.2%      speed 180 -> 51.3%
+       * ```
+       *
+       * It plateaus around 53 % from 88 upward and then *falls*, which travel
+       * time cannot explain — the protocol's rule for a dial that has run out of
+       * resolution. The rounds that miss are not missing because they are slow;
+       * they are missing because of where they were aimed and what the target did
+       * afterwards. 110 sits in the plateau with margin on either side.
+       */
+      projSpeed: 110,
       projLife: 120,
       projRadius: 5,
       pierceCount: 4,
@@ -508,6 +524,17 @@ export const VESPER: MechDef = {
       // for its whole flight at this speed would be unanswerable.
       homing: 0.021,
       homingTicks: 45,
+      /**
+       * A quarter of the rounds that land knock a weapon out for five seconds.
+       *
+       * The stance's real payload, and the reason it is worth planting for. A
+       * sniper does not out-damage anyone — he takes pieces off them. Which of
+       * the three goes is random, so the stance is a threat the opponent cannot
+       * plan around rather than a targeted removal; and it is on the *stance*
+       * shot only, so it exists exactly while Kestrel is standing still and
+       * paying for it.
+       */
+      disarms: 0.25,
       muzzleForward: 52,
     }),
   },

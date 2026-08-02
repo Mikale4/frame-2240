@@ -697,6 +697,17 @@ export class MatchSim {
                 attacker.vy -= ay * fin;
               }
             }
+            /**
+             * The disarm roll, on a clean hit only.
+             *
+             * Rolled here rather than at spawn so a round that misses never
+             * consumes one, and out of the match generator so a replay
+             * reproduces it. A guard or a barrier burst stops it for the same
+             * reason it stops a status element: blocking is the answer to
+             * everything, and an effect that ignored it would have no counter.
+             */
+            if (p.disarms > 0 && this.rng.chance(p.disarms)) c.disarm(this.rng, this.events);
+
             // Status elements only take hold on a clean hit — guarding or
             // absorbing a shot also turns aside whatever it was carrying.
             if (p.element !== Element.None && c.status.apply(p.element as Element)) {

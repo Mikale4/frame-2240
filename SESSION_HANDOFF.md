@@ -38,9 +38,9 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 ## 3. Current status — verified
 
-* **534 tests pass** (26 files), typecheck clean, production build clean.
+* **542 tests pass** (26 files), typecheck clean, production build clean.
 * **Working tree clean** on `master`. No other branches.
-* `docs/DECISIONS.md` runs to **D108**.
+* `docs/DECISIONS.md` runs to **D109**.
 * **Suite runtime ~35s.** Deliberate — see §8a.
 * **`tools/probe/balance.ts` is the roster instrument** (D97). A full eight-mech
   sweep is ~20s:
@@ -133,26 +133,31 @@ nothing left here that a measurement can distinguish from noise.
 `npx vite-node tools/probe/balance.ts -- --tier extreme`. Six seeds per matchup,
 both slot orders on the same seed, real 180s round cap. Standard error ~0.045.
 
-| | EXTREME | | HARD |
-| --- | --- | --- | --- |
-| 1 | **NULLTIDE +0.237** | | **NULLTIDE +0.356** |
-| 2 | **VESPER +0.215** | | VESPER +0.065 |
-| 3 | PYRE +0.023 | | PYRE −0.000 |
-| 4 | TERRAMOTH −0.025 | | CIRRUS −0.019 |
-| 5 | NOCTURNE −0.054 | | NOCTURNE −0.031 |
-| 6 | HALCYON −0.120 | | HALCYON −0.073 |
-| 7 | CIRRUS −0.129 | | TERRAMOTH −0.117 |
-| 8 | OBELISK −0.148 | | OBELISK −0.181 |
+| | EXTREME | |
+| --- | --- | --- |
+| 1 | **VESPER +0.320** | |
+| 2 | **NULLTIDE +0.215** | |
+| 3 | PYRE −0.015 | |
+| 4 | TERRAMOTH −0.038 | |
+| 5 | NOCTURNE −0.049 | |
+| 6 | HALCYON −0.110 | |
+| 7 | CIRRUS −0.124 | |
+| 8 | OBELISK −0.199 | |
 
-spread: **EXTREME 0.385, HARD 0.536**.
+spread: **EXTREME 0.519**.
 
 > **This is a chosen state, not a regression.** The roster was at 0.169 / 0.242
-> with no outliers after the tuning pass (D97–D104). D105 and D107–D108 are
+> with no outliers after the tuning pass (D97–D104). D105 and D107–D109 are
 > requested buffs to NULLTIDE and VESPER, and the standing instruction on
 > NULLTIDE is explicit: *"don't try and balance the roster, I want to see for
 > myself just how much of an overpowered buff it really is."* **Do not quietly
-> re-tune either of them.** The levers, when the call is made, are in D105 and
-> D108.
+> re-tune either of them.** The levers, when the call is made, are in D105 (the
+> projection) and D109 (the disarm chance and cadence — *not* projectile speed,
+> which is measured out).
+>
+> **`playstyles.test.ts`'s roster guard was raised 0.7 → 0.78** to accommodate
+> this. Put it back to 0.7 when they are tuned. It still catches the 0.854 the
+> first playstyle cut failed at.
 
 **Mean fight is 46s of a 180s round**, so nearly every match is a kill rather
 than a timeout and the lead is dominated by who dies. The probe reports net kills
@@ -261,6 +266,13 @@ four rules worth carrying:
 * **Do not trust a code comment about behaviour — measure it.** `chooseAttack`
   claimed the rival never produces command motions. A branch was built on that
   and thrown away when a player said he had watched every mech fire one.
+
+**`Combatant.fire` builds its projectile spawn field by field.** A new
+`AttackDef` property that is not explicitly copied there never reaches the
+projectile — the feature is fully written, the data says it is on, and nothing
+happens. This has now bitten **three times in one session**: `decoyShot` (D102),
+`homingTicks`, and `disarms` (D109). Assert on the *pooled projectile*, never on
+the attack. The real fix is probably to spread rather than copy.
 
 **Any new world-space `Graphics` must be added to `BattleScene.worldObjects`**,
 or the UI camera draws a second copy of it at zoom 1 somewhere else on screen.

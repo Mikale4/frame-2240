@@ -26,6 +26,8 @@ export class Projectile {
    * what every homing weapon did before the field existed.
    */
   homingLeft = Infinity;
+  /** Chance of knocking a weapon offline on a clean hit. See `disarms`. */
+  disarms = 0;
   pierceLeft = 0;
   /** Status element inflicted on a clean hit. */
   element = 0;
@@ -95,6 +97,7 @@ export class Projectile {
     this.knockback = s.knockback;
     this.homing = s.homing;
     this.homingLeft = s.homingTicks ?? Infinity;
+    this.disarms = s.disarms ?? 0;
     this.pierceLeft = s.pierceCount;
     this.element = s.element ?? 0;
     this.decoyShot = s.decoyShot ?? false;
@@ -193,6 +196,7 @@ export class Projectile {
       knockback: this.knockback,
       homing: this.homing,
       homingTicks: this.homingLeft === Infinity ? undefined : this.homingLeft,
+      disarms: this.disarms,
       pierceCount: this.pierceLeft,
       element: this.element,
       decoyShot: this.decoyShot,

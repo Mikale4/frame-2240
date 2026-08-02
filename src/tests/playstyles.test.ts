@@ -281,9 +281,24 @@ describe('playstyles and roster balance', () => {
     }
     const v = [...lead].map(([k, s]) => s / n.get(k)!);
     const spread = Math.max(...v) - Math.min(...v);
-    // Measured at 0.511 with playstyles on, against 0.555 with them neutralised.
-    // The ceiling is the baseline plus headroom, so this fails on a regression
-    // rather than on ordinary tuning noise.
-    expect(spread).toBeLessThan(0.7);
+    /**
+     * **Raised from 0.7 to 0.78, and it should come back down.**
+     *
+     * Measured at 0.511 with playstyles on against 0.555 with them neutralised,
+     * and the ceiling was the baseline plus headroom. It now reads **0.722**,
+     * and none of that came from playstyles: NULLTIDE's projection (D105) and
+     * VESPER's sniper stance, kiting and disarm (D107–D109) are deliberate power
+     * increases, made on request, with an explicit instruction not to rebalance
+     * the roster around them until they have been played.
+     *
+     * The new ceiling is chosen to keep the guard doing its job rather than to
+     * make the red go away: **0.854 was the number the first playstyle cut
+     * failed at**, and 0.78 still catches that with room to spare. It is not a
+     * licence to drift — if a change pushes this past 0.78 the answer is to look
+     * at the change, not at the ceiling.
+     *
+     * When those two machines are tuned, put this back to 0.7.
+     */
+    expect(spread).toBeLessThan(0.78);
   }, 120_000);
 });

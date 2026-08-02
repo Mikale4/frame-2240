@@ -4088,3 +4088,104 @@ The kite alone was worth **-0.026 -> +0.096**; working auto-aim on the stance
 shot took him to **+0.215**. He is now the second strongest machine on the roster,
 which is a much larger swing than "fix his spacing" implies and is worth deciding
 about deliberately.
+
+---
+
+## D109 — The sniper takes pieces off you
+
+**Requested**: while in Sniper Mode only, VESPER's main-weapon projectiles have a
+25 % chance to disable a random enemy weapon — main, heavy or melee — for five
+seconds.
+
+### Shape
+
+`WeaponSlot` names the three, `Combatant.weaponLock` is a three-slot tick array,
+and `AttackDef.disarms` is the per-weapon chance. All of it defaults to nothing,
+so it is inert for every weapon that does not ask.
+
+Rolled by `MatchSim` **at the moment of impact**, out of the match generator, so
+a replay reproduces it and a round that misses never consumes a roll. Only a
+clean hit disarms — a guard or a barrier burst stops it, exactly as they stop a
+status element, which keeps blocking the answer to everything.
+
+Deliberate choices worth stating:
+
+* **Three weapons, not everything.** The lance, spread and salvo are command
+  motions and the sub belongs to the escort, so a disarmed pilot still has
+  options that cost a motion to produce. Losing a gun changes what you do; it
+  does not switch you off.
+* **Refreshes, never stacks.** A second hit on a dead gun resets its clock rather
+  than queueing another five seconds, so the effect has a ceiling however many
+  rounds land.
+* **It cancels the shot in progress** if that shot *is* the disarmed weapon, and
+  drops a melee chain. A gun that goes offline mid-swing and still fires is not
+  offline.
+* **The stance shot rides the main slot**, so disarming VESPER's own main gun
+  silences the stance too. A sniper with his gun shot out has nothing at all,
+  which is the risk planting is supposed to carry.
+
+The rival never presses a dead weapon, at **every tier** — that is knowledge of
+your own machine, not of the opponent, and a rival pulling a dead trigger reads
+as broken rather than as weak. It falls through to whatever it still has.
+
+### Visible, or it reads as dropped inputs
+
+`OFFLINE: MAIN 5s  MELEE 3s` on the affected pilot's HUD, its own line, with a
+per-weapon countdown. This is the only status in the game that takes an *option*
+away, and without a readout a player would conclude the game was eating their
+button presses. Confirmed on screen alongside the stance readout.
+
+### It shipped switched off, for the third time this session
+
+Data said 0.25. Across 21 fights: 424 stance shots, 211 clean hits, and **zero
+disarms**.
+
+`Combatant.fire` builds its projectile spawn **field by field** rather than
+spreading the attack, so a new `AttackDef` property that is not explicitly copied
+there never reaches the projectile. That is now three for three: `decoyShot`
+(D102, dropped in `Projectile.reset`), `homingTicks`, and this. The symptom is
+identical every time and completely invisible — the feature is written, the data
+says it is on, and nothing happens.
+
+`sniper.test.ts` now asserts the flag survives **into the pool** rather than
+asserting on the attack, which was always correct. Any future flag on `AttackDef`
+wants the same treatment, and the real fix is probably to spread rather than to
+copy.
+
+### Speed, and a dial that has run out
+
+Reported from play as "the beam only hits 23.7 % of the time". That number was
+the disarm rate *among hits* — 50 disarms from 211 hits, the 25 % chance working
+— rather than a hit rate. The actual connect rate was already **49.8 %**, the
+best on the roster.
+
+Raising the speed was still worth doing, and was swept rather than guessed:
+
+```
+  projSpeed  54 -> 49.8% connect, 2.38 disarms/fight
+             88 -> 53.2%          2.10
+            110 -> 55.9%          2.43
+            130 -> 53.6%          2.29
+            180 -> 51.3%          1.90
+```
+
+It plateaus around 53–56 % from 88 upward and then **falls** at 180, which travel
+time cannot explain — the protocol's signature for a dial with no resolution
+left. Shipped at **110**, best on both measures and 3.2× the normal lance.
+
+**Speed is not the lever for how often the disarm lands.** The rounds that miss
+are missing on aim and on what the target did afterwards, not on flight time. If
+more disarms are wanted the levers are the 25 % chance itself, the stance's fire
+cadence, or `homing`/`homingTicks`.
+
+### Cost
+
+```
+  VESPER   EXTREME  +0.215 -> +0.320       roster spread 0.385 -> 0.519
+```
+
+He is now the strongest machine on the roster, ahead of NULLTIDE. The roster
+guard in `playstyles.test.ts` was raised from 0.7 to **0.78** to accommodate this
+and D105 — chosen to still catch the 0.854 that the first playstyle cut failed
+at, not to make the red go away. **It should go back to 0.7 when these two are
+tuned.**

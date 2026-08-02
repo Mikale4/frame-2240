@@ -54,6 +54,23 @@ export function isPressed(f: InputFrame, b: Btn): boolean {
   return (f.pressed & (1 << b)) !== 0;
 }
 
+/**
+ * The three weapons a hit can knock offline. See `ProjectileSpawn.disarms`.
+ *
+ * Deliberately only these three: they are the buttons a pilot presses to deal
+ * damage. The lance, the spread and the salvo are command motions and the
+ * sub-weapon belongs to the escort, so a disabled *gun* does not silence the
+ * whole machine — it takes away the option the pilot reaches for most and leaves
+ * them the ones that cost a motion to produce.
+ */
+export const enum WeaponSlot {
+  Main = 0,
+  Heavy = 1,
+  Melee = 2,
+}
+export const WEAPON_SLOT_COUNT = 3;
+export const WEAPON_SLOT_NAMES: readonly string[] = ['MAIN', 'HEAVY', 'MELEE'];
+
 /** Saturation modes, mirroring the reference's three "concentration" types. */
 export const enum SatMode {
   Shield = 0,
@@ -158,6 +175,17 @@ export interface ProjectileSpawn {
   trueDamage?: boolean;
   /** Status element inflicted on a clean hit. Omitted or 0 = none. */
   element?: number;
+  /**
+   * Chance, on a clean hit, of knocking one of the target's three weapons
+   * offline. See `WeaponSlot` and `DISARM_TICKS`.
+   *
+   * Rolled by `MatchSim` at the moment of impact rather than at spawn, out of the
+   * match generator, so it is replay-safe and so a round that misses never
+   * consumes a roll. Only a clean hit can disarm: a guard or a barrier burst
+   * stops it, which keeps the answer to it the same as the answer to everything
+   * else.
+   */
+  disarms?: number;
 
   // ---- art and motion -----------------------------------------------------
   //
@@ -245,6 +273,8 @@ export type SimEvent =
    */
   | { t: 'satBurnout'; x: number; y: number; id: number; overheat?: boolean }
   | { t: 'modeCycle'; id: number; mode: SatMode }
+  /** A weapon knocked offline. `slot` is a `WeaponSlot`. */
+  | { t: 'disarm'; x: number; y: number; victimId: number; slot: number }
   /** A sniper stance opened or closed. See `SniperModeDef`. */
   | { t: 'sniper'; x: number; y: number; id: number; on: boolean }
   | { t: 'ko'; id: number }

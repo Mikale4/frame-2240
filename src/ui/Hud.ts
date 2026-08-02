@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { Combatant } from '../combat/Combatant';
 import type { MatchSim } from '../combat/MatchSim';
-import { SAT_MODE_NAMES, SatMode } from '../combat/types';
+import { SAT_MODE_NAMES, SatMode, WEAPON_SLOT_COUNT, WEAPON_SLOT_NAMES } from '../combat/types';
 import { VIEW_W } from '../core/GameConfig';
 import { clamp01 } from '../core/MathUtil';
 import { session } from '../core/Session';
@@ -39,6 +39,14 @@ export class Hud {
    */
   private readonly satModeTexts: Phaser.GameObjects.Text[] = [];
   private readonly flightTexts: Phaser.GameObjects.Text[] = [];
+  /**
+   * Which of this pilot's weapons are offline, and for how long.
+   *
+   * Its own line rather than sharing one: a disarm is the only status in the
+   * game that takes an *option* away, and a player who cannot see which button
+   * has stopped working will read it as the game dropping inputs.
+   */
+  private readonly disarmTexts: Phaser.GameObjects.Text[] = [];
   private readonly comboText: Phaser.GameObjects.Text;
   private readonly bannerText: Phaser.GameObjects.Text;
   private readonly subPips: Phaser.GameObjects.Rectangle[][] = [[], []];
@@ -111,10 +119,23 @@ export class Hud {
         })
         .setOrigin(right ? 1 : 0, 0)
         .setStroke('#0a0e18', 4);
+      const disarm = scene.add
+        .text(x, 170, '', {
+          fontFamily: FONT,
+          fontSize: '12px',
+          color: '#ff8a5c',
+        })
+        .setOrigin(right ? 1 : 0, 0)
+        .setStroke('#0a0e18', 4);
       this.satModeTexts.push(sat);
       this.flightTexts.push(flight);
+      this.disarmTexts.push(disarm);
       this.root.add(sat);
       this.root.add(flight);
+      // Must join the container: `BattleScene` ignores `hud.container` on the
+      // world camera, so a HUD element left outside it is drawn by *both*
+      // cameras. Same trap as the sniper overlay, from the other side.
+      this.root.add(disarm);
     }
 
     this.comboText = scene.add
@@ -284,6 +305,20 @@ export class Hud {
        * cannot see how much of it is left cannot decide whether to keep holding
        * the line or bail out early.
        */
+      // Offline weapons, longest remaining first, so the one that matters most
+      // is the one that reads first.
+      if (c.anyWeaponDisabled) {
+        const down: string[] = [];
+        for (let slot = 0; slot < WEAPON_SLOT_COUNT; slot++) {
+          if (c.weaponLock[slot] > 0) {
+            down.push(`${WEAPON_SLOT_NAMES[slot]} ${Math.ceil(c.weaponLock[slot] / 60)}s`);
+          }
+        }
+        this.disarmTexts[side].setText(`OFFLINE: ${down.join('  ')}`);
+      } else {
+        this.disarmTexts[side].setText('');
+      }
+
       if (c.sniperActive) {
         this.flightTexts[side].setText(`SNIPER: ${Math.ceil(c.sniperTicks / 60)}s`);
         this.flightTexts[side].setColor('#ff5c5c');

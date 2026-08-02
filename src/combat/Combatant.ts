@@ -18,6 +18,8 @@ import {
   type InputFrame,
   type ProjectileSpawn,
   type SimEvent,
+  WeaponSlot,
+  WEAPON_SLOT_COUNT,
 } from './types';
 import { DEG, approachAngle, clamp, lerp } from '../core/MathUtil';
 import { Supporter } from './Supporter';
@@ -167,6 +169,15 @@ export const DESIGNATOR_DAMAGE = 1.2;
  * roster table alone would not have caught that.
  */
 export const DESIGNATOR_HOMING = 0.012;
+
+/**
+ * How long a disarmed weapon stays offline. Five seconds.
+ *
+ * Long enough to change what the pilot does rather than merely what they press
+ * — five seconds without a main gun is a decision about how to spend the next
+ * five seconds — and short enough that it is a window rather than a sentence.
+ */
+export const DISARM_TICKS = 300;
 
 /**
  * Ticks the pilot is helpless after a saturation burst burns out.
@@ -406,6 +417,14 @@ export class Combatant implements FlightState {
    */
   sniperTicks = 0;
   sniperCooldown = 0;
+
+  /**
+   * Ticks each weapon is offline for, indexed by `WeaponSlot`.
+   *
+   * A fixed three-slot array rather than three fields so the HUD, the AI and the
+   * enforcement can all loop over it and none of them can forget a weapon.
+   */
+  readonly weaponLock: number[] = [0, 0, 0];
   /**
    * How charged the meter was when this burst opened, 0..1.
    *
@@ -703,6 +722,48 @@ export class Combatant implements FlightState {
    */
   get topSpeed(): number {
     return this.def.flight.maxSpeed;
+  }
+
+  /** Is this weapon knocked offline right now? */
+  weaponDisabled(slot: WeaponSlot): boolean {
+    return this.weaponLock[slot] > 0;
+  }
+
+  /** True if anything is offline — cheap enough for the HUD to ask every frame. */
+  get anyWeaponDisabled(): boolean {
+    return this.weaponLock[0] > 0 || this.weaponLock[1] > 0 || this.weaponLock[2] > 0;
+  }
+
+  /**
+   * Knocks one weapon offline, chosen at random from the three.
+   *
+   * Refreshes rather than stacks: a second hit on an already-dead gun resets its
+   * clock instead of queueing a second five seconds, so the effect has a ceiling
+   * however many rounds land.
+   *
+   * Cancels the attack in progress if it *is* that weapon, because a gun that
+   * goes offline mid-swing and still fires is not offline.
+   */
+  disarm(rng: Rng, events: SimEvent[]): WeaponSlot {
+    const slot = Math.floor(rng.next() * WEAPON_SLOT_COUNT) as WeaponSlot;
+    this.weaponLock[slot] = Math.max(this.weaponLock[slot], DISARM_TICKS);
+    const live = this.attack;
+    const isMelee = live?.kind === ProjKind.Melee;
+    if (
+      live &&
+      ((slot === WeaponSlot.Melee && isMelee) ||
+        (slot === WeaponSlot.Main && live.id === 'main') ||
+        (slot === WeaponSlot.Heavy && live.id === 'heavy'))
+    ) {
+      this.attack = null;
+    }
+    if (slot === WeaponSlot.Melee) {
+      this.meleeLock = null;
+      this.meleeCount = 0;
+      this.meleeChainQueued = false;
+    }
+    events.push({ t: 'disarm', x: this.x, y: this.y, victimId: this.id, slot });
+    return slot;
   }
 
   /** True while the sniper stance is up. */
@@ -1033,6 +1094,10 @@ export class Combatant implements FlightState {
 
   private tickSaturation(events: SimEvent[]): void {
     const g = this.def.gauges;
+    for (let i = 0; i < WEAPON_SLOT_COUNT; i++) {
+      if (this.weaponLock[i] > 0) this.weaponLock[i]--;
+    }
+
     // Sniper stance clock. Runs down whatever else is happening — the stance is
     // a commitment, so being hit or stunned does not pause it — and hands
     // straight over to the recharge when it expires.
@@ -1350,7 +1415,14 @@ export class Combatant implements FlightState {
       if (this.sniperActive) {
         const fire =
           isPressed(input, Btn.Main) || (isHeld(input, Btn.Main) && this.autoFireReady());
-        if (fire && (this.energyFree || this.energy >= d.sniper.shot.energyCost)) {
+        // The stance's lance rides the main slot, so disarming the main gun
+        // silences it too. A sniper with his gun shot out has nothing at all,
+        // which is the risk the stance is supposed to carry.
+        if (
+          fire &&
+          !this.weaponDisabled(WeaponSlot.Main) &&
+          (this.energyFree || this.energy >= d.sniper.shot.energyCost)
+        ) {
           this.begin(d.sniper.shot);
         }
         return;
@@ -1391,7 +1463,7 @@ export class Combatant implements FlightState {
     // do more. Main takes the primary slot because it is the short one and the
     // one that auto-fires; the heavy rides the twin slot, which refuses a reload
     // while it is busy and so rate-limits itself to a heavy's own cadence.
-    if (this.shootActive) {
+    if (this.shootActive && !this.weaponDisabled(WeaponSlot.Main)) {
       const twinDown =
         isPressed(input, Btn.Heavy) ||
         isPressed(input, Btn.Main) ||
@@ -1403,7 +1475,9 @@ export class Combatant implements FlightState {
           this.grounded = false;
           events.push({ t: 'takeoff', x: this.x, y: this.y, id: this.id });
         }
-        this.beginCo(d.heavy);
+        // The twin slot is skipped when the heavy is the offline one, so a
+        // Shoot burst still fires the gun the pilot still has.
+        if (!this.weaponDisabled(WeaponSlot.Heavy)) this.beginCo(d.heavy);
         this.begin(d.main);
         return;
       }
@@ -1411,7 +1485,11 @@ export class Combatant implements FlightState {
 
     // Heavy shot. The reference switched FlyingMode on automatically for its
     // Level 2 shot, so a heavy commitment always happens airborne.
-    if (isPressed(input, Btn.Heavy) && (this.energyFree || this.energy >= d.heavy.energyCost)) {
+    if (
+      isPressed(input, Btn.Heavy) &&
+      !this.weaponDisabled(WeaponSlot.Heavy) &&
+      (this.energyFree || this.energy >= d.heavy.energyCost)
+    ) {
       if (!this.flying) {
         this.flying = true;
         this.vy -= this.def.flight.takeoffImpulse * 0.6;
@@ -1425,7 +1503,11 @@ export class Combatant implements FlightState {
     // Melee has its own button: a swing is always a deliberate commitment, never
     // something that happens because you drifted into range. It lunges toward
     // the aim, so it stays useful from outside contact distance.
-    if (isPressed(input, Btn.Melee) && this.meleeLockout <= 0) {
+    if (
+      isPressed(input, Btn.Melee) &&
+      this.meleeLockout <= 0 &&
+      !this.weaponDisabled(WeaponSlot.Melee)
+    ) {
       if (this.startMeleeLock(target, events)) return;
       // No lock available (no target, out of range, or not enough energy):
       // still throw a single swing so the button is never dead.
@@ -1435,7 +1517,11 @@ export class Combatant implements FlightState {
 
     // Main gun, with hold-to-autofire as the reference offered.
     const mainDown = isPressed(input, Btn.Main) || (isHeld(input, Btn.Main) && this.autoFireReady());
-    if (mainDown && (this.energyFree || this.energy >= d.main.energyCost)) {
+    if (
+      mainDown &&
+      !this.weaponDisabled(WeaponSlot.Main) &&
+      (this.energyFree || this.energy >= d.main.energyCost)
+    ) {
       this.begin(d.main);
     }
     void target;
@@ -2056,6 +2142,21 @@ export class Combatant implements FlightState {
         knockback: a.knockback,
         homing,
         homingTicks: a.homingTicks,
+        /**
+         * **Third time a flag has been dropped here this session.**
+         *
+         * This object is built field by field rather than spread from the
+         * attack, so every new gameplay property on `AttackDef` has to be added
+         * in this exact spot or it silently never reaches the projectile. It has
+         * now happened to `decoyShot` (D102, dropped in `Projectile.reset`),
+         * `homingTicks`, and this. The symptom is always the same and always
+         * invisible: the feature is fully written, the data says it is on, and
+         * nothing whatsoever happens.
+         *
+         * `sniper.test.ts` asserts this one survives into the pool. Any future
+         * flag wants the same treatment.
+         */
+        disarms: a.disarms,
         pierceCount: a.pierceCount,
         element: a.element ?? Element.None,
         family: famId,

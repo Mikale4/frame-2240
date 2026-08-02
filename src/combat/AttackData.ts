@@ -56,6 +56,13 @@ export interface AttackDef {
    * forever; see `ProjectileSpawn.homingTicks`.
    */
   homingTicks?: number;
+  /**
+   * Chance this shot knocks one of the target's weapons offline on a clean hit.
+   *
+   * Omitted is zero, so it is inert for every weapon that does not ask for it.
+   * See `ProjectileSpawn.disarms`.
+   */
+  disarms?: number;
   pierceCount: number;
 
   /** Muzzle offset along the aim axis / perpendicular to it. */

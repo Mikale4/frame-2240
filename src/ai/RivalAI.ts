@@ -1,6 +1,6 @@
 import type { Combatant } from '../combat/Combatant';
 import type { MechDef } from '../mechs/MechDef';
-import { ActState, Btn, ProjKind, SatMode, type InputFrame } from '../combat/types';
+import { ActState, Btn, ProjKind, SatMode, WeaponSlot, type InputFrame } from '../combat/types';
 import { playstyleFor, type Playstyle } from './Playstyles';
 import type { Projectile } from '../projectiles/Projectile';
 import type { Rng } from '../core/Rng';
@@ -1112,7 +1112,20 @@ export class RivalAI {
       // any path that still asked for a heavy shot gets the main gun instead.
       // `chooseAttack` has five separate `return Btn.Heavy` sites and one of them
       // going unguarded would show up as a sniper flickering his own stance.
-      const btn = chosen === Btn.Heavy && self.def.sniper ? Btn.Main : chosen;
+      const remapped = chosen === Btn.Heavy && self.def.sniper ? Btn.Main : chosen;
+      /**
+       * Never press a weapon that is offline.
+       *
+       * Not a difficulty read: knowing your own gun has been shot out is not
+       * skill, and a rival that keeps pulling a dead trigger reads as broken
+       * rather than as weak. So this applies at every tier, unlike everything in
+       * `AI_PROFILES`.
+       *
+       * Falls through to whatever the machine still has rather than skipping the
+       * turn — a disarm should change what the opponent does, not switch them
+       * off, which is the difference between a status effect and a stun.
+       */
+      const btn = remapped === null ? null : this.usableWeapon(self, remapped);
       if (btn !== null) {
         this.queuedButton = btn;
         this.buttonHold = 2;
@@ -1761,6 +1774,31 @@ export class RivalAI {
    *   pilot, and noticing that is the difference between a tier that understands
    *   the mode and one that owns it.
    */
+  /**
+   * Maps a wanted button onto one this machine can actually fire.
+   *
+   * Returns null only when every weapon in the chain is down, which is the one
+   * case where there genuinely is nothing to press.
+   */
+  private usableWeapon(self: Combatant, want: Btn): Btn | null {
+    const slotOf: Partial<Record<Btn, WeaponSlot>> = {
+      [Btn.Main]: WeaponSlot.Main,
+      [Btn.Heavy]: WeaponSlot.Heavy,
+      [Btn.Melee]: WeaponSlot.Melee,
+    };
+    const slot = slotOf[want];
+    if (slot === undefined || !self.weaponDisabled(slot)) return want;
+    // Preference order for a fallback: the cheap reliable gun, then the heavy,
+    // then the sword. A planted sniper has only the main slot, so it gets none.
+    if (self.def.sniper && self.sniperActive) return null;
+    for (const alt of [Btn.Main, Btn.Heavy, Btn.Melee]) {
+      if (alt === want) continue;
+      const s2 = slotOf[alt]!;
+      if (!self.weaponDisabled(s2)) return alt;
+    }
+    return null;
+  }
+
   private sniperIntent(self: Combatant, foe: Combatant, dist: number): true | null {
     if (!self.def.sniper || this.stanceHold > 0) return null;
     const shot = self.def.sniper.shot;
