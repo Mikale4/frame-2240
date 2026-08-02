@@ -232,6 +232,18 @@ const SPENDS_CHARGES = new Set<SupporterRole>([
   'miner',
   'hazard',
 ]);
+/**
+ * `dome`: how much damage the shell absorbs before it fails, and how long it is
+ * gone for afterwards.
+ *
+ * The pool is generous — a dome that popped to a single volley would not be
+ * worth the drone standing where it has to stand — but the recovery is long
+ * enough to be a real window. Breaking Tengku's bubble should feel like it has
+ * bought something, and ten seconds without it is the something.
+ */
+export const DOME_MAX = 900;
+export const DOME_RECOVER = 420;
+
 /** `arcTether`: shortest span that counts as a wire rather than a formation gap. */
 const ARC_MIN_SPAN = 150;
 /** `decoy`: how often a new silhouette is thrown, how long it lasts, how far out. */
@@ -479,6 +491,17 @@ export class Supporter {
   /** `dome`: true while the bubble is up. `MatchSim` sweeps shots out of it. */
   domeActive = false;
   /**
+   * `dome`: how much punishment the bubble has left.
+   *
+   * It used to erase every non-piercing shot that entered it for the whole match
+   * at no cost but the drone's position — an unconditional wall with one answer,
+   * and the answer was slow. Now the wall pays: each round it deletes takes that
+   * round's damage off the shell, and a sustained volley will break it.
+   */
+  domeHp = DOME_MAX;
+  /** `dome`: ticks until a broken shell finishes rebuilding itself. */
+  domeDownTicks = 0;
+  /**
    * `decoy`: the false machine — how long it has left, where it is, and where it
    * is going.
    *
@@ -698,6 +721,14 @@ export class Supporter {
     this.follow(owner, target, threats);
     this.slew(owner, target);
 
+    // The shell rebuilds on its own clock, whatever else the drone is doing —
+    // including while the drone itself is being rebuilt, so a downed escort does
+    // not come back with a broken bubble on top of everything else.
+    if (this.domeDownTicks > 0) {
+      this.domeDownTicks--;
+      if (this.domeDownTicks === 0) this.domeHp = DOME_MAX;
+    }
+
     // A rebuilding drone is a passenger: no gun, no passive, no orders.
     //
     // Every latched role flag has to be cleared here, not just some of them.
@@ -791,9 +822,11 @@ export class Supporter {
 
     switch (d.role) {
       case 'dome':
-        // Always up while on station. Its cost is that the drone has to *be*
-        // there, which is what makes shooting it down the answer.
-        this.domeActive = true;
+        // Up while on station **and** while the shell has anything left. Its
+        // cost used to be only that the drone has to *be* there; now it is also
+        // that the shell is consumable, so pressure is an answer as well as
+        // position.
+        this.domeActive = this.domeDownTicks <= 0 && this.domeHp > 0;
         break;
 
       case 'tether':

@@ -27,7 +27,7 @@ import { music } from '../audio/Music';
 import { DANGER_LIFE_FRACTION, pickBattleCue } from '../audio/MusicBank';
 import { MatchPhase, ProjKind, SAT_MODE_NAMES, SatMode, emptyInput, type InputFrame } from '../combat/types';
 import { ELEMENTS, type Element } from '../combat/Status';
-import { DroneMode } from '../combat/Supporter';
+import { DOME_MAX, DroneMode } from '../combat/Supporter';
 import type { Combatant } from '../combat/Combatant';
 import { clamp, wrapAngle } from '../core/MathUtil';
 import { depthScaleAt, depthSortAt } from '../core/Depth';
@@ -748,6 +748,19 @@ export class BattleScene extends Phaser.Scene {
           }
           break;
         }
+        case 'domeBreak': {
+          // The shell coming apart. Loud on purpose: it is a window opening, and
+          // whoever spent a volley making it happen should be in no doubt.
+          const c = this.byId(ev.id);
+          const tint = c?.def.tint.glow ?? 0xbdf0ff;
+          this.effects.barrier(ev.x, ev.y, 170, tint);
+          this.effects.guardBreak(ev.x, ev.y);
+          this.effects.explode(ev.x, ev.y, false, tint);
+          this.shake = Math.max(this.shake, 5);
+          sfx.guardBreak();
+          if (c) this.hud.banner(`${c.def.supporter.name} DOWN`, 34);
+          break;
+        }
         case 'breaker': {
           /**
            * SIGHTLINE's breaker pulse.
@@ -1076,6 +1089,20 @@ export class BattleScene extends Phaser.Scene {
         const glow = c.def.tint.glow ?? 0xbdf0ff;
         const accent = c.def.tint.accent ?? 0x4ad6ff;
         const t = this.sim.tick;
+        /**
+         * **A shell that is failing has to look like it.**
+         *
+         * The dome is consumable now, and a player deciding whether to keep
+         * pushing needs that written on the screen rather than inferred from
+         * whether shots are still vanishing. Integrity drives the whole thing:
+         * the surface thins, the rim dims, and under a third it stutters — the
+         * seams drop out for a beat on a cadence taken off the tick, so a shell
+         * about to go reads as unstable rather than merely dimmer.
+         */
+        const integrity = clamp(s.domeHp / DOME_MAX, 0, 1);
+        const failing = integrity < 0.34;
+        const flicker = failing && Math.sin(t * 0.55) < -0.25 ? 0.35 : 1;
+        const solidity = (0.35 + 0.65 * integrity) * flicker;
         // Above the deck, below the mechs. The fight happens inside this shell
         // and a bubble drawn over the top of both machines would bury it.
         dome.setDepth(19.5);
@@ -1116,27 +1143,27 @@ export class BattleScene extends Phaser.Scene {
           const f = k / (SHELLS - 1);
           // Pow 2.6 keeps the middle nearly clear and stacks the light into the
           // last fifth of the radius, which is where a real shell would show.
-          dome.lineStyle(4 + f * 7, accent, 0.012 + 0.075 * Math.pow(f, 2.6));
+          dome.lineStyle(4 + f * 7, accent, (0.012 + 0.075 * Math.pow(f, 2.6)) * solidity);
           dome.strokeCircle(s.x, s.y, r * (0.46 + 0.54 * f));
         }
         // Faint interior tint, so the volume is enclosed rather than a ring
         // floating in front of the arena.
-        dome.fillStyle(accent, 0.035);
+        dome.fillStyle(accent, 0.035 * solidity);
         dome.fillCircle(s.x, s.y, r);
 
         // The rim itself. Breathing slowly, because a shield holding is not a
         // static object.
         const pulse = Math.sin(t * 0.06);
-        dome.lineStyle(9, accent, 0.2 + pulse * 0.05);
+        dome.lineStyle(9, accent, (0.2 + pulse * 0.05) * solidity);
         dome.strokeCircle(s.x, s.y, r);
-        dome.lineStyle(2.5, glow, 0.85 + pulse * 0.15);
+        dome.lineStyle(2.5, glow, (0.85 + pulse * 0.15) * solidity);
         dome.strokeCircle(s.x, s.y, r);
 
         // ---- seams, all on one rotation ------------------------------------
         const spin = t * 0.008;
         // Longitude: ellipses collapsing and reopening on |cos| as they swing
         // round the far side.
-        dome.lineStyle(1.5, glow, 0.22);
+        dome.lineStyle(1.5, glow, 0.22 * solidity);
         for (let k = 0; k < 6; k++) {
           const a = spin + (k * Math.PI) / 6;
           dome.strokeEllipse(s.x, s.y, Math.abs(Math.cos(a)) * r * 2, r * 2);
@@ -1147,13 +1174,13 @@ export class BattleScene extends Phaser.Scene {
         const TILT = 0.3;
         for (const lat of [-0.95, -0.62, -0.3, 0, 0.3, 0.62, 0.95]) {
           const cw = Math.cos(lat) * r;
-          dome.lineStyle(1.5, glow, lat === 0 ? 0.26 : 0.18);
+          dome.lineStyle(1.5, glow, (lat === 0 ? 0.26 : 0.18) * solidity);
           dome.strokeEllipse(s.x, s.y - Math.sin(lat) * r, cw * 2, cw * 2 * TILT);
         }
 
         // A specular cap up and to the left, where this arena's key light is.
         // Small, offset, and the last cue that the thing has a near side.
-        dome.fillStyle(0xffffff, 0.05);
+        dome.fillStyle(0xffffff, 0.05 * solidity);
         dome.fillEllipse(s.x - r * 0.34, s.y - r * 0.4, r * 0.5, r * 0.34);
 
         // ---- impacts --------------------------------------------------------

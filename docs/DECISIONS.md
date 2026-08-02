@@ -3258,3 +3258,52 @@ The breaker was caught mid-pulse on screen: gap 41px at the instant it fired,
 VESPER thrown at -15 and CIRRUS at +15 in opposite directions, CIRRUS in 20 ticks
 of hitstun with her chain broken, and nine ticks later the gap already open to
 121px behind an expanding hex wave.
+
+## D95 — Aegis's dome is consumable
+
+**Requested**: the dome may be too strong. It erased every non-piercing shot that
+entered 150px of the drone, for the whole match, at no cost but the drone's
+position — an unconditional wall whose only answer was killing the escort.
+
+The shell now pays for what it eats: each round deleted takes that round's damage
+off `DOME_MAX`, so a heavy costs it more than a pellet and the counter-play is
+pressure of the right *kind* rather than volume. At zero it fails and stays down
+for `DOME_RECOVER`, rebuilding on its own clock even while the drone itself is
+rebuilding — a downed escort should not come back with a broken bubble as well.
+
+**Tuned on measurement, and the measurement was surprising.** Two settings, six
+seeds a matchup, both slots, OBELISK's lead against the field:
+
+```
+  DOME_MAX 620 / RECOVER 600     EXTREME -0.219 +/-0.057   HARD -0.286 +/-0.041
+  DOME_MAX 900 / RECOVER 420     EXTREME -0.218 +/-0.040   HARD -0.202 +/-0.043
+```
+
+**Durability does not drive the EXTREME result at all** — a 45% larger pool and a
+30% shorter recovery moved it by 0.001. It is worth 0.084 at HARD. So the softer
+shell is strictly better and was taken; whatever costs OBELISK at the top tier,
+it is not how long the bubble survives.
+
+### Visible, because a consumable wall has to be readable
+
+Integrity drives the whole dome now: the fresnel surface thins, the rim dims, and
+under a third it **stutters** — the seams drop for a beat on a cadence taken off
+the tick, so a shell about to go reads as unstable rather than merely fainter. A
+player deciding whether to keep pushing needs that on the screen rather than
+inferred from whether their shots are still vanishing.
+
+The break gets a ring, guard-break shards, a shake and an `AEGIS DOWN` banner.
+Looked at: caught mid-match at 485/900 depleting under real fire, then at the
+break with the sphere gone.
+
+### Recorded plainly: Obelisk was not overpowered on the numbers
+
+It measured **-0.002** — dead neutral — before this change. The dome *felt*
+oppressive because it had no counterplay, not because the machine was winning
+more than its share. Both things can be true, and the design fix was still the
+right one: an ability with no answer is a bad ability at any win rate.
+
+It costs OBELISK about 0.19 of a life bar and leaves it the weakest machine, so
+it is owed a tuning pass — and that pass should not start by making the shell
+tougher again, because the measurement above says that lever does nothing where
+it matters.

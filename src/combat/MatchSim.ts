@@ -3,7 +3,7 @@ import { Rng } from '../core/Rng';
 import type { MechDef } from '../mechs/MechDef';
 import { Projectile, ProjectilePool, sweptHit } from '../projectiles/Projectile';
 import { Combatant, DESIGNATOR_HOMING } from './Combatant';
-import { SupState } from './Supporter';
+import { DOME_RECOVER, SupState } from './Supporter';
 import { Element } from './Status';
 import { clampToArena } from './FlightModel';
 import { clamp } from '../core/MathUtil';
@@ -352,6 +352,17 @@ export class MatchSim {
             if (Math.hypot(p.x - s.x, p.y - s.y) > r) continue;
             p.active = false;
             this.events.push({ t: 'absorb', x: p.x, y: p.y, victimId: c.id, charge: 0 });
+            // The shell pays for what it eats. A heavy round costs it more than
+            // a pellet, so the counter-play is pressure of the right kind rather
+            // than volume.
+            s.domeHp -= p.damage;
+            if (s.domeHp <= 0) {
+              s.domeHp = 0;
+              s.domeActive = false;
+              s.domeDownTicks = DOME_RECOVER;
+              this.events.push({ t: 'domeBreak', x: s.x, y: s.y, id: c.id });
+              break;
+            }
           }
           break;
         }
