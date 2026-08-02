@@ -349,6 +349,7 @@ men. **Mechs are "it"; pilots get their own pronouns. The present is 43 CE.**
 | --- | --- |
 | `CLAUDE.md` (workspace root) | Project rules, structure, definition of done |
 | **`docs/TESTING_PROTOCOL.md`** | **How to verify. Test at EXTREME; the traps** |
+| **`docs/TIER_LIST.md`** | **Measured tiers, the full matchup chart, and which fights are fair** |
 | `docs/DECISIONS.md` | **D1–D100.** D97–D100 are the roster tuning pass |
 | **`tools/probe/balance.ts`** | **The roster instrument.** Run `--selftest` first |
 | `src/data/archive.ts` | The story bible: 21 entries |
