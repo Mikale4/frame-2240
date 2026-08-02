@@ -3372,3 +3372,221 @@ So the gap between what `preferredRangeFor` wants and what she holds is not a
 defect here. It is the fight her kit is built to create, and the same measurement
 means opposite things on two different machines. Worth remembering before the
 next "wants X, gets Y" line is read as a bug.
+
+---
+
+## D97 — A committed instrument for roster balance
+
+Every roster measurement so far has been made with a scratch script that did not
+survive the session, so `SESSION_HANDOFF.md` §6 has repeatedly carried numbers
+the next session could not reproduce. `tools/probe/balance.ts` is that script,
+kept.
+
+```
+npx vite-node tools/probe/balance.ts -- --tier extreme --matrix
+npx vite-node tools/probe/balance.ts -- --selftest
+```
+
+Every machine against every other, both slot orders **on the same seed**, six
+seeds, at the real 180-second round cap. It shards across ten child processes,
+so a full eight-mech sweep is about 20 seconds — cheap enough that a tuning
+change is measured rather than argued about.
+
+### The self-test is the point
+
+`docs/TESTING_PROTOCOL.md` records three measurements that were believed and
+overturned in one session, and the property that would have caught all three is
+that **an inert change must measure exactly zero**. `--selftest` runs the same
+configuration twice in one process and requires bit-identical samples; if that
+ever disagrees, the simulation carries state between runs and every A/B measured
+through the file is confounded.
+
+Two further checks came free and both passed: `--only terramoth` reproduces
+TERRAMOTH's full-sweep number **exactly** (+0.256 either way), because it is the
+same 42 samples; and the tool reproduced the previous session's ranking from a
+different seed set and a different tick cap — TERRAMOTH +0.256 against a
+recorded +0.266, OBELISK −0.187 against −0.154.
+
+### What it measured that reading the code did not
+
+`ko` per fight is reported alongside the lead, and the mean fight is **46s of a
+180s round** — nearly every match is a kill, not a timeout, so the lead is
+dominated by who dies rather than by who is ahead on chip.
+
+Two diagnostics from the same sweep are worth carrying:
+
+* **`grounded` is 0.0 % for all eight machines.** The whole ground game —
+  `groundedMul`, `walkSpeed`, `takeoffImpulse`, `groundedBoostRegen` — is dead
+  code in AI-versus-AI play. TERRAMOTH's 5624 grounded effective HP, the largest
+  bracing bonus on the roster and part of its written identity, never once
+  happens. It exists for a human player only.
+* **The AI never chooses a sub-weapon.** `Btn.Sub` deploys and recalls the
+  drone; the *drone* fires the owner's sub on its own schedule. So a
+  sub-weapon's balance contribution in any measurement here is entirely the
+  escort's doing, and the two roles with no gun contribute none of it.
+
+---
+
+## D98 — Terramoth was over-armoured three times over
+
+**+0.266 at EXTREME and +0.149 at HARD**, the worst outlier on the roster, and
+never investigated. The handoff guessed it was the "out-ranged, close in" branch
+plus a big frame. It is simpler and more specific than that.
+
+### Effective HP, which no screen shows
+
+```
+  mech        life   def  brace     eHP        dps    eHP x dps
+  terramoth   2490  0.78   0.86    3712       25.6       95,000
+  obelisk     2070  0.86   1.00    2407       20.9       50,300
+  nocturne    1750  0.82   1.00    2134       20.2       43,100
+  pyre        1860  0.95   1.00    1958       28.1       55,000
+  halcyon     1750  1.00   1.00    1750       38.8       67,900
+  nulltide    1610  1.08   1.00    1491       34.2       51,000
+  vesper      1490  1.15   1.00    1296       49.1       63,600
+  cirrus      1440  1.18   1.00    1220       68.1       83,100
+```
+
+TERRAMOTH stacks **three** multipliers on the same axis: the largest hull pool,
+the best chassis `defence.mul`, and BULWARK's ARMOUR BRACE — the only
+*defensive* drone passive on the roster, where the other seven grant a
+capability. The product is 1.54x the next toughest machine and 3.0x the
+lightest.
+
+Its damage is **below average** (25.6 dps against a field mean of 35.6), so it
+does not win by hitting hard. It wins by not dying, and the matrix says so: its
+two biggest wins are over CIRRUS (+0.51) and NULLTIDE (+0.42), the two frailest
+frames, and it is level with VESPER and PYRE, who can actually out-damage it.
+
+### The price it is supposed to pay does not exist
+
+The design charges TERRAMOTH in mobility — slowest frame, lowest boost ceiling,
+"slow to reposition". Two measurements say that currency is not accepted. §8b
+already found that the roster fights at one distance because closing is
+unilateral and withdrawing is not, so being slow costs a machine that wants to
+be close almost nothing. And `grounded` is 0.0 %, so the bracing bonus it is
+supposed to earn by planting never arrives either.
+
+### Trimmed on the axis it was stacked on
+
+Single-lever ablations, EXTREME, six seeds:
+
+```
+  baseline                                eHP 3712    +0.256
+  brace 0.86 -> 1.00 (removed)            eHP 3192    +0.159
+  defence.mul 0.78 -> 0.86                eHP 3367    +0.189
+```
+
+Roughly 0.007 of lead per 1 % of effective HP, consistent across both levers.
+Shipped: **`defence.mul` 0.78 -> 0.88 and ARMOUR BRACE 0.86 -> 0.92**, both of
+them the invisible multipliers. `maxLife` 2490 is untouched deliberately — it is
+the number on the select screen and the one a player reads as "immense armour".
+At eHP 3007 TERRAMOTH is still comfortably the toughest machine on the roster,
+by 25 % over OBELISK, rather than by 54 %.
+
+```
+  TERRAMOTH   EXTREME  +0.256 -> +0.132      HARD  +0.139 -> -0.025
+  spread      EXTREME   0.459 ->  0.322      HARD   0.351 ->  0.275
+```
+
+---
+
+## D99 — A broken dome falls back on its gun
+
+D95 made AEGIS's shell consumable and the handoff recorded the cost at ~0.19 of
+a life bar, with the note that OBELISK "is owed compensation somewhere other
+than the shell" — `DOME_MAX` and `DOME_RECOVER` together moved EXTREME by 0.001,
+so how long the bubble lasts is not the lever.
+
+Measured, the lever is what happens when it is gone:
+
+```
+  AEGIS across 28 fights vs the field, EXTREME
+    dome active       56.6%
+    dome rebuilding   36.9%
+    dome breaks       3.82 per fight
+```
+
+`dome` is one of only two roles excluded from `SPENDS_CHARGES`, because holding
+a bubble is a full-time job. But for **36.9 % of every fight there is no bubble
+to hold**, and AEGIS spent that third of the match contributing nothing at all —
+no shell and no gun — while all seven other escorts worked every tick. That is
+not what "consumable" was meant to mean; it turned a trade into a hole.
+
+So `SPENDS_CHARGES.has(role)` became `Supporter.spendsCharges(role)`, and a dome
+whose emitter is down draws from the charge rack until it has rebuilt. The
+counterplay D95 was made for is intact — pop the bubble and it stays popped for
+ten seconds — but the ten seconds now buy incoming fire instead of a switched-off
+escort. It is offence rather than shell, which is the only direction OBELISK had
+left.
+
+**OBELISK −0.187 → −0.153 at EXTREME** on that change alone.
+
+### Looked at, not only measured
+
+Driven in the browser at EXTREME, OBELISK vs PYRE: the shell was dropped to 1 hp
+so the next hit would pop it the way an opponent's would. `domeBreak` fired,
+`domeDownTicks` went to 420, and AEGIS put out **three volleys** during the
+rebuild. Frozen mid-sequence the drone reads `Recover` with `domeActive: false`
+and 409 ticks left, and an OBELISK-owned `Missile` round sits 10 px off the
+drone. On screen: the faceted shell is visibly shattered, the AEGIS DOWN banner
+is up, and the escort is shooting.
+
+One thing this exposed: `domeHp = 0` with `domeDownTicks = 0` is unreachable in
+play — `MatchSim` sets both in the same statement — so a probe that writes
+`domeHp` directly produces a state the game cannot enter, and the fallback
+correctly declines to fire in it. The first browser check did exactly that and
+read as a null result.
+
+---
+
+## D100 — A guard should bank meter, and the ladder says it may not
+
+Built, measured, reverted. Kept here because the reasoning was sound and the
+measurement still killed it.
+
+`Combatant.takeHit`'s guarded branch grants **no saturation at all**, while the
+unguarded route below it pays `landed * satOnDamage`. Holding a guard therefore
+*costs* meter relative to standing still and eating the shot. It reads worst on
+the machine built around it:
+
+```
+  OBELISK   guards 20.3 % of every fight — the most on the roster
+            takes 14 % of gunfire while doing it
+            overdrive uptime 41.0 % — the LOWEST of all eight
+            blurb: "Turns incoming fire into overdrive"
+```
+
+The identity and the code disagreed. The fix was one branch: charge the meter
+off `dmg`, before mitigation, so blocking 100 damage down to 14 banks what
+taking all 100 would have. General rather than an OBELISK exception, at each
+chassis's own `satOnDamage`, and excluding a Shield burst so the self-funding
+loop the unguarded route already refuses could not be reopened from this side.
+
+It worked, and the bill arrived somewhere else:
+
+```
+  OBELISK          -0.187 -> -0.152      the intended effect
+  PYRE             +0.085 -> +0.143      saturation gain x1.8, free
+  EXTREME vs HARD  +0.147 -> -0.004      the ladder, flattened
+```
+
+The top rung is the hardest-won property on this project — last session took it
+from +0.012 to +0.147 — and a general saturation rule hands the lower tier more
+than it hands the higher one, because EXTREME's edge is built out of not being
+hit. `difficulty.test.ts` caught it and nothing else would have; the roster
+sweep called the change an improvement.
+
+Two rules confirmed rather than learned, both already in the protocol: **a
+rule's value is a property of the AI it sits in**, and **a general rule aimed at
+one machine is charged to all eight**. Reverted, with the finding written into
+the branch so the next reader does not re-derive it.
+
+### Still open
+
+OBELISK is the outstanding roster problem: **−0.137 at EXTREME, −0.173 at
+HARD**, the only machine outside the pack at either tier. Its output is
+second-lowest on the roster (20.9 dps) while its durability is second-highest,
+and giving its main gun 64 % more reach — 528px against the 563px it actually
+fights at — measured **−0.033, i.e. nothing**. Reach is not the answer either.
+Whatever is owed it is still owed.

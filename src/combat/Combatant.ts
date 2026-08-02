@@ -2197,6 +2197,30 @@ export class Combatant implements FlightState {
       if (isMelee) this.meleeHitsTaken++;
       // A Shield burst supersedes the guard's own scaling rather than stacking
       // with it, so the figures in `SHIELD_TAKEN` are the whole story.
+      /**
+       * **A guard banks no meter, and that was tried as a fix and reverted.**
+       *
+       * The asymmetry is real and looks like a defect: the unguarded route
+       * below pays `landed * satOnDamage` and this branch pays nothing, so
+       * holding a guard *costs* saturation relative to standing there and
+       * eating the shot. It reads worst on OBELISK, whose blurb is "turns
+       * incoming fire into overdrive" and which — measured at EXTREME — guards
+       * 20.3 % of every fight, the most on the roster, and comes out with the
+       * *lowest* overdrive uptime of all eight (41.0 % against NULLTIDE's
+       * 55.5 %).
+       *
+       * Charging the meter off `dmg` here, before mitigation, was measured. It
+       * did what it was meant to — OBELISK -0.187 to -0.152 — and it also
+       * **flattened the top rung of the difficulty ladder, EXTREME vs HARD from
+       * +0.147 to -0.004**, which is the single most expensive property on this
+       * project to hold. It handed PYRE (saturation gain x1.8) a free +0.058 on
+       * the way past. `difficulty.test.ts` caught it; nothing else would have.
+       *
+       * So the asymmetry stays until someone can pay for it. The lesson is the
+       * one in `docs/TESTING_PROTOCOL.md`: a rule's value is a property of the
+       * AI it sits in, and a general rule aimed at one machine is charged to
+       * all eight. See D97.
+       */
       this.life -=
         dmg *
         (this.shieldActive

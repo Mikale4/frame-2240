@@ -791,7 +791,7 @@ export class Supporter {
         // tether or a decoy is not a volley and must not compete for ammunition
         // its owner is also spending on the sub-weapon button.
         if (this.ready && requestVolley && this.wantsToFire(owner, target)) {
-          if (SPENDS_CHARGES.has(d.role)) {
+          if (this.spendsCharges(d.role)) {
             const a = requestVolley();
             if (a) this.order(a);
           }
@@ -800,6 +800,34 @@ export class Supporter {
     }
   }
 
+
+  /**
+   * Whether this role draws from the owner's charge rack *this tick*.
+   *
+   * `SPENDS_CHARGES` answers it for seven roles permanently. The eighth is
+   * conditional, and it is the reason this is a method rather than a set
+   * lookup: **a dome with no shell left has nothing else to do.**
+   *
+   * Holding the bubble is a full-time job, which is why `dome` gives up the gun
+   * — but since D95 the bubble is consumable, and measured at EXTREME it is
+   * *down* 36.9 % of every fight (3.82 breaks per fight, ten seconds each).
+   * For over a third of the match AEGIS was therefore contributing nothing
+   * whatsoever: no shell, and no gun either, while every other escort on the
+   * roster is doing its job every tick. That is most of what D95 cost OBELISK,
+   * and it is not what "consumable" was meant to mean.
+   *
+   * So a broken emitter falls back on its weapon until it has rebuilt. The
+   * trade stays intact — an opponent who pops the bubble still gets ten seconds
+   * without it, which is the counterplay the change was made for — but they now
+   * trade the shell for incoming fire rather than for an escort that has been
+   * switched off. It is offence rather than shell, which is the only direction
+   * OBELISK had left: its durability is already second on the roster and
+   * `DOME_MAX`/`DOME_RECOVER` were measured at 0.001 of lead.
+   */
+  private spendsCharges(role: SupporterRole): boolean {
+    if (SPENDS_CHARGES.has(role)) return true;
+    return role === 'dome' && this.domeDownTicks > 0;
+  }
 
   /**
    * The drone's own verb, run once per tick.

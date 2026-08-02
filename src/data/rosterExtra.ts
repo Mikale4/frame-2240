@@ -511,7 +511,7 @@ export const TERRAMOTH: MechDef = {
   gauges: { ...GAUGES, maxLife: 2490, maxEnergy: 900, energyRegen: 2.7, barrierRegen: 0.44 },
   barrier: { ...BARRIER, radius: 56, cost: 26, breakStun: 58 },
   // Built to stand and take it.
-  defence: { mul: 0.78, groundedMul: 0.66 },
+  defence: { mul: 0.88, groundedMul: 0.66 },
   rig: makeRig({
     scale: 1.29,
     hurtRadius: 36,
@@ -712,8 +712,8 @@ export const TERRAMOTH: MechDef = {
     fireRange: 640,
     passive: {
       name: 'ARMOUR BRACE',
-      text: 'You take 14% less damage.',
-      defenceMul: 0.86,
+      text: 'You take 8% less damage.',
+      defenceMul: 0.92,
     },
   },
   lockCone: 85 * DEG,
