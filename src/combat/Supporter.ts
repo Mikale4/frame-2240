@@ -246,35 +246,62 @@ export const DOME_RECOVER = 420;
 
 /** `arcTether`: shortest span that counts as a wire rather than a formation gap. */
 const ARC_MIN_SPAN = 150;
-/** `decoy`: how often a new silhouette is thrown, how long it lasts, how far out. */
-const DECOY_PERIOD = 150;
-const DECOY_LIFE = 110;
+/**
+ * `decoy`: how often a new silhouette is thrown, how long it lasts, how far out.
+ *
+ * `DECOY_LIFE` matching `DECOY_PERIOD` is deliberate: a new projection is thrown
+ * exactly as the last one fades, so the *cadence* leaves no gap. The 40-tick
+ * hole it used to leave was the ability's weakest moment — an opponent who
+ * simply waited got a clean look at a single target, which is the opposite of
+ * what a jammer should offer.
+ *
+ * **That is a statement about the cadence, not a guarantee of uptime.** A
+ * projection is only thrown while STATIC is on station and inside `fireRange` of
+ * the target, so measured in a real fight at EXTREME the silhouette is up about
+ * **75 %** of the time rather than always. Killing the escort, or driving it off
+ * station, is still the answer — which is as it should be.
+ */
+export const DECOY_PERIOD = 150;
+export const DECOY_LIFE = 150;
 // Far enough out that a fooled shot genuinely misses. At 130 the silhouette sat
 // close enough to its owner that aiming at it still nearly aimed at them.
 const DECOY_THROW = 300;
-/** How fast the projection drifts. Near a mech's cruising speed, not its boost. */
-const DECOY_SPEED = 2.6;
-/** How often the projection fires, and how fast its harmless rounds travel. */
 /**
- * How often the projection fires, and how likely each round is to stun.
+ * How fast the projection moves, as a share of the chassis it is imitating.
  *
- * Rebalanced together, deliberately: the projection's job is to make ignoring it
- * expensive, and it did that with volume. Volume is the wrong lever — a stream
- * of harmless rounds from a silhouette is easy to read as harmless. Fewer shots
- * that each carry a real threat make the *decision* to ignore it the risky part,
- * which is what a decoy is for.
+ * **It flies as well as she does.** At the old flat 2.6 — under half NULLTIDE's
+ * 5.7 cruise — the silhouette drifted while the real machine manoeuvred, which
+ * is the one tell no amount of muzzle flash covers: anything moving that
+ * placidly in a firefight is not a pilot. Expressed against
+ * `SupporterOwner.topSpeed` rather than as a constant so it stays true if the
+ * chassis is ever retuned.
  */
-const DECOY_FIRE_PERIOD = 28;
+const DECOY_SPEED_FRAC = 1.0;
+/** Fallback for a bare stand-in with no chassis, e.g. in a unit test. */
+const DECOY_SPEED_FALLBACK = 5.7;
+/** How fast the projection's rounds travel. */
 const DECOY_SHOT_SPEED = 13;
 /**
- * Three in twenty, for one second.
+ * How often the projection fires, and what its rounds are worth.
  *
- * The decoy's rounds do no damage, so this is the entire reason to respect them
- * — and at one in twenty a decoy would usually throw its whole volley without
- * landing anything, which made ignoring it very nearly free.
+ * **The stun lottery is gone.** The rounds used to do no damage at all and carry
+ * a three-in-twenty chance of a one-second stun, which made respecting the
+ * projection a gamble on someone else's dice — ignore it twenty times and you
+ * are three stuns down through no decision of your own. That is the wrong kind
+ * of pressure, and it is also invisible: a shot that does nothing nineteen times
+ * teaches the player that it does nothing.
+ *
+ * Now every round bites a little, always, and none of them interrupt. Chip is
+ * legible in a way a coin flip is not — the life bar moves — and it makes the
+ * projection a *third weapon* rather than a nuisance, which is the shape D96
+ * described NULLTIDE as having and the kit did not deliver.
+ *
+ * Deliberately tiny. At 8 a side, fired every 16 ticks, a projection that landed
+ * **every** round for its whole 150-tick life would do 72 damage — under 5 % of
+ * an average hull. It cannot win a fight. It can make standing still lose one.
  */
-const DECOY_STUN_CHANCE = 0.3;
-const DECOY_STUN_TICKS = 60;
+export const DECOY_FIRE_PERIOD = 16;
+export const DECOY_DAMAGE = 8;
 /** `miner`: a cluster of large, long-lived charges rather than one small one. */
 const MINE_PERIOD = 110;
 const MINE_LIFE = 900;
@@ -447,6 +474,14 @@ export interface SupporterOwner {
   guarding?: boolean;
   /** Inside a Shield saturation burst. */
   shieldActive?: boolean;
+  /**
+   * Chassis cruising top speed, so a `decoy` projection can move as well as the
+   * machine it is imitating rather than at a flat constant.
+   *
+   * Optional for the same reason as `helpless`: a bare stand-in handed to `step`
+   * in a test has no chassis, and falls back to `DECOY_SPEED_FALLBACK`.
+   */
+  topSpeed?: number;
 }
 
 
@@ -556,10 +591,17 @@ export class Supporter {
     /** Owning chassis id, used only to look up the pilot's drone doctrine. */
     mechId?: string,
     /**
-     * The match generator, for the decoy's stun roll. Falls back to its own so a
-     * `Supporter` built in isolation still works.
+     * The match generator, so anything a drone rolls is replay-safe. Falls back
+     * to its own so a `Supporter` built in isolation still works.
+     *
+     * **Currently unread.** Its only consumer was the decoy's stun roll, which
+     * was removed when the projection's rounds were given damage instead (D101).
+     * Kept plumbed rather than deleted so the next role that needs a die rolls
+     * it from the match's generator — the property every replay depends on —
+     * instead of reaching for `Math.random()` because no seeded source was to
+     * hand.
      */
-    private readonly rng: Rng = new Rng(0x5eed0007 + owner.id),
+    readonly rng: Rng = new Rng(0x5eed0007 + owner.id),
   ) {
     this.life = def.maxLife;
     this.team = owner.team;
@@ -1009,11 +1051,23 @@ export class Supporter {
     events: SimEvent[],
   ): void {
     const age = DECOY_LIFE - this.decoyTicks;
-    // A slow S-curve rather than a random walk, so it never doubles back in a
-    // way no pilot would.
-    this.decoyHeading += Math.sin(age * 0.045) * 0.028;
-    this.decoyVx = Math.cos(this.decoyHeading) * DECOY_SPEED;
-    this.decoyVy = Math.sin(this.decoyHeading) * DECOY_SPEED + Math.sin(age * 0.11) * 0.55;
+    const speed = (owner.topSpeed ?? DECOY_SPEED_FALLBACK) * DECOY_SPEED_FRAC;
+    /**
+     * A folded S-curve rather than a random walk, so it never doubles back in a
+     * way no pilot would — but a *sharper* one than the original lazy drift.
+     *
+     * Two sine terms at different rates, so the path does not repeat on a period
+     * short enough to recognise: a long sweep it holds for about a second and a
+     * half, and a tighter jink on top. Together they read as a machine picking
+     * lines and committing to them, which is what the real one is doing a few
+     * hundred pixels away.
+     *
+     * Still deterministic — every term comes off the projection's own age, so a
+     * replay reproduces its path exactly.
+     */
+    this.decoyHeading += Math.sin(age * 0.045) * 0.052 + Math.sin(age * 0.017) * 0.031;
+    this.decoyVx = Math.cos(this.decoyHeading) * speed;
+    this.decoyVy = Math.sin(this.decoyHeading) * speed + Math.sin(age * 0.11) * 0.55;
     this.decoyX += this.decoyVx;
     this.decoyY += this.decoyVy;
     if (Math.abs(this.decoyVx) > 0.05) this.decoyFacing = this.decoyVx >= 0 ? 1 : -1;
@@ -1026,10 +1080,10 @@ export class Supporter {
      * the shots look exactly like Io's, they arrive from a plausible angle, and
      * answering them is a decision.
      *
-     * They do no damage at all. Their only bite is a one-in-twenty chance of a
-     * one-second stun, which is enough that ignoring the projection is not free
-     * and far too little to make the ability a damage source. Rolled at spawn
-     * out of the match RNG, so a replay reproduces it.
+     * Each round takes a sliver of hull and **interrupts nothing** — no hitstun,
+     * no hitstop, no knockback, no i-frames. Ignoring the projection costs a
+     * trickle rather than a dice roll, and answering it costs the attention that
+     * was always the real price.
      */
     if (!target || !target.alive) return;
     // Slewed at the drone's own turret rate rather than snapped, exactly as a
@@ -1042,13 +1096,12 @@ export class Supporter {
     if (this.decoyFireTimer-- > 0) return;
     this.decoyFireTimer = DECOY_FIRE_PERIOD;
     const ang = this.decoyAim;
-    const stun = this.rng.chance(DECOY_STUN_CHANCE);
     spawns.push({
       x: this.decoyX + Math.cos(ang) * 26,
       y: this.decoyY + Math.sin(ang) * 26,
       vx: Math.cos(ang) * DECOY_SHOT_SPEED,
       vy: Math.sin(ang) * DECOY_SHOT_SPEED,
-      damage: 0,
+      damage: DECOY_DAMAGE,
       guardDamage: 0,
       life: 46,
       radius: 9,
@@ -1057,7 +1110,7 @@ export class Supporter {
       kind: ProjKind.Bullet,
       barrier: BarrierResponse.Absorb,
       hitstop: 0,
-      hitstun: stun ? DECOY_STUN_TICKS : 0,
+      hitstun: 0,
       knockback: 0,
       homing: 0,
       pierceCount: 0,

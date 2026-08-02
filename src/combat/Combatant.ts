@@ -687,6 +687,14 @@ export class Combatant implements FlightState {
     return this.act === ActState.Hitstun || this.satBurnout > 0 || this.guardBreakStun > 0;
   }
 
+  /**
+   * Cruising top speed. Read by the supporter so a `decoy` projection can fly as
+   * well as the chassis it is imitating — see `SupporterOwner.topSpeed`.
+   */
+  get topSpeed(): number {
+    return this.def.flight.maxSpeed;
+  }
+
   get shieldActive(): boolean {
     return this.satActive && this.satMode === SatMode.Shield;
   }
@@ -2155,11 +2163,32 @@ export class Combatant implements FlightState {
      * damage, no guard interaction, no meter, and no `hitInvuln` — see
      * `ProjectileSpawn.decoyShot` for why that last one matters.
      */
+    /**
+     * A decoy's shot. Lands, sounds right, and takes a sliver.
+     *
+     * Handled before every other branch so it can skip most of the ladder, and
+     * the exclusions are each load-bearing:
+     *
+     * * **No `hitInvuln`.** The reason `decoyShot` exists at all. A round that
+     *   opened the usual i-frame window would have NULLTIDE *shielding* the
+     *   pilot she is deceiving from her own real fire, which inverts the ability.
+     * * **No hitstun, hitstop or knockback.** The projection interrupts nothing.
+     *   It used to do the opposite — no damage and a three-in-twenty one-second
+     *   stun — and that was the wrong pressure: a coin flip the opponent cannot
+     *   play around, invisible nineteen times out of twenty.
+     * * **No meter, either way.** It does not feed the victim's saturation. At
+     *   this cadence a chip source that charged the bar would hand the target a
+     *   burst for being shot at by a hologram.
+     *
+     * It does respect chassis defence and a held guard, because a shot that
+     * ignored armour would be the hardest-hitting thing in NULLTIDE's kit
+     * against the frames built to resist exactly this.
+     */
     if (p.decoyShot) {
-      if (p.hitstun > 0 && this.invuln <= 0) {
-        this.hitstun = Math.max(this.hitstun, p.hitstun);
-        this.act = ActState.Hitstun;
-      }
+      const guarded = this.guarding || this.shieldActive;
+      const chip =
+        p.damage * this.incomingScale * (guarded ? this.def.barrier.guardScale : 1);
+      this.life = Math.max(0, this.life - chip);
       return 'hit';
     }
 

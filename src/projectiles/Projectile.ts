@@ -31,6 +31,27 @@ export class Projectile {
   prevX = 0;
   prevY = 0;
 
+  /**
+   * A decoy's shot. See `ProjectileSpawn.decoyShot`.
+   *
+   * **This was being dropped on the way into the pool.** `reset` did not copy it
+   * and `asHit` did not emit it, so the flag existed on the spawn and was gone
+   * by the time anything could read it — every projection round in the game went
+   * down `takeHit`'s ordinary route instead of its own branch. The contract the
+   * flag documents, that a decoy round grants **no hit invulnerability**, was
+   * therefore never once in force: each harmless round opened a normal i-frame
+   * window and had NULLTIDE shielding the pilot she was deceiving from her own
+   * real fire, which is the exact inversion the comment on `decoyShot` warns
+   * about. It also cancelled the victim's attack and melee chain every time one
+   * landed.
+   *
+   * Nothing pointed at it, because a flag that silently does nothing looks
+   * identical to a flag that is working — the rounds still did no damage, for
+   * the unrelated reason that their damage was zero. Found while writing the
+   * first tests the role has ever had.
+   */
+  decoyShot = false;
+
   // ---- art and motion -------------------------------------------------------
   /** Detonates against incoming enemy fire. See `ProjectileSpawn.intercepts`. */
   intercepts = false;
@@ -70,6 +91,7 @@ export class Projectile {
     this.homing = s.homing;
     this.pierceLeft = s.pierceCount;
     this.element = s.element ?? 0;
+    this.decoyShot = s.decoyShot ?? false;
     this.intercepts = s.intercepts ?? false;
     this.family = s.family ?? 'pellet';
     this.visualScale = s.visualScale ?? 1;
@@ -161,6 +183,7 @@ export class Projectile {
       homing: this.homing,
       pierceCount: this.pierceLeft,
       element: this.element,
+      decoyShot: this.decoyShot,
     };
   }
 }
