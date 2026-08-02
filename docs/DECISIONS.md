@@ -3164,3 +3164,97 @@ measurement has run out of resolution and the answer is not in that dial.**
 
 The aggregate of six same-direction results was worth more than any of the
 individual comparisons, none of which was significant alone.
+
+## D94 — Pilots fight the way they are written
+
+**Requested**: every machine should play to its strengths. PYRE is a brawler and
+was fighting at the longest average distance on the roster; VESPER is a marksman
+and could not keep anyone off him.
+
+### The personality was dead code at EXTREME
+
+`preferredRangeFor` computes `styleMul` from the pilot's `rangeMul` and then uses
+it **only in the `!rangeIq` early return**. The three reach branches below never
+touch it. So at EXTREME — the tier this game is meant to be played at — a pilot's
+range preference did nothing at all, and the comment beside it claimed it applied
+"at every difficulty".
+
+Restoring it was not enough on its own, because the reach calculus produces
+numbers the 900px clamp flattens: PYRE wanted 1674, and 1674 x 0.72 is still over
+the clamp. The personality could not survive a multiplication it never reached.
+
+So a pilot whose `meleeAppetite` is *decided* now chooses the branch outright,
+and the reach comparison decides only for pilots with no strong view — which is
+five of eight. Measured, median separation and time in melee reach:
+
+```
+  before                     after
+  PYRE      751px  12.1%     596px  14.7%
+  CIRRUS    567px  35.2%     347px  43.7%
+  VESPER    709px  15.7%     693px  10.2%
+  spread    184px            363px
+```
+
+### Sightline becomes a bodyguard
+
+VESPER wanted 900px and got 656, because **withdrawing is not something a pilot
+can do unilaterally** — whoever wants to close decides the range. That is the
+asymmetry D93 hit and could not solve from the AI side. It is solvable from the
+*kit* side.
+
+`interceptor` gains the **breaker pulse**: while a melee chain is landing on
+Kestrel and the attacker is inside 250px, SIGHTLINE interrupts the chain, takes
+18 life, and throws **both** machines apart at 15/tick along the axis between
+them. Pierces guards, because the whole value is the spacing. 150-tick cooldown —
+it is a reset, not a weapon.
+
+Its doctrine moved `screen` -> `shadow`. D88 measured `screen` as the best of
+five configurations, but that priced a drone whose only trick was point defence;
+the pulse only fires when someone is on top of *him*, so the escort has to be
+there. **The old measurement priced a drone that no longer exists.**
+
+Result: VESPER 656px -> 710px and 15.5% -> 10.4% of the fight in melee reach. He
+now enforces his spacing instead of hoping for it.
+
+**Two gates were wrong before this one was right**, and both failed the same way
+— too strong:
+
+* Firing on `meleeLock` caught the `close` phase, so the escort swatted attackers
+  down before they arrived and a desperate Speed close (D80) never reached him.
+* Gating on `phase === 'swing'` fired on the swing's **first frame**, so the chain
+  died before landing anything and VESPER could not be hit with a sword at all.
+  `interrupt` destroyed the lock inside the same `step` that created it.
+
+The shipped gate is `meleeHitsTaken > 0` — the opener lands, the rest of the
+chain does not. That is a reset; the other two were an immunity.
+
+### Cirrus dashes out, and three implementations were needed
+
+**Requested**: she prefers melee, uses range to control, and breaks off after a
+combo so the counter finds nothing.
+
+Wanting distance after a chain measured as doing **nothing** — 132px -> 130px,
+counter-hits 58 -> 59 — because `chooseAttack` fires on range alone, so she
+backed off a pixel, found herself in reach, and swung. The retreat and the
+appetite fought each other every tick and the appetite won.
+
+Adding a refusal to swing made it **worse**: 141px but counter-hits 58 -> 71.
+D81 made combos hold, so *the chain was her defence* — ending it to make space
+hands the opponent the initiative, and the space does not pay for the turn.
+
+Sustained thrust barely helped (69). A **dash** is the only movement in this game
+that clears a sword's reach inside the window the opponent needs to answer:
+145px, counter-hits 58 -> 60, which is flat. Letting the break-off spend the
+boost reserve measured slightly worse again (140px/61), so it respects the
+reserve like everything except an evade.
+
+**Shipped as neutral on balance and positive on character**, which is the honest
+description: it buys the visible hit-and-run cycle at no measurable cost, not a
+reduction in damage taken.
+
+### Looked at
+
+The breaker was caught mid-pulse on screen: gap 41px at the instant it fired,
+VESPER thrown at -15 and CIRRUS at +15 in opposite directions, CIRRUS in 20 ticks
+of hitstun with her chain broken, and nine ticks later the gap already open to
+121px behind an expanding hex wave.

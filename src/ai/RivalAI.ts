@@ -147,6 +147,31 @@ const TACTIC_NAMES = ['APPROACH', 'HOLD', 'RETREAT', 'STRAFE', 'EVADE'];
 const PLACED_SPEED = 0.35;
 
 /**
+ * Where a pilot's `meleeAppetite` stops being a lean and becomes a doctrine.
+ *
+ * Above the first, the pilot fights at the edge of their sword whatever the
+ * reach comparison says; below the second, they hold the longest line their
+ * machine can land a shot from. Between them the reach calculus decides, which
+ * is most of the roster — only PYRE (0.20), CIRRUS (0.25) and VESPER (-0.20)
+ * hold a view strong enough to override it.
+ */
+/**
+ * A hit-and-run pilot's break-off after her chain ends: how long, how far, and
+ * — the part that matters — that it is a **dash**.
+ *
+ * Walking away measured worse than never breaking off at all: counter-hits over
+ * the following 60 ticks went 58 to 71, because she surrendered her turn without
+ * gaining the space that was supposed to pay for it. Sustained thrust barely
+ * helped (69). A dash is the only movement in this game that clears a sword's
+ * reach inside the window the opponent needs to answer.
+ */
+const DISENGAGE_TICKS = 64;
+const DISENGAGE_REACH = 2.1;
+
+const BRAWLER_APPETITE = 0.15;
+const MARKSMAN_APPETITE = -0.15;
+
+/**
  * How much more willing a rival is to dash while its boost is free.
  *
  * A Speed burst removes the cost, so the rationing that governs the rest of a
@@ -470,6 +495,11 @@ export class RivalAI {
    * rare.
    */
   private planCooldown = 0;
+
+  /** True on the previous tick if this pilot was mid-chain — see `disengage`. */
+  private wasInMelee = false;
+  /** Ticks left of a hit-and-run pilot's break-off after landing a chain. */
+  private disengage = 0;
   /** Buffered decision, released after the reaction delay. */
   private reactTimer = 0;
   private dirX = 0;
@@ -595,17 +625,55 @@ export class RivalAI {
     const theirMax = foe.satActive ? Number.POSITIVE_INFINITY : theirs.max;
     const faster = mine.topSpeed >= theirs.topSpeed * 0.98;
 
+    /**
+     * **A pilot with a strong opinion picks the answer.**
+     *
+     * Two faults were fixed here together, and the second is why the first was
+     * not enough on its own.
+     *
+     * `styleMul` was computed and then **dropped**: it is applied in the
+     * `!rangeIq` early return above and nowhere else, so at EXTREME — the tier
+     * this game is meant to be played at — the pilot's `rangeMul` did nothing at
+     * all. The comment beside it claimed it applied "at every difficulty".
+     *
+     * Restoring it is still not enough, because the reach calculus produces
+     * numbers that the 900 clamp flattens: PYRE out-ranges most of the field on
+     * paper, so it wanted 1674, and 1674 x 0.72 is still over the clamp. The
+     * personality could not survive a multiplication it never reached.
+     *
+     * So a pilot whose appetite is *decided* chooses the branch outright, and
+     * the reach comparison decides only for pilots who have no strong view.
+     * Rasa Volkov is written as a brawler and now fights like one whatever her
+     * lance says she could do; Kestrel Doyne holds the longest line he can.
+     *
+     * `styleMul` is deliberately **not** re-applied on those two branches —
+     * `meleeAppetite` has already expressed the intent, and multiplying again
+     * put PYRE inside its own melee range.
+     */
+    const style = this.style(self);
+    const chill = chilled ? 0.72 : 1;
     let want: number;
-    if (mine.max > theirMax * 1.05 && faster) {
+    if (this.disengage > 0 && style.hitAndRun) {
+      // Just landed a chain: be outside the sword that is about to swing back.
+      // Outranks the brawler branch, and has to — otherwise a pilot who prefers
+      // melee stands exactly where the answer is already aimed.
+      want = Math.max(foe.effectiveMeleeRange * DISENGAGE_REACH, mine.melee * 1.8) * chill;
+    } else if (style.meleeAppetite >= BRAWLER_APPETITE) {
+      // Fight at the edge of the sword, and close the moment they drift out.
+      want = mine.melee * 1.4 * chill;
+    } else if (style.meleeAppetite <= MARKSMAN_APPETITE) {
+      // As far out as the longest shot this machine can land allows.
+      want = Math.min(mine.max * 0.85, 900) * chill;
+    } else if (mine.max > theirMax * 1.05 && faster) {
       // Out-range them and able to hold the gap: sit just past their reach.
-      want = Math.min(theirMax * 1.1, mine.max * 0.9);
+      want = Math.min(theirMax * 1.1, mine.max * 0.9) * styleMul;
     } else if (theirMax > mine.max * 1.05 || !faster) {
       // Out-ranged, or too slow to keep away from them. Standing off loses;
       // close to where this machine's own numbers are good.
-      want = Math.max(mine.melee * 1.25, mine.max * 0.32);
+      want = Math.max(mine.melee * 1.25, mine.max * 0.32) * styleMul;
     } else {
       // Comparable machines: fight inside my own effective envelope.
-      want = mine.max * 0.55;
+      want = mine.max * 0.55 * styleMul;
     }
 
     // Without its drone a pilot has lost its passive and its sub-weapon, so the
@@ -652,6 +720,16 @@ export class RivalAI {
     const foeCommitted =
       foe.act === ActState.Attack && foe.attack !== null && foe.attack.kind !== ProjKind.Melee;
     const foeMelee = foe.attack?.kind === ProjKind.Melee;
+
+    // ---- Hit-and-run bookkeeping -------------------------------------------
+    // Watched here rather than in `preferredRangeFor`, which runs several times
+    // a tick and must stay a pure function of the current state.
+    const inMelee = self.meleeLock !== null;
+    if (this.wasInMelee && !inMelee && this.style(self).hitAndRun) {
+      this.disengage = DISENGAGE_TICKS;
+    }
+    this.wasInMelee = inMelee;
+    if (this.disengage > 0) this.disengage--;
 
     // ---- Plan ---------------------------------------------------------------
     // Runs every tick, unlike the tactic. A plan's *entry* is a rare event and
@@ -742,6 +820,13 @@ export class RivalAI {
     this.dashCharge--;
     const imminent = incoming !== null && incoming.ttc <= 10;
     const evadeDash = this.tactic === AiTactic.Evade && imminent;
+    // The break-off dash. This is the whole mechanic: a skirmisher who walks out
+    // of her own combo is just a slower skirmisher.
+    const breakDash = this.disengage > 0 && dist < self.effectiveMeleeRange * DISENGAGE_REACH;
+    // The break-off does **not** get to spend the reserve, though an evade does.
+    // Letting it measured slightly worse — 145px/60 counter-hits became
+    // 140px/61 — because a skirmisher who empties the tank getting out has
+    // nothing left to get out with next time.
     const floor = evadeDash ? 0 : this.boostReserve(self);
     // Free dashing changes what a dash is *for*.
     //
@@ -754,14 +839,14 @@ export class RivalAI {
     const free = self.boostFree;
     const approachDash = this.tactic === AiTactic.Approach && (free || dist > 340);
     const wantsDash =
-      (evadeDash || approachDash) &&
+      (evadeDash || approachDash || breakDash) &&
       this.dashCharge <= 0 &&
       self.boost >= self.def.flight.dashCost + floor &&
       (mx !== 0 || my !== 0) &&
       // Twitchiness is the pilot's: CIRRUS is never still, TERRAMOTH walks.
       this.rng.chance(
         clamp(
-          (evadeDash ? this.p.evadeDashChance : this.p.dashChance) *
+          (breakDash ? 1 : evadeDash ? this.p.evadeDashChance : this.p.dashChance) *
             this.style(self).dashMul *
             (free ? 1 + (SPEED_BURST_DASH - 1) * this.skill : 1),
           0,
@@ -1484,6 +1569,12 @@ export class RivalAI {
     // extends the lock ninefold, and gating on the base figure meant the buff
     // existed and the rival could not reach for it.
     if (dist < self.effectiveMeleeRange) {
+      // Mid break-off: refuse the swing. Wanting distance is not enough on its
+      // own — this branch fires on range alone, so she would find herself in
+      // reach again and swing, and the retreat and the appetite would fight each
+      // other every tick.
+      if (this.disengage > 0 && this.style(self).hitAndRun) return null;
+
       // **Never swing into a live repel.** A barrier burst throws the opening
       // strike back at whoever made it, for `MELEE_REPEL_STUN` — a full second
       // of helplessness, the worst single outcome available to an attacker.

@@ -748,6 +748,25 @@ export class BattleScene extends Phaser.Scene {
           }
           break;
         }
+        case 'breaker': {
+          /**
+           * SIGHTLINE's breaker pulse.
+           *
+           * The *shove* is the mechanic, so the visual is a wave leaving the
+           * machine rather than a flash on it — a wide ring pushed out past
+           * where both bodies end up, plus the guard-break shards, because what
+           * the opponent just lost is their chain.
+           */
+          const c = this.byId(ev.id);
+          const tint = c?.def.tint.glow ?? 0x7ff5e6;
+          this.effects.barrier(ev.x, ev.y, 190, tint);
+          this.effects.barrier(ev.x, ev.y, 120, 0xffffff);
+          this.effects.guardBreak(ev.x, ev.y);
+          this.shake = Math.max(this.shake, 5.5);
+          sfx.guardBreak();
+          if (c) this.hud.banner('BREAKER', 30);
+          break;
+        }
         case 'barrier': {
           const c = this.byId(ev.id);
           this.effects.barrier(ev.x, ev.y, c?.def.barrier.radius ?? 46, 0x8fe6ff);

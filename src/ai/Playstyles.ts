@@ -59,6 +59,15 @@ export interface Playstyle {
   satPreference: SatMode;
   /** How this pilot's escort supports them. See `DroneDoctrine`. */
   droneDoctrine: DroneDoctrine;
+  /**
+   * Dashes clear after landing a melee chain instead of standing in the counter.
+   *
+   * Mira Holloway has the roster's longest chain and its thinnest margins —
+   * eight hits on 1440 hit points — so the exchange after her turn is the one
+   * she cannot afford. She has the fastest frame and double boost regen; this
+   * is what they are for.
+   */
+  hitAndRun: boolean;
 }
 
 /**
@@ -102,6 +111,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     guardMul: 1.0,
     satPreference: SatMode.Shoot,
     droneDoctrine: 'escort',
+    hitAndRun: false,
   },
 
   nocturne: {
@@ -117,6 +127,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     guardMul: 1.15,
     satPreference: SatMode.Shoot,
     droneDoctrine: 'escort',
+    hitAndRun: false,
   },
 
   vesper: {
@@ -124,15 +135,26 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     note:
       'Kestrel Doyne — marksman. Quiet, watchful, still. The longest reach on the ' +
       'roster and the second-thinnest life pool, so every metre of distance is worth ' +
-      'more to him than to anyone else. His drone screens: it goes and makes a ' +
-      'nuisance of itself so he can hold his line and shoot down it.',
+      'more to him than to anyone else. His drone is a bodyguard: it stays on him ' +
+      'and breaks up anyone who gets inside his line.',
     aggressionMul: 0.95,
     rangeMul: 1.18,
     meleeAppetite: -0.2,
     dashMul: 1.08,
     guardMul: 0.92,
     satPreference: SatMode.Shoot,
-    droneDoctrine: 'screen',
+    /**
+     * **`shadow`, not `screen` — the escort's job changed.**
+     *
+     * Screening measured best when SIGHTLINE's only trick was point defence
+     * (-0.146 against escort's -0.201 and shadow's -0.217), because a drone
+     * making a nuisance of itself out front bought Kestrel time. It now carries
+     * the breaker pulse, which only fires when someone is on top of *him* — so
+     * the escort has to be there, not out front. The old measurement priced a
+     * drone that no longer exists.
+     */
+    droneDoctrine: 'shadow',
+    hitAndRun: false,
   },
 
   terramoth: {
@@ -149,6 +171,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     guardMul: 1.2,
     satPreference: SatMode.Shield,
     droneDoctrine: 'shadow',
+    hitAndRun: false,
   },
 
   cirrus: {
@@ -166,6 +189,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     guardMul: 0.85,
     satPreference: SatMode.Speed,
     droneDoctrine: 'flank',
+    hitAndRun: true,
   },
 
   obelisk: {
@@ -182,6 +206,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     guardMul: 1.3,
     satPreference: SatMode.Shield,
     droneDoctrine: 'shadow',
+    hitAndRun: false,
   },
 
   pyre: {
@@ -198,6 +223,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     guardMul: 0.85,
     satPreference: SatMode.Shoot,
     droneDoctrine: 'screen',
+    hitAndRun: false,
   },
 
   nulltide: {
@@ -215,6 +241,7 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
     guardMul: 0.98,
     satPreference: SatMode.Shoot,
     droneDoctrine: 'flank',
+    hitAndRun: false,
   },
 };
 
@@ -229,6 +256,7 @@ export const NEUTRAL_PLAYSTYLE: Playstyle = {
   guardMul: 1,
   satPreference: SatMode.Shoot,
   droneDoctrine: 'escort',
+  hitAndRun: false,
 };
 
 export function playstyleFor(mechId: string | undefined): Playstyle {

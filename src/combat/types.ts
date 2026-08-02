@@ -192,6 +192,8 @@ export type SimEvent =
   | { t: 'hit'; x: number; y: number; damage: number; ownerId: number; victimId: number; kind: ProjKind; family?: ProjFamilyId }
   | { t: 'guard'; x: number; y: number; victimId: number }
   | { t: 'absorb'; x: number; y: number; victimId: number; charge: number }
+  /** SIGHTLINE's breaker pulse: a melee chain broken and both machines shoved apart. */
+  | { t: 'breaker'; x: number; y: number; id: number }
   | { t: 'barrier'; x: number; y: number; id: number }
   | { t: 'guardBreak'; x: number; y: number; id: number }
   /**

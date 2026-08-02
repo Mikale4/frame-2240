@@ -66,6 +66,28 @@ const ARC_TETHER_DAMAGE = 34;
  */
 export const ARC_TETHER_WIDTH = 14;
 
+/**
+ * `interceptor`: the breaker pulse — a bodyguard's answer to being crowded.
+ *
+ * SIGHTLINE's point defence protects VESPER from *shots*, and shots were never
+ * his problem. Measured, Kestrel wants to fight at 900px and gets 656, because
+ * withdrawing is not something a pilot can do unilaterally — whoever wants to
+ * close decides the range. A marksman with no way to enforce spacing is a
+ * marksman in name only.
+ *
+ * So the escort breaks the melee instead: it interrupts the chain, takes a
+ * little life, and throws **both** machines apart along the axis between them.
+ * The shove is the point, not the damage. It is on a long cooldown because it
+ * is a reset, not a weapon — an opponent who commits to a sword should get one
+ * chain broken, not every chain.
+ */
+const BREAKER_DAMAGE = 18;
+const BREAKER_STUN = 20;
+const BREAKER_KNOCK = 15;
+/** Only while they are actually on top of him. */
+const BREAKER_RANGE = 250;
+const BREAKER_COOLDOWN = 150;
+
 /** How long a designator's paint outlives the drone's line of sight. */
 const DESIGNATOR_PAINT_TICKS = 45;
 
@@ -335,6 +357,76 @@ export class MatchSim {
         }
 
         case 'interceptor': {
+          /**
+           * **Breaker pulse**, before the point defence.
+           *
+           * Fires when the opponent is mid-melee and inside `BREAKER_RANGE`.
+           * `interrupt` is the same call a barrier repel makes, so a broken
+           * chain reads exactly like the one the game already teaches.
+           */
+          if (s.pulseCooldown > 0) s.pulseCooldown--;
+          else if (
+            foe.alive &&
+            /**
+             * **A combo has to be happening before it can be interrupted.**
+             *
+             * `meleeHitsTaken` counts hits landed on this pilot by a chain in
+             * progress and resets the moment hitstun ends, so a non-zero value
+             * means a sword is connecting *right now*.
+             *
+             * Two weaker gates were tried first and both were wrong in the same
+             * direction. Firing on `meleeLock` caught the `close` phase, so the
+             * escort swatted attackers down before they arrived and a desperate
+             * Speed close (D80) never reached him. Gating on `phase === 'swing'`
+             * fired on the swing's *first frame*, so the chain died before
+             * landing anything and VESPER simply could not be hit with a sword.
+             *
+             * Letting the opener land is what makes this a reset rather than an
+             * immunity: the attacker gets their read and their first hit, and
+             * pays for the rest of the chain.
+             */
+            c.meleeHitsTaken > 0 &&
+            Math.hypot(foe.x - c.x, foe.y - c.y) < BREAKER_RANGE
+          ) {
+            s.pulseCooldown = BREAKER_COOLDOWN;
+            const dx = foe.x - c.x;
+            const dy = foe.y - c.y;
+            const l = Math.hypot(dx, dy) || 1;
+            const ux = dx / l;
+            const uy = dy / l;
+            foe.takeHit({
+              x: foe.x,
+              y: foe.y,
+              vx: ux,
+              vy: uy,
+              damage: BREAKER_DAMAGE,
+              guardDamage: BREAKER_DAMAGE,
+              life: 1,
+              radius: 8,
+              ownerId: c.id,
+              team: c.team,
+              kind: ProjKind.Beam,
+              // Pierces, because a guard must not turn the reset off. The whole
+              // value is the spacing, and a sword swinging through a guard is
+              // exactly the situation this exists for.
+              barrier: BarrierResponse.Pierce,
+              hitstop: 3,
+              hitstun: 0,
+              knockback: 0,
+              homing: 0,
+              pierceCount: 0,
+              element: Element.None,
+            });
+            foe.interrupt(BREAKER_STUN);
+            // Both thrown apart along the axis between them — the escort braces
+            // its own pilot backwards as hard as it shoves the attacker away.
+            foe.vx = ux * BREAKER_KNOCK;
+            foe.vy = uy * BREAKER_KNOCK - 2;
+            c.vx = -ux * BREAKER_KNOCK;
+            c.vy = -uy * BREAKER_KNOCK - 2;
+            this.events.push({ t: 'breaker', x: c.x, y: c.y, id: c.id });
+          }
+
           // One shot at a time, on the ordinary weapon cooldown, at whichever
           // incoming round is closest to landing. Precise rather than broad —
           // the opposite trade to the dome.

@@ -510,6 +510,8 @@ export class Supporter {
   tetherLive = false;
   /** `arcTether`: ticks before the wire may bite again. */
   arcCooldown = 0;
+  /** `interceptor`: ticks before the breaker pulse may fire again. */
+  pulseCooldown = 0;
   /** `hazard`: embers laid in the current burst. */
   private hazardBurst = 0;
 
