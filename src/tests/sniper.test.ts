@@ -121,15 +121,27 @@ describe('the sniper stance, as data', () => {
     expect(HALCYON.barrier.pierceGuardScale).toBeCloseTo(0.5, 5);
   });
 
-  it('fires at a bolt-action cadence, not a stream', () => {
+  /**
+   * Bounded at both ends, because both ends have been wrong.
+   *
+   * It shipped at 25 ticks a shot — a stream, and worth 0.5 of a life bar. The
+   * first nerf went to 109, which measured fine and **played as far too slow**:
+   * three shots in a six-second stance, most of it spent waiting. 60 is the
+   * playtested middle.
+   *
+   * So the assertion is a band rather than a floor. A cadence outside it is a
+   * regression whichever direction it went.
+   */
+  it('fires at a worked-weapon cadence — neither a stream nor a wait', () => {
     const shot = VESPER.sniper!.shot;
     const cycle = shot.startup + shot.active + shot.recovery;
-    // Under one shot a second, and slower than anything else he carries.
-    expect(cycle).toBeGreaterThan(60);
     const mainCycle = VESPER.main.startup + VESPER.main.active + VESPER.main.recovery;
-    expect(cycle).toBeGreaterThan(mainCycle * 3);
-    // Three shots or so per six-second stance.
-    expect(Math.floor(VESPER.sniper!.duration / cycle)).toBeLessThanOrEqual(4);
+    // Deliberate and aimed: several times slower than his ordinary gun.
+    expect(cycle).toBeGreaterThanOrEqual(mainCycle * 3);
+    // ...but not a timer to watch. Four to eight shots per stance.
+    const shots = Math.floor(VESPER.sniper!.duration / cycle);
+    expect(shots).toBeGreaterThanOrEqual(4);
+    expect(shots).toBeLessThanOrEqual(8);
   });
 
   it('kicks the chassis backwards on every shot', () => {
@@ -377,7 +389,7 @@ describe('the disarm', () => {
   });
 
   it('rides only the stance shot, not his ordinary guns', () => {
-    expect(VESPER.sniper!.shot.disarms).toBeCloseTo(0.25, 5);
+    expect(VESPER.sniper!.shot.disarms).toBeCloseTo(0.3, 5);
     expect(VESPER.main.disarms ?? 0).toBe(0);
     expect(VESPER.heavy.disarms ?? 0).toBe(0);
     expect(VESPER.lance.disarms ?? 0).toBe(0);

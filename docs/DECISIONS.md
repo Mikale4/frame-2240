@@ -4271,3 +4271,61 @@ multi-hitting. Three compounding losses against one dial.
 So if VESPER is to come back toward the middle, the fire rate is a weak dial and
 the honest ones are `pierceCount` (returning multi-hit without returning guard
 piercing), the stance's `damage`, or `speedScale`.
+
+---
+
+## D111 — The cadence, set by playtest, and the disarm raised to match
+
+**Reported from play**: 109 ticks a shot was "way too slow".
+
+Three settings have now been tried and the middle one is the answer:
+
+```
+   25 ticks (0.4s)  ->  shipped value. A stream, and worth +0.32 of a life bar.
+  109 ticks (1.8s)  ->  the first nerf. Measured fine, played as a wait.
+   60 ticks (1.0s)  ->  the playtested middle.
+```
+
+`startup` 16 → 12 and `recovery` 92 → 47. The startup came down with the recovery
+because half of "sluggish" was the delay between pressing and firing rather than
+the gap between shots — that is a feel problem the balance number cannot see.
+
+Measured in real fights: **5.09 shots per stance**, against a theoretical maximum
+of six, up from three. Enough that the stance reads as a weapon being worked
+rather than a timer being watched.
+
+**This was safe to set by feel because the dial was already measured.** D110
+swept it: doubling the rate of fire is worth about 0.077, against the 0.503 that
+removing the lance properties cost. Cadence is a *feel* knob far more than a
+power knob, so playtest is the right instrument for it and the harness is only
+there to confirm nothing moved much.
+
+```
+  VESPER  EXTREME  -0.182 -> -0.090      spread 0.471 -> 0.371
+```
+
+### The disarm follows the cadence
+
+**Requested**: 25 % → 30 %, to compensate the slower fire.
+
+Right, and worth stating why the two belong together: the per-shot chance is only
+half of how often a disarm lands, and the other half is how often he gets to
+shoot. Slowing the cadence from 25 to 60 ticks cut the rate from **2.43 disarms a
+fight to 1.14** without anyone touching the chance.
+
+```
+  0.25 at 60 ticks  ->  1.14 disarms/fight
+  0.30 at 60 ticks  ->  1.43 disarms/fight
+```
+
+Balance cost: **-0.090 → -0.085**, which is inside the standard error. A 20 %
+relative bump to an effect landing once a fight is not a power change; it is a
+consistency change, which is what it was asked for.
+
+### The test now bounds the cadence at both ends
+
+`sniper.test.ts` asserted `cycle > 60` and failed on the playtested value, which
+is a test encoding one wrong answer as a rule. It now asserts a **band** — four
+to eight shots per stance, and at least three times slower than his ordinary gun
+— because both ends of this dial have been wrong once and a regression in either
+direction should fail.

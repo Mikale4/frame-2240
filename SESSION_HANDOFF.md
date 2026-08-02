@@ -40,7 +40,7 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 * **546 tests pass** (26 files), typecheck clean, production build clean.
 * **Working tree clean** on `master`. No other branches.
-* `docs/DECISIONS.md` runs to **D110**.
+* `docs/DECISIONS.md` runs to **D111**.
 * **Suite runtime ~35s.** Deliberate — see §8a.
 * **`tools/probe/balance.ts` is the roster instrument** (D97). A full eight-mech
   sweep is ~20s:
@@ -135,16 +135,16 @@ both slot orders on the same seed, real 180s round cap. Standard error ~0.045.
 
 | | EXTREME | |
 | --- | --- | --- |
-| 1 | **NULLTIDE +0.272** | |
-| 2 | TERRAMOTH +0.062 | |
-| 3 | PYRE +0.039 | |
-| 4 | NOCTURNE +0.021 | |
-| 5 | CIRRUS −0.063 | |
-| 6 | HALCYON −0.080 | |
-| 7 | OBELISK −0.086 | |
-| 8 | **VESPER −0.182** | |
+| 1 | **NULLTIDE +0.262** | |
+| 2 | TERRAMOTH +0.051 | |
+| 3 | PYRE +0.019 | |
+| 4 | NOCTURNE +0.009 | |
+| 5 | CIRRUS −0.065 | |
+| 6 | HALCYON −0.079 | |
+| 7 | VESPER −0.085 | |
+| 8 | OBELISK −0.112 | |
 
-spread: **EXTREME 0.471** (12 seeds; SE ~0.03).
+spread: **EXTREME 0.374** (12 seeds; SE ~0.03).
 
 > **This is a chosen state, not a regression.** The roster was at 0.169 / 0.242
 > with no outliers after the tuning pass (D97–D104). D105 and D107–D109 are

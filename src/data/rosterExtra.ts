@@ -480,19 +480,29 @@ export const VESPER: MechDef = {
       id: 'sniperShot',
       label: 'LONG LANCE',
       /**
-       * **Bolt-action.** One shot every 109 ticks — a shade under two seconds —
-       * against the 25 ticks it fired at when the stance shipped.
+       * **One shot a second, on the nose.** 12 + 1 + 47 = 60 ticks.
        *
-       * The old cadence was the whole problem. A weapon with a lance's piercing,
-       * auto-aim and 110px/tick travel, fired two and a half times a second, is
-       * not a sniper rifle; it is a machine gun that happens to be accurate, and
-       * it put VESPER 0.53 of a life bar clear of the bottom of the roster. At
-       * this rate the stance's six seconds buy **three shots**, so each one is a
-       * decision rather than a stream.
+       * Three settings have been tried and the middle one is the answer. It
+       * shipped at **25 ticks**, which is not a sniper rifle — it is a machine
+       * gun that happens to be accurate, and it put VESPER 0.53 of a life bar
+       * clear of the field. The first nerf went to **109** (a shade under two
+       * seconds), which played as "way too slow" — three shots per stance, and a
+       * pilot spending most of his six seconds waiting.
+       *
+       * 60 gives **six shots per stance**: fast enough to feel like a weapon
+       * being worked rather than a timer being watched, slow enough that each
+       * round is aimed. The startup came down with it, from 16 to 12, because
+       * half of "sluggish" was the delay between pressing and firing rather than
+       * the gap between shots.
+       *
+       * The balance cost of this dial is small and measured — see D110. Doubling
+       * the rate of fire is worth about 0.077, against the 0.503 that removing
+       * the lance properties cost, so cadence is a feel knob far more than a
+       * power knob. That is what makes it safe to set by playtest.
        */
-      startup: 16,
+      startup: 12,
       active: 1,
-      recovery: 92,
+      recovery: 47,
       // Dearer per shot than RAILNEEDLE and far dearer than it looks, because
       // the stance blocks the recovery options he would normally spend energy
       // on. A sniper who empties the reactor is a sniper standing still with
@@ -568,7 +578,7 @@ export const VESPER: MechDef = {
       homing: 0.021,
       homingTicks: 45,
       /**
-       * A quarter of the rounds that land knock a weapon out for five seconds.
+       * Three in ten of the rounds that land knock a weapon out for five seconds.
        *
        * The stance's real payload, and the reason it is worth planting for. A
        * sniper does not out-damage anyone — he takes pieces off them. Which of
@@ -576,8 +586,14 @@ export const VESPER: MechDef = {
        * plan around rather than a targeted removal; and it is on the *stance*
        * shot only, so it exists exactly while Kestrel is standing still and
        * paying for it.
+       *
+       * Raised from 0.25 to compensate the bolt-action cadence. The two move
+       * together and should keep moving together: at 25 ticks a shot this landed
+       * **2.43 disarms a fight**, and slowing to 60 dropped it to 1.14 — the
+       * per-shot chance is only half the rate, and the other half is how often he
+       * gets to shoot. 0.30 puts it back to about 1.4.
        */
-      disarms: 0.25,
+      disarms: 0.3,
       muzzleForward: 52,
     }),
   },
