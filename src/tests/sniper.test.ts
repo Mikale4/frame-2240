@@ -55,12 +55,94 @@ describe('the sniper stance, as data', () => {
     }
   });
 
-  it('fires a lance that is thinner, longer and faster than his own lance', () => {
+  it('is thinner, longer and much faster than his own lance', () => {
     const shot = VESPER.sniper!.shot;
-    expect(shot.kind).toBe(ProjKind.Beam);
     expect(shot.projRadius).toBeLessThan(VESPER.lance.projRadius);
     expect(shot.projLife).toBeGreaterThan(VESPER.lance.projLife);
-    expect(shot.projSpeed).toBeGreaterThan(VESPER.lance.projSpeed);
+    expect(shot.projSpeed).toBeGreaterThan(VESPER.lance.projSpeed * 2);
+  });
+
+  /**
+   * It *looks* like a lance and does not *behave* like one, and both halves
+   * matter.
+   *
+   * It shipped carrying `Beam` + `Pierce` + `pierceCount: 4`, so the stance's
+   * round ignored a held guard's damage reduction, punched through the escort
+   * and the pilot behind it, and could not be intercepted — three advantages
+   * nobody asked for, on the weapon with the best connect rate in the game.
+   * Stripping them is the nerf; keeping the sprite is the point.
+   */
+  it('keeps the lance look and none of the lance behaviour', () => {
+    const shot = VESPER.sniper!.shot;
+    // The look and the sound: dressed as a beam, and reported as one, since
+    // `kind` drives the beam SFX, the shake and the impact flash.
+    expect(shot.family).toBe('beam');
+    expect(shot.kind).toBe(ProjKind.Beam);
+    // The behaviour: every lance property rides these two fields, and both are
+    // now ordinary. A guard works, a dome eats it, an interceptor downs it, and
+    // it stops at the first thing it touches.
+    expect(shot.barrier).toBe(BarrierResponse.Absorb);
+    expect(shot.pierceCount).toBe(0);
+    // ...unlike his actual lance, which keeps both.
+    expect(VESPER.lance.barrier).toBe(BarrierResponse.Pierce);
+    expect(VESPER.lance.pierceCount).toBeGreaterThan(0);
+  });
+
+  /**
+   * **A held guard takes 80 % off the stance shot, not 50 %.**
+   *
+   * This is the whole of what "loses its lance properties" means at the point of
+   * impact, and it is worth an explicit number rather than an inference from a
+   * flag. `takeHit` sends a `Pierce` round *past* the guarded branch and scales
+   * it by `pierceGuardScale` (0.50); an ordinary `Absorb` round goes through the
+   * branch and is scaled by `guardScale` (0.20). Same guard, same shot, 2.5x the
+   * damage difference.
+   */
+  it('is cut 80% by a held guard, exactly as ordinary gunfire is', () => {
+    const shot = VESPER.sniper!.shot;
+    const hit = (barrier: BarrierResponse): number => {
+      const c = new Combatant({ id: 0, team: Team.Player, def: HALCYON, x: 0, y: 0, facing: 1 });
+      c.guarding = true;
+      const before = c.life;
+      c.takeHit({
+        x: 0, y: 0, vx: 1, vy: 0,
+        damage: 100, guardDamage: 10, life: 10, radius: 5,
+        ownerId: 1, team: Team.Enemy, kind: ProjKind.Beam,
+        barrier, hitstop: 0, hitstun: 0, knockback: 0, homing: 0, pierceCount: 0,
+      });
+      return before - c.life;
+    };
+    // The stance shot's own setting: 20 through, i.e. 80% off.
+    expect(shot.barrier).toBe(BarrierResponse.Absorb);
+    expect(hit(shot.barrier)).toBeCloseTo(100 * HALCYON.barrier.guardScale, 5);
+    expect(HALCYON.barrier.guardScale).toBeCloseTo(0.2, 5);
+    // A lance in the same situation keeps half of its damage.
+    expect(hit(BarrierResponse.Pierce)).toBeCloseTo(100 * HALCYON.barrier.pierceGuardScale, 5);
+    expect(HALCYON.barrier.pierceGuardScale).toBeCloseTo(0.5, 5);
+  });
+
+  it('fires at a bolt-action cadence, not a stream', () => {
+    const shot = VESPER.sniper!.shot;
+    const cycle = shot.startup + shot.active + shot.recovery;
+    // Under one shot a second, and slower than anything else he carries.
+    expect(cycle).toBeGreaterThan(60);
+    const mainCycle = VESPER.main.startup + VESPER.main.active + VESPER.main.recovery;
+    expect(cycle).toBeGreaterThan(mainCycle * 3);
+    // Three shots or so per six-second stance.
+    expect(Math.floor(VESPER.sniper!.duration / cycle)).toBeLessThanOrEqual(4);
+  });
+
+  it('kicks the chassis backwards on every shot', () => {
+    expect(VESPER.sniper!.shot.recoil).toBeGreaterThan(VESPER.main.recoil * 2);
+    const s = harness();
+    s.step(press(Btn.Heavy), emptyInput());
+    // Face a known direction and note where he is before the shot lands.
+    const before = s.player.x;
+    const aimSign = Math.cos(s.player.aim) >= 0 ? 1 : -1;
+    for (let i = 0; i < 40; i++) s.step(press(Btn.Main), emptyInput());
+    const drift = (s.player.x - before) * aimSign;
+    // Pushed *away* from where he is pointing.
+    expect(drift).toBeLessThan(0);
   });
 
   it('costs real mobility, and has both a clock and a recharge', () => {
@@ -120,24 +202,30 @@ describe('the stance, in the sim', () => {
    * Sampled every tick rather than once at the end.
    *
    * The stance round travels 110px a tick and the arena is 2400 wide, so a shot
-   * fired early is off the field and culled well before a loop of 30 steps
-   * finishes. Snapshotting `activeProjectiles()` afterwards found an empty pool
-   * and read as "the stance does not fire" — a test measuring its own timing
-   * rather than the behaviour.
+   * fired early is off the field long before the loop ends. Snapshotting
+   * `activeProjectiles()` afterwards found an empty pool and read as "the stance
+   * does not fire" — a test measuring its own timing rather than the behaviour.
+   *
+   * The window also has to cover the **bolt-action cadence**: one shot every 109
+   * ticks, so a 60-tick loop can legitimately contain none at all.
    */
   it('fires the stance lance from the main button while it is up', () => {
     const s = harness();
     s.step(press(Btn.Heavy), emptyInput());
-    const seen: { kind: number; homing: number }[] = [];
-    for (let i = 0; i < 60; i++) {
+    const seen: { kind: number; homing: number; barrier: number }[] = [];
+    for (let i = 0; i < 280; i++) {
       s.step(press(Btn.Main), emptyInput());
       for (const p of s.activeProjectiles()) {
-        if (p.ownerId === s.player.id) seen.push({ kind: p.kind, homing: p.homing });
+        if (p.ownerId === s.player.id) {
+          seen.push({ kind: p.kind, homing: p.homing, barrier: p.barrier });
+        }
       }
     }
     expect(seen.length).toBeGreaterThan(0);
     // Beams, not the ordinary RAILNEEDLE bullet.
     expect(seen.every((p) => p.kind === ProjKind.Beam)).toBe(true);
+    // ...but absorbable, unlike a real lance.
+    expect(seen.every((p) => p.barrier === BarrierResponse.Absorb)).toBe(true);
     expect(seen.some((p) => p.homing > 0)).toBe(true);
   });
 
@@ -384,7 +472,7 @@ describe('the disarm', () => {
     const s = harness();
     s.step(press(Btn.Heavy), emptyInput());
     let n = 0;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 280; i++) {
       s.step(press(Btn.Main), emptyInput());
       for (const p of s.activeProjectiles()) {
         if (p.ownerId !== s.player.id) continue;

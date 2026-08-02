@@ -479,9 +479,20 @@ export const VESPER: MechDef = {
     shot: attack({
       id: 'sniperShot',
       label: 'LONG LANCE',
-      startup: 7,
+      /**
+       * **Bolt-action.** One shot every 109 ticks — a shade under two seconds —
+       * against the 25 ticks it fired at when the stance shipped.
+       *
+       * The old cadence was the whole problem. A weapon with a lance's piercing,
+       * auto-aim and 110px/tick travel, fired two and a half times a second, is
+       * not a sniper rifle; it is a machine gun that happens to be accurate, and
+       * it put VESPER 0.53 of a life bar clear of the bottom of the roster. At
+       * this rate the stance's six seconds buy **three shots**, so each one is a
+       * decision rather than a stream.
+       */
+      startup: 16,
       active: 1,
-      recovery: 17,
+      recovery: 92,
       // Dearer per shot than RAILNEEDLE and far dearer than it looks, because
       // the stance blocks the recovery options he would normally spend energy
       // on. A sniper who empties the reactor is a sniper standing still with
@@ -493,9 +504,41 @@ export const VESPER: MechDef = {
       hitstun: 15,
       knockback: 4,
       satGain: 15,
-      recoil: 2,
+      /**
+       * Kickback. The chassis is shoved back along its own aim on every shot.
+       *
+       * Worth far more than the number looks, because the stance already caps
+       * movement at 0.32 — the shove is roughly four times what he can push
+       * against, so a sniper who fires is a sniper drifting backwards out of his
+       * own firing line and having to crawl back into it. `FlightModel` lets
+       * overspeed bleed off as momentum rather than clamping it to the cap,
+       * which is what makes this land at all while planted.
+       */
+      recoil: 6.5,
+      /**
+       * **Not a lance any more, and that is the nerf.**
+       *
+       * It kept `Beam` + `Pierce` + `pierceCount: 4` from the day it was built,
+       * which meant the stance's shot ignored a held guard's damage reduction,
+       * punched through the escort *and* the pilot behind it, and could not be
+       * picked out of the air by a point-defence drone. Three separate
+       * advantages, none of them asked for, all on the weapon that already had
+       * the best connect rate in the game.
+       *
+       * Now an ordinary absorbable round: a guard works against it, a barrier
+       * burst eats it, an interceptor can shoot it down, and it stops at the
+       * first thing it hits.
+       *
+       * **Presentation is untouched, deliberately.** `kind` stays `Beam` because
+       * it is what drives the beam report, the heavier screen shake and the big
+       * impact flash, and `projectileArt` dresses the round as `beam` for the
+       * sprite. `kind` carries no defensive behaviour at all — every lance
+       * property above rides `barrier` and `pierceCount`, which are the two
+       * fields that changed. It still looks and sounds exactly like the lance it
+       * is drawn as; it simply no longer behaves like one.
+       */
       kind: ProjKind.Beam,
-      barrier: BarrierResponse.Pierce,
+      barrier: BarrierResponse.Absorb,
       /**
        * Thinner and longer than PIERCE BEAM (radius 11, life 90, speed 34), and
        * **3.2x as fast** — a shot that arrives before the target can react to
@@ -518,7 +561,7 @@ export const VESPER: MechDef = {
       projSpeed: 110,
       projLife: 120,
       projRadius: 5,
-      pierceCount: 4,
+      pierceCount: 0,
       // Auto-aim, for a window. It corrects onto the target early and then
       // commits, so a pilot who moves late still beats it — a round that steered
       // for its whole flight at this speed would be unanswerable.

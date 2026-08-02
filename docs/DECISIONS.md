@@ -4189,3 +4189,85 @@ guard in `playstyles.test.ts` was raised from 0.7 to **0.78** to accommodate thi
 and D105 — chosen to still catch the 0.854 that the first playstyle cut failed
 at, not to make the red go away. **It should go back to 0.7 when these two are
 tuned.**
+
+---
+
+## D110 — Sniper Mode nerfed: no lance properties, bolt-action, kickback
+
+**Requested**, after VESPER measured +0.321 and top of the roster (D109 /
+`docs/TIER_LIST.md`): the stance's rounds lose their lance properties while
+keeping the lance's look, the fire rate is dramatically slowed to a real sniper
+rifle's, projectile speed stays, and every shot kicks the chassis backwards.
+
+### What "lance properties" actually were
+
+Worth writing down, because it was three separate advantages and only one of them
+is the famous one:
+
+* **A held guard was half as good against it.** `takeHit` routes a `Pierce` round
+  *past* the guarded branch and scales it by `pierceGuardScale` (0.50); an
+  ordinary round goes through the branch at `guardScale` (0.20). So a guard took
+  50 % off a lance and 80 % off everything else.
+* **It could not be intercepted or erased.** AEGIS's dome, SIGHTLINE's point
+  defence and every other screen in `MatchSim` skip `Pierce` rounds outright.
+* **`pierceCount: 4`** — it passed through the escort *and* the pilot behind it.
+
+It never bypassed a barrier **burst**: an invulnerable target returns `ignored`
+either way. The only difference there is that a piercing shot denies the defender
+the saturation charge they would have banked by absorbing it.
+
+All three came free with two fields the stance inherited on the day it was built
+and nobody chose. Now `barrier: Absorb` and `pierceCount: 0`: **a guard takes
+80 % off it**, a dome eats it, an interceptor downs it, and it stops at the first
+thing it touches.
+
+**`kind` stays `Beam`.** It carries no defensive behaviour whatsoever — every
+lance property above rides `barrier` and `pierceCount` — but it does drive the
+beam report, the heavier screen shake and the big impact flash, and `family`
+drives the sprite. The round looks and sounds exactly as it did. The first cut of
+this change moved `kind` to `Bullet` as well and quietly took the presentation
+with it, which is not what "keep its visual look" means.
+
+### Bolt-action
+
+`startup` 7 → 16 and `recovery` 17 → 92: **109 ticks a shot**, a shade under two
+seconds, against 25. The stance's six seconds now buy **three shots**, so each is
+a decision rather than a stream.
+
+### Kickback
+
+`recoil` 2 → 6.5, shoving the chassis back along its own aim on every shot. Worth
+more than the number looks because the stance already caps movement at 0.32 — the
+shove is roughly four times what he can push against, so firing drifts him out of
+his own firing line and he has to crawl back into it. `FlightModel` lets
+overspeed bleed off as momentum rather than clamping it to the cap, which is the
+only reason this lands at all while planted.
+
+### Measured — and it overshot
+
+```
+  VESPER   EXTREME  +0.321 -> -0.182       HARD  +0.163 -> -0.267
+  spread   EXTREME   0.531 ->  0.471
+```
+
+He goes from **first to last at both tiers**, a swing of 0.503. Four nerfs landed
+at once and all four were asked for, so this is recorded rather than reversed.
+
+**The cadence is not the lever, which is the useful part.** Swept at EXTREME with
+everything else held:
+
+```
+  109 ticks/shot (2.1s)  ->  -0.182      the shipped value
+   75 ticks/shot (1.3s)  ->  -0.163
+   51 ticks/shot (0.9s)  ->  -0.105
+```
+
+Doubling the rate of fire buys back only **0.077** of a 0.503 fall. Almost all of
+the loss is the lance properties — which makes sense once they are enumerated:
+guard reduction going from 50 % to 80 % is a 2.5x cut in damage against anyone
+holding guard, *and* the round became interceptable, *and* it stopped
+multi-hitting. Three compounding losses against one dial.
+
+So if VESPER is to come back toward the middle, the fire rate is a weak dial and
+the honest ones are `pierceCount` (returning multi-hit without returning guard
+piercing), the stance's `damage`, or `speedScale`.
