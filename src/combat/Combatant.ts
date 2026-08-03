@@ -1208,13 +1208,31 @@ export class Combatant implements FlightState {
     const st = this.status.def;
     const chip = this.status.step();
     if (chip > 0) {
-      // Chip goes through the same defence multiplier as everything else, but
-      // deliberately cannot land the killing blow: being finished by a lingering
-      // burn seconds after the shooter disengaged reads as a bug, not a loss.
-      // A Shield burst smothers it, same as it smothers gunfire — a burn is the
+      // Chip goes through the same defence multiplier as everything else. A
+      // Shield burst smothers it, same as it smothers gunfire — a burn is the
       // one damage source a guard could never do anything about.
+      //
+      // **A burn can land the killing blow.** It could not, until D121: this was
+      // `Math.max(1, ...)`, so chip damage stopped dead at one hull point.
+      //
+      // The reason given was that *"being finished by a lingering burn seconds
+      // after the shooter disengaged reads as a bug, not a loss"* — but a burn
+      // lasts **120 ticks**, and `Status.apply` restarts that clock on every hit
+      // that inflicts it. The worst case the clamp was defending against is
+      // therefore dying **two seconds** after the last round landed, which is a
+      // legible death and not a bug. The duration already solved the problem the
+      // clamp was solving, and the clamp's real effect was elsewhere.
+      //
+      // Its real effect was on PYRE, whose blurb says it *"wins fights it has
+      // already left"* and who carries fire on seven of nine weapons. Measured,
+      // she left an opponent alive at exactly one hull in **20 of 168 fights** —
+      // four times the roster's next worst — and pinned opponents at that floor
+      // for 32 ticks a fight. She dropped the whole field low and confirmed
+      // nothing. Lifting the clamp took her **38 % → 46 %** and moved the roster
+      // spread by 0.001, because fire is the only damaging status anyone
+      // actually carries: acid exists and no weapon on the roster applies it.
       const shieldChip = this.shieldActive ? SHIELD_TAKEN.chip : 1;
-      this.life = Math.max(1, this.life - chip * this.incomingScale * shieldChip);
+      this.life = Math.max(0, this.life - chip * this.incomingScale * shieldChip);
     }
     if (st?.energyDrain) this.energy = Math.max(0, this.energy - st.energyDrain);
 

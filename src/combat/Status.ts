@@ -71,7 +71,12 @@ export const ELEMENTS: Record<Element, ElementDef | null> = {
   [Element.Cryo]: {
     name: 'CRYO',
     duration: 150,
-    damagePerTick: 0,
+    // 15 hull over a full application. A *token* — ice is a control effect and
+    // `speedScale` 0.66 is the whole of it. What the number buys is that every
+    // element now damages, so "you are still burning/frozen/shorting out" is a
+    // clock running down on the victim rather than a status that some machines
+    // can safely ignore. See D121.
+    damagePerTick: 0.1,
     speedScale: 0.66,
     energyDrain: 0,
     blocksEnergyRegen: false,
@@ -89,7 +94,10 @@ export const ELEMENTS: Record<Element, ElementDef | null> = {
   [Element.Shock]: {
     name: 'SHOCK',
     duration: 165,
-    damagePerTick: 0,
+    // 8 hull over a full application, the smallest number on the table. Shock's
+    // bite is `energyDrain` and `blocksEnergyRegen`; this is there so it can
+    // finish a machine it has already shut down, not so it can hurt one.
+    damagePerTick: 0.05,
     speedScale: 0.9,
     energyDrain: 1.9,
     blocksEnergyRegen: true,

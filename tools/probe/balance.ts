@@ -164,6 +164,11 @@ interface Sample {
   ticks: number;
 }
 
+/** A duel's contribution to a win count: 1 won, 0 lost, half a draw. */
+function drawAware(win: number): number {
+  return win > 0 ? 1 : win < 0 ? 0 : 0.5;
+}
+
 /** Runs one shard of the plan. */
 function runShard(opts: Options): Sample[] {
   const plan = samplePlan(opts);
@@ -181,7 +186,21 @@ function runShard(opts: Options): Sample[] {
       i,
       j,
       lead: (fwd.lead - rev.lead) / 2,
-      wins: (fwd.win > 0 ? 1 : 0) + (rev.win < 0 ? 1 : 0),
+      /**
+       * Half a win each on a draw.
+       *
+       * This read `(fwd.win > 0 ? 1 : 0)`, which gives the left side nothing on
+       * a tie — and since the right side's share is derived as `2 - wins`, a
+       * draw was silently scored as a **full win for whoever happened to be
+       * listed second**. Both sides then swap slots, so it did not vanish in the
+       * average; it just moved a fixed amount of credit down the roster order.
+       *
+       * Harmless while draws were rare and not any more: letting a status land
+       * the killing blow (D121) made **double KOs** possible, and they went from
+       * about 3 per machine to about 11 of 168 — 6.5 % of PYRE's fights end with
+       * both machines dying on the same tick.
+       */
+      wins: drawAware(fwd.win) + drawAware(-rev.win),
       ko: fwd.ko - rev.ko,
       ticks: (fwd.ticks + rev.ticks) / 2,
     });

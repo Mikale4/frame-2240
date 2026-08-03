@@ -5152,3 +5152,122 @@ Four sniper tests went red, none of them a regression, all of them coupled to
   file this session to make the same mistake after `lastStand.test.ts` and
   `overdrive.test.ts`, and the rule stands: **never pin a balance dial with an
   equality assertion.**
+
+---
+
+## D121 — A burn can kill
+
+**Found by a player**, which is now four for four. The report: *"Ive test out Pyre
+and she seems to do well vs the rest of the cast; not lagging behind, but also not
+feeling overpowered. Im not sure why her win rate says 38% because it feels more
+like in the high 40s. She doesnt really do poor against any mech."*
+
+Every aggregate agreed with him and none of them explained it. PYRE's margin was
+−0.045, near even. Her exchange rate was 132.6 bar/min dealt against 134.8 taken,
+near even. Her matchup row was the flattest on the roster — nothing worse than
+−0.14. And her record was the worst in the game.
+
+### `tools/probe/outcomes.ts`
+
+A third instrument, because the first two could not see it. `balance.ts` reports
+a margin and a record derived from it; `telemetry.ts` reports what a machine did
+with its ticks. Neither says *how a fight ended*. This one splits outcomes into
+kills, clock decisions and draws, and counts two things nothing else did.
+
+The first thing it found was about the harness rather than the game: **every
+fight on the roster ends by KO.** 1344 duels, **zero** decided by the clock. The
+180-second cap is never reached, so `lead` — documented as the game's timeout
+tiebreaker — never actually acts as one in AI play. It is a proxy for how
+comfortably a machine kills, and nothing else.
+
+The second thing was the answer:
+
+```
+  mech        n   KO-W  KO-L   leftAt1   clamp/fight
+  PYRE      168     60   105        20          32.1
+  NULLTIDE  168     82    80         6          32.1
+  VESPER    168     85    77         6           0.0
+  HALCYON   168     95    68         0           0.3
+```
+
+**PYRE left an opponent alive at exactly one hull point in 20 of 168 fights**,
+four times the roster's next worst, and pinned opponents at that floor for 32
+ticks a fight. She dropped the entire field low and confirmed nothing.
+
+### The cause
+
+`Combatant.step` applied status chip as `Math.max(1, life - chip)`. **A burn
+could not land the killing blow.** Not "rarely" — never, by construction.
+
+The reason given was that *"being finished by a lingering burn seconds after the
+shooter disengaged reads as a bug, not a loss"*. That concern is real, but the
+rule was far broader than the case, and the case turns out to be small: **a burn
+lasts 120 ticks**, and `Status.apply` restarts that clock on every hit that
+inflicts it. The worst thing the clamp was preventing is dying **two seconds**
+after the last round landed — a legible death. The duration had already bounded
+the problem; the clamp bounded it a second time and charged PYRE for it.
+
+It only ever fell on her, because fire is the only damaging status anyone
+carries. **Acid is carried by no weapon on the roster at all** — `Element.Corrosive`
+is fully implemented, tuned at 0.42/tick, referenced only in test files.
+
+| element | dmg/tick | carried by |
+| --- | --- | --- |
+| Incendiary | 0.95 | **PYRE ×7**, NOCTURNE ×2 |
+| Shock | 0 → **0.05** | OBELISK ×2, NULLTIDE ×4, HALCYON ×1 |
+| Cryo | 0 → **0.10** | NULLTIDE ×3 |
+| Corrosive | 0.42 | **nobody** |
+
+### The change
+
+The clamp is gone: `Math.max(0, ...)`. **By request, every element also now
+does damage** — Shock 0.05/tick and Cryo 0.10/tick, which is 8 and 15 hull over
+a full application. Deliberately token: Shock's bite is `energyDrain` and
+`blocksEnergyRegen`, Cryo's is `speedScale` 0.66. The numbers exist so that no
+status is one a machine can safely ignore, and so each can finish something it
+has already shut down.
+
+A brief attempt at a middle path — lethal only while the burn is *fresh*, gated
+on `Status.fraction` — was built, swept (0.9/0.7/0.5/0.3 → 40/41/43/45 %) and
+thrown away. Once the 120-tick duration was understood there was nothing left for
+it to protect.
+
+### Measured — both arms with the corrected probe
+
+```
+  EXTREME   PYRE  37 % / -0.045  ->  41 % / -0.044
+  HARD      PYRE  40 % / -0.011  ->  43 % / +0.013
+  spread    EXTREME 0.156 -> 0.143      HARD 0.206
+  win-rate range   21 points -> 16 points
+```
+
+The mechanism moved as intended: **`leftAt1` fell from 20 fights to 6**, and the
+ticks opponents spend pinned at one hull from 32 to 19.
+
+**+4 points, not the +8 first reported.** The first counterfactual was measured
+through a probe bug found later in the same session — see below — which was
+inflating PYRE specifically. The corrected figure is +4, and the player's "high
+40s" is still above it. That gap is expected and is not this defect: he is
+describing *human* play, where a pilot finishes a burning opponent with a gun.
+The rival never chooses a command motion (§8d) or a sub-weapon (§8f) and will
+still wait for the fire.
+
+### The probe bug this uncovered
+
+Letting a status kill made **double KOs** possible — both machines dying on the
+same tick. They went from about 3 per machine to 11 of PYRE's 168 fights.
+
+`balance.ts` scored a draw as `(fwd.win > 0 ? 1 : 0)`, giving the left side
+nothing, while the right side's share is derived as `2 - wins` — so **a draw was
+scored as a full win for whichever machine was listed later in `ROSTER`**. Both
+slot orders are sampled, so it did not cancel in the average; it moved a fixed
+amount of credit down the roster order. PYRE is seventh of eight and was
+collecting it.
+
+Harmless while draws were rare, which they were until this change. Now
+`drawAware` gives half a win to each side. Every number in this entry is measured
+with the fix, on both arms.
+
+**The lesson generalises**: a metric that is fine under current conditions can be
+made wrong by a gameplay change, and nothing will announce it. The tie branch had
+been there since D97 and was correct-by-irrelevance the whole time.
