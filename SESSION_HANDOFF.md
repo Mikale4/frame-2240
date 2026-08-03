@@ -38,9 +38,9 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 ## 3. Current status — verified
 
-* **567 tests pass** (27 files), typecheck clean, production build clean.
+* **570 tests pass** (27 files), typecheck clean, production build clean.
 * **Working tree clean** on `master`. No other branches.
-* `docs/DECISIONS.md` runs to **D113**.
+* `docs/DECISIONS.md` runs to **D114**.
 * **Suite runtime ~35s.** Deliberate — see §8a.
 * **`tools/probe/balance.ts` is the roster instrument** (D97). A full eight-mech
   sweep is ~20s:
@@ -135,16 +135,16 @@ both slot orders on the same seed, real 180s round cap. Standard error ~0.045.
 
 | | EXTREME | |
 | --- | --- | --- |
-| 1 | **NULLTIDE +0.257** | |
-| 2 | HALCYON +0.048 | |
-| 3 | TERRAMOTH +0.031 | |
-| 4 | PYRE −0.004 | |
-| 5 | NOCTURNE −0.026 | |
-| 6 | CIRRUS −0.096 | |
-| 7 | VESPER −0.102 | |
-| 8 | OBELISK −0.108 | |
+| 1 | HALCYON +0.072 | | NULLTIDE +0.102 |
+| 2 | TERRAMOTH +0.066 | | PYRE +0.082 |
+| 3 | NULLTIDE +0.032 | | HALCYON ~0.00 |
+| 4 | PYRE +0.020 | | NOCTURNE −0.012 |
+| 5 | NOCTURNE +0.019 | | CIRRUS −0.022 |
+| 6 | VESPER −0.058 | | TERRAMOTH −0.053 |
+| 7 | CIRRUS −0.061 | | OBELISK −0.075 |
+| 8 | OBELISK −0.091 | | **VESPER −0.159** |
 
-spread: **EXTREME 0.364** (12 seeds; SE ~0.03). NULLTIDE's two projections (D113) are the outlier; the other seven span 0.156.
+spread: **EXTREME 0.163, HARD 0.297** (12 seeds; SE ~0.03). **The tightest the roster has ever measured**, with no outlier at EXTREME at all. VESPER at HARD is the one machine still adrift — structural, see `docs/TIER_LIST.md` §5.
 
 > **This is a chosen state, not a regression.** The roster was at 0.169 / 0.242
 > with no outliers after the tuning pass (D97–D104). D105 and D107–D109 are

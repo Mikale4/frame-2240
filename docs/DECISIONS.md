@@ -4518,3 +4518,75 @@ all.
 
 spread **0.364**, against 0.169 before this block. NULLTIDE is the outlier again,
 and it is the two projections that put her there.
+
+---
+
+## D114 — LAST STAND stops the death and nothing else, and the pair quietens down
+
+### The passive was doing more than it said
+
+**Reported**: "Last Stand only makes Halcyon not die, but Halcyon should still be
+susceptible to hit stun and statuses and other mechanics that hinder a mech."
+
+Correct, and it was not — but the fault was narrower and more specific than
+"immunity". The reprieve never blocked statuses or hitstun *while it ran*. What
+it did was **erase the killing blow itself**: on trigger D113 cleared `hitstun`,
+dropped the attack and the melee lock, and forced `ActState.Free`.
+
+So the hit that should have staggered Naia Vesk left her standing and able to act
+on the very next tick. That is a free full-screen reset welded onto the strongest
+defensive passive in the game, and nobody asked for it — it came from a comment
+("whatever it was doing is over") that read as tidying up and was actually a
+second ability.
+
+Now the trigger sets `life = 1` and touches nothing else. The killing blow
+resolves exactly as it would on any other machine: hitstun, knockback, the
+cancelled attack, the broken chain, whatever status it carried. Three tests pin
+it — that she is still in hitstun and `helpless` after surviving, that Cryo still
+slows her and Corrosive still chips her down to the floor during the reprieve,
+and that a *second* hit mid-reprieve stuns her again.
+
+The clamp was already correct: everything that hinders a mech still hinders this
+one; it simply does not die while the clock runs.
+
+### The projections quieten down
+
+`DECOY_FIRE_PERIOD` 34 → 70. Swept at EXTREME, twelve seeds:
+
+```
+  34 -> +0.257      70 -> +0.032
+  50 -> +0.127      95 -> +0.036
+```
+
+70 and 95 are the same number inside the error bars — the protocol's signature
+for a dial with no resolution left, so slowing it further only makes the
+silhouettes quieter for nothing.
+
+Worth stating what this means with two on the field: staggered by half a period,
+the **pair** puts out a round every 35 ticks, which is close to what a single
+projection did at the old 34. The volume is roughly back where it was. It now
+arrives from two places, and each of those places can be shot down.
+
+### Where the roster landed
+
+```
+  EXTREME                              HARD
+  HALCYON   +0.072   VESPER   -0.058   NULLTIDE  +0.102   CIRRUS    -0.022
+  TERRAMOTH +0.066   CIRRUS   -0.061   PYRE      +0.082   TERRAMOTH -0.053
+  NULLTIDE  +0.032   OBELISK  -0.091   HALCYON   ~0        OBELISK   -0.075
+  PYRE      +0.020                     NOCTURNE  -0.012   VESPER    -0.159
+  NOCTURNE  +0.019
+```
+
+**spread 0.163 at EXTREME** — the tightest the roster has ever measured, beating
+the 0.169 of D112. Every machine inside a 0.163 band with no outlier at all.
+
+HALCYON tops it, which is worth a note: the machine that a few blocks ago won
+*no matchup at all* and was described as a bent yardstick is now nominally first
+— by 0.006 over TERRAMOTH, which is a quarter of a standard error and means
+nothing except that the top of this roster is flat.
+
+**VESPER at HARD (−0.159) is the one thing still outside the pack**, unchanged
+and unrelated to this block. Its cause is structural: `kites` and the sniper
+stance both need `rangeIq`, which is EXTREME-only, so at HARD he cannot enforce
+the spacing his whole design assumes. See `docs/TIER_LIST.md` §5.

@@ -813,13 +813,22 @@ export class Combatant implements FlightState {
     if (!def || this.lastStandUsed || this.life > 0) return null;
     this.lastStandUsed = true;
     this.lastStandTicks = def.ticks;
+    /**
+     * **It stops the death and nothing else.**
+     *
+     * The first cut also cleared `hitstun`, dropped the attack and the melee
+     * lock, and forced `ActState.Free` — which meant the killing blow was not
+     * merely survived but *erased*: the hit that should have staggered Naia Vesk
+     * left her standing and immediately able to act, which is a free full-screen
+     * reset attached to the strongest defensive passive in the game.
+     *
+     * Now the hit resolves exactly as it would on any other machine — hitstun,
+     * knockback, the cancelled attack, the broken chain, every status it carried
+     * — and the *only* thing that changes is that `life` stops at 1 instead of
+     * reaching 0. Everything that hinders a mech still hinders this one; it just
+     * does not die while the clock runs.
+     */
     this.life = 1;
-    // Whatever it was doing when the killing blow landed is over.
-    this.attack = null;
-    this.coAttack = null;
-    this.meleeLock = null;
-    this.hitstun = 0;
-    this.act = ActState.Free;
     return 'triggered';
   }
 

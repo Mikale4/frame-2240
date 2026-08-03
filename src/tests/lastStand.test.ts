@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { MatchSim } from '../combat/MatchSim';
 import { MECHS, ROSTER } from '../data/mechs';
-import { MatchPhase, emptyInput } from '../combat/types';
+import { ActState, MatchPhase, emptyInput } from '../combat/types';
+import { Element } from '../combat/Status';
 import { BANTER_PRIORITY, pickBanter } from '../data/banter';
 
 /**
@@ -145,6 +146,64 @@ describe('the reprieve', () => {
       if (s.events.some((e) => e.t === 'lastStandEnd')) ended = true;
     }
     expect(ended).toBe(true);
+  });
+
+  /**
+   * LAST STAND stops the death and **nothing else**.
+   *
+   * The first cut also cleared hitstun, dropped the attack and forced the mech
+   * back to `Free`, which turned the strongest defensive passive in the game
+   * into a free full-screen reset as well: the killing blow was not survived, it
+   * was erased. These pin the difference.
+   */
+  it('leaves the killing blow doing everything else it would have done', () => {
+    const s = sim();
+    s.player.life = 60;
+    s.player.takeHit({
+      x: s.player.x, y: s.player.y, vx: 1, vy: 0,
+      damage: 9999, guardDamage: 0, life: 5, radius: 5,
+      ownerId: 1, team: 1, kind: 0, barrier: 0,
+      hitstop: 6, hitstun: 40, knockback: 6, homing: 0, pierceCount: 0,
+    });
+    // The hit staggered her, as it would anyone.
+    expect(s.player.hitstun).toBeGreaterThan(0);
+    s.step(emptyInput(), emptyInput());
+    expect(s.player.alive).toBe(true);
+    // ...and she is still in it afterwards, not standing free.
+    expect(s.player.hitstun).toBeGreaterThan(0);
+    expect(s.player.act).toBe(ActState.Hitstun);
+    expect(s.player.helpless).toBe(true);
+  });
+
+  it('does not make her immune to status effects', () => {
+    const s = sim();
+    s.player.life = 0;
+    s.step(emptyInput(), emptyInput());
+    expect(s.player.lastStandActive).toBe(true);
+    s.player.status.apply(Element.Cryo);
+    expect(s.player.status.speedScale).toBeLessThan(1);
+    // And the chip a status deals still lands — it simply cannot finish her.
+    s.player.status.apply(Element.Corrosive);
+    for (let i = 0; i < 90; i++) s.step(emptyInput(), emptyInput());
+    expect(s.player.alive).toBe(true);
+    expect(s.player.life).toBe(1);
+  });
+
+  it('does not stop her being stunned again while it runs', () => {
+    const s = sim();
+    s.player.life = 0;
+    s.step(emptyInput(), emptyInput());
+    for (let i = 0; i < 20; i++) s.step(emptyInput(), emptyInput());
+    s.player.takeHit({
+      x: s.player.x, y: s.player.y, vx: 1, vy: 0,
+      damage: 200, guardDamage: 0, life: 5, radius: 5,
+      ownerId: 1, team: 1, kind: 0, barrier: 0,
+      hitstop: 4, hitstun: 30, knockback: 4, homing: 0, pierceCount: 0,
+    });
+    expect(s.player.hitstun).toBeGreaterThan(0);
+    s.step(emptyInput(), emptyInput());
+    expect(s.player.alive).toBe(true);
+    expect(s.player.helpless).toBe(true);
   });
 
   it('does nothing at all for a machine without the passive', () => {

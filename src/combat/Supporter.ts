@@ -339,12 +339,28 @@ const DECOY_SHOT_SPEED = 13;
  * whole life still does well under a tenth of a hull. It cannot win a fight. It
  * can make standing still lose one.
  *
- * **The cadence was halved, from 16 ticks to 34.** Measured, the projection's
- * stun was worth +0.196 of NULLTIDE's +0.262 lead — nearly the whole of it — and
- * the rate of fire is one of the two things that sets how often it lands. See
- * D112.
+ * **Slowed twice, and the second time because there are two of them.** 16 → 34
+ * when a single projection's stun was measured at +0.196 of NULLTIDE's +0.262
+ * lead (D112); then 34 → 70 once `DECOY_COUNT` went to two, which had doubled
+ * the volume straight back (D113).
+ *
+ * 70 is where the dial stops paying. Swept at EXTREME, twelve seeds:
+ *
+ * ```
+ *   34 -> +0.257      70 -> +0.032
+ *   50 -> +0.127      95 -> +0.036
+ * ```
+ *
+ * 70 and 95 are the same number inside the error bars, which is the protocol's
+ * signature for a dial with no resolution left — slowing it further buys nothing
+ * and only makes the projections quieter.
+ *
+ * Note what it means with two on the field: staggered by half a period, the
+ * *pair* puts out a round every 35 ticks, which is close to what one projection
+ * did at the old 34. The volume is roughly where it was; it now arrives from two
+ * places, and each of those places can be shot.
  */
-export const DECOY_FIRE_PERIOD = 34;
+export const DECOY_FIRE_PERIOD = 70;
 export const DECOY_DAMAGE = 8;
 /**
  * The projection's rounds steer, for a window.
