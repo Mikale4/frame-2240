@@ -254,6 +254,87 @@ function summarise(samples: Sample[]): { rows: Row[]; spread: number; ticks: num
   return { rows, spread: rows.length ? rows[0].mean - rows[rows.length - 1].mean : 0, ticks };
 }
 
+/**
+ * How far from the field a machine has to sit before the word "outlier" is
+ * earned.
+ *
+ * Two standard deviations, and it is a **flag rather than a verdict**: with only
+ * eight machines, one of them landing past 2σ is not a surprising event. What it
+ * is good for is the opposite direction — when nothing is flagged, the roster is
+ * one population and "X is the outlier" is not a claim the data supports.
+ *
+ * This exists because that claim was made about NOCTURNE off a sorted list, on
+ * the strength of it being last on lead. It was −1.10σ. The lowest machine in a
+ * tight field is not an outlier, PYRE was further out on win rate anyway, and
+ * the genuinely most extreme machine was VESPER at +1.75σ — at the *top*.
+ * Sorting shows you an order; it does not show you whether the order means
+ * anything.
+ */
+const OUTLIER_Z = 2;
+
+interface Dispersion {
+  meanLead: number;
+  sdLead: number;
+  meanWin: number;
+  sdWin: number;
+  /**
+   * Dispersion with measurement error removed.
+   *
+   * Each row carries its own standard error, so the spread you can *see* is
+   * inflated by it: `observed² ≈ true² + SE²`. Subtracting gives the part that
+   * is actually the machines differing from each other. It runs about a fifth of
+   * the observed figure at 12 seeds, which is worth knowing before treating a
+   * 0.01 gap as real.
+   */
+  trueSdLead: number;
+  noiseShare: number;
+  outliers: string[];
+}
+
+/** Null for a partial sweep, where the field is not a comparable population. */
+function dispersion(rows: Row[]): Dispersion | null {
+  if (rows.length < 3) return null;
+  /**
+   * **Every row must carry the same sample count.**
+   *
+   * `--only X` gives X a full 84 samples and every other machine the 12 from
+   * their single pairing against it. Those rows are not a field — they are seven
+   * one-opponent records — and treating them as one produced a lead SD of 0.125
+   * and a straight-faced "no outliers" on numbers that meant nothing. Detected by
+   * unequal `n` rather than by reading `opts.only`, so any future sampling mode
+   * that skews the plan is caught by the same check.
+   */
+  const counts = rows.map((r) => r.n);
+  if (Math.min(...counts) !== Math.max(...counts)) return null;
+  const n = rows.length;
+  const spreadOfN = (xs: number[]): { mean: number; sd: number } => {
+    const mean = xs.reduce((t, x) => t + x, 0) / xs.length;
+    const v = xs.reduce((t, x) => t + (x - mean) ** 2, 0) / Math.max(1, xs.length - 1);
+    return { mean, sd: Math.sqrt(v) };
+  };
+  const lead = spreadOfN(rows.map((r) => r.mean));
+  const win = spreadOfN(rows.map((r) => r.winRate));
+  const meanSeSq = rows.reduce((t, r) => t + r.se ** 2, 0) / n;
+  const trueVar = Math.max(0, lead.sd ** 2 - meanSeSq);
+  const trueSd = Math.sqrt(trueVar);
+  const outliers = rows
+    .filter(
+      (r) =>
+        Math.abs((r.mean - lead.mean) / (lead.sd || 1)) >= OUTLIER_Z ||
+        Math.abs((r.winRate - win.mean) / (win.sd || 1)) >= OUTLIER_Z,
+    )
+    .map((r) => r.id.toUpperCase());
+  return {
+    meanLead: lead.mean,
+    sdLead: lead.sd,
+    meanWin: win.mean,
+    sdWin: win.sd,
+    trueSdLead: trueSd,
+    noiseShare: lead.sd > 0 ? 1 - trueSd / lead.sd : 0,
+    outliers,
+  };
+}
+
 function report(samples: Sample[], opts: Options): void {
   const { rows, spread, ticks } = summarise(samples);
   const label = opts.only ? ` (only ${opts.only})` : '';
@@ -261,18 +342,39 @@ function report(samples: Sample[], opts: Options): void {
     `\n  ${opts.tierName.toUpperCase()}  ${opts.seeds} seeds x both slots, ` +
       `${opts.ticks} tick cap${label}\n`,
   );
+  const d = dispersion(rows);
   for (const r of rows) {
     const bar = r.mean >= 0 ? '+' : '';
+    const z = d ? (r.mean - d.meanLead) / d.sdLead : 0;
+    const zw = d ? (r.winRate - d.meanWin) / d.sdWin : 0;
+    const flag = d && (Math.abs(z) >= OUTLIER_Z || Math.abs(zw) >= OUTLIER_Z) ? '  <- outlier' : '';
     console.log(
       `  ${r.id.toUpperCase().padEnd(10)} win ${(r.winRate * 100).toFixed(0).padStart(3)}%` +
         `   lead ${bar}${r.mean.toFixed(3).padStart(6)} +/-${r.se.toFixed(3)}` +
-        `   ko ${(r.ko >= 0 ? '+' : '') + r.ko.toFixed(2)}   n=${r.n}`,
+        `   ko ${(r.ko >= 0 ? '+' : '') + r.ko.toFixed(2)}` +
+        (d
+          ? `   z ${(z >= 0 ? '+' : '') + z.toFixed(2)}/${(zw >= 0 ? '+' : '') + zw.toFixed(2)}`
+          : '') +
+        `   n=${r.n}${flag}`,
     );
   }
   console.log(
     `\n  spread: ${spread.toFixed(3)}   mean fight ${(ticks / 60).toFixed(0)}s of ` +
-      `${(opts.ticks / 60).toFixed(0)}s\n`,
+      `${(opts.ticks / 60).toFixed(0)}s`,
   );
+  if (d) {
+    console.log(
+      `  dispersion: lead SD ${d.sdLead.toFixed(3)} (true ${d.trueSdLead.toFixed(3)}, ` +
+        `${(d.noiseShare * 100).toFixed(0)}% of it is measurement noise)   ` +
+        `win SD ${(d.sdWin * 100).toFixed(1)}pts`,
+    );
+    console.log(
+      d.outliers.length
+        ? `  outliers (|z| >= ${OUTLIER_Z}): ${d.outliers.join(', ')}`
+        : `  outliers (|z| >= ${OUTLIER_Z}): none — the field is one population`,
+    );
+  }
+  console.log('');
 
   if (opts.matrix) {
     const cell = new Map<string, number[]>();

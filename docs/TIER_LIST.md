@@ -53,6 +53,24 @@ into narrow survivals, and **you have to read both**. Two live examples:
 **spread 0.143 — the tightest the roster has ever measured** (0.208 before D118).
 The win-rate range is 16 points, down from 21.
 
+### Nobody is an outlier, and the probe now says so
+
+| | EXTREME | HARD |
+| --- | --- | --- |
+| lead SD | 0.050 (**true 0.041**, 18 % is measurement noise) | 0.073 (true 0.066) |
+| win-rate SD | 5.5 points | 10.1 points |
+| beyond ±2σ | **none** | **none** |
+
+`balance.ts` prints a `z` column and this block on every full sweep. **Read them
+before calling anything an outlier.** The most extreme machine at EXTREME is
+VESPER at **+1.75σ — at the top**; the lowest *lead* is NOCTURNE at −1.10σ and
+the lowest *record* is PYRE at −1.57σ, and neither is separable from the field.
+
+A sorted table always has a last row. That is not the same as having a problem,
+and the difference cost a wasted investigation into NOCTURNE (D122). Roughly a
+fifth of the visible dispersion at 12 seeds is measurement error, so a gap of
+0.01 between adjacent machines is noise by construction.
+
 ### Every fight ends by KO
 
 Measured in `tools/probe/outcomes.ts`: across 1344 duels, **zero** were decided

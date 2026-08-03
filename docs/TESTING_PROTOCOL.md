@@ -167,6 +167,37 @@ proto.createMediaElementSource = function (el) { (window.__voices ??= []).push(e
 
 ---
 
+## 4b. "Last" is not "outlier"
+
+A sorted table always has a bottom row. Whether that row is a *problem* is a
+separate question and the sort cannot answer it.
+
+`tools/probe/balance.ts` prints a `z` column and a dispersion line on every full
+sweep. **Use them before calling anything an outlier.** The convention here is
+|z| >= 2, and it is a flag rather than a verdict — with eight machines, one
+landing past 2σ is unremarkable. Its real value is the negative: when nothing is
+flagged, the roster is one population and "X is the outlier" is not a claim the
+data supports.
+
+This is written down because the claim was made and was wrong. NOCTURNE was
+called "the next real outlier" off a sorted list, on the strength of being last
+on lead. It was **−1.10σ**. PYRE was further out on win rate (−1.57σ), and the
+genuinely most extreme machine was VESPER at **+1.75σ, at the top of the table**.
+Nothing was beyond 2σ at either tier.
+
+Two things follow:
+
+* **Subtract the noise.** Each row carries its own standard error, so observed
+  dispersion is inflated: `observed² ≈ true² + SE²`. At 12 seeds about a fifth of
+  the visible spread at EXTREME is measurement error. A 0.01 gap between adjacent
+  machines is noise by construction.
+* **The dispersion block suppresses itself on a partial sweep.** `--only X`
+  gives X 84 samples and everyone else 12; that is not a field. Detected by
+  unequal `n`, because the first cut of this check read the flag instead and duly
+  printed a confident "no outliers" over meaningless numbers.
+
+---
+
 ## 5. Things that will mislead you
 
 * **Vite answers unknown paths with `index.html` and a 200.** Requesting an asset

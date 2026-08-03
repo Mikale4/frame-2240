@@ -5271,3 +5271,95 @@ with the fix, on both arms.
 **The lesson generalises**: a metric that is fine under current conditions can be
 made wrong by a gameplay change, and nothing will announce it. The tie branch had
 been there since D97 and was correct-by-irrelevance the whole time.
+
+---
+
+## D122 — "Last" is not "outlier"
+
+**A correction, and the instrument that stops it recurring.**
+
+At the end of D121 the roster was reported as having one remaining problem:
+*"The next real outlier is NOCTURNE — 43 % / −0.055 at EXTREME, 38 % / −0.087 at
+HARD, and unlike PYRE the aggregates all agree it's genuinely losing the
+exchange."* The user asked why that word had been used. It should not have been.
+
+### The claim did not survive checking
+
+Computed across the eight machines at EXTREME:
+
+```
+  mean lead +0.000   SD 0.050        mean win 49.9 %   SD 5.4 pts
+
+  VESPER      z(lead) +1.75    z(win) -0.16
+  CIRRUS              +1.17           +1.31
+  NULLTIDE            +0.08           +0.54
+  OBELISK             -0.06           +0.05
+  HALCYON             -0.21           +0.54
+  TERRAMOTH           -0.75           +0.54
+  PYRE                -0.87           -1.57
+  NOCTURNE            -1.10           -1.35
+```
+
+**Nothing exceeds ±2σ at either tier.** NOCTURNE is −1.10σ, PYRE is further out
+on record at −1.57σ, and the most extreme machine in the field is **VESPER at
++1.75σ — at the top of the table**. The gap between NOCTURNE's −0.055 and PYRE's
+−0.044 is 0.011 against a ±0.030 standard error on each.
+
+What actually existed was "NOCTURNE has the lowest lead at EXTREME". That was
+reported as a much stronger claim, which is the same failure as reading a lead
+column and calling it a record: a number was used to answer a question it does
+not answer.
+
+### It also produced wasted work
+
+Two investigations ran off the back of it before the word was challenged — a
+per-matchup decomposition against HALCYON, which is not how this roster is meant
+to be read (a bad matchup is acceptable by design), and a stat sweep looking for
+a fix to a machine that did not need one. Both were sound measurements of the
+wrong question.
+
+One thing found along the way is worth keeping, since it was measured: **HALCYON
+with LAST STAND stripped is 36 % / −0.113, worse than NOCTURNE.** The AV frame is
+the weakest chassis in the game and HALCYON's standing is almost entirely her
+passive. That is a design observation about where the identity gaps are, not a
+balance defect, and no change was made.
+
+### The instrument
+
+`balance.ts` now prints, on every full sweep:
+
+* a **`z` column** per row, lead and win rate;
+* a **dispersion line** — SD of each, plus the **noise-corrected** figure;
+* an explicit **outlier verdict** at |z| >= 2, which says *"none — the field is
+  one population"* when there is nothing there.
+
+**Noise correction matters more than it sounds.** Each row carries its own
+standard error, so observed dispersion is inflated by it: `observed² ≈ true² +
+SE²`. At 12 seeds, EXTREME reads SD 0.050 of which the true component is
+**0.041** — 18 % of the visible spread is measurement error. A 0.01 gap between
+adjacent machines is noise by construction, and the probe now says so rather than
+leaving it to be inferred.
+
+The threshold is a flag rather than a verdict: with eight machines, one landing
+past 2σ is unremarkable. Its value is the negative direction — when nothing
+trips it, "X is the outlier" is not a claim the data supports.
+
+### The guard needed a guard
+
+The first cut computed dispersion whenever there were three or more rows, which
+included `--only` runs. `--only X` gives X a full 84 samples and every other
+machine the 12 from their single pairing, so it printed a lead SD of 0.125, a
+spread of 0.352 and a straight-faced *"no outliers"* over numbers that meant
+nothing — a more confident version of exactly the error being fixed.
+
+It now suppresses itself when the rows disagree on `n`, detected from the data
+rather than from reading `opts.only`, so any future sampling mode that skews the
+plan is caught by the same check.
+
+### Where this leaves the roster
+
+After D118, D120 and D121 there is **no machine these measurements can
+distinguish as broken**: spread 0.208 → 0.143, win-rate range 21 → 16 points, and
+no row beyond 2σ at either tier. Further work on any individual machine is now a
+design choice about identity — NOCTURNE is the only frame without a signature —
+and not something the numbers are asking for.
