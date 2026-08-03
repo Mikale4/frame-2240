@@ -273,6 +273,8 @@ export type SimEvent =
    */
   | { t: 'satBurnout'; x: number; y: number; id: number; overheat?: boolean }
   | { t: 'modeCycle'; id: number; mode: SatMode }
+  /** A decoy projection shot out of the air. */
+  | { t: 'decoyPop'; x: number; y: number; ownerId: number }
   /** A weapon knocked offline. `slot` is a `WeaponSlot`. */
   | { t: 'disarm'; x: number; y: number; victimId: number; slot: number }
   /** A sniper stance opened or closed. See `SniperModeDef`. */

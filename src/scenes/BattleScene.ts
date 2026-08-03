@@ -872,6 +872,23 @@ export class BattleScene extends Phaser.Scene {
           sfx.hit();
           break;
         }
+        case 'decoyPop': {
+          /**
+           * A projection shot out of the air.
+           *
+           * Given a real report rather than letting it silently blink out: the
+           * whole value of the counterplay is that a player learns they *can*
+           * shoot the fake, and a silhouette that vanishes with no feedback
+           * teaches nothing. The burst is already queued by the sim as a small
+           * `explode`; this adds the sound and a brief flash at the same point.
+           */
+          sfx.absorb();
+          const owner = this.byId(ev.ownerId);
+          this.effects.absorb(ev.x, ev.y, owner?.def.tint.glow ?? 0x9be7ff);
+          this.shake = Math.max(this.shake, 1.2);
+          break;
+        }
+
         case 'droneDown': {
           // Two lines, one loss: the owner mourns it, the shooter gloats. They
           // are different boxes, so both can land.

@@ -48,6 +48,11 @@ function droneHitKey(ownerId: number): number {
   return 1000 + ownerId;
 }
 
+/** The same trick again for a decoy projection, which is a third target type. */
+function decoyHitKey(ownerId: number): number {
+  return 2000 + ownerId;
+}
+
 /** How hard a repelled melee attacker is thrown off, and for how long. */
 const MELEE_REPEL_KNOCK = 13;
 /** One second. Long enough to punish, which is the whole point of the read. */
@@ -243,6 +248,7 @@ export class MatchSim {
     for (const s of this.spawnQueue) this.projectiles.spawn(s);
     this.stepProjectiles();
     this.resolveCollisions();
+    this.resolveDecoyCollisions();
     this.resolveDroneCollisions();
     this.applyShieldSweep();
     this.stepDroneRoles();
@@ -551,6 +557,51 @@ export class MatchSim {
    * Mechs are resolved first, so a shot that has already killed itself on a
    * chassis cannot also clip the escort behind it.
    */
+  /**
+   * A decoy projection can be shot out of the air.
+   *
+   * **It could not be, and that was most of what made it strong.** Measured, the
+   * projection's stun was worth +0.196 of NULLTIDE's +0.262 lead, and the reason
+   * it was worth so much was not how *often* it landed — CIRRUS locks an opponent
+   * down more and sits in the bottom half — but that it cost her nothing and
+   * could not be answered. Hit detection tested combatants and supporters; the
+   * silhouette was neither, so the thing stunning you was not a thing you could
+   * shoot.
+   *
+   * Now one clean hit pops it. Deliberately *one*, and deliberately no damage
+   * pool: it is a hologram, not a machine, and the counterplay should be a
+   * decision — spend a round on the fake and the real one has a free second —
+   * rather than a chore. The shot is consumed doing it, which is the price.
+   *
+   * Sized off the owner's own hurt radius, because it is pretending to be that
+   * machine and a decoy that is easier to hit than the pilot is a decoy nobody
+   * is fooled by twice.
+   *
+   * Resolved before drones and after mechs, matching the existing order: a shot
+   * that has already spent itself on a chassis cannot also pop a projection.
+   */
+  private resolveDecoyCollisions(): void {
+    for (const p of this.projectiles.items) {
+      if (!p.active || p.damage <= 0) continue;
+      for (const c of this.combatants) {
+        const s = c.supporter;
+        if (s.decoyTicks <= 0) continue;
+        if (c.team === p.team || c.id === p.ownerId) continue;
+        const key = decoyHitKey(c.id);
+        if (p.hitIds.has(key)) continue;
+        if (!sweptHit(p, s.decoyX, s.decoyY, c.def.rig.hurtRadius)) continue;
+
+        p.hitIds.add(key);
+        s.popDecoy();
+        this.events.push({ t: 'decoyPop', x: s.decoyX, y: s.decoyY, ownerId: c.id });
+        this.events.push({ t: 'explode', x: s.decoyX, y: s.decoyY, big: false });
+        // The round is spent on the fake. That is the trade.
+        p.active = false;
+        break;
+      }
+    }
+  }
+
   private resolveDroneCollisions(): void {
     for (const p of this.projectiles.items) {
       if (!p.active) continue;

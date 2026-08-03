@@ -4329,3 +4329,85 @@ is a test encoding one wrong answer as a rule. It now asserts a **band** — fou
 to eight shots per stance, and at least three times slower than his ordinary gun
 — because both ends of this dial have been wrong once and a regression in either
 direction should fail.
+
+---
+
+## D112 — The projection becomes answerable
+
+**Requested**, after the diagnosis in the previous block: lower the decoy's rate
+of fire, greatly extend its rounds' range, and **make the projection targetable —
+damaging it makes it vanish.**
+
+### The diagnosis it acts on
+
+Ablated at 12 seeds, NULLTIDE's +0.262 decomposed as:
+
+```
+  baseline                              +0.262
+  stun off (chip + auto-aim only)       +0.066    the stun was worth +0.196
+  auto-aim off                          +0.128    auto-aim was worth +0.134
+  projection entirely harmless          +0.031    the armed projection: +0.231
+```
+
+The two are **multiplicative** — 0.196 + 0.134 exceeds the 0.231 they are jointly
+worth — because auto-aim's value is almost entirely that it makes the stun land.
+
+And the reason the stun was worth so much was *not* how often it landed. CIRRUS
+puts an opponent in hitstun **28.5 %** of a fight against NULLTIDE's 25.8 % and
+sits in the bottom half of the roster. The difference is what it costs. CIRRUS
+buys its lock with an eight-hit melee flurry inside sword range on the thinnest
+hull in the game. Hers was free: the projection fires while she fires, it lands
+from several hundred pixels away, and — the part that mattered — **it could not
+be shot.** `MatchSim` tested combatants and supporters; the silhouette was
+neither. Measured, she was free to act against an opponent who could not for
+**23.2 % of every fight**.
+
+### The three changes
+
+* **`DECOY_FIRE_PERIOD` 16 → 34.** Halved. The per-round chance is only half of
+  how often a stun lands; the cadence is the other half.
+* **Round life 46 → 160.** Reach goes from 598px to a little over 2000 — most of
+  a 2400px arena. A jammer's silhouette that could only threaten what was already
+  near it was not doing the job the ability describes.
+* **The projection is a target.** One clean hit from the opponent pops it.
+
+Deliberately **one hit and no damage pool**: it is a hologram, not a machine, and
+the counterplay should be a decision — spend a round on the fake and the real one
+gets a free second — rather than a chore. The shot is consumed doing it, which is
+the price. Sized off the owner's own `rig.hurtRadius`, because a decoy easier to
+hit than the pilot is a decoy nobody is fooled by twice.
+
+`popDecoy` deliberately leaves `roleTimer` running, so shooting one down does not
+bring the next one forward. **That gap is the entire reward** and resetting the
+timer would quietly delete it — there is a test on the observable gap rather than
+on the private field.
+
+### Measured
+
+```
+  NULLTIDE   EXTREME  +0.262 -> -0.026        HARD  +0.304 -> +0.071
+  spread     EXTREME   0.374 ->  0.169        HARD   0.572 ->  0.257
+```
+
+**0.169 is the tightest the roster has ever measured**, equal to the best state
+the tuning pass ever reached, and with no machine outside ±0.09 of the field.
+
+Behaviourally:
+
+```
+  projections thrown        3.9 per fight
+  shot down                 67 % of them
+  projection on the field   55.7 % (was 75 %)
+  foe in hitstun            19.9 % (was 25.8 %)
+  decoy stuns landed        1.5 per fight (was 3.3)
+```
+
+### The side effect is the best part
+
+**Two thirds of projections are now shot down, and the AI is not aiming at
+them.** Rounds thrown at NULLTIDE's position hit the silhouette standing near it,
+so the decoy has become a *shot-eater* — it absorbs fire meant for her and dies
+doing it. Nobody designed that; it falls out of giving a fake machine a hurtbox,
+and it is exactly what a decoy is supposed to do. It also means the counterplay
+requires no new AI: an opponent shooting at where she seems to be is already
+performing it.

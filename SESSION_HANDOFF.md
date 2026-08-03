@@ -38,9 +38,9 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 ## 3. Current status — verified
 
-* **546 tests pass** (26 files), typecheck clean, production build clean.
+* **551 tests pass** (26 files), typecheck clean, production build clean.
 * **Working tree clean** on `master`. No other branches.
-* `docs/DECISIONS.md` runs to **D111**.
+* `docs/DECISIONS.md` runs to **D112**.
 * **Suite runtime ~35s.** Deliberate — see §8a.
 * **`tools/probe/balance.ts` is the roster instrument** (D97). A full eight-mech
   sweep is ~20s:
@@ -135,16 +135,16 @@ both slot orders on the same seed, real 180s round cap. Standard error ~0.045.
 
 | | EXTREME | |
 | --- | --- | --- |
-| 1 | **NULLTIDE +0.262** | |
-| 2 | TERRAMOTH +0.051 | |
-| 3 | PYRE +0.019 | |
-| 4 | NOCTURNE +0.009 | |
-| 5 | CIRRUS −0.065 | |
-| 6 | HALCYON −0.079 | |
-| 7 | VESPER −0.085 | |
-| 8 | OBELISK −0.112 | |
+| 1 | TERRAMOTH +0.089 | |
+| 2 | PYRE +0.050 | |
+| 3 | NOCTURNE +0.044 | |
+| 4 | CIRRUS −0.010 | |
+| 5 | NULLTIDE −0.026 | |
+| 6 | OBELISK −0.033 | |
+| 7 | HALCYON −0.035 | |
+| 8 | VESPER −0.079 | |
 
-spread: **EXTREME 0.374** (12 seeds; SE ~0.03).
+spread: **EXTREME 0.169, HARD 0.257** (12 seeds; SE ~0.03). **No machine is outside ±0.09 of the field** — the tightest the roster has measured.
 
 > **This is a chosen state, not a regression.** The roster was at 0.169 / 0.242
 > with no outliers after the tuning pass (D97–D104). D105 and D107–D109 are

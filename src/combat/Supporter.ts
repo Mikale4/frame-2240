@@ -296,11 +296,16 @@ const DECOY_SHOT_SPEED = 13;
  * projection a *third weapon* rather than a nuisance, which is the shape D96
  * described NULLTIDE as having and the kit did not deliver.
  *
- * Deliberately tiny. At 8 a side, fired every 16 ticks, a projection that landed
- * **every** round for its whole 150-tick life would do 72 damage — under 5 % of
- * an average hull. It cannot win a fight. It can make standing still lose one.
+ * Deliberately tiny. At 8 a side a projection that landed **every** round for its
+ * whole life still does well under a tenth of a hull. It cannot win a fight. It
+ * can make standing still lose one.
+ *
+ * **The cadence was halved, from 16 ticks to 34.** Measured, the projection's
+ * stun was worth +0.196 of NULLTIDE's +0.262 lead — nearly the whole of it — and
+ * the rate of fire is one of the two things that sets how often it lands. See
+ * D112.
  */
-export const DECOY_FIRE_PERIOD = 16;
+export const DECOY_FIRE_PERIOD = 34;
 export const DECOY_DAMAGE = 8;
 /**
  * The projection's rounds steer, for a window.
@@ -873,6 +878,18 @@ export class Supporter {
 
 
   /**
+   * Shot out of the air: the projection is gone, now.
+   *
+   * `roleTimer` is deliberately left running, so popping one does **not** bring
+   * the next one forward — the reward for spending a round on the fake is the
+   * gap until the cadence comes round again. That gap is the whole counterplay,
+   * and resetting the timer here would quietly delete it.
+   */
+  popDecoy(): void {
+    this.decoyTicks = 0;
+  }
+
+  /**
    * Whether this role draws from the owner's charge rack *this tick*.
    *
    * `SPENDS_CHARGES` answers it for seven roles permanently. The eighth is
@@ -1134,7 +1151,16 @@ export class Supporter {
       vy: Math.sin(ang) * DECOY_SHOT_SPEED,
       damage: DECOY_DAMAGE,
       guardDamage: 0,
-      life: 46,
+      /**
+       * **Long-ranged.** 13px a tick for 160 ticks is a little over 2000px of
+       * reach, against the 598 it had — most of the way across a 2400px arena.
+       *
+       * A jammer's silhouette that could only threaten things already near it was
+       * not doing the job the ability describes: the point of a second machine on
+       * the field is that it has to be *accounted for* from wherever it is, and a
+       * round that expires halfway there is one the opponent learns to ignore.
+       */
+      life: 160,
       radius: 9,
       ownerId: owner.id,
       team: this.team,

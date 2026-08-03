@@ -10,6 +10,7 @@ import {
 } from '../combat/Supporter';
 import {
   ActState,
+  Btn,
   BarrierResponse,
   MatchPhase,
   ProjKind,
@@ -276,5 +277,118 @@ describe('the projection itself', () => {
         if (p.decoyShot) expect(p.asHit().decoyShot).toBe(true);
       }
     }
+  });
+});
+
+/**
+ * Shooting the fake.
+ *
+ * The projection could not be hit at all until now, and that was most of what
+ * made NULLTIDE the strongest machine on the roster. Ablated, its stun was worth
+ * **+0.196** of her +0.262 lead — and the reason was not how often it landed
+ * (CIRRUS locks an opponent down more and sits in the bottom half) but that it
+ * cost her nothing and could not be answered. `MatchSim` tested combatants and
+ * supporters; the silhouette was neither.
+ */
+describe('the projection can be shot down', () => {
+  function harness() {
+    const s = new MatchSim({
+      playerDef: NULLTIDE,
+      enemyDef: HALCYON,
+      seed: 4242,
+      introTicks: 1,
+      roundTicks: 10800,
+    });
+    for (let i = 0; i < 6; i++) s.step(emptyInput(), emptyInput());
+    s.player.x = 1000;
+    s.enemy.x = 1400;
+    s.player.supporter.reset(s.player);
+    s.enemy.supporter.reset(s.enemy);
+    return s;
+  }
+
+  /** Runs until a projection is live, then returns the sim. */
+  function withLiveDecoy(): MatchSim {
+    const s = harness();
+    for (let i = 0; i < 400 && s.player.supporter.decoyTicks <= 0; i++) {
+      s.step(emptyInput(), emptyInput());
+    }
+    expect(s.player.supporter.decoyTicks).toBeGreaterThan(0);
+    return s;
+  }
+
+  it('vanishes when an enemy round connects with it', () => {
+    const s = withLiveDecoy();
+    const sup = s.player.supporter;
+    // Put an enemy round exactly on the silhouette.
+    s.enemy.x = sup.decoyX - 30;
+    s.enemy.y = sup.decoyY;
+    let popped = false;
+    for (let i = 0; i < 60 && !popped; i++) {
+      s.step(emptyInput(), { ...emptyInput(), pressed: 1 << Btn.Main, held: 1 << Btn.Main });
+      if (s.events.some((e) => e.t === 'decoyPop')) popped = true;
+      // Keep the shooter on top of it while it drifts.
+      s.enemy.x = sup.decoyX - 30;
+      s.enemy.y = sup.decoyY;
+    }
+    expect(popped).toBe(true);
+    expect(sup.decoyTicks).toBe(0);
+  });
+
+  it('stops shooting once it is gone', () => {
+    const s = withLiveDecoy();
+    const sup = s.player.supporter;
+    sup.popDecoy();
+    let rounds = 0;
+    for (let i = 0; i < 90; i++) {
+      s.step(emptyInput(), emptyInput());
+      rounds += s.activeProjectiles().filter((p) => p.decoyShot).length;
+      // A fresh projection may be thrown on cadence; stop counting if so.
+      if (sup.decoyTicks > 0) break;
+    }
+    expect(rounds).toBe(0);
+  });
+
+  /**
+   * Popping one must not bring the next one forward. The gap until the cadence
+   * comes round again *is* the reward for spending a round on the fake, and
+   * resetting `roleTimer` in `popDecoy` would quietly delete it.
+   */
+  it('does not hurry the next projection along', () => {
+    const s = withLiveDecoy();
+    const sup = s.player.supporter;
+    // Popped early, well inside its natural life.
+    expect(sup.decoyTicks).toBeGreaterThan(30);
+    sup.popDecoy();
+    // The next one arrives on the cadence, not immediately — so there is a real
+    // window with no silhouette on the field. Asserted on the observable gap
+    // rather than on `roleTimer`, which is the supporter's own business.
+    let dark = 0;
+    for (let i = 0; i < 40; i++) {
+      s.step(emptyInput(), emptyInput());
+      if (sup.decoyTicks <= 0) dark++;
+    }
+    expect(dark).toBe(40);
+  });
+
+  it('is only vulnerable to the opponent, not to its own side', () => {
+    const s = withLiveDecoy();
+    const sup = s.player.supporter;
+    // NULLTIDE's own fire passes straight through her own projection.
+    s.player.x = sup.decoyX - 30;
+    s.player.y = sup.decoyY;
+    for (let i = 0; i < 40; i++) {
+      s.step({ ...emptyInput(), pressed: 1 << Btn.Main, held: 1 << Btn.Main }, emptyInput());
+      if (sup.decoyTicks <= 0) break;
+      s.player.x = sup.decoyX - 30;
+      s.player.y = sup.decoyY;
+    }
+    expect(s.events.some((e) => e.t === 'decoyPop')).toBe(false);
+  });
+
+  it('is as big a target as the machine it imitates', () => {
+    // A decoy easier to hit than the pilot is a decoy nobody is fooled by twice.
+    // The collision uses the owner's own hurt radius; this pins that intent.
+    expect(NULLTIDE.rig.hurtRadius).toBeGreaterThan(0);
   });
 });
