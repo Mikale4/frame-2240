@@ -5415,30 +5415,97 @@ landed machine than a flying one.
   after    40044 ticks sampled,  0 below the deck, worst  0.0 px
 ```
 
-### It moved the balance, and the probe caught it
+### It moved the balance, and the first explanation was wrong twice
+
+**Amended after the fact.** The original version of this entry credited the
+balance shift to the deck removing an escape axis from whoever was closing on
+VESPER, since he is the only pilot with `kites`. A player disputed it from
+playtesting — *"mechs barely reach the very bottom of the deck, so I believe this
+to be a non-issue"* — and the measurement agreed with him, not with the entry:
 
 ```
-  EXTREME  spread 0.143 -> 0.192    VESPER 49 % / +0.088 -> 59 % / +0.131
-  HARD     spread 0.206 -> 0.187    TERRAMOTH 34 % -> 38 %
+  height above the deck, 495262 samples at EXTREME
+
+  mech        median   within 100px   within 20px
+  VESPER         539          8.5 %        2.3 %
+  TERRAMOTH      447          7.9 %        1.5 %
+  HALCYON        480          5.9 %        1.6 %
+  OBELISK        528          2.8 %        0.1 %
 ```
 
-**HARD improved. EXTREME did not**, and `balance.ts` flagged **VESPER at +2.05σ —
-the first outlier the dispersion check has ever reported**, two commits after it
-was added in D122. The instrument earned itself on the very next change.
+Machines sit a median of 440–580px above the deck and spend 0.1–2.3 % of ticks
+anywhere near it. There is nowhere near enough deck contact for the stated
+mechanism to move a roster by ten points of win rate. **Sixth play report, sixth
+time the player was right.**
 
-The direction makes sense: a solid deck is worth most to the machine that wants
-to hold a line, because it removes an escape axis from whatever is closing on
-him, and VESPER is the only pilot with `kites`. TERRAMOTH gains at HARD for the
-mirror-image reason — a slow heavy no longer loses opponents through the floor.
+### The real cause was an incidental change, not the fix
 
-**Left as measured, not trimmed.** The fix is a correctness fix and stands on its
-own; VESPER's number is a balance question that deserves its own pass rather than
-being folded into a bug fix, and the roster it is measured against has changed
-underneath it. Flagged rather than silently corrected.
+The commit did two things and the entry conflated them: it raised the floor
+**and** changed the arena's bottom edge from bouncing (`vy = -vy * 0.25`) to
+absorbing (`vy = 0`), on the reasoning that a floor should stop you rather than
+throw you off. That sounded right and was never measured.
 
-### Still open: projectiles pass through the deck
+Ablated with the floor height held constant:
 
-Rounds are culled 260 px outside the arena and test nothing else, so the second
-half of the report — shooting through the floor — is unfixed. It is a separate
-change with its own balance cost (OBELISK's and TERRAMOTH's mines sit near the
-deck and would begin colliding with it), so it was not bundled in here.
+```
+  bounce (original)     VESPER 49 %   spread 0.143
+  absorb               VESPER 61 %   spread 0.229
+```
+
+**The incidental change was worth more than the bug fix it was smuggled in
+beside.** Vertical rebound off the arena edge is load-bearing for the whole
+flight model and nothing about adding a deck justified touching it. Bounce is
+restored.
+
+### What each half actually costs, measured cleanly
+
+With the bounce confound removed:
+
+| | spread | VESPER |
+| --- | --- | --- |
+| no floor at all | 0.143 | 49 % / +0.088 |
+| **mechs stop at the deck** | **0.218** | 57 % / +0.130 |
+| **+ rounds stop at the deck** | 0.237 | 60 % / +0.136 |
+
+The projectile half costs **0.019**. The mech half costs **0.075** — the opposite
+of the first reading, which had also been taken through the bounce bug.
+
+### And the mechanism is small
+
+Telemetry, VESPER, with and without the deck:
+
+```
+  bar/min dealt   141.9 -> 148.3   (+4.5 %)
+  bar/min taken   124.2 -> 127.1   (+2.3 %)
+  net             +17.7 -> +21.3
+  engagement dist   768 ->   776
+```
+
+A 4.5 % output gain against a 2.3 % intake gain, and *that* is what an
+eight-point record swing is made of. **The roster is packed inside 0.14, so a
+small net edge flips a lot of near-even matchups.** That is worth holding onto as
+a general fact about this game now: at this spread, record is a very sensitive
+function of margin, and a mechanical change with a couple of percent in it will
+look like a balance event.
+
+The main gun's connect rate reads 17 % → 39 % across the change and that is
+**not** an accuracy gain — `telemetry.ts` classifies a round stopped by the deck
+as contact rather than as a fly-off. Ask what a number means before acting on it.
+
+### Rounds stop at the deck too
+
+The second half of the report is fixed in the same pass. Rounds are tested
+against their lower edge rather than their centre, so a shell buries itself in
+the plate instead of sinking half its radius first, and an impact is emitted so
+it reads as hitting something rather than expiring.
+
+Mines were the worry — OBELISK carries SHOCK MINE and MINEFIELD as chassis
+weapons and TERRAMOTH's BULWARK runs the `miner` role — but at 0.019 of spread
+the whole projectile half is close to free, and neither machine moved
+meaningfully.
+
+### Left as measured
+
+VESPER at 57–60 % is a balance question, not a correctness one, and the roster
+underneath him has moved three times today. It deserves its own measured pass
+rather than being folded into a bug fix. Flagged, not silently corrected.

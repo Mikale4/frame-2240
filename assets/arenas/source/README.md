@@ -11,9 +11,16 @@ Art direction and the full specification live in `docs/STAGE_ART_BRIEF.md`.
 | Shipped | Size | Source | Derivation |
 | --- | --- | --- | --- |
 | `arena_far.png` | 3072 x 1024 | `far_master_1536.png` | **Mirrored.** See below. |
+| `arena_haze.png` | 3072 x 1024 | `haze_master_1536.png` | **Mirrored**, same reason |
 | `arena_mid.png` | 1536 x 1024 | `mid_master_1536.png` | Straight copy |
 | `arena_near.png` | 1536 x 1024 | `deck_master_1536.png` | Straight copy |
 | `arena_fore.png` | 1536 x 1024 | `fore_master_1536.png` | Straight copy |
+
+`arena_haze.png` is the mid-distance band between `far` and `mid`, added because
+the stack had a factor-of-three gap in its scroll rates (0.06 to 0.18) and read
+as two flats. It scrolls at 0.11. Its master ran off both edges exactly as the
+far layer's did — 106 of 256 rows, mismatch up to 113 — and is mirrored by the
+same recipe.
 
 ### `arena_far.png` is the one that matters
 
@@ -69,7 +76,7 @@ print(sorted(tops)[len(tops)//2])   # -> NEAR_LIP_ROW
 
 ## Expect tiling to fail
 
-Three of the four delivered layers did not tile. Two happened to be safe because
+Four of the five delivered layers did not tile. Two happened to be safe because
 their structure did not reach the image edges; the far layer had to be mirrored.
 **Assume seamlessness is the engine's job, not the generator's**, and measure it
 rather than trusting it:

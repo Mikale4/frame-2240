@@ -159,6 +159,14 @@ export class MatchSim {
   private readonly spawnQueue: ProjectileSpawn[] = [];
   private readonly arenaW: number;
   private readonly arenaH: number;
+  /**
+   * The deck surface, in world y. Rounds and machines both stop here.
+   *
+   * Kept as a field rather than a constructor local because the projectile step
+   * needs it too — `DECK_Y` is the default, but a scene may override it, and a
+   * projectile testing the global constant would sail through a custom floor.
+   */
+  readonly deckY: number;
   private readonly introTicks: number;
   private readonly roundTicks: number;
   /** True when the rival is a training dummy. */
@@ -198,6 +206,7 @@ export class MatchSim {
     // Each chassis rests at whatever body height puts its own soles on the deck,
     // so both machines stand on the same drawn line.
     const deck = cfg.groundY ?? DECK_Y;
+    this.deckY = deck;
     for (const c of this.combatants) {
       // `footOffset` is measured on the unscaled sprite, so a chassis drawn at
       // 1.29 stands 1.29x further from its own pivot; without this a big mech
@@ -672,6 +681,25 @@ export class MatchSim {
         ty = target.y;
       }
       p.step(tx, ty, guide);
+
+      /**
+       * The deck stops rounds, the same as it stops machines.
+       *
+       * Rounds used to be tested against nothing but the arena's outer margin,
+       * so every shot that missed low sailed straight through the floor and kept
+       * going — the other half of the report that produced D125, and just as
+       * invisible while the floor was a placeholder bar.
+       *
+       * Tested against the round's lower edge rather than its centre, so a shell
+       * visibly buries itself in the plate instead of sinking half its radius
+       * first. The impact is emitted so it reads as hitting something, because
+       * silently vanishing at the floor line looks like the shot expiring.
+       */
+      if (p.active && p.y + p.radius >= this.deckY) {
+        p.active = false;
+        this.events.push({ t: 'hit', x: p.x, y: this.deckY, damage: 0, ownerId: p.ownerId, victimId: -1, kind: p.kind, family: p.family });
+      }
+
       // Off-arena cleanup with a generous margin so homing shots can loop back.
       if (
         p.x < -260 ||

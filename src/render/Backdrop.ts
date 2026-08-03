@@ -28,12 +28,22 @@ const FORE_SCROLL = 1.35;
 const FORE_DEPTH = 60;
 
 /**
- * The arena "CATHEDRAL YARD": a procedural sky gradient, four tiling parallax
+ * The arena "CATHEDRAL YARD": a procedural sky gradient, five tiling parallax
  * strips and a drifting dust field for depth.
  */
 export class Backdrop {
   private readonly sky: Phaser.GameObjects.Graphics;
   private readonly far: Phaser.GameObjects.TileSprite;
+  /**
+   * Mid-distance haze: cranes and gantry platforms between the skyline and the
+   * dock proper.
+   *
+   * Added because the stack had a hole in it. `far` scrolls at 0.06 and `mid` at
+   * 0.18 — a factor of three with nothing between them, which a player spotted
+   * as "it still looks like its missing a layer". Depth reads as a gradient, and
+   * a gradient with a gap in it reads as two flats.
+   */
+  private readonly haze: Phaser.GameObjects.TileSprite;
   private readonly mid: Phaser.GameObjects.TileSprite;
   private readonly near: Phaser.GameObjects.TileSprite;
   /**
@@ -50,7 +60,7 @@ export class Backdrop {
 
   /** All backdrop objects, so the scene can assign them to the right camera. */
   get objects(): Phaser.GameObjects.GameObject[] {
-    return [this.sky, this.far, this.mid, this.near, this.fore, this.dust];
+    return [this.sky, this.far, this.haze, this.mid, this.near, this.fore, this.dust];
   }
 
   constructor(scene: Phaser.Scene) {
@@ -73,6 +83,15 @@ export class Backdrop {
     this.far.setOrigin(0, 0).setDepth(-90);
     this.far.setTint(0x6f7fa8);
     this.far.setAlpha(0.85);
+
+    // Mirrored to 3072 for the same reason as `far`: the delivered art ran off
+    // both edges. Its structure sits in the lower two thirds of its own image,
+    // so it is placed lower than `far` rather than in front of it — depth here
+    // is the scroll rate, not the height.
+    this.haze = scene.add.tileSprite(0, 0, VIEW_W, 1024, 'arena_haze');
+    this.haze.setOrigin(0, 0).setDepth(-85);
+    this.haze.setTint(0x8290b4);
+    this.haze.setAlpha(0.92);
 
     // 1024, not 512: the hand-authored mid art is 1536x1024. A tile sprite
     // shorter than its texture crops rather than fits, so the strip has to match
@@ -107,6 +126,16 @@ export class Backdrop {
     // Darker and cooler than the mid strip: it is nearer than every light in
     // the scene, so it reads as an unlit mass with the dock glowing past it.
     this.fore.setTint(0x5a6480);
+    /**
+     * Semi-transparent, because it is drawn *over* the fight.
+     *
+     * At full opacity a machine passing behind a column vanished outright. A
+     * foreground is a depth cue, and a depth cue that hides the thing you are
+     * controlling has stopped being one — the player has to keep reading the
+     * silhouette through it. 0.62 is enough mass to sell the parallax and thin
+     * enough that a mech behind it is still legible.
+     */
+    this.fore.setAlpha(0.62);
 
     // ---- dust / debris field --------------------------------------------
     this.dust = scene.add.container(0, 0);
@@ -210,6 +239,9 @@ export class Backdrop {
     place(this.fore, -150 + vFrac * 210, FORE_SCROLL);
     place(this.far, -110 + vFrac * 70, 0.06);
     this.far.tilePositionY = vFrac * 24;
+    // Between far (0.06) and mid (0.18), and offset up so its structure band
+    // lands above the mid gantry rather than behind it.
+    place(this.haze, -300 + vFrac * 100, 0.11);
     place(this.mid, -40 + vFrac * 130, 0.18);
     // World-anchored, and offset so the strip's own deck lip — the first fully
     // opaque row of arena_near.png, measured at y=111 — lands exactly on DECK_Y.

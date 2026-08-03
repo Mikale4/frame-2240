@@ -293,9 +293,18 @@ export function clampToArena(
   const bottom = Math.min(h - radius, floorY);
   if (s.y > bottom) {
     s.y = bottom;
-    // Killed rather than bounced. A wall throws you off it, which reads as
-    // impact; a floor you are hovering against should simply stop you, or a
-    // machine held down against the deck jitters on it every tick.
-    if (s.vy > 0) s.vy = 0;
+    /**
+     * **Bounces, like every other wall.** This briefly read `s.vy = 0`, on the
+     * reasoning that a floor should stop you rather than throw you off — which
+     * sounds right and was never measured.
+     *
+     * Ablated: absorbing instead of bouncing, with the floor height left
+     * untouched, moved VESPER from 49 % to 61 % and the roster spread from
+     * 0.143 to 0.229. The incidental change was worth more than the deck fix it
+     * was smuggled in beside. Vertical rebound off the arena edge is
+     * load-bearing for the whole flight model, and nothing about adding a deck
+     * justified touching it.
+     */
+    if (s.vy > 0) s.vy = -s.vy * bounce;
   }
 }
