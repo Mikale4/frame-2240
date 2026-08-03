@@ -305,9 +305,21 @@ export class Hud {
        * cannot see how much of it is left cannot decide whether to keep holding
        * the line or bail out early.
        */
-      // Offline weapons, longest remaining first, so the one that matters most
-      // is the one that reads first.
-      if (c.anyWeaponDisabled) {
+      /**
+       * OVERDRIVE and its aftermath take the line first.
+       *
+       * Both are whole-machine states and both are clocks — the first counting
+       * down to the burnout, the second permanent. A player who cannot see which
+       * one they are in cannot tell a mech that is about to lose its guns from
+       * one that already has.
+       */
+      if (c.overdriveActive) {
+        this.disarmTexts[side].setText(`OVERDRIVE: ${Math.ceil(c.overdriveTicks / 60)}s`);
+        this.disarmTexts[side].setColor('#ffd166');
+      } else if (c.overdriveSpent) {
+        this.disarmTexts[side].setText('BLADE ONLY');
+        this.disarmTexts[side].setColor('#ff5c5c');
+      } else if (c.anyWeaponDisabled) {
         const down: string[] = [];
         for (let slot = 0; slot < WEAPON_SLOT_COUNT; slot++) {
           if (c.weaponLock[slot] > 0) {

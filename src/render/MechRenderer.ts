@@ -222,6 +222,33 @@ export class MechRenderer {
       this.root.alpha = 0.5 + Math.abs(Math.sin(c.bobPhase * 9)) * 0.5;
     }
 
+    /**
+     * OVERDRIVE, and the wreck it leaves.
+     *
+     * Three whole-machine states now drive this alpha and each has to be
+     * distinguishable from the other two at a glance, because they mean
+     * completely different things:
+     *
+     * * **Saturation** — a smooth 0.86–1.00 breath. Power held.
+     * * **LAST STAND** — a hard 0.50–1.00 strobe at nine. Refusal.
+     * * **OVERDRIVE** — pinned bright, barely dipping, at fourteen. Not a pulse
+     *   so much as a machine running past its limits: it never gets dark,
+     *   because nothing is being held back.
+     * * **Burnt out** — the opposite. Dim, and *unsteady* rather than periodic:
+     *   two detuned sines beat against each other so the flicker never settles,
+     *   which reads as damage rather than as an effect.
+     *
+     * Read defensively — this renderer is also driven by the decoy's synthetic
+     * state, which is not a real `Combatant`.
+     */
+    const od = c as { overdriveActive?: boolean; overdriveSpent?: boolean };
+    if (od.overdriveActive) {
+      this.root.alpha = 0.88 + Math.abs(Math.sin(c.bobPhase * 14)) * 0.12;
+    } else if (od.overdriveSpent) {
+      const beat = Math.sin(c.bobPhase * 5.3) * Math.sin(c.bobPhase * 2.1);
+      this.root.alpha = 0.62 + beat * 0.18;
+    }
+
     // Dead mechs tumble.
     if (!c.alive) {
       this.root.rotation += 0.06 * dt * 60 * 0.016;

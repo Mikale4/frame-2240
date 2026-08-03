@@ -38,9 +38,9 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 ## 3. Current status — verified
 
-* **570 tests pass** (27 files), typecheck clean, production build clean.
+* **585 tests pass** (28 files), typecheck clean, production build clean.
 * **Working tree clean** on `master`. No other branches.
-* `docs/DECISIONS.md` runs to **D114**.
+* `docs/DECISIONS.md` runs to **D115**.
 * **Suite runtime ~35s.** Deliberate — see §8a.
 * **`tools/probe/balance.ts` is the roster instrument** (D97). A full eight-mech
   sweep is ~20s:
@@ -135,16 +135,16 @@ both slot orders on the same seed, real 180s round cap. Standard error ~0.045.
 
 | | EXTREME | |
 | --- | --- | --- |
-| 1 | HALCYON +0.072 | | NULLTIDE +0.102 |
-| 2 | TERRAMOTH +0.066 | | PYRE +0.082 |
-| 3 | NULLTIDE +0.032 | | HALCYON ~0.00 |
-| 4 | PYRE +0.020 | | NOCTURNE −0.012 |
-| 5 | NOCTURNE +0.019 | | CIRRUS −0.022 |
-| 6 | VESPER −0.058 | | TERRAMOTH −0.053 |
-| 7 | CIRRUS −0.061 | | OBELISK −0.075 |
-| 8 | OBELISK −0.091 | | **VESPER −0.159** |
+| 1 | **CIRRUS +0.204** | |
+| 2 | HALCYON +0.041 | |
+| 3 | TERRAMOTH +0.030 | |
+| 4 | NULLTIDE −0.003 | |
+| 5 | NOCTURNE −0.020 | |
+| 6 | PYRE −0.048 | |
+| 7 | VESPER −0.092 | |
+| 8 | OBELISK −0.112 | |
 
-spread: **EXTREME 0.163, HARD 0.297** (12 seeds; SE ~0.03). **The tightest the roster has ever measured**, with no outlier at EXTREME at all. VESPER at HARD is the one machine still adrift — structural, see `docs/TIER_LIST.md` §5.
+spread: **EXTREME 0.316** (12 seeds; SE ~0.03). CIRRUS's OVERDRIVE (D115) is the outlier; the other seven span 0.153. It was 0.163 with no outlier at all before that passive landed.
 
 > **This is a chosen state, not a regression.** The roster was at 0.169 / 0.242
 > with no outliers after the tuning pass (D97–D104). D105 and D107–D109 are
@@ -338,6 +338,14 @@ itself. `sim.events` is cleared every tick and a 35 ms poll misses it.
 a shot. Anything that presses Heavy without knowing that will strobe the stance;
 there are three separate guards in `RivalAI` for exactly this, and the player-side
 check sits above the command motions because `MOTIONS.lance` ends in Heavy.
+
+**Two machines carry a chassis passive**, declared as `MechDef` fields and absent
+on the other six: **HALCYON's LAST STAND** (D113/D114 — refuses one killing blow,
+ten seconds, once a match, stops the death and nothing else) and **CIRRUS's
+OVERDRIVE** (D115 — all three saturation modes for ten seconds at a quarter hull,
+then thrusters and both guns destroyed and melee at ×1.5). Both are once per
+match. **A test file that drives a mech to low life must strip the passive it is
+not testing** — see `LADDER_MECH` and `desperation.test.ts`.
 
 **Pilot doctrine**, from `meleeAppetite`: brawler ≥ 0.15 (PYRE, CIRRUS), marksman
 ≤ −0.15 (VESPER, NULLTIDE); the rest use the reach calculus. `hitAndRun` (CIRRUS,

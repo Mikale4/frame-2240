@@ -26,18 +26,28 @@ describe('pilot banter — coverage', () => {
   });
 
   /**
-   * Most triggers can happen to anyone. `lastStand` cannot: it fires only on a
-   * chassis that declares `MechDef.lastStand`, which is HALCYON alone.
+   * Most triggers can happen to anyone. A few cannot: they fire only on a
+   * chassis that declares the passive behind them.
    *
-   * So the rule is **exactly the pilots who can reach it**, in both directions.
-   * Blanket coverage would force seven pilots to carry lines that can never
-   * play — dead content, and the same landmine D74 describes. Requiring only
-   * *some* pilot to have them would let the one who can trigger it ship silent.
+   * The rule for those is **exactly the pilots who can reach it**, in both
+   * directions. Blanket coverage would force seven pilots to carry lines that
+   * can never play — dead content, and the same landmine D74 describes.
+   * Requiring only *some* pilot to have them would let the one who can trigger
+   * it ship silent.
+   *
+   * Driven off the mech definitions rather than a hand-kept list, so the next
+   * passive is covered the moment it is declared.
    */
+  const CONDITIONAL: Partial<Record<BanterTrigger, (m: (typeof ROSTER)[number]) => boolean>> = {
+    lastStand: (m) => m.lastStand !== undefined,
+    overdrive: (m) => m.overdrive !== undefined,
+    overdriveSpent: (m) => m.overdrive !== undefined,
+  };
+
   it('covers every universal trigger for every pilot', () => {
     for (const m of ROSTER) {
       for (const t of TRIGGERS) {
-        if (t === 'lastStand') continue;
+        if (CONDITIONAL[t]) continue;
         const lines = BANTER[m.id][t];
         expect(lines, `${m.id} has nothing for ${t}`).toBeTruthy();
         expect(lines!.length, `${m.id}.${t} is empty`).toBeGreaterThan(0);
@@ -45,14 +55,17 @@ describe('pilot banter — coverage', () => {
     }
   });
 
-  it('gives lastStand lines to exactly the pilots who can trigger it', () => {
-    for (const m of ROSTER) {
-      const lines = BANTER[m.id].lastStand;
-      if (m.lastStand) {
-        expect(lines, `${m.id} can trigger LAST STAND and says nothing`).toBeTruthy();
-        expect(lines!.length).toBeGreaterThan(0);
-      } else {
-        expect(lines, `${m.id} cannot trigger LAST STAND but carries lines`).toBeUndefined();
+  it('gives conditional lines to exactly the pilots who can trigger them', () => {
+    for (const [trigger, canReach] of Object.entries(CONDITIONAL)) {
+      const t = trigger as BanterTrigger;
+      for (const m of ROSTER) {
+        const lines = BANTER[m.id][t];
+        if (canReach!(m)) {
+          expect(lines, `${m.id} can trigger ${t} and says nothing`).toBeTruthy();
+          expect(lines!.length).toBeGreaterThan(0);
+        } else {
+          expect(lines, `${m.id} cannot trigger ${t} but carries lines`).toBeUndefined();
+        }
       }
     }
   });

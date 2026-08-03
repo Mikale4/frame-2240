@@ -40,6 +40,10 @@ export type BanterTrigger =
   | 'guardBroken'
   /** They refused a killing blow. LAST STAND. */
   | 'lastStand'
+  /** Their reactor dumped into all three modes at once. OVERDRIVE. */
+  | 'overdrive'
+  /** OVERDRIVE burned out: thrusters and guns gone, sword left. */
+  | 'overdriveSpent'
   | 'win'
   | 'lose';
 
@@ -65,6 +69,10 @@ export const BANTER_PRIORITY: Record<BanterTrigger, number> = {
   // loudest thing that can happen without the match ending, and a combo line
   // stomping it would be absurd.
   lastStand: 8,
+  // Both OVERDRIVE beats sit with LAST STAND: the loudest things that can happen
+  // without the match ending.
+  overdrive: 8,
+  overdriveSpent: 8,
   win: 9,
   lose: 9,
 };
@@ -199,6 +207,16 @@ export const BANTER: Record<string, BanterLines> = {
     intro: ['Oh, this is going to be fun!'],
     firstHit: ['Got you!', 'Too slow, too slow!'],
     combo: ['Keep up! Keep up!', 'I can do this all day!'],
+        overdrive: [
+      'Everything. All of it. Now.',
+      'Burning the whole reactor. Watch.',
+      'No more saving anything for later.',
+    ],
+    overdriveSpent: [
+      'Thrusters gone. Guns gone. Still here.',
+      'Just the blade left. It will do.',
+      'Then we do this the short way.',
+    ],
     saturation: [
       'Watch this bit!',
       'Everything at once! Ready?',

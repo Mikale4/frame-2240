@@ -4590,3 +4590,107 @@ nothing except that the top of this roster is flat.
 and unrelated to this block. Its cause is structural: `kites` and the sniper
 stance both need `rangeIq`, which is EXTREME-only, so at HARD he cannot enforce
 the spacing his whole design assumes. See `docs/TIER_LIST.md` §5.
+
+---
+
+## D115 — OVERDRIVE: everything at once, bought with everything
+
+CIRRUS becomes the second machine with a chassis passive. At or below a quarter
+hull the reactor is dumped: **all three saturation modes run simultaneously** for
+ten seconds, with no burst of her own available while it lasts. When the window
+closes the thrusters and both guns are **destroyed** for the rest of the match,
+and the only thing left is the eight-hit flurry at **×1.5**.
+
+### All three modes cost four words, because of where they were wired
+
+`shieldActive` / `shootActive` / `speedActive` were already the hub every derived
+thing reads — `barrierFree`, `energyFree`, `boostFree`, every scale, the AI's
+reads, the renderer. Making those three getters return true during OVERDRIVE
+turns *everything* on exactly as the real modes would, with no parallel
+implementation and no special cases downstream.
+
+Three direct `satActive && satMode === Shoot` checks were changed to `shootActive`
+on the way past. They were already saying "Shoot is up" the long way round.
+
+### It is not LAST STAND, and it is not desperation
+
+Two distinctions worth stating, because both were asked about and one was a bug:
+
+* **No death prevention.** All three modes include Shield, so damage is
+  *reduced* — but nothing here stops a kill, and a machine that could not die for
+  ten seconds would be a different ability. Tested: damaged during the window,
+  then killed during it.
+* **It does not borrow desperation.** `desperateSpeed` is
+  `speedActive && satDesperate`, and OVERDRIVE turns `speedActive` on.
+  Desperation opens below a *third* of a life bar and OVERDRIVE at a *quarter*,
+  so a pilot is frequently already inside a desperate burst when it fires —
+  leaving `satDesperate` set handed her true-damage melee and arena-crossing
+  reach from a mechanic this passive does not use. **The trigger now clears it**,
+  with a test that opens a real desperate burst at 30 % life, drops her into
+  OVERDRIVE, and asserts all three `desperate*` flags are off and her reach is
+  back to the plain 195px.
+
+That bug was found by a question about why the desperation *tests* were being
+touched, not by the harness.
+
+### The burnout rides the disarm predicate
+
+`weaponDisabled` already gates the input path, the rival's weapon choice and the
+HUD, so routing destroyed guns through it meant none of them needed to learn a
+second concept. `overdriveSpent` never clears — these are destroyed, not
+disabled, and the distinction is the whole moment.
+
+### Two staged scenes, because it is two moments
+
+**OVERDRIVE** — shake, three saturation bursts fanned in time so it reads as
+three things firing at once, a card reading `OVERDRIVE / ALL SYSTEMS — TEN
+SECONDS`, and an aura of three counter-rotating broken rings in the three mode
+colours plus a white fuse arc that visibly closes.
+
+**BURNOUT** — deliberately not a smaller version of the first. Harder shake, the
+burnout cue rather than the saturation one, a blade flare on the aim axis, and a
+red card reading `BURNOUT / THRUSTERS AND GUNS DESTROYED — BLADE ONLY`. The aura
+does not stop, it *changes*: one dim red ring and a blade flare, because the
+machine is still transformed — it has simply spent everything into the sword.
+
+The rig animation now distinguishes four whole-machine states by alpha alone, and
+they must not be confusable: saturation is a smooth 0.86–1.00 breath (power
+held), LAST STAND a hard strobe at nine (refusal), OVERDRIVE pinned bright at
+fourteen and barely dipping (nothing held back), and burnt-out dim and *unsteady*
+— two detuned sines beating against each other so the flicker never settles,
+which reads as damage rather than as an effect.
+
+HUD: `OVERDRIVE: 10s` counting down, then `BLADE ONLY`.
+
+### Two test files needed decoupling, for the same reason
+
+`desperation.test.ts` drives CIRRUS to a fifth of a life bar to test desperate
+SPEED, which is now also under OVERDRIVE's threshold — so the passive fired
+mid-test and turned on all three modes, failing an assertion about Shield and
+Shoot not extending reach. Its subject is now `{ ...CIRRUS, overdrive: undefined }`,
+the same fix and the same reasoning as `LADDER_MECH` in D113: strip the passive
+that is not under test rather than let it confound the measurement.
+
+`banter.test.ts`'s conditional-trigger rule was generalised from a hard-coded
+`lastStand` special case into a table driven off the mech definitions, so the
+next passive is covered the moment it is declared.
+
+### Measured
+
+```
+  CIRRUS   EXTREME  -0.061 -> +0.204        ko +0.69, the highest on the roster
+  spread   EXTREME   0.163 ->  0.316
+```
+
+She is the outlier, and it is OVERDRIVE that put her there — ten seconds of
+everything at a quarter hull is an enormous comeback window, and the ×1.5 melee
+state afterwards is still potent on the fastest frame in the game. Recorded
+rather than tuned, as with NULLTIDE's projections.
+
+If it wants trimming, the dials in order of leverage are `ticks` (the window),
+`threshold` (when it opens), and `meleeMul`.
+
+**One thing worth a look**: the opening fires three full saturation bursts at
+once, which fills a quarter of the screen for about a second. It communicates
+"all three" unambiguously and it is transient, but it is very loud, and one
+burst with a tri-colour treatment would say the same thing more quietly.

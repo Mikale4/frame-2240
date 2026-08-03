@@ -273,6 +273,10 @@ export type SimEvent =
    */
   | { t: 'satBurnout'; x: number; y: number; id: number; overheat?: boolean }
   | { t: 'modeCycle'; id: number; mode: SatMode }
+  /** OVERDRIVE opened: all three modes at once. */
+  | { t: 'overdrive'; x: number; y: number; id: number }
+  /** OVERDRIVE burned out: thrusters and guns gone, sword left. */
+  | { t: 'overdriveSpent'; x: number; y: number; id: number }
   /** LAST STAND opened: the mech refused a killing blow. */
   | { t: 'lastStand'; x: number; y: number; id: number }
   /** LAST STAND ran out. The reprieve is over. */

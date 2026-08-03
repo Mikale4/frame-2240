@@ -254,6 +254,7 @@ export class MatchSim {
     this.stepDroneRoles();
     this.resolveMineIntercepts();
     this.pushApart();
+    this.resolveOverdrive();
     this.resolveLastStand();
     this.checkEnd();
   }
@@ -870,6 +871,24 @@ export class MatchSim {
    * them would be a passive that saves you from bullets and not from burning
    * ground.
    */
+  /**
+   * OVERDRIVE's two moments, driven beside LAST STAND for the same reason: both
+   * are gates on hull totals that every damage source can push through, and both
+   * have to be asked after all of them have resolved.
+   */
+  private resolveOverdrive(): void {
+    for (const c of this.combatants) {
+      const r = c.stepOverdrive();
+      if (r === 'opened') {
+        this.events.push({ t: 'overdrive', x: c.x, y: c.y, id: c.id });
+        this.events.push({ t: 'explode', x: c.x, y: c.y, big: true });
+      } else if (r === 'spent') {
+        this.events.push({ t: 'overdriveSpent', x: c.x, y: c.y, id: c.id });
+        this.events.push({ t: 'explode', x: c.x, y: c.y, big: true });
+      }
+    }
+  }
+
   private resolveLastStand(): void {
     for (const c of this.combatants) {
       const r = c.stepLastStand();

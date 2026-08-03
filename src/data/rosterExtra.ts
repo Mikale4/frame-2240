@@ -899,6 +899,26 @@ export const CIRRUS: MechDef = {
   statPower: 2,
   statSpeed: 5,
   statRange: 3,
+  /**
+   * OVERDRIVE — Mira Holloway spends the machine.
+   *
+   * At a quarter hull the reactor is dumped: all three saturation modes at once
+   * for ten seconds, with no burst of her own available while it runs. Then the
+   * thrusters and both guns are **destroyed** and what is left is the eight-hit
+   * flurry, half again as hard.
+   *
+   * It fits her better than it would fit anyone. CIRRUS already has the roster's
+   * thinnest margins and its longest chain — 1440 hull and eight hits — and a
+   * pilot written as "hit-and-run, thin margins" reaching a point where there is
+   * nothing left to run with is the natural end of that sentence. The mode also
+   * costs her the two things her playstyle is built on, thrusters and range, and
+   * leaves only the thing she was always best at.
+   *
+   * `threshold` matches the desperation line the rest of the game already uses,
+   * so a player who knows what a third of a life bar means also knows what a
+   * quarter of one means on this machine.
+   */
+  overdrive: { threshold: 0.25, ticks: 600, meleeMul: 1.5 },
   flight: {
     ...FLIGHT,
     accel: 2.15,

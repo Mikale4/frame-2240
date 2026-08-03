@@ -156,6 +156,8 @@ export class BattleScene extends Phaser.Scene {
   private sniperMarks: Phaser.GameObjects.Graphics[] = [];
   /** LAST STAND aura, one per side. Empty on the seven that never trigger it. */
   private lastStandAuras: Phaser.GameObjects.Graphics[] = [];
+  /** OVERDRIVE aura, one per side. Also draws the post-burnout blade flare. */
+  private overdriveAuras: Phaser.GameObjects.Graphics[] = [];
   /** One per side; only a `decoy` drone ever shows its own. */
   private decoyGhosts: MechRenderer[] = [];
   /** Animation state per projection, keyed by `combatantId * DECOY_COUNT + slot`. */
@@ -228,6 +230,7 @@ export class BattleScene extends Phaser.Scene {
     this.paintMarks = [];
     this.sniperMarks = [];
     this.lastStandAuras = [];
+    this.overdriveAuras = [];
     this.decoyGhosts = [];
     this.decoyAnim = {};
     this.worldObjects = [];
@@ -342,6 +345,9 @@ export class BattleScene extends Phaser.Scene {
       const stand = this.add.graphics();
       stand.setBlendMode(Phaser.BlendModes.ADD);
       this.lastStandAuras.push(stand);
+      const over = this.add.graphics();
+      over.setBlendMode(Phaser.BlendModes.ADD);
+      this.overdriveAuras.push(over);
       this.droneRings.push(this.add.graphics());
 
       /**
@@ -414,6 +420,7 @@ export class BattleScene extends Phaser.Scene {
       // Same rule as every other world-space Graphics: in this list or the UI
       // camera draws a second copy of it somewhere else. See D107.
       ...this.lastStandAuras,
+      ...this.overdriveAuras,
       ...this.decoyGhosts.map((r) => r.root),
       this.effects.container,
       ...this.debug.worldObjects,
@@ -884,6 +891,74 @@ export class BattleScene extends Phaser.Scene {
           sfx.hit();
           break;
         }
+        case 'overdrive': {
+          /**
+           * The reactor dump. All three modes at once, announced as such.
+           *
+           * Given the full card because it is the loudest thing this machine can
+           * do and the last decision it gets to make — after this the kit is on
+           * a ten-second fuse.
+           */
+          const c = this.byId(ev.id);
+          this.shake = Math.max(this.shake, 10);
+          sfx.saturation();
+          sfx.beam();
+          if (c) {
+            // One burst per mode, fanned in time, so it reads as three things
+            // firing at once rather than one bigger flash.
+            for (const mode of [SatMode.Shield, SatMode.Shoot, SatMode.Speed]) {
+              this.effects.saturationBurst(c.x, c.y, mode, c.def.tint.accent, c.facing);
+            }
+            this.cutscene.play({
+              portraitKey: `pilot_${c.def.id}`,
+              pilot: c.def.pilot,
+              mode: SatMode.Speed,
+              line: pickBanter(c.def.id, 'overdrive', this.banterRng.next()),
+              tint: c.def.tint.accent,
+              screenFrac: c.x / ARENA_W,
+              label: 'OVERDRIVE',
+              sub: 'ALL SYSTEMS — TEN SECONDS',
+            });
+          }
+          this.hud.banner('OVERDRIVE', 110);
+          break;
+        }
+
+        case 'overdriveSpent': {
+          /**
+           * The burnout, and the scene the whole passive is built toward.
+           *
+           * Deliberately *not* a smaller version of the opening card. The first
+           * is a machine switching everything on; this is a machine losing
+           * everything it just spent — thrusters and both guns destroyed — and
+           * the pilot answering with the only thing left. So it gets the harder
+           * shake, the burnout cue rather than the saturation one, and its own
+           * headline.
+           */
+          const c = this.byId(ev.id);
+          this.shake = Math.max(this.shake, 14);
+          sfx.satBurnout();
+          sfx.guardBreak();
+          if (c) {
+            this.effects.guardBreak(c.x, c.y);
+            this.effects.explode(c.x, c.y, true, c.def.tint.accent);
+            // The blade lights: the energy goes somewhere, and it goes there.
+            this.effects.melee(c.x, c.y, c.aim, 2, c.def.tint.glow);
+            this.cutscene.play({
+              portraitKey: `pilot_${c.def.id}`,
+              pilot: c.def.pilot,
+              mode: SatMode.Speed,
+              line: pickBanter(c.def.id, 'overdriveSpent', this.banterRng.next()),
+              tint: 0xff5c5c,
+              screenFrac: c.x / ARENA_W,
+              label: 'BURNOUT',
+              sub: 'THRUSTERS AND GUNS DESTROYED — BLADE ONLY',
+            });
+          }
+          this.hud.banner('BLADE ONLY', 130);
+          break;
+        }
+
         case 'lastStand': {
           /**
            * The moment the passive exists for, given the full treatment.
@@ -1609,6 +1684,67 @@ export class BattleScene extends Phaser.Scene {
    * is one they cannot play around. The last two seconds go red and speed up,
    * because that is when killing this machine becomes possible again.
    */
+  /**
+   * OVERDRIVE's aura, drawn on the same layer as LAST STAND's.
+   *
+   * Three rings, one per mode, in the three saturation colours — the visual has
+   * to say *all three at once*, which no single-colour glow can. They counter-
+   * rotate so the thing reads as a reactor being overrun rather than a shield.
+   *
+   * After burnout the aura does not stop; it changes. The rings collapse to a
+   * single dim red one and a blade flare on the aim axis, because the machine is
+   * still transformed — it has simply spent everything into the sword.
+   */
+  private drawOverdrive(i: number, c: Combatant): void {
+    const g = this.overdriveAuras[i];
+    if (!g) return;
+    g.clear();
+    if (!c.alive) return;
+    const t = this.sim.tick;
+    const r = c.def.barrier.radius;
+
+    if (c.overdriveActive) {
+      const total = c.def.overdrive?.ticks ?? 1;
+      const left = c.overdriveTicks / total;
+      const modeTints = [0x9fe0ff, 0xffd166, 0xff9ae0];
+      g.setDepth(40);
+      for (let k = 0; k < 3; k++) {
+        const dir = k % 2 === 0 ? 1 : -1;
+        const spin = t * 0.05 * dir + k * 2.1;
+        const radius = r * (1.3 + k * 0.3) + Math.sin(t * 0.18 + k) * 7;
+        g.lineStyle(3 - k * 0.5, modeTints[k], 0.62 - k * 0.1);
+        // Broken rings, so the counter-rotation is visible.
+        for (let seg = 0; seg < 3; seg++) {
+          const a0 = spin + (seg * Math.PI * 2) / 3;
+          g.beginPath();
+          g.arc(c.x, c.y, radius, a0, a0 + 1.5, false);
+          g.strokePath();
+        }
+      }
+      // The fuse, closing.
+      g.lineStyle(4, 0xffffff, 0.85);
+      g.beginPath();
+      g.arc(c.x, c.y, r * 2.2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left, false);
+      g.strokePath();
+      return;
+    }
+
+    if (c.overdriveSpent) {
+      g.setDepth(40);
+      const pulse = 0.5 + 0.5 * Math.sin(t * 0.09);
+      g.lineStyle(1.5, 0xff5c5c, 0.18 + pulse * 0.12);
+      g.strokeCircle(c.x, c.y, r * 1.35);
+      // Everything that is left, pointed where the sword is.
+      const cos = Math.cos(c.aim);
+      const sin = Math.sin(c.aim);
+      g.lineStyle(3, c.def.tint.glow, 0.35 + pulse * 0.4);
+      g.beginPath();
+      g.moveTo(c.x + cos * r * 0.7, c.y + sin * r * 0.7);
+      g.lineTo(c.x + cos * (r * 0.7 + 46 + pulse * 12), c.y + sin * (r * 0.7 + 46 + pulse * 12));
+      g.strokePath();
+    }
+  }
+
   private drawLastStand(i: number, c: Combatant): void {
     const g = this.lastStandAuras[i];
     if (!g) return;
@@ -1941,6 +2077,7 @@ export class BattleScene extends Phaser.Scene {
       this.drawPaint(i, c);
       this.drawSniper(i, c);
       this.drawLastStand(i, c);
+      this.drawOverdrive(i, c);
 
       // WARDEN's repair, on the machine receiving it.
       //

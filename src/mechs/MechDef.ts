@@ -540,6 +540,23 @@ export interface MechDef {
   melee: AttackDef[];
   meleeLock: MeleeProfile;
   /**
+   * OVERDRIVE — everything at once, and then nothing.
+   *
+   * At or below `threshold` of maximum hull the chassis dumps its reactor: all
+   * three saturation modes run **simultaneously** for `ticks`, and the pilot
+   * cannot open a saturation burst of their own while it lasts. When the window
+   * closes the thrusters and both guns are **destroyed** — permanently, for the
+   * rest of the match — and the only thing left is the sword, which hits
+   * `meleeMul` harder.
+   *
+   * It is not a comeback so much as a decision the machine makes on the pilot's
+   * behalf: ten seconds of being everything, bought with everything.
+   *
+   * Once per match. Absent on seven of eight machines.
+   */
+  overdrive?: { threshold: number; ticks: number; meleeMul: number };
+
+  /**
    * LAST STAND — refuses to die, once per match, for a window.
    *
    * A hit that would take the chassis to zero instead leaves it on its feet with

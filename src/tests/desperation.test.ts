@@ -2,8 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { MatchSim } from '../combat/MatchSim';
 import { DESPERATION_LIFE } from '../combat/Combatant';
 import { HALCYON, MECHS, NOCTURNE } from '../data/mechs';
+import type { MechDef } from '../mechs/MechDef';
 
-const CIRRUS = MECHS.cirrus;
+/**
+ * CIRRUS **without OVERDRIVE**, as this file's subject.
+ *
+ * These tests are about the *desperation* mechanic, not about Mira Holloway —
+ * she is the subject only because she is the Speed-preferring pilot. Every one
+ * of them drives her to a fifth of a life bar, which is now also under
+ * OVERDRIVE's quarter-hull threshold, so the passive fires mid-test and turns on
+ * all three saturation modes. `does not extend reach for the other two modes`
+ * then fails for a reason that has nothing to do with what it is asserting.
+ *
+ * Same fix and same reasoning as `LADDER_MECH` in `difficulty.test.ts`: strip the
+ * passive that is not under test rather than let it confound the measurement.
+ */
+const CIRRUS: MechDef = { ...MECHS.cirrus, overdrive: undefined };
 const VESPER = MECHS.vesper;
 import {
   BarrierResponse,

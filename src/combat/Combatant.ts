@@ -429,6 +429,18 @@ export class Combatant implements FlightState {
   lastStandUsed = false;
 
   /**
+   * OVERDRIVE: ticks of the all-modes window left, whether it has been spent,
+   * and whether the machine is living in the wreckage afterwards.
+   *
+   * `overdriveSpent` is the permanent half and never clears — thrusters and both
+   * guns are *destroyed*, not disabled, and the distinction is the whole point
+   * of the moment. See `MechDef.overdrive`.
+   */
+  overdriveTicks = 0;
+  overdriveUsed = false;
+  overdriveSpent = false;
+
+  /**
    * Ticks each weapon is offline for, indexed by `WeaponSlot`.
    *
    * A fixed three-slot array rather than three fields so the HUD, the AI and the
@@ -736,6 +748,17 @@ export class Combatant implements FlightState {
 
   /** Is this weapon knocked offline right now? */
   weaponDisabled(slot: WeaponSlot): boolean {
+    /**
+     * OVERDRIVE's burnout destroys both guns for the rest of the match.
+     *
+     * Routed through the same predicate a temporary disarm uses, so every place
+     * that already refuses to fire an offline weapon — the input path, the
+     * rival's weapon choice, the HUD — handles this for free and none of them
+     * needs to learn a second concept.
+     */
+    if (this.overdriveSpent && (slot === WeaponSlot.Main || slot === WeaponSlot.Heavy)) {
+      return true;
+    }
     return this.weaponLock[slot] > 0;
   }
 
@@ -794,6 +817,61 @@ export class Combatant implements FlightState {
    * Returns `'triggered'` on the tick it opens and `'ended'` on the tick the
    * clock runs out, so the caller can announce both.
    */
+  /**
+   * OVERDRIVE's clock, driven from `MatchSim` beside LAST STAND's.
+   *
+   * Returns `'opened'` on the tick the reactor dumps and `'spent'` on the tick it
+   * burns out, so the caller can stage both moments.
+   */
+  stepOverdrive(): 'opened' | 'spent' | null {
+    const def = this.def.overdrive;
+    if (!def) return null;
+
+    if (this.overdriveTicks > 0) {
+      this.overdriveTicks--;
+      if (this.overdriveTicks > 0) return null;
+      /**
+       * Burnout. The thrusters and both guns are **destroyed**, not disabled:
+       * nothing in the match brings them back, and `overdriveSpent` is never
+       * cleared. What is left is a sword and whatever the pilot has left.
+       */
+      this.overdriveSpent = true;
+      return 'spent';
+    }
+
+    if (this.overdriveUsed || !this.alive) return null;
+    if (this.life > this.def.gauges.maxLife * def.threshold) return null;
+    this.overdriveUsed = true;
+    this.overdriveTicks = def.ticks;
+    /**
+     * The reactor dump interrupts whatever burst the pilot was running — there
+     * is no meaningful "on top of all three modes".
+     *
+     * **`satDesperate` must be cleared with it, and this was a bug.** OVERDRIVE
+     * is not a desperation burst and shares none of that mechanic, but
+     * `desperateSpeed` is `speedActive && satDesperate` — and OVERDRIVE turns
+     * `speedActive` on. Desperation opens below a third of a life bar and
+     * OVERDRIVE at a quarter, so a pilot is *frequently* already inside a
+     * desperate burst when it fires: leaving the flag set handed her
+     * true-damage melee and arena-crossing reach for the whole window, from a
+     * mechanic this passive is not supposed to touch.
+     */
+    this.satActive = false;
+    this.satTicks = 0;
+    this.satDesperate = false;
+    return 'opened';
+  }
+
+  /**
+   * Damage multiplier on this machine's melee, from OVERDRIVE's burnout.
+   *
+   * The whole kit is gone and the sword is what it is spent on, so the number
+   * lives on the melee path only and applies for the rest of the match.
+   */
+  get meleeScale(): number {
+    return this.overdriveSpent ? (this.def.overdrive?.meleeMul ?? 1) : 1;
+  }
+
   stepLastStand(): 'triggered' | 'ended' | null {
     // The clock and the clamp, together, because they must both run at a moment
     // the machine is nominally dead.
@@ -845,14 +923,28 @@ export class Combatant implements FlightState {
     return this.sniperActive ? (this.def.sniper?.speedScale ?? 1) : 1;
   }
 
+  /** True while the all-modes window is running. */
+  get overdriveActive(): boolean {
+    return this.overdriveTicks > 0;
+  }
+
+  /**
+   * The three saturation modes, and the one place OVERDRIVE plugs into.
+   *
+   * Making these three the hub is what lets "all three modes at once" be four
+   * words of code rather than a parallel implementation: `barrierFree`,
+   * `energyFree`, `boostFree`, every scale, the AI's reads and the renderer all
+   * derive from these, so turning them all on turns *everything* on exactly as
+   * the real modes would.
+   */
   get shieldActive(): boolean {
-    return this.satActive && this.satMode === SatMode.Shield;
+    return this.overdriveActive || (this.satActive && this.satMode === SatMode.Shield);
   }
   get shootActive(): boolean {
-    return this.satActive && this.satMode === SatMode.Shoot;
+    return this.overdriveActive || (this.satActive && this.satMode === SatMode.Shoot);
   }
   get speedActive(): boolean {
-    return this.satActive && this.satMode === SatMode.Speed;
+    return this.overdriveActive || (this.satActive && this.satMode === SatMode.Speed);
   }
 
   // ---- desperation ---------------------------------------------------------
@@ -1121,7 +1213,7 @@ export class Combatant implements FlightState {
     const regen = st?.blocksEnergyRegen
       ? 0
       : g.energyRegen *
-        (this.satActive && this.satMode === SatMode.Shoot ? 2.2 : 1) *
+        (this.shootActive ? 2.2 : 1) *
         (passive?.energyRegenMul ?? 1) *
         jam;
     this.energy = Math.min(g.maxEnergy, this.energy + regen);
@@ -1407,7 +1499,7 @@ export class Combatant implements FlightState {
     const d = this.def;
 
     // Saturation mode cycling is always available (reference: Start button).
-    if (isPressed(input, Btn.ModeCycle) && !this.satActive) {
+    if (isPressed(input, Btn.ModeCycle) && !this.satActive && !this.overdriveActive) {
       this.satMode = ((this.satMode + 1) % SAT_MODE_COUNT) as SatMode;
       events.push({ t: 'modeCycle', id: this.id, mode: this.satMode });
     }
@@ -1840,7 +1932,7 @@ export class Combatant implements FlightState {
           y: m.y,
           vx: nx * 0.001,
           vy: ny * 0.001,
-          damage: dmg * this.satShootScale * this.outgoingScale,
+          damage: dmg * this.satShootScale * this.outgoingScale * this.meleeScale,
           guardDamage: dmg * 0.5,
           life: 2,
           radius: p.range,
@@ -1967,7 +2059,9 @@ export class Combatant implements FlightState {
    * also spend a dash or fire off a barrier burst.
    */
   private tryActivateSaturation(input: InputFrame, events: SimEvent[]): boolean {
-    if (this.satActive || this.satBurnout > 0) return false;
+    // OVERDRIVE owns all three modes; a burst on top of it would be meaningless
+    // and the pilot is explicitly denied one while it runs.
+    if (this.satActive || this.overdriveActive || this.satBurnout > 0) return false;
     if (!isPressed(input, Btn.Saturation)) return false;
 
     const frac = this.sat / this.def.gauges.maxSaturation;
@@ -2144,8 +2238,11 @@ export class Combatant implements FlightState {
     const m = from ?? this.muzzle(a);
     const aim = from ? from.angle : this.aim;
     const speed = a.projSpeed * this.satProjSpeedScale;
-    const dmgScale = this.satShootScale * this.outgoingScale;
-    const homing = a.homing * (this.satActive && this.satMode === SatMode.Shoot ? 1.8 : 1);
+    const dmgScale =
+      this.satShootScale *
+      this.outgoingScale *
+      (a.kind === ProjKind.Melee ? this.meleeScale : 1);
+    const homing = a.homing * (this.shootActive ? 1.8 : 1);
 
     const famId = a.family ?? defaultFamily(a.kind);
     const fam = PROJ_FAMILIES[famId];
@@ -2209,7 +2306,7 @@ export class Combatant implements FlightState {
         vy: Math.sin(ang) * sp,
         damage: a.damage * dmgScale,
         guardDamage: a.guardDamage * dmgScale,
-        life: this.satActive ? Math.max(a.projLife, SAT_UNLIMITED_LIFE) : a.projLife,
+        life: this.shootActive ? Math.max(a.projLife, SAT_UNLIMITED_LIFE) : a.projLife,
         radius: a.projRadius,
         ownerId: this.id,
         team: this.team,
@@ -2284,7 +2381,10 @@ export class Combatant implements FlightState {
       this.vy -= Math.sin(aim) * a.recoil;
     }
 
-    this.sat = Math.min(this.def.gauges.maxSaturation, this.sat + (this.satActive ? 0 : a.satGain));
+    this.sat = Math.min(
+      this.def.gauges.maxSaturation,
+      this.sat + (this.satActive || this.overdriveActive ? 0 : a.satGain),
+    );
     this.firedThisTick = a.kind;
     events.push({ t: 'fire', x: m.x, y: m.y, angle: aim, kind: a.kind, ownerId: this.id, family: famId });
     void target;
@@ -2297,12 +2397,13 @@ export class Combatant implements FlightState {
     const intent: FlightIntent = {
       dx: locked ? 0 : input.dx,
       dy: locked ? 0 : input.dy,
-      boost: !locked && isHeld(input, Btn.Boost),
+      // Thrusters are gone after OVERDRIVE burns out. No boost, and no dash.
+      boost: !locked && !this.overdriveSpent && isHeld(input, Btn.Boost),
       // Dash is deliberately NOT gated on `!a`. A mech may dash while firing or
       // mid-swing — that overlap is what makes the movement read as aggressive
       // rather than as a series of committed stops. Firing and melee remain
       // mutually exclusive with each other; only movement overlaps them.
-      dash: !locked && isPressed(input, Btn.Boost),
+      dash: !locked && !this.overdriveSpent && isPressed(input, Btn.Boost),
       // Cryo bites here, so it slows flight, walking and boost alike.
       speedScale: this.satSpeedScale * this.status.speedScale * this.sniperSpeedScale,
       boostSpeedScale: this.satThrustScale * this.status.speedScale * this.sniperSpeedScale,
