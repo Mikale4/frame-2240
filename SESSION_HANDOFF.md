@@ -40,7 +40,7 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 * **585 tests pass** (28 files), typecheck clean, production build clean.
 * **Working tree clean** on `master`. No other branches.
-* `docs/DECISIONS.md` runs to **D115**.
+* `docs/DECISIONS.md` runs to **D116**.
 * **Suite runtime ~35s.** Deliberate — see §8a.
 * **`tools/probe/balance.ts` is the roster instrument** (D97). A full eight-mech
   sweep is ~20s:
@@ -135,16 +135,24 @@ both slot orders on the same seed, real 180s round cap. Standard error ~0.045.
 
 | | EXTREME | |
 | --- | --- | --- |
-| 1 | **CIRRUS +0.204** | |
-| 2 | HALCYON +0.041 | |
-| 3 | TERRAMOTH +0.030 | |
-| 4 | NULLTIDE −0.003 | |
-| 5 | NOCTURNE −0.020 | |
-| 6 | PYRE −0.048 | |
-| 7 | VESPER −0.092 | |
-| 8 | OBELISK −0.112 | |
+| 1 | CIRRUS +0.096 (58% wins) | |
+| 2 | TERRAMOTH +0.055 (57%) | |
+| 3 | HALCYON +0.054 (70%) | |
+| 4 | NULLTIDE +0.013 (52%) | |
+| 5 | NOCTURNE +0.002 (48%) | |
+| 6 | PYRE −0.029 (42%) | |
+| 7 | VESPER −0.086 (40%) | |
+| 8 | OBELISK −0.104 (33%) | |
 
-spread: **EXTREME 0.316** (12 seeds; SE ~0.03). CIRRUS's OVERDRIVE (D115) is the outlier; the other seven span 0.153. It was 0.163 with no outlier at all before that passive landed.
+spread: **EXTREME 0.200** (12 seeds; SE ~0.03). No machine outside the pack —
+CIRRUS leads TERRAMOTH by 1.3σ, which is a tie. **OBELISK's −0.104 floor is now
+what binds the spread**, not anyone's ceiling: zeroing the top machine would only
+reach ~0.16.
+
+**The probe reports win rate as well as lead** — they are different numbers and
+get confused. `lead` is life-bar *margin*; `win` is the record. CIRRUS at ten
+seconds had +0.204 lead and 85 % wins; HALCYON has a modest +0.054 lead and 70 %
+wins, because LAST STAND converts losses into narrow survivals.
 
 > **This is a chosen state, not a regression.** The roster was at 0.169 / 0.242
 > with no outliers after the tuning pass (D97–D104). D105 and D107–D109 are

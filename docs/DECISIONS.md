@@ -4694,3 +4694,70 @@ If it wants trimming, the dials in order of leverage are `ticks` (the window),
 once, which fills a quarter of the screen for about a second. It communicates
 "all three" unambiguously and it is transient, but it is very loud, and one
 burst with a tri-colour treatment would say the same thing more quietly.
+
+---
+
+## D116 — Overdrive's window cut from ten seconds to four
+
+CIRRUS shipped at **85 % of matches won** against a next-best 66 %, and a lead of
++0.204 against +0.041 — five times the second machine, about 6σ clear, and in the
+same bracket as the two worst outliers this project has ever measured
+(TERRAMOTH's +0.266, NULLTIDE's +0.257).
+
+### The window was the whole problem, and the measurement said so plainly
+
+Across 42 fights at EXTREME:
+
+```
+  ended DURING the window   17 fights   won 17, lost 0
+  ended AFTER burnout       13 fights   won  7, lost 6
+  never fired at all        12 fights
+```
+
+The blade-only aftermath is a coin flip — it was already fair. Everything came
+from the phase she never lost. That ruled out the obvious-looking lever of making
+the burnout harsher: it would have hit the half that was working.
+
+### Swept, not guessed
+
+```
+  600 (10s) -> +0.204, 85% wins, roster spread 0.316
+  480  (8s) -> +0.180, 78%
+  360  (6s) -> +0.154, 72%
+  300  (5s) -> +0.124,           roster spread 0.225
+  240  (4s) -> +0.096, 58% wins, roster spread 0.200
+```
+
+A clean monotonic dial with no plateau — unusually well-behaved for this project,
+where most dials run out of resolution before they run out of range.
+
+**240 is where it stops paying.** She lands *inside* the top group rather than
+above it — +0.096 against TERRAMOTH's +0.055 is 1.3σ — and below this the spread
+is bound by OBELISK's −0.104 floor rather than by her ceiling. Zeroing her
+entirely would only reach ~0.16, so shortening further would cost the moment and
+buy nothing.
+
+A shorter window also shifts weight onto the blade-only phase, which is the half
+that already measured fair. That is the right way round.
+
+### A note on what this number is worth
+
+The 85 % was an AI-versus-AI figure and probably flattered the second half of the
+passive. During the blade-only phase the rival holds a mean **212px** from a mech
+with no thrusters and no guns; a human backs off and shoots it, which is what a
+player reported after HALCYON beat this build twice. The nerf is aimed at the
+window rather than the aftermath partly for that reason — the aftermath is the
+part the harness understands least.
+
+### The probe now reports win rate
+
+Related, and prompted by the same conversation: `balance.ts` reported life-bar
+*margin* and it was being read as *record*. They are different numbers and in
+CIRRUS's case sharply different ones. Win rate is what a player thinks in, so it
+is now the first column on every row.
+
+### Two tests had pinned the literal
+
+`overdrive.test.ts` asserted `ticks: 600` twice and broke on the tune. Both now
+derive from the definition — the threshold and the melee multiplier are design
+constants and stay pinned; the window is a balance dial and is bounded instead.

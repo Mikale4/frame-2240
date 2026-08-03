@@ -917,8 +917,32 @@ export const CIRRUS: MechDef = {
    * `threshold` matches the desperation line the rest of the game already uses,
    * so a player who knows what a third of a life bar means also knows what a
    * quarter of one means on this machine.
+   *
+   * **The window is four seconds, down from ten, and the length was the whole
+   * balance problem.** At ten she won **85 %** of her matches against a
+   * next-best 66 %, and the phase was the reason: measured across 42 fights she
+   * went **17–0** in matches that ended inside the window and **7–6** in matches
+   * that ran past it. The aftermath was already fair; the window was not.
+   *
+   * Swept at EXTREME, twelve seeds:
+   *
+   * ```
+   *   600 (10s) -> +0.204, 85% wins, roster spread 0.316
+   *   480  (8s) -> +0.180, 78%
+   *   360  (6s) -> +0.154, 72%
+   *   300  (5s) -> +0.124,          roster spread 0.225
+   *   240  (4s) -> +0.096, 58% wins, roster spread 0.200
+   * ```
+   *
+   * 240 is where the lever stops paying. She lands inside the top group rather
+   * than above it — +0.096 against TERRAMOTH's +0.055 is 1.3σ — and below this
+   * the spread is bound by OBELISK's floor rather than by her ceiling, so
+   * shortening further would cost the moment without buying balance.
+   *
+   * A shorter window also shifts weight onto the blade-only phase, which is the
+   * half that already measured fair. That is the right way round.
    */
-  overdrive: { threshold: 0.25, ticks: 600, meleeMul: 1.5 },
+  overdrive: { threshold: 0.25, ticks: 240, meleeMul: 1.5 },
   flight: {
     ...FLIGHT,
     accel: 2.15,

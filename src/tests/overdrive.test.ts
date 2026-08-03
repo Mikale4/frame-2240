@@ -43,7 +43,16 @@ function open(s: MatchSim): void {
 
 describe('who carries it', () => {
   it('is CIRRUS, and only CIRRUS', () => {
-    expect(CIRRUS.overdrive).toEqual({ threshold: 0.25, ticks: 600, meleeMul: 1.5 });
+    const od = CIRRUS.overdrive!;
+    expect(od).toBeDefined();
+    // The two numbers the design fixes, rather than the one that gets tuned:
+    // it opens at a quarter hull, and the sword ends up half again as strong.
+    expect(od.threshold).toBeCloseTo(0.25, 5);
+    expect(od.meleeMul).toBeCloseTo(1.5, 5);
+    // The window is a balance dial and has already moved 600 -> 240, so it is
+    // bounded rather than pinned. A literal here breaks on every tune.
+    expect(od.ticks).toBeGreaterThanOrEqual(120);
+    expect(od.ticks).toBeLessThanOrEqual(600);
     for (const m of ROSTER) {
       if (m.id === 'cirrus') continue;
       expect(m.overdrive, m.id).toBeUndefined();
@@ -59,7 +68,7 @@ describe('the window', () => {
     expect(s.player.overdriveActive).toBe(false);
     open(s);
     expect(s.player.overdriveActive).toBe(true);
-    expect(s.player.overdriveTicks).toBeGreaterThan(560);
+    expect(s.player.overdriveTicks).toBe(CIRRUS.overdrive!.ticks);
   });
 
   it('runs all three saturation modes at once', () => {
