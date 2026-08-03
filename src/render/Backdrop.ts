@@ -236,7 +236,25 @@ export class Backdrop {
     // Faster than the world (1.0), so it overtakes the machines rather than
     // trailing them. 1.35 is enough to read as "very close" without strobing
     // past at the speeds a dash reaches.
-    place(this.fore, -150 + vFrac * 210, FORE_SCROLL);
+    /**
+     * Held high enough that the columns' own top edge never enters the view.
+     *
+     * The art's structure spans rows 44–968 of its 1024, so the columns
+     * *terminate* 44px down — and at the old `-150 + vFrac * 210` that
+     * termination drifted into frame whenever the camera sat low, leaving
+     * machines flying above a row of severed girders. A player reported it as
+     * mechs flying over the foreground.
+     *
+     * The strip is 1.9x the view height at every zoom, so this was never a
+     * coverage problem: it was placement. The range is now -230..-80, which
+     * keeps the content's top edge between 36 and 186px *above* the view at both
+     * zoom extremes while preserving most of the vertical drift.
+     *
+     * If the art is ever redrawn, the columns should run off both edges of their
+     * image rather than stopping inside it — a foreground fragment that visibly
+     * ends is a fragment the camera can catch.
+     */
+    place(this.fore, -230 + vFrac * 150, FORE_SCROLL);
     place(this.far, -110 + vFrac * 70, 0.06);
     this.far.tilePositionY = vFrac * 24;
     // Between far (0.06) and mid (0.18), and offset up so its structure band
