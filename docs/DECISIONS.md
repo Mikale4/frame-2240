@@ -4761,3 +4761,78 @@ is now the first column on every row.
 `overdrive.test.ts` asserted `ticks: 600` twice and broke on the tune. Both now
 derive from the definition — the threshold and the melee multiplier are design
 constants and stay pinned; the window is a balance dial and is bounded instead.
+
+---
+
+## D117 — Last Stand's window cut from ten seconds to five
+
+### It was worth twenty-nine points of win rate
+
+The roster table hid this, because HALCYON's *lead* was an unremarkable +0.054.
+Ablated:
+
+```
+  HALCYON as shipped        81 % of matches won
+  HALCYON, passive stripped 52 %
+```
+
+It fired in **48 %** of her fights and she went on to win **60 %** of those. The
+machine described a few blocks ago as a bent yardstick that won no matchup at all
+had become the best machine on the roster by the metric a player actually
+experiences.
+
+**This is the clearest case yet for reporting both numbers.** LAST STAND does not
+win fights *bigger*, it wins them *more often* — it converts losses into narrow
+survivals. Lead cannot see that and win rate cannot miss it.
+
+### The number that shaped the options
+
+Across the whole ten-second window the opponent lands **69 damage** on her — 4 %
+of a life bar. So the reprieve was never absorbing punishment. It was ten seconds
+in which she could not lose, with **no counterplay whatsoever**: nothing the
+opponent did for that duration mattered. That is the same fault D95 fixed on
+AEGIS's dome by making it consumable, and a damage pool was offered as the
+alternative here.
+
+Shortening was chosen instead.
+
+### Swept
+
+```
+  600 (10s) -> 70 % wins, lead +0.054
+  420  (7s) -> 63 %,      lead +0.026
+  300  (5s) -> 60 %,      lead +0.012
+  180  (3s) -> 52 %,      lead -0.006
+```
+
+**180 is the floor and it is a hard one**: 52 % is exactly what she measures with
+the passive removed entirely, so at three seconds LAST STAND is decorative. That
+is a useful thing to have measured — it says the whole ability lives between 3
+and 10 seconds, and there is no room below.
+
+**300 shipped.** She lands at 60 % against CIRRUS's 60 % and TERRAMOTH's 58 % — a
+three-way tie at the top by win rate — with a mid-pack lead of +0.012. The
+passive is still worth +8 points over her stripped baseline, so it does something
+without deciding matches.
+
+### It barely moved the spread, and that is the point
+
+```
+  roster spread   0.200 -> 0.208
+```
+
+Unchanged inside the noise, because **HALCYON was never the outlier on lead** —
+she was the outlier on *record*. The spread is bound by OBELISK's −0.100 floor at
+both ends of this change. Anyone reading only the spread would have concluded
+there was nothing to fix here, which is exactly the trap the win-rate column was
+added to close.
+
+Both chassis passives now run a similar window — OVERDRIVE four seconds, LAST
+STAND five — which was not designed for but reads consistently.
+
+### The tests had pinned the literal again
+
+`lastStand.test.ts` asserted `ticks === 600` and hard-coded 620- and 700-tick
+loops. All of them now derive from `HALCYON.lastStand.ticks`, one commit after
+`overdrive.test.ts` learned the same lesson. A balance dial should never be
+pinned by an equality assertion; bound it instead.

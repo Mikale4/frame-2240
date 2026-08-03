@@ -40,7 +40,7 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 * **585 tests pass** (28 files), typecheck clean, production build clean.
 * **Working tree clean** on `master`. No other branches.
-* `docs/DECISIONS.md` runs to **D116**.
+* `docs/DECISIONS.md` runs to **D117**.
 * **Suite runtime ~35s.** Deliberate — see §8a.
 * **`tools/probe/balance.ts` is the roster instrument** (D97). A full eight-mech
   sweep is ~20s:
@@ -135,16 +135,16 @@ both slot orders on the same seed, real 180s round cap. Standard error ~0.045.
 
 | | EXTREME | |
 | --- | --- | --- |
-| 1 | CIRRUS +0.096 (58% wins) | |
-| 2 | TERRAMOTH +0.055 (57%) | |
-| 3 | HALCYON +0.054 (70%) | |
-| 4 | NULLTIDE +0.013 (52%) | |
-| 5 | NOCTURNE +0.002 (48%) | |
-| 6 | PYRE −0.029 (42%) | |
-| 7 | VESPER −0.086 (40%) | |
-| 8 | OBELISK −0.104 (33%) | |
+| 1 | CIRRUS +0.108 (60% wins) | |
+| 2 | TERRAMOTH +0.059 (58%) | |
+| 3 | NULLTIDE +0.022 (54%) | |
+| 4 | HALCYON +0.012 (60%) | |
+| 5 | NOCTURNE +0.008 (48%) | |
+| 6 | PYRE −0.026 (45%) | |
+| 7 | VESPER −0.083 (40%) | |
+| 8 | OBELISK −0.100 (36%) | |
 
-spread: **EXTREME 0.200** (12 seeds; SE ~0.03). No machine outside the pack —
+spread: **EXTREME 0.208** (12 seeds; SE ~0.03). No machine outside the pack —
 CIRRUS leads TERRAMOTH by 1.3σ, which is a tie. **OBELISK's −0.104 floor is now
 what binds the spread**, not anyone's ceiling: zeroing the top machine would only
 reach ~0.16.

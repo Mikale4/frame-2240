@@ -225,7 +225,7 @@ export const HALCYON: MechDef = {
    * window in which the other pilot has to *finish something they thought they
    * had finished*, and cannot.
    */
-  lastStand: { ticks: 600 },
+  lastStand: { ticks: 300 },
   rig: HALCYON_RIG,
 
   main: attack({

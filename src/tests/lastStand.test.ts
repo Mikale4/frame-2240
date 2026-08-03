@@ -32,7 +32,11 @@ function sim(playerDef = HALCYON): MatchSim {
 describe('who carries it', () => {
   it('is HALCYON, and only HALCYON', () => {
     expect(HALCYON.lastStand).toBeDefined();
-    expect(HALCYON.lastStand!.ticks).toBe(600);
+    // The window is a balance dial and has already moved 600 -> 300, so it is
+    // bounded rather than pinned. A literal here breaks on every tune — the same
+    // lesson OVERDRIVE's tests learned one commit earlier.
+    expect(HALCYON.lastStand!.ticks).toBeGreaterThanOrEqual(120);
+    expect(HALCYON.lastStand!.ticks).toBeLessThanOrEqual(600);
     for (const m of ROSTER) {
       if (m.id === 'halcyon') continue;
       expect(m.lastStand, m.id).toBeUndefined();
@@ -108,12 +112,13 @@ describe('the reprieve', () => {
     }
   });
 
-  it('lasts ten seconds and then lets go', () => {
+  it('runs its window and then lets go', () => {
     const s = sim();
+    const window = HALCYON.lastStand!.ticks;
     s.player.life = 0;
     s.step(emptyInput(), emptyInput());
-    expect(s.player.lastStandTicks).toBeGreaterThan(560);
-    for (let i = 0; i < 620 && s.phase !== MatchPhase.Over; i++) {
+    expect(s.player.lastStandTicks).toBe(window);
+    for (let i = 0; i < window + 20 && s.phase !== MatchPhase.Over; i++) {
       s.step(emptyInput(), emptyInput());
     }
     expect(s.player.lastStandActive).toBe(false);
@@ -128,7 +133,7 @@ describe('the reprieve', () => {
     s.player.life = 0;
     s.step(emptyInput(), emptyInput());
     expect(s.player.lastStandUsed).toBe(true);
-    for (let i = 0; i < 620 && s.phase !== MatchPhase.Over; i++) {
+    for (let i = 0; i < HALCYON.lastStand!.ticks + 20 && s.phase !== MatchPhase.Over; i++) {
       s.step(emptyInput(), emptyInput());
     }
     s.player.life = 0;
@@ -141,7 +146,7 @@ describe('the reprieve', () => {
     s.player.life = 0;
     s.step(emptyInput(), emptyInput());
     let ended = false;
-    for (let i = 0; i < 700 && s.phase !== MatchPhase.Over; i++) {
+    for (let i = 0; i < HALCYON.lastStand!.ticks + 100 && s.phase !== MatchPhase.Over; i++) {
       s.step(emptyInput(), emptyInput());
       if (s.events.some((e) => e.t === 'lastStandEnd')) ended = true;
     }
