@@ -9,10 +9,11 @@ standard error** on lead and **0.05–0.10** on an individual matchup.
 npx vite-node tools/probe/balance.ts -- --tier extreme --seeds 12 --matrix
 ```
 
-Current as of **D118/D119**. `tools/probe/telemetry.ts` is the companion
-instrument: same duels, same seeds, reporting *how* a machine spent its match
-rather than who won it. Reach for it before proposing a fix — three OBELISK
-passes were spent on reasoned hypotheses that each measured near zero.
+Current as of **D120**. `tools/probe/telemetry.ts` is the companion instrument:
+same duels, same seeds, reporting *how* a machine spent its match rather than who
+won it. Reach for it before proposing a fix — three OBELISK passes were spent on
+reasoned hypotheses that each measured near zero, and VESPER's recorded diagnosis
+turned out to name a mechanism that does not exist in the code.
 
 ## Two numbers, and they disagree
 
@@ -20,10 +21,11 @@ passes were spent on reasoned hypotheses that each measured near zero.
 * **`lead`** — the life-bar *margin* a machine finishes ahead by, averaged over
   the field. Also the game's own timeout tiebreaker.
 
-They come apart whenever an ability converts losses into narrow survivals rather
-than winning bigger. **HALCYON is the standing example**: 58 % wins on a +0.009
-lead, because LAST STAND turns defeats into one-hull escapes. Reading only the
-spread says there is nothing to look at.
+They come apart whenever one matchup is lopsided or an ability converts losses
+into narrow survivals. **VESPER is now the sharpest example on the roster**: top
+of the lead column at +0.102 and *fifth of eight* on record at 51 %. The entire
+margin is one matchup — across the other six he averages +0.037. Reading the lead
+column alone would call him the best machine in the game.
 
 ---
 
@@ -31,41 +33,37 @@ spread says there is nothing to look at.
 
 | Mech | Win | Lead | ± |
 | --- | --- | --- | --- |
-| CIRRUS | 60 % | +0.097 | 0.027 |
-| OBELISK | 57 % | +0.053 | 0.029 |
-| TERRAMOTH | 56 % | +0.033 | 0.028 |
-| HALCYON | 58 % | +0.009 | 0.025 |
-| NULLTIDE | 52 % | −0.007 | 0.029 |
-| PYRE | 40 % | −0.030 | 0.024 |
-| NOCTURNE | 42 % | −0.036 | 0.030 |
-| VESPER | **35 %** | **−0.119** | 0.036 |
+| VESPER | 51 % | +0.102 | 0.037 |
+| CIRRUS | 57 % | +0.056 | 0.025 |
+| OBELISK | 52 % | −0.001 | 0.029 |
+| HALCYON | 57 % | −0.008 | 0.021 |
+| NULLTIDE | 52 % | −0.021 | 0.026 |
+| TERRAMOTH | 52 % | −0.030 | 0.035 |
+| PYRE | 38 % | −0.045 | 0.022 |
+| NOCTURNE | 42 % | −0.054 | 0.030 |
 
-**spread 0.216.**
+**spread 0.156 — the tightest the roster has ever measured** (0.208 before D118).
 
-### One machine is adrift, and it is no longer OBELISK
+### Read the record column, not the margin
 
-The top seven span 0.133 — roughly four standard errors across *seven* machines,
-so almost every adjacent pair is inside noise and there are no honest tiers up
-there. **VESPER is 0.086 below the next machine and 5.4σ below the top.** He is
-the sole outlier and the sole remaining lopsided matchup.
+Six machines sit inside 0.110 of each other on lead and five of them are within
+five points of an even record. The two genuinely low records are **PYRE at 38 %**
+and **NOCTURNE at 42 %**, and neither shows up as an outlier on margin — PYRE's
+lead is −0.045 with the flattest matchup row in the game.
 
-**OBELISK was the floor and is now second on lead** (D118): 36 % / −0.100 →
-57 % / +0.053, and 32 % / −0.114 → 61 % / +0.040 at HARD. It had no winning
-matchup anywhere; it now has three, with three of its four losses inside ±0.03.
+**VESPER's +0.102 is one matchup**, not a tier. See §5.
 
 ## 2. Fairness
 
-| | before D118 | now |
-| --- | --- | --- |
-| Matchups inside ±0.10 — a real fight | 13 of 28 | **15 of 28** |
-| Matchups beyond ±0.30 — a bad fight | 1 of 28 | **1 of 28** |
+| | before D118 | after D118 | now |
+| --- | --- | --- | --- |
+| Matchups inside ±0.10 — a real fight | 13 of 28 | 15 of 28 | **18 of 28** |
+| Matchups beyond ±0.30 — a bad fight | 1 of 28 | 1 of 28 | **1 of 28** |
 
-The single bad pairing is still **CIRRUS over VESPER, +0.34**, unchanged and
-unaddressed: he cannot hold range against a frame that closes.
-
-**PYRE remains the reference machine for shape** — −0.030 with nothing worse
-than −0.14 — though its 40 % record now sits below its margin, which is the
-win/lead split running the other way and is worth a look on its own.
+The best fairness on record. The single bad pairing changed identity in D120:
+**CIRRUS over VESPER, long the one unfair fight in the game, is fixed at −0.05.**
+It was replaced by **VESPER over TERRAMOTH at +0.59**, which is larger, and which
+is a deliberate design decision rather than an oversight — see §5.
 
 ## 3. The full chart — EXTREME
 
@@ -73,59 +71,65 @@ Row beats column.
 
 | | HAL | NOC | VES | TER | CIR | OBE | PYR | NUL |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **HALCYON** | — | −0.01 | +0.20 | +0.08 | −0.15 | +0.02 | +0.03 | −0.10 |
-| **NOCTURNE** | +0.01 | — | −0.01 | −0.23 | −0.01 | −0.17 | −0.02 | +0.18 |
-| **VESPER** | −0.20 | +0.01 | — | +0.15 | **−0.34** | −0.19 | −0.12 | −0.15 |
-| **TERRAMOTH** | −0.08 | +0.23 | −0.15 | — | +0.09 | +0.03 | +0.14 | −0.03 |
-| **CIRRUS** | +0.15 | +0.01 | **+0.34** | −0.09 | — | +0.10 | +0.07 | +0.10 |
-| **OBELISK** | −0.02 | +0.17 | +0.19 | −0.03 | −0.10 | — | −0.03 | +0.20 |
-| **PYRE** | −0.03 | +0.02 | +0.12 | −0.14 | −0.07 | +0.03 | — | −0.14 |
-| **NULLTIDE** | +0.10 | −0.18 | +0.15 | +0.03 | −0.10 | −0.20 | +0.14 | — |
+| **HALCYON** | — | −0.01 | +0.08 | +0.08 | −0.15 | +0.02 | +0.03 | −0.10 |
+| **NOCTURNE** | +0.01 | — | −0.13 | −0.23 | −0.01 | −0.17 | −0.02 | +0.18 |
+| **VESPER** | −0.08 | +0.13 | — | **+0.59** | −0.05 | +0.19 | −0.02 | −0.05 |
+| **TERRAMOTH** | −0.08 | +0.23 | **−0.59** | — | +0.09 | +0.03 | +0.14 | −0.03 |
+| **CIRRUS** | +0.15 | +0.01 | +0.05 | −0.09 | — | +0.10 | +0.07 | +0.10 |
+| **OBELISK** | −0.02 | +0.17 | −0.19 | −0.03 | −0.10 | — | −0.03 | +0.20 |
+| **PYRE** | −0.03 | +0.02 | +0.02 | −0.14 | −0.07 | +0.03 | — | −0.14 |
+| **NULLTIDE** | +0.10 | −0.18 | +0.05 | +0.03 | −0.10 | −0.20 | +0.14 | — |
 
 ## 4. HARD
 
 | Mech | Win | Lead |
 | --- | --- | --- |
-| CIRRUS | 64 % | +0.104 |
-| HALCYON | 64 % | +0.074 |
-| NULLTIDE | 52 % | +0.051 |
-| OBELISK | **61 %** | +0.040 |
-| PYRE | 44 % | +0.023 |
-| NOCTURNE | 41 % | −0.055 |
-| TERRAMOTH | 37 % | −0.073 |
-| VESPER | **38 %** | **−0.165** |
+| CIRRUS | 62 % | +0.076 |
+| VESPER | 57 % | +0.064 |
+| HALCYON | 61 % | +0.046 |
+| NULLTIDE | 50 % | +0.025 |
+| OBELISK | 60 % | +0.021 |
+| PYRE | 40 % | −0.011 |
+| NOCTURNE | 38 % | −0.082 |
+| TERRAMOTH | **33 %** | **−0.140** |
 
-**spread 0.269.** Rows that move between tiers, and what each says:
+**spread 0.216** (0.265 before D118). Six of eight are inside 0.090 of each
+other. The tier split worth knowing:
 
-* **HALCYON is stronger at HARD.** LAST STAND is worth more against an opponent
-  less able to finish a machine on one hull.
-* **TERRAMOTH is much weaker** (37 % against 56 %), and has been across every
-  measurement this session. It is now the second-worst machine at HARD and is
-  worth a pass of its own.
-* **VESPER is weakest at both tiers and worst of all at HARD**, −0.165.
+* **OBELISK is stronger at HARD than EXTREME on record** — 60 % against 52 %.
+  It wins more fights by smaller margins, which is what a heavy does against
+  opponents less able to finish it.
+* **TERRAMOTH is much weaker at HARD**, and has been in every measurement:
+  37 % before the VESPER work and 38 % before D118, so this is not caused by
+  either. Bulk stops paying when fights end sooner.
 
 ---
 
-## 5. What is left to fix
+## 5. The one bad matchup, and why it stays
 
-1. **VESPER, and specifically VESPER at HARD.** The sole outlier and the holder
-   of the one remaining lopsided matchup. Structural rather than numeric:
-   `kites` and the sniper stance both depend on `rangeIq`, which is
-   **EXTREME-only** (`RivalAI.ts`, `false` at Easy/Normal/Hard), so at HARD he
-   cannot enforce the spacing his design assumes.
+**VESPER over TERRAMOTH, +0.59.** Not an excess in any single dial — measured
+separately, VESPER's stance cut puts it at +0.50, his dash at +0.40 and his
+stance mobility at +0.50, each alone. The only change that leaves it alone
+(+0.13) is the one that made him *slower*. Any mobility at all breaks it: the
+slowest machine on the roster cannot answer a marksman who can disengage.
 
-   Measured, his kit is not the problem. His sniper shot connects **83–84 %** —
-   the best-connecting weapon in the game — against his main gun's 18–23 %. And
-   his main gun fails in the *opposite* way to OBELISK's: **0 % expire, 82 %
-   flies off the map.** He over-ranges rather than falling short, which means
-   reach is not the lever and spacing is.
+**Kept, by design decision** (D120): TERRAMOTH's hull is high enough that it
+outlasts most of the field through bulk and trading, and the measurement supports
+that at EXTREME. Its exchange rate is **the most even on the roster — 76.7
+bar/min dealt against 76.5 taken** — on the lowest damage intake in the game, and
+excluding VESPER its matchup row averages **+0.063**, above average, with only
+two marginal losses. It sits at 52 % wins.
 
-2. **TERRAMOTH at HARD**, 37 % / −0.073, second-worst and 19 points below its
-   own EXTREME record.
+Do not "fix" this without re-reading D120 first.
 
-3. **PYRE's record against its margin** — 40 % on a −0.030 lead with the
-   flattest matchup spread on the roster. Something is converting good positions
-   into losses.
+## 6. What is left
+
+1. **PYRE, 38 % at EXTREME and 40 % at HARD.** The lowest record in the game on
+   a −0.045 margin and the flattest matchup row on the roster — nothing worse
+   than −0.14. Its margin says mid-pack and its record says worst. Something
+   converts good positions into losses, and nobody has pulled that thread.
+2. **NOCTURNE, 42 % / −0.054.** Quietly the second-lowest record at both tiers.
+3. **TERRAMOTH at HARD**, 33 % / −0.140. Separate from §5 and long-standing.
 
 ---
 
@@ -137,4 +141,4 @@ close to worthless in AI hands. `MechDef.gauges.satShieldDrain` (D119) is
 likewise invisible here, because the rival never picks SHIELD on the one chassis
 that has it. The gap is widest around **CIRRUS's post-burnout state**, where the
 AI holds a mean 212px from a mech with no thrusters and no guns and a person
-would simply back off — her 60 % is probably flattering.
+would simply back off.

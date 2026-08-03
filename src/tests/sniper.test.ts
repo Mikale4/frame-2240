@@ -138,9 +138,16 @@ describe('the sniper stance, as data', () => {
     const mainCycle = VESPER.main.startup + VESPER.main.active + VESPER.main.recovery;
     // Deliberate and aimed: several times slower than his ordinary gun.
     expect(cycle).toBeGreaterThanOrEqual(mainCycle * 3);
-    // ...but not a timer to watch. Four to eight shots per stance.
+    // ...but not a timer to watch. Three to eight shots per stance.
+    //
+    // The floor was 4 until D120 cut the stance from six seconds to three, which
+    // is a deliberate design change and not a regression: the window got smaller
+    // rather than the weapon getting slower, and the per-shot disarm went up to
+    // hold the payload roughly where it was. The band still catches what it was
+    // written to catch — a stance that fires twice is a wait, and one that fires
+    // twelve times is a stream.
     const shots = Math.floor(VESPER.sniper!.duration / cycle);
-    expect(shots).toBeGreaterThanOrEqual(4);
+    expect(shots).toBeGreaterThanOrEqual(3);
     expect(shots).toBeLessThanOrEqual(8);
   });
 
@@ -227,6 +234,10 @@ describe('the stance, in the sim', () => {
     const seen: { kind: number; homing: number; barrier: number }[] = [];
     for (let i = 0; i < 280; i++) {
       s.step(press(Btn.Main), emptyInput());
+      // Only what the *stance* fires. Past `duration` the main button goes back
+      // to RAILNEEDLE, and sweeping those up made this assert that his ordinary
+      // bullet was a beam. See the note in the pooled-projectile test.
+      if (!s.player.sniperActive) continue;
       for (const p of s.activeProjectiles()) {
         if (p.ownerId === s.player.id) {
           seen.push({ kind: p.kind, homing: p.homing, barrier: p.barrier });
@@ -389,7 +400,13 @@ describe('the disarm', () => {
   });
 
   it('rides only the stance shot, not his ordinary guns', () => {
-    expect(VESPER.sniper!.shot.disarms).toBeCloseTo(0.5, 5);
+    // Bounded, not pinned. This asserted `toBeCloseTo(0.5)` and duly went red
+    // when the dial moved to 0.6 in D120 — the same mistake `lastStand.test.ts`
+    // and `overdrive.test.ts` each made once. What matters here is that the
+    // disarm is a real chance living on the stance shot and nowhere else, which
+    // is what the rest of this test says.
+    expect(VESPER.sniper!.shot.disarms!).toBeGreaterThan(0);
+    expect(VESPER.sniper!.shot.disarms!).toBeLessThanOrEqual(1);
     expect(VESPER.main.disarms ?? 0).toBe(0);
     expect(VESPER.heavy.disarms ?? 0).toBe(0);
     expect(VESPER.lance.disarms ?? 0).toBe(0);
@@ -486,6 +503,13 @@ describe('the disarm', () => {
     let n = 0;
     for (let i = 0; i < 280; i++) {
       s.step(press(Btn.Main), emptyInput());
+      // **Only while planted.** The loop deliberately outlives the stance, and
+      // once it drops the same button fires his ordinary gun, which carries no
+      // disarm and must not — collecting those rounds asserted the opposite of
+      // the intended property. Gating on `sniperActive` rather than shortening
+      // the loop keeps this independent of `duration`, which is a balance dial
+      // and moved in D120.
+      if (!s.player.sniperActive) continue;
       for (const p of s.activeProjectiles()) {
         if (p.ownerId !== s.player.id) continue;
         n++;

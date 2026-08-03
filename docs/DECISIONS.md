@@ -5008,3 +5008,147 @@ barely moved. The fix was EXTREME-only, which is the same structural disease
 VESPER has and the reason HARD is run as a corroborating second sample at all.
 An EXTREME-only spread of 0.177 is worth less than a fix that works at both
 tiers, and reading only the first number would have shipped the wrong one.
+
+---
+
+## D120 — Vesper: slow cruise, violent dash, a shorter bet
+
+**Requested**, as a design package rather than a number: *"His Sniper Mode should
+only last 3 seconds. Increase the disability chance from 50% to 60%. Lower
+Vesper's overall base movement speed, but improve his Dash to make it faster and
+extend a longer distance. That way, he still keeps his sniper mentality by using
+slow movements and then when he needs to get out of danger he can dash instead of
+moving regularly. Also while in Sniper Mode, slightly increase his movement speed
+VERY slightly, and allow him to dash."*
+
+VESPER was **35 % / −0.119 at EXTREME and 38 % / −0.165 at HARD** — the sole
+outlier once OBELISK came up in D118, and the holder of the one lopsided matchup.
+
+### The handoff's diagnosis was wrong, and checking it mattered
+
+`SESSION_HANDOFF.md` said VESPER's kit "rests on `kites` and the sniper stance,
+and holding range depends on `rangeIq`, which is EXTREME-only" — structural, not
+numeric. **Neither is gated on `rangeIq`.** The kite retreat in `pickTactic`
+checks `style.kites`, `!sniperActive` and a constant `KITE_RANGE`; `sniperIntent`
+checks constants and energy. `foeClosing` is ungated. What *is* gated is
+`preferredRangeFor` and `disengageReach` — and measured, his mean engagement
+distance differs by 25px between the tiers, so it barely expresses.
+
+The "worse at HARD" premise was also over-read: **−0.119 ± 0.036 against
+−0.165 ± 0.037** is a difference of 0.046 ± 0.052, and his *win rate* was
+actually higher at HARD (38 % against 35 %). He was about equally bad at both.
+
+That mattered because it changed the whole approach. He did not need a
+tier-independence fix. Telemetry said what he did need, and it was the exact
+inverse of OBELISK's problem: **he dealt the third-highest damage on the roster
+(161 bar/min) and took the highest (185)**. Not short of offence — short of
+survival. `defence.mul` 1.15 on the second-thinnest hull.
+
+### What was measured before the package
+
+* **More stance is worse.** Sweeping `sniper.cooldown` 420 → 340 → 270 → 200
+  moved his lead −0.119 → −0.132 → −0.123 → −0.123. Flat to negative. His
+  best-connecting weapon by far — the stance shot lands **81 %**, against his
+  main gun's 17 % — and giving him more of it does nothing, because the stance's
+  price is standing still and standing still was killing him.
+* SIGHTLINE's gun (the D118 trick applied to `interceptor`) was worth +0.085.
+* `defence.mul` 1.15 → 0.96 was worth +0.118.
+
+Neither was used. The requested package was better and it is in character.
+
+### The package, and what each part is worth
+
+Measured alone, from the −0.119 baseline, 12 seeds, n = 84:
+
+| change | alone | worth |
+| --- | --- | --- |
+| stance `duration` 360 → 180 | 43 % / −0.039 | **+0.080** |
+| `dashSpeed` 14→18, `dashTicks` 7→9 (98 → 162px) | 47 % / +0.019 | **+0.138** |
+| stance `speedScale` 0.32 → 0.38 **and `dashSpeedScale: 1`** | 55 % / +0.065 | **+0.184** |
+| `accel` 1.6→1.4, `maxSpeed` 5.1→4.5, `boostMaxSpeed` 8.8→8.0 | 42 % / −0.079 | **+0.040** |
+| `disarms` 0.50 → 0.60 | 36 % / −0.114 | **+0.005 — nothing** |
+
+Every part of the request pays except the disarm, and **cutting the stance in
+half is a buff**, which the cooldown sweep above had already predicted and which
+is the least obvious thing here: a shorter bet on the same read is worth more
+than a longer one when being wrong is fatal.
+
+`SniperModeDef.dashSpeedScale` is new. The stance already allowed dashing — it
+simply scaled the dash by `speedScale`, so the panic button moved him about a
+third of a body length. Splitting the dash out of the movement penalty is what
+"allow him to dash" means mechanically, and it is the single largest component.
+
+**Sub-additive, heavily.** The five parts sum to +0.447 and the package measures
++0.221. The dash and the stance-dash-exemption are substitutes rather than
+complements — either one alone provides the escape — which is why an
+ablation-from-full initially showed both as worth nothing and nearly sent this
+the wrong way. Decomposing from the baseline instead is what made it legible.
+
+### The disarm was reverted, deliberately
+
+**By request, after being measured at +0.005 against a 0.035 standard error.** It
+was proposed on the sound logic that halving the stance halves the number of
+shots, so the per-shot chance should rise to compensate — the same reasoning D111
+used. It simply does not show up. Reverting rather than keeping it as a free
+flourish: a dial that measures at nothing is a dial the next reader assumes is
+load-bearing, and this one already carries three tuning notes.
+
+Reverting it also improved the roster spread, 0.171 → 0.156, inside noise.
+
+### Result
+
+```
+  EXTREME   35 % / -0.119  ->  51 % / +0.102     spread 0.216 -> 0.156
+  HARD      38 % / -0.165  ->  57 % / +0.064     spread 0.269 -> 0.216
+```
+
+**0.156 is the tightest the roster has ever measured**, and matchups inside
+±0.10 went 15 of 28 to 18 of 28, the best fairness on record. The old lopsided
+pairing — CIRRUS over VESPER at +0.34, the one bad fight in the game for many
+sessions — is **fixed at −0.05**.
+
+His +0.102 lead reads as top of the roster and is not what it looks like. The
+whole of it is one matchup: across the other six he averages **+0.037**, and on
+win rate he is **51 %, fifth of eight**. This is the clearest case yet of the two
+columns answering different questions.
+
+### The one broken matchup, and why it is being kept
+
+**VESPER over TERRAMOTH, +0.59.** Bigger than the CIRRUS/VESPER fight it
+replaced. It is not an excess in any one dial: measured separately, the stance
+cut puts it at +0.50, the dash at +0.40 and the stance mobility at +0.50, each on
+its own. The only change that leaves it alone (+0.13) is the one that made VESPER
+*slower*. **Any mobility whatsoever breaks it** — the slowest machine on the
+roster cannot answer a marksman who can disengage at all.
+
+**Left as it is, by design decision**, and the reasoning is worth recording so a
+future session does not read it as an oversight and "fix" it: *"even with its
+disadvantage towards high mobility opponents, its hp is so high that it genuinely
+can outlast most opponent due to high bulk and trading/exchanges."*
+
+The measurement supports that at EXTREME, and more strongly than the tier list
+suggests. TERRAMOTH's exchange rate is **the most even on the roster — 76.7
+bar/min dealt against 76.5 taken, net +0.2** — on the lowest damage intake in the
+game, and excluding VESPER its matchup row averages **+0.063**, above average,
+with only two marginal losses. It sits at 52 % wins. The attrition identity works.
+
+The honest caveat, recorded and not acted on: it is 33 % / −0.140 at HARD, last
+on both metrics — and that predates this change entirely (37 % before the VESPER
+work, 38 % before D118). It is a separate problem from this matchup.
+
+### Tests
+
+Four sniper tests went red, none of them a regression, all of them coupled to
+`duration` — a balance dial:
+
+* Two collected projectiles for 280 ticks and asserted every one was a stance
+  shot. At six seconds the loop never outlived the stance; at three it does, and
+  the ordinary main gun correctly carries no disarm and is not a beam. Both now
+  gate on `sniperActive`, which makes them independent of the dial rather than
+  merely re-tuned to it.
+* The cadence band asserted 4–8 shots per stance and now gets 3. The floor moved
+  to 3 — a design change, stated as one in the test.
+* `disarms` was pinned with `toBeCloseTo(0.5)`. Bounded now. That is the third
+  file this session to make the same mistake after `lastStand.test.ts` and
+  `overdrive.test.ts`, and the rule stands: **never pin a balance dial with an
+  equality assertion.**

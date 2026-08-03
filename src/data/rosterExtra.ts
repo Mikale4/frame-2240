@@ -263,7 +263,30 @@ export const VESPER: MechDef = {
   statPower: 4,
   statSpeed: 3,
   statRange: 5,
-  flight: { ...FLIGHT, accel: 1.6, maxSpeed: 5.1, boostMaxSpeed: 8.8, turretRate: 15 * DEG, bankMax: 20 * DEG },
+  /**
+   * **Slow cruise, violent dash.** The movement profile is the character.
+   *
+   * A marksman should not travel well. Everything that moves him *continuously*
+   * — cruise, acceleration, boost — is the slowest on the roster bar the two
+   * heavies, so drifting across the arena is genuinely a bad way for Kestrel
+   * Doyne to spend time. What he gets instead is the best dash in the game:
+   * `dashSpeed` 18 over `dashTicks` 9 covers roughly 162px against the roster's
+   * standard 98, so the one move he is good at is *leaving*.
+   *
+   * That is the sniper mentality expressed in the flight model rather than in a
+   * note: hold still, watch, and when the answer arrives spend the dash and be
+   * somewhere else. See D120.
+   */
+  flight: {
+    ...FLIGHT,
+    accel: 1.4,
+    maxSpeed: 4.5,
+    boostMaxSpeed: 8.0,
+    dashSpeed: 18,
+    dashTicks: 9,
+    turretRate: 15 * DEG,
+    bankMax: 20 * DEG,
+  },
   // Glass cannon: fewer hit points and no grounded bracing bonus.
   gauges: { ...GAUGES, maxLife: 1490, maxEnergy: 1150, energyRegen: 3.4 },
   barrier: { ...BARRIER, cost: 34, invulnTicks: 32 },
@@ -463,19 +486,31 @@ export const VESPER: MechDef = {
    * actually lacked was a reason for anyone to respect the range he wants to
    * hold. See D107.
    *
-   * The trade, stated plainly: he gives up **two thirds of his movement, every
-   * other weapon he owns, and any answer at all to something that reaches him**,
-   * for six seconds of a gun that steers, crosses the arena in under a second
-   * and pierces four targets. Then seven seconds with no stance at all. It is the
-   * most committed thing on the roster and it is meant to be terrifying to walk
-   * into and trivial to punish if he calls it wrong.
+   * The trade, stated plainly: he gives up **most of his movement and every
+   * other weapon he owns** for three seconds of a gun that steers, crosses the
+   * arena in under a second and pierces four targets. Then seven seconds with
+   * no stance at all.
+   *
+   * **Three seconds, not six** (D120). Six was long enough that planting was a
+   * commitment he could not survive being wrong about — and measured, more
+   * stance uptime made him *worse*, not better: sweeping the cooldown from 420
+   * down to 200 moved his lead −0.119 → −0.123, flat to negative, because the
+   * stance's cost is standing still and standing still is what was killing him.
+   * A shorter window is a smaller bet on the same read.
+   *
+   * **He is no longer defenceless in it.** The stance still takes his cruise
+   * and his thrust, but `dashSpeedScale` leaves the dash whole, so the answer to
+   * being found is one committed move rather than none. That is the difference
+   * between a turret and a marksman.
    */
   sniper: {
-    duration: 360,
+    duration: 180,
     cooldown: 420,
-    // Drastic on purpose. At 0.32 he covers 1.6px a tick against a light frame's
-    // 6.4 — he is a turret, and choosing to become one is the decision.
-    speedScale: 0.32,
+    // Still severe, and deliberately a shade less than the 0.32 it launched at:
+    // enough to adjust a firing line, nowhere near enough to travel on.
+    speedScale: 0.38,
+    // The escape hatch. See `SniperModeDef.dashSpeedScale`.
+    dashSpeedScale: 1,
     shot: attack({
       id: 'sniperShot',
       label: 'LONG LANCE',
@@ -594,6 +629,20 @@ export const VESPER: MechDef = {
        * often he gets to shoot. 0.25 → 0.30 put it at 1.43; **0.50** takes it to
        * roughly one every other shot, which is the point at which planting reads
        * as *taking something off* the opponent rather than hoping to.
+       *
+       * **It stays at 0.50, and D120 is why it did not move a third time.**
+       *
+       * The stance was cut from six seconds to three in D120, which halves how
+       * often he gets to shoot, and by the reasoning above that is half the
+       * rate — so 0.60 was tried, to hold the payload across the shorter window.
+       * Measured, it was worth **+0.005 against a 0.035 standard error**: it
+       * does no balance work whatsoever.
+       *
+       * Reverted deliberately rather than kept as a free flourish. A dial that
+       * measures at nothing is a dial the next reader will assume is load-
+       * bearing, and the disarm already has three tuning notes on it. Two shots
+       * a stance that take something off half the time is the same threat it
+       * always was, arriving in a shorter window.
        */
       disarms: 0.5,
       muzzleForward: 52,

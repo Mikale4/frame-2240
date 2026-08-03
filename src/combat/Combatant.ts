@@ -922,6 +922,17 @@ export class Combatant implements FlightState {
   get sniperSpeedScale(): number {
     return this.sniperActive ? (this.def.sniper?.speedScale ?? 1) : 1;
   }
+  /**
+   * The stance's grip on the **dash**, which a chassis may loosen separately.
+   *
+   * See `SniperModeDef.dashSpeedScale`. Falls back to `speedScale`, so a stance
+   * that says nothing behaves exactly as stances did before the field existed.
+   */
+  get sniperDashScale(): number {
+    if (!this.sniperActive) return 1;
+    const s = this.def.sniper;
+    return s?.dashSpeedScale ?? s?.speedScale ?? 1;
+  }
 
   /** True while the all-modes window is running. */
   get overdriveActive(): boolean {
@@ -2415,7 +2426,7 @@ export class Combatant implements FlightState {
       // yard in one move is the thing that changed — not the top speed you
       // cruise at, which would just make the mech hard to place.
       dashSpeedScale:
-        this.satThrustScale * this.status.speedScale * this.sniperSpeedScale * (this.desperateSpeed ? DESPERATE_DASH : 1),
+        this.satThrustScale * this.status.speedScale * this.sniperDashScale * (this.desperateSpeed ? DESPERATE_DASH : 1),
       boostFree: this.boostFree,
       // Firing anchors you, but never so much that a simultaneous dash fizzles:
       // the dash impulse is the whole point of allowing the overlap.

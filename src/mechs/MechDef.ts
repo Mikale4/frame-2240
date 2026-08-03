@@ -513,6 +513,20 @@ export interface SniperModeDef {
    */
   speedScale: number;
   /**
+   * Multiplier on the **dash** while planted. Omitted means `speedScale`, which
+   * is what a stance did before this existed.
+   *
+   * Split out so the stance can punish *travelling* without punishing
+   * *escaping*. A sniper who cannot reposition is the design; a sniper who
+   * cannot get out of the way when somebody arrives is just a slow target, and
+   * at `speedScale` the dash was scaled to 32 % — a panic button that moved him
+   * about a third of a body length.
+   *
+   * At 1 the stance costs cruise speed and thrust and leaves the dash whole, so
+   * the answer to being found is one committed move rather than a slow walk.
+   */
+  dashSpeedScale?: number;
+  /**
    * What the main weapon fires instead of its own while the stance is up.
    *
    * Auto-aim lives on the attack, as `homing` / `homingTicks`, rather than being
