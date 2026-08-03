@@ -1166,7 +1166,7 @@ export class Combatant implements FlightState {
       // A wreck still coasts, and it still has to stay in the arena: this branch
       // used to return without clamping, so a mech killed while carrying speed
       // drifted through the wall and kept going for the whole KO freeze.
-      clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH);
+      clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH, undefined, this.groundY);
       return;
     }
 
@@ -1184,7 +1184,7 @@ export class Combatant implements FlightState {
       // here: the stun branch returns before the melee step ever runs.
       if (this.meleeLock) this.endMeleeLock(false);
       this.stepStunned(input, events);
-      clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH);
+      clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH, undefined, this.groundY);
       return;
     }
 
@@ -1198,7 +1198,7 @@ export class Combatant implements FlightState {
       if (this.stepMeleeLock(target, spawns, events)) {
         this.x += this.vx;
         this.y += this.vy;
-        clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH);
+        clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH, undefined, this.groundY);
         this.updateVisualAngles(input);
         return;
       }
@@ -1231,7 +1231,7 @@ export class Combatant implements FlightState {
         id: this.id,
       });
     }
-    clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH);
+    clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH, undefined, this.groundY);
     this.updateVisualAngles(input);
   }
 

@@ -5363,3 +5363,82 @@ distinguish as broken**: spread 0.208 → 0.143, win-rate range 21 → 16 points
 no row beyond 2σ at either tier. Further work on any individual machine is now a
 design choice about identity — NOCTURNE is the only frame without a signature —
 and not something the numbers are asking for.
+
+---
+
+## D125 — The floor was decorative
+
+**Reported by a player**, five for five: *"I do see a floor layer on the map, but
+Ive also seen the mechs fly right through or shoot through the floor layer."*
+
+Both halves were true and had the same cause. The entire ground clamp lives
+inside `if (intent.flying === false)` in `FlightModel.stepFlight`. **In flight
+mode there was no deck collision at all** — and `flying` defaults to true, with
+`grounded` measuring 0.0 % of every fight, so the floor has never once been solid
+in anything a player has seen. A flying machine was bounded only by the arena's
+bottom edge, which sits 30 px below the deck and is measured against the body
+centre rather than the feet:
+
+```
+  mech         feet reach below the drawn deck
+  HALCYON / VESPER          86 px
+  OBELISK                   84 px
+  PYRE                      82 px
+  NOCTURNE / TERRAMOTH      79 px
+  NULLTIDE                  73 px
+  CIRRUS                    64 px
+```
+
+Invisible for as long as the floor was a placeholder bar. Not invisible against
+the art committed in the previous change, which is why this surfaced now.
+
+### The fix
+
+`clampToArena` takes a `floorY`, and `Combatant` passes its own `groundY` at all
+four call sites. **Not fixed inside the grounded branch**, because the dash path
+returns early — a floor enforced later in the step would be punched straight
+through by a dash, which is exactly the move most likely to reach the deck.
+
+The floor kills downward velocity rather than bouncing it. A wall throwing you
+off reads as impact; a floor you are hovering against should stop you, or a
+machine held down against the deck jitters on it every tick.
+
+`MatchSim.enforceFloor` also lost its `!c.flying` gate. It existed because
+separation and other post-motion nudges can push a mech below the deck during
+hitstop, when the flight step will not correct it — and that is no more true of a
+landed machine than a flying one.
+
+### Measured
+
+```
+  before   41298 ticks sampled, 63 below the deck, worst 82.1 px
+  after    40044 ticks sampled,  0 below the deck, worst  0.0 px
+```
+
+### It moved the balance, and the probe caught it
+
+```
+  EXTREME  spread 0.143 -> 0.192    VESPER 49 % / +0.088 -> 59 % / +0.131
+  HARD     spread 0.206 -> 0.187    TERRAMOTH 34 % -> 38 %
+```
+
+**HARD improved. EXTREME did not**, and `balance.ts` flagged **VESPER at +2.05σ —
+the first outlier the dispersion check has ever reported**, two commits after it
+was added in D122. The instrument earned itself on the very next change.
+
+The direction makes sense: a solid deck is worth most to the machine that wants
+to hold a line, because it removes an escape axis from whatever is closing on
+him, and VESPER is the only pilot with `kites`. TERRAMOTH gains at HARD for the
+mirror-image reason — a slow heavy no longer loses opponents through the floor.
+
+**Left as measured, not trimmed.** The fix is a correctness fix and stands on its
+own; VESPER's number is a balance question that deserves its own pass rather than
+being folded into a bug fix, and the roster it is measured against has changed
+underneath it. Flagged rather than silently corrected.
+
+### Still open: projectiles pass through the deck
+
+Rounds are culled 260 px outside the arena and test nothing else, so the second
+half of the report — shooting through the floor — is unfixed. It is a separate
+change with its own balance cost (OBELISK's and TERRAMOTH's mines sit near the
+deck and would begin colliding with it), so it was not bundled in here.

@@ -847,15 +847,19 @@ export class MatchSim {
   }
 
   /**
-   * Re-applies the arena floor to grounded mechs.
+   * Re-applies the arena floor.
    *
-   * Separation (and any other post-motion nudge) can push a landed mech below
-   * the deck. The flight step would normally correct it on the next tick, but
-   * not while the mech is frozen in hitstop — so it has to be enforced here.
+   * Separation (and any other post-motion nudge) can push a mech below the deck.
+   * The flight step would normally correct it on the next tick, but not while
+   * the mech is frozen in hitstop — so it has to be enforced here.
+   *
+   * **No longer gated on `!c.flying`.** The floor used to exist only for landed
+   * machines, which meant knockback, recoil and separation could push a flying
+   * one straight through the deck and nothing put it back.
    */
   private enforceFloor(): void {
     for (const c of this.combatants) {
-      if (!c.flying && c.y > c.groundY) {
+      if (c.y > c.groundY) {
         c.y = c.groundY;
         if (c.vy > 0) c.vy = 0;
       }

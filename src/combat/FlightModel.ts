@@ -261,6 +261,21 @@ export function clampToArena(
   w: number,
   h: number,
   bounce = 0.25,
+  /**
+   * The deck, as a body-centre height. Defaults to no floor at all.
+   *
+   * **The floor used to exist only in grounded mode.** The whole ground clamp
+   * lives inside the `intent.flying === false` branch above, so a flying machine
+   * — which is every machine, essentially all of the time — was bounded only by
+   * the arena's bottom edge. Measured, that let feet reach **64–86px below the
+   * drawn deck** depending on chassis, and it was invisible for as long as the
+   * floor was a placeholder bar. It is not invisible against real art.
+   *
+   * Passed here rather than fixed inside the grounded branch because the dash
+   * path returns early, so a dash could punch through a floor enforced anywhere
+   * later in the step. This is the one place every motion path funnels into.
+   */
+  floorY = Infinity,
 ): void {
   if (s.x < radius) {
     s.x = radius;
@@ -272,8 +287,15 @@ export function clampToArena(
   if (s.y < radius) {
     s.y = radius;
     if (s.vy < 0) s.vy = -s.vy * bounce;
-  } else if (s.y > h - radius) {
-    s.y = h - radius;
-    if (s.vy > 0) s.vy = -s.vy * bounce;
+    return;
+  }
+  // The deck, or the arena's bottom edge if this caller declares no deck.
+  const bottom = Math.min(h - radius, floorY);
+  if (s.y > bottom) {
+    s.y = bottom;
+    // Killed rather than bounced. A wall throws you off it, which reads as
+    // impact; a floor you are hovering against should simply stop you, or a
+    // machine held down against the deck jitters on it every tick.
+    if (s.vy > 0) s.vy = 0;
   }
 }
