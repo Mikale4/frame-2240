@@ -86,8 +86,18 @@ function parseArgs(argv: string[]): Options {
 
 /** One duel. Returns side A's life-bar lead: >0 means A finished ahead. */
 interface Duel {
-  /** Side A's life-bar lead. This is also the game's own timeout tiebreaker. */
+  /**
+   * Side A's life-bar lead — the *margin*, not the result.
+   *
+   * Worth being blunt about, because the two get confused: a machine that wins
+   * narrowly often and loses badly occasionally has a poor lead and a good win
+   * rate. CIRRUS is the live example — most of her lead comes from a handful of
+   * crushing wins inside OVERDRIVE, and her record outside it is a coin flip.
+   * Both numbers are reported for that reason.
+   */
   lead: number;
+  /** +1 if side A finished ahead, -1 if behind, 0 on an exact tie. */
+  win: number;
   /** +1 side A killed B, -1 B killed A, 0 the clock ran out. */
   ko: number;
   ticks: number;
@@ -110,8 +120,12 @@ function duel(a: MechDef, b: MechDef, seed: number, tier: Difficulty, ticks: num
       p2.think(s.enemy, s.player, s.activeProjectiles(), ARENA_W, ARENA_H),
     );
   }
+  const lead = s.player.life / a.gauges.maxLife - s.enemy.life / b.gauges.maxLife;
   return {
-    lead: s.player.life / a.gauges.maxLife - s.enemy.life / b.gauges.maxLife,
+    lead,
+    // The game's own rule: whoever is ahead on life fraction takes it, whether
+    // that came by KO or by the clock.
+    win: lead > 0 ? 1 : lead < 0 ? -1 : 0,
     ko: s.player.alive === s.enemy.alive ? 0 : s.enemy.alive ? -1 : 1,
     ticks: n,
   };
@@ -144,6 +158,8 @@ interface Sample {
   lead: number;
   /** Net kills i took off j across the two slot orders, in [-2, 2]. */
   ko: number;
+  /** Matches i won against j, of the two slot orders. */
+  wins: number;
   /** Mean length of the two fights, in ticks. */
   ticks: number;
 }
@@ -165,6 +181,7 @@ function runShard(opts: Options): Sample[] {
       i,
       j,
       lead: (fwd.lead - rev.lead) / 2,
+      wins: (fwd.win > 0 ? 1 : 0) + (rev.win < 0 ? 1 : 0),
       ko: fwd.ko - rev.ko,
       ticks: (fwd.ticks + rev.ticks) / 2,
     });
@@ -179,16 +196,22 @@ interface Row {
   n: number;
   /** Net kills per fight: +1 means it always kills and is never killed. */
   ko: number;
+  /** Share of individual matches won, 0..1. The number a player thinks in. */
+  winRate: number;
 }
 
 function summarise(samples: Sample[]): { rows: Row[]; spread: number; ticks: number } {
   const per = new Map<string, number[]>(ROSTER.map((m) => [m.id, []]));
   const kos = new Map<string, number[]>(ROSTER.map((m) => [m.id, []]));
+  const wins = new Map<string, number[]>(ROSTER.map((m) => [m.id, []]));
   for (const s of samples) {
     per.get(ROSTER[s.i].id)!.push(s.lead);
     per.get(ROSTER[s.j].id)!.push(-s.lead);
     kos.get(ROSTER[s.i].id)!.push(s.ko / 2);
     kos.get(ROSTER[s.j].id)!.push(-s.ko / 2);
+    // Each sample is two matches; `wins` counts i's share of them.
+    wins.get(ROSTER[s.i].id)!.push(s.wins / 2);
+    wins.get(ROSTER[s.j].id)!.push((2 - s.wins) / 2);
   }
   const rows: Row[] = [];
   for (const m of ROSTER) {
@@ -197,12 +220,14 @@ function summarise(samples: Sample[]): { rows: Row[]; spread: number; ticks: num
     const mean = xs.reduce((t, x) => t + x, 0) / xs.length;
     const v = xs.reduce((t, x) => t + (x - mean) ** 2, 0) / Math.max(1, xs.length - 1);
     const k = kos.get(m.id)!;
+    const w = wins.get(m.id)!;
     rows.push({
       id: m.id,
       mean,
       se: Math.sqrt(v / xs.length),
       n: xs.length,
       ko: k.reduce((t, x) => t + x, 0) / k.length,
+      winRate: w.reduce((t, x) => t + x, 0) / w.length,
     });
   }
   rows.sort((p, q) => q.mean - p.mean);
@@ -220,8 +245,9 @@ function report(samples: Sample[], opts: Options): void {
   for (const r of rows) {
     const bar = r.mean >= 0 ? '+' : '';
     console.log(
-      `  ${r.id.toUpperCase().padEnd(10)} ${bar}${r.mean.toFixed(3).padStart(6)}` +
-        `  +/-${r.se.toFixed(3)}   ko ${(r.ko >= 0 ? '+' : '') + r.ko.toFixed(2)}   n=${r.n}`,
+      `  ${r.id.toUpperCase().padEnd(10)} win ${(r.winRate * 100).toFixed(0).padStart(3)}%` +
+        `   lead ${bar}${r.mean.toFixed(3).padStart(6)} +/-${r.se.toFixed(3)}` +
+        `   ko ${(r.ko >= 0 ? '+' : '') + r.ko.toFixed(2)}   n=${r.n}`,
     );
   }
   console.log(
