@@ -31,6 +31,37 @@ interface PartNode {
 }
 
 /**
+ * The exact surface `MechRenderer.sync` reads off a machine.
+ *
+ * A `Combatant` satisfies this, and so must any stand-in drawn through the same
+ * renderer — today that is `BattleScene.decoyState`, which fabricates one for
+ * each of NULLTIDE's projections. Declaring the contract structurally is what
+ * makes that stand-in the compiler's problem instead of the player's; see the
+ * note on `sync`.
+ */
+export interface MechPoseSource {
+  alive: boolean;
+  act: ActState;
+  y: number;
+  facing: number;
+  aim: number;
+  bank: number;
+  bobPhase: number;
+  spin: number;
+  reach: number;
+  thrust: number;
+  swinging: boolean;
+  /** Freeze frames on impact; the renderer jitters the rig while it runs. */
+  hitstop: number;
+  satActive: boolean;
+  walkPhase: number;
+  stride: number;
+  /** `[near, far]` airborne dangle. See `Combatant.legSwing`. */
+  legSwing: readonly number[];
+  status: Combatant['status'];
+}
+
+/**
  * Draws one multipart mech.
  *
  * The rig is rebuilt as a tree of Phaser containers matching MechDef.rig, so a
@@ -120,7 +151,28 @@ export class MechRenderer {
    *
    * `screenX/screenY` are already camera-transformed by the caller.
    */
-  sync(c: Combatant, screenX: number, screenY: number, dt: number): void {
+  /**
+   * Everything `sync` reads off a machine, and nothing else.
+   *
+   * **Not `Combatant`.** `BattleScene.decoyState` draws NULLTIDE's projections
+   * through this same renderer using a hand-built stand-in object, and it used
+   * to reach the parameter as `{...} as unknown as Combatant` — a cast that
+   * tells the compiler to stop checking the very thing that needs checking.
+   * Adding `legSwing` to the pose in D123 therefore compiled cleanly, passed 592
+   * tests, and crashed the live game the moment a decoy was projected:
+   *
+   * ```
+   * TypeError: Cannot read properties of undefined (reading '0')
+   *   at MechRenderer.sync   <- c.legSwing[0]
+   *   at BattleScene.drawDrone
+   * ```
+   *
+   * Naming the contract structurally means the stand-in is type-checked against
+   * it, so the next field added here fails the build instead of the match. Same
+   * lesson as §8b of the handoff: a hand-built copy of a growing object is a
+   * silent breakage waiting for its next field.
+   */
+  sync(c: MechPoseSource, screenX: number, screenY: number, dt: number): void {
     this.root.setPosition(screenX, screenY);
     this.root.setVisible(c.alive || c.act === ActState.Dead);
 
@@ -159,6 +211,11 @@ export class MechRenderer {
       meleeing,
       walkPhase: facing > 0 ? c.walkPhase : -c.walkPhase,
       stride: c.stride,
+      // Same mirroring as the stride, and for the same reason: the dangle is
+      // computed in world space, so a mech that faces left must not have its
+      // legs trail forward once the root mirror negates them.
+      legNear: facing > 0 ? c.legSwing[0] : -c.legSwing[0],
+      legFar: facing > 0 ? c.legSwing[1] : -c.legSwing[1],
     };
     for (const node of this.nodes.values()) {
       node.container.rotation = partLocalRotation(node.def, node.inheritsTurret, pose);

@@ -111,7 +111,9 @@ export class BootScene extends Phaser.Scene {
     }
 
     // Arena parallax layers.
-    for (const layer of ['far', 'mid', 'near']) {
+    // `fore` is the fast foreground: free-standing girder columns that sweep
+    // past in front of the machines. Added in D124 with the hand-authored art.
+    for (const layer of ['far', 'mid', 'near', 'fore']) {
       this.load.image(`arena_${layer}`, `arenas/arena_${layer}.png`);
     }
 

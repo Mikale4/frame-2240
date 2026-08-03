@@ -35,6 +35,8 @@ const restPose: RigPose = {
   meleeing: false,
   walkPhase: 0,
   stride: 0,
+  legNear: 0,
+  legFar: 0,
 };
 const pose = (over: Partial<RigPose>): RigPose => ({ ...restPose, ...over });
 

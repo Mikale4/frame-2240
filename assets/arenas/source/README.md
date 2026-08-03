@@ -1,0 +1,81 @@
+# CATHEDRAL YARD — source masters
+
+The four files in `assets/arenas/` are what the game loads. Some of them are
+**derived**, and this folder holds what they were derived from. Do not delete it:
+one of the shipped files cannot be regenerated without its master.
+
+Art direction and the full specification live in `docs/STAGE_ART_BRIEF.md`.
+
+## What ships, and where it came from
+
+| Shipped | Size | Source | Derivation |
+| --- | --- | --- | --- |
+| `arena_far.png` | 3072 x 1024 | `far_master_1536.png` | **Mirrored.** See below. |
+| `arena_mid.png` | 1536 x 1024 | `mid_master_1536.png` | Straight copy |
+| `arena_near.png` | 1536 x 1024 | `deck_master_1536.png` | Straight copy |
+| `arena_fore.png` | 1536 x 1024 | `fore_master_1536.png` | Straight copy |
+
+### `arena_far.png` is the one that matters
+
+The delivered far layer ran off both edges and did not tile — 78 of 256 sampled
+rows had content at an edge, with alpha mismatches up to 255. It is shipped as
+`[A | mirror(A)]`, which tiles exactly by construction: the interior join is A's
+right edge against its own mirror, and the wrap join is A's left edge against its
+own mirror. Measured wrap-seam mismatch afterwards: **0**.
+
+Undetectable in play because the far layer is fog, scrolls at 0.06 and is tinted
+and faded on top of that. To rebuild it:
+
+```python
+from PIL import Image, ImageOps
+src = Image.open('source/far_master_1536.png').convert('RGBA')
+w, h = src.size
+out = Image.new('RGBA', (w * 2, h), (0, 0, 0, 0))
+out.paste(src, (0, 0))
+out.paste(ImageOps.mirror(src), (w, 0))
+out.save('arena_far.png')
+```
+
+## The deck's contact row is a measured constant
+
+`Backdrop.NEAR_LIP_ROW` is **748** — the first fully opaque row of
+`arena_near.png`, measured per column (747 lowest, 752 highest, median 748). The
+engine positions the strip so that row lands exactly on `DECK_Y`, which is what
+makes the drawn floor and the floor the simulation stands machines on the same
+line.
+
+**Re-measure it whenever the deck art changes.** Nothing warns you when it moves,
+and the arena has already shipped once with the two floors in different places.
+
+```python
+from PIL import Image
+im = Image.open('arena_near.png').convert('RGBA'); px = im.getchannel('A').load()
+w, h = im.size
+tops = [next(y for y in range(h) if px[x, y] >= 250) for x in range(0, w, 8)]
+print(sorted(tops)[len(tops)//2])   # -> NEAR_LIP_ROW
+```
+
+## Other files
+
+* `fore_master_v1_rejected.png` — the first foreground pass. Kept because the art
+  is good and only the *composition* was wrong: it came back as a proscenium
+  frame with a beam spanning the full width across the top (97 % of the top band
+  covered) and a continuous band across the bottom (100 %). In a game where
+  machines fly to the ceiling and land on the deck, anything crossing the top or
+  bottom of the frame hides gameplay. The accepted version replaced it with two
+  free-standing columns and an 864px clear span; 0 rows span the full width.
+* `blender_far/mid/near.png` — the original procedural strips built by
+  `tools/blender/build_arena.py`, which these replaced.
+
+## Expect tiling to fail
+
+Three of the four delivered layers did not tile. Two happened to be safe because
+their structure did not reach the image edges; the far layer had to be mirrored.
+**Assume seamlessness is the engine's job, not the generator's**, and measure it
+rather than trusting it:
+
+```python
+left  = [im.getpixel((0, y))       for y in range(0, h, 4)]
+right = [im.getpixel((w - 1, y))   for y in range(0, h, 4)]
+print(max(abs(l[3] - r[3]) for l, r in zip(left, right)))   # 0 = seamless
+```

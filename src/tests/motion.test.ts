@@ -164,6 +164,10 @@ describe('walk cycle', () => {
       meleeing: false,
       walkPhase: Math.PI / 2,
       stride: 1,
+      // Full stride, so the airborne dangle is faded fully out and this stays a
+      // test of the gait rather than of the hang.
+      legNear: 0,
+      legFar: 0,
     };
     const a = partLocalRotation(near, inherits.get('legNear')!, pose);
     const b = partLocalRotation(far, inherits.get('legFar')!, pose);
@@ -176,6 +180,76 @@ describe('walk cycle', () => {
     const inherits = buildTurretInheritance(parts);
     expect(inherits.get('legNear')).toBe(false);
     expect(inherits.get('legFar')).toBe(false);
+  });
+});
+
+/**
+ * The legs move *in the air*, which for this game is the only case that matters.
+ *
+ * The walk cycle above is gated on `grounded && !flying` and `grounded` measures
+ * **0.0 %** across every machine in the harness, so before this existed the legs
+ * held a fixed splay for entire matches. Every assertion here is therefore about
+ * a flying mech; a green `walk cycle` block says nothing about what a player
+ * actually sees.
+ */
+describe('airborne leg dangle', () => {
+  /** Flies the player under thrust for `n` ticks and returns the leg angles. */
+  const flyFor = (n: number, dx: number): { s: MatchSim; legs: number[] } => {
+    const s = sim();
+    for (let i = 0; i < 4; i++) s.step(emptyInput(), emptyInput());
+    for (let i = 0; i < n; i++) s.step({ ...press(Btn.Boost), dx, dy: 0 }, emptyInput());
+    return { s, legs: [...s.player.legSwing] };
+  };
+
+  it('swings the legs while airborne, where the walk cycle never runs', () => {
+    const { s, legs } = flyFor(40, 1);
+    // The precondition this whole feature rests on: no gait is running.
+    expect(s.player.grounded).toBe(false);
+    expect(s.player.stride).toBe(0);
+    expect(Math.abs(legs[0])).toBeGreaterThan(2 * DEG);
+    expect(Math.abs(legs[1])).toBeGreaterThan(2 * DEG);
+  });
+
+  it('trails the legs opposite to the direction of travel', () => {
+    const right = flyFor(40, 1).legs;
+    const left = flyFor(40, -1).legs;
+    // Opposite travel, opposite hang. Sign, not magnitude — the magnitudes
+    // differ because the springs differ, which is the point of the next test.
+    expect(Math.sign(right[0])).toBe(-Math.sign(left[0]));
+    expect(Math.sign(right[1])).toBe(-Math.sign(left[1]));
+  });
+
+  it('never returns the same angle for both legs', () => {
+    // The failure being guarded is two sprites welded into one silhouette. It
+    // is not enough that they move; they have to move *differently*, or the
+    // pair still reads as a single piece however far it swings.
+    const seen: number[] = [];
+    const s = sim();
+    for (let i = 0; i < 4; i++) s.step(emptyInput(), emptyInput());
+    for (let i = 0; i < 90; i++) {
+      s.step({ ...press(Btn.Boost), dx: i < 45 ? 1 : -1, dy: 0 }, emptyInput());
+      seen.push(Math.abs(s.player.legSwing[0] - s.player.legSwing[1]));
+    }
+    // Separated on essentially every frame, and meaningfully so at some point.
+    expect(seen.filter((d) => d > 0.001).length).toBeGreaterThan(80);
+    expect(Math.max(...seen)).toBeGreaterThan(1.5 * DEG);
+  });
+
+  it('keeps swinging for a moment after the machine stops driving', () => {
+    // A spring, not a sine locked to velocity: cut the input and the legs should
+    // still be moving on the next tick rather than snapping to a new rest angle.
+    const s = sim();
+    for (let i = 0; i < 4; i++) s.step(emptyInput(), emptyInput());
+    for (let i = 0; i < 40; i++) s.step({ ...press(Btn.Boost), dx: 1, dy: 0 }, emptyInput());
+    const atCut = [...s.player.legSwing];
+    s.step(emptyInput(), emptyInput());
+    const after = [...s.player.legSwing];
+    expect(after[0]).not.toBeCloseTo(atCut[0], 6);
+    expect(after[1]).not.toBeCloseTo(atCut[1], 6);
+  });
+
+  it('is deterministic, so a replay reproduces the pose', () => {
+    expect(flyFor(50, 1).legs).toEqual(flyFor(50, 1).legs);
   });
 });
 

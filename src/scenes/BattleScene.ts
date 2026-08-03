@@ -6,7 +6,7 @@ import { MECHS } from '../data/mechs';
 import { RivalAI } from '../ai/RivalAI';
 import { Rng } from '../core/Rng';
 import { InputManager } from '../input/InputManager';
-import { MechRenderer, PART_SCALE } from '../render/MechRenderer';
+import { MechRenderer, PART_SCALE, type MechPoseSource } from '../render/MechRenderer';
 import { partTexture } from '../render/PartTexture';
 import { Effects } from '../render/Effects';
 import { Backdrop } from '../render/Backdrop';
@@ -1175,7 +1175,17 @@ export class BattleScene extends Phaser.Scene {
    * duck-typed against the fields `MechRenderer.sync` actually reads rather than
    * faking a whole `Combatant`.
    */
-  private decoyState(c: Combatant, slot: number, dt: number): Combatant {
+  /**
+   * A drawable stand-in for one of NULLTIDE's projections.
+   *
+   * **Returns `MechPoseSource`, not `Combatant`.** It used to end in
+   * `as unknown as Combatant`, which silenced the compiler on a hand-built copy
+   * of a growing object — and the copy duly fell behind. `legSwing` was added to
+   * the renderer's pose in D123, this object did not gain it, and the game
+   * crashed on the first decoy of the first NULLTIDE match while every test
+   * stayed green. The narrow interface is what makes that a build error.
+   */
+  private decoyState(c: Combatant, slot: number, dt: number): MechPoseSource {
     const dec = c.supporter.decoys[slot];
     // Keyed per projection, so the two do not share a bob phase and read as one
     // object drawn twice.
@@ -1205,10 +1215,15 @@ export class BattleScene extends Phaser.Scene {
       status: c.status,
       stride: 0,
       walkPhase: 0,
+      // The projection copies the machine it is imitating, legs included. Zeros
+      // would hang them dead straight while the original's swing — and a
+      // silhouette that does not move like the thing it is pretending to be is
+      // the tell the whole ability exists to avoid.
+      legSwing: c.legSwing,
       // Always under thrust: it is flying, so the plumes are lit. A projection
       // with dead thrusters reads as a wreck.
       thrust: 0.55 + Math.sin(st.bobPhase * 1.7) * 0.12,
-    } as unknown as Combatant;
+    };
   }
 
   private drawDrone(i: number, c: Combatant, dt: number): void {

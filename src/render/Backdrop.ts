@@ -3,28 +3,54 @@ import { ARENA_H, ARENA_W, DECK_Y, VIEW_H, VIEW_W } from '../core/GameConfig';
 import { depthSortAt } from '../core/Depth';
 
 /**
- * Row in arena_near.png where the deck surface becomes solid.
+ * Row in `arena_near.png` where the deck surface becomes solid.
  *
- * Measured from the asset rather than eyeballed, so the drawn lip and DECK_Y
- * cannot drift apart. Re-measure if the arena is re-rendered.
+ * **Measured from the asset, never estimated.** The engine positions the strip
+ * so this row lands exactly on `DECK_Y`, which is what makes the drawn floor and
+ * the floor the simulation stands machines on the same line. Guessing it puts
+ * them in different places, which this arena has already shipped once.
+ *
+ * 748 for the hand-authored deck, measured as the first fully opaque row per
+ * column: 747 at the lowest, 752 at the highest, median 748 across the full
+ * width. **Re-measure whenever the art changes** — the old Blender strip was
+ * 111, and nothing warns you when it moves.
  */
-const NEAR_LIP_ROW = 111;
+const NEAR_LIP_ROW = 748;
+
+/** How much faster than the world the foreground columns travel. */
+const FORE_SCROLL = 1.35;
+/**
+ * Draw order for the foreground.
+ *
+ * Above the machines, which sort around `depthSortAt(y, 20)` and below, and
+ * below the HUD, which the UI camera draws separately at zoom 1.
+ */
+const FORE_DEPTH = 60;
 
 /**
- * The arena "CATHEDRAL YARD": a procedural sky gradient plus three tiling
- * parallax strips rendered in Blender, and a drifting dust field for depth.
+ * The arena "CATHEDRAL YARD": a procedural sky gradient, four tiling parallax
+ * strips and a drifting dust field for depth.
  */
 export class Backdrop {
   private readonly sky: Phaser.GameObjects.Graphics;
   private readonly far: Phaser.GameObjects.TileSprite;
   private readonly mid: Phaser.GameObjects.TileSprite;
   private readonly near: Phaser.GameObjects.TileSprite;
+  /**
+   * The fast foreground: girder columns passing in front of the machines.
+   *
+   * The only layer that scrolls *faster* than the world. Everything else in a
+   * parallax stack sits behind the action and moves slower than it; this one is
+   * nearer than the camera's subject, so it has to overtake it, and that
+   * overtaking is the entire depth cue it provides.
+   */
+  private readonly fore: Phaser.GameObjects.TileSprite;
   private readonly dust: Phaser.GameObjects.Container;
   private readonly motes: Phaser.GameObjects.Image[] = [];
 
   /** All backdrop objects, so the scene can assign them to the right camera. */
   get objects(): Phaser.GameObjects.GameObject[] {
-    return [this.sky, this.far, this.mid, this.near, this.dust];
+    return [this.sky, this.far, this.mid, this.near, this.fore, this.dust];
   }
 
   constructor(scene: Phaser.Scene) {
@@ -38,12 +64,20 @@ export class Backdrop {
 
     // ---- parallax strips -------------------------------------------------
     // Each strip is anchored so the arena floor sits near the arena's bottom.
-    this.far = scene.add.tileSprite(0, 0, VIEW_W, 512, 'arena_far');
+    // 1024 to match the hand-authored asset's height, as with the mid strip.
+    // `arena_far.png` is the delivered 1536-wide art mirrored to 3072: the
+    // painting ran off both edges and did not tile, and mirroring makes the
+    // wrap exact by construction. Undetectable here because the far layer is
+    // fog, scrolls at 0.06 and is tinted and faded on top of that.
+    this.far = scene.add.tileSprite(0, 0, VIEW_W, 1024, 'arena_far');
     this.far.setOrigin(0, 0).setDepth(-90);
     this.far.setTint(0x6f7fa8);
     this.far.setAlpha(0.85);
 
-    this.mid = scene.add.tileSprite(0, 0, VIEW_W, 512, 'arena_mid');
+    // 1024, not 512: the hand-authored mid art is 1536x1024. A tile sprite
+    // shorter than its texture crops rather than fits, so the strip has to match
+    // the asset's height or the bottom of the structure is simply never drawn.
+    this.mid = scene.add.tileSprite(0, 0, VIEW_W, 1024, 'arena_mid');
     this.mid.setOrigin(0, 0).setDepth(-80);
     this.mid.setTint(0x9aa8c8);
 
@@ -53,11 +87,26 @@ export class Backdrop {
     // geometry spanning the arena, pinned to the deck line, and drawn behind the
     // machines so it reads as the deck's own structure rather than as a bar
     // across the fight.
-    this.near = scene.add.tileSprite(0, 0, ARENA_W + 800, 256, 'arena_near');
+    // 1024 to match the hand-authored asset. The strip carries a lot of empty
+    // sky above its deck line, which is fine — it is transparent, and the deck
+    // itself is placed by `NEAR_LIP_ROW` rather than by the strip's top edge.
+    this.near = scene.add.tileSprite(0, 0, ARENA_W + 800, 1024, 'arena_near');
     this.near.setOrigin(0, 0).setDepth(depthSortAt(DECK_Y, 11));
     // Muted: at full saturation the hazard diamonds along the lip pulled the eye
     // harder than the machines did.
     this.near.setTint(0x8d97bb);
+
+    // ---- foreground ------------------------------------------------------
+    // Drawn in front of everything the fight contains. The art is deliberately
+    // free-standing columns with a wide clear span between them: a foreground
+    // that framed the view would hide a machine at altitude, and mechs here fly
+    // to the ceiling. Measured on the asset — 0 rows span the full width and the
+    // centre 50 % is empty — which is what makes it safe to put on top.
+    this.fore = scene.add.tileSprite(0, 0, VIEW_W, 1024, 'arena_fore');
+    this.fore.setOrigin(0, 0).setDepth(FORE_DEPTH);
+    // Darker and cooler than the mid strip: it is nearer than every light in
+    // the scene, so it reads as an unlit mass with the dock glowing past it.
+    this.fore.setTint(0x5a6480);
 
     // ---- dust / debris field --------------------------------------------
     this.dust = scene.add.container(0, 0);
@@ -155,6 +204,10 @@ export class Backdrop {
       obj.tilePositionX = camX * scrollRate;
     };
 
+    // Faster than the world (1.0), so it overtakes the machines rather than
+    // trailing them. 1.35 is enough to read as "very close" without strobing
+    // past at the speeds a dash reaches.
+    place(this.fore, -150 + vFrac * 210, FORE_SCROLL);
     place(this.far, -110 + vFrac * 70, 0.06);
     this.far.tilePositionY = vFrac * 24;
     place(this.mid, -40 + vFrac * 130, 0.18);

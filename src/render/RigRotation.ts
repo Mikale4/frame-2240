@@ -33,6 +33,15 @@ export interface RigPose {
    * stops mid-step settles rather than freezing mid-stride.
    */
   stride: number;
+  /**
+   * Airborne dangle per leg, in radians, already mirrored for facing.
+   *
+   * Separate from `walkPhase` because they answer different questions: the walk
+   * cycle is a gait and this is a hanging limb. See `Combatant.legSwing` for why
+   * it exists at all — the gait is gated on being grounded, which never happens.
+   */
+  legNear: number;
+  legFar: number;
 }
 
 /** Peak leg swing at full stride, in radians. */
@@ -122,10 +131,15 @@ export function partLocalRotation(part: RigPart, inheritsTurret: boolean, pose: 
       // The two legs stride half a cycle apart. At rest they settle into a
       // slight splayed stance rather than snapping to a single overlapping pose,
       // which would make the two leg sprites collapse into one silhouette.
-      const side = part.follow === 'legNear' ? 0 : Math.PI;
+      const near = part.follow === 'legNear';
+      const side = near ? 0 : Math.PI;
       const swing = Math.sin(pose.walkPhase + side) * STRIDE_MAX * pose.stride;
-      const rest = (part.follow === 'legNear' ? 1 : -1) * STANCE * (1 - pose.stride);
-      return own + swing + rest;
+      const rest = (near ? 1 : -1) * STANCE * (1 - pose.stride);
+      // Airborne dangle, faded out by the stride so a walking mech keeps its
+      // gait and a flying one — which is all of them, nearly all the time —
+      // gets the full hang. The two terms are never both fully on.
+      const dangle = (near ? pose.legNear : pose.legFar) * (1 - pose.stride);
+      return own + swing + rest + dangle;
     }
     default:
       return own;

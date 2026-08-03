@@ -80,6 +80,39 @@ const BARRIER_DENIED_COOLDOWN = 24;
  * plain guard stops 80 % of gunfire and only 50 % of melee, and stops nothing
  * whatsoever from a piercing lance or a burn.
  */
+// ---- airborne leg dangle -----------------------------------------------
+//
+// See `Combatant.legSwing`. All angles in radians, all rates per tick at 60Hz.
+
+/** Peak trail angle at full speed under full thrust. */
+const LEG_DANGLE_MAX = 26 * DEG;
+/** Trail from velocity alone, and the extra the thrusters add on top. */
+const LEG_TRAIL_BASE = 0.7;
+const LEG_TRAIL_THRUST = 0.55;
+/** How much vertical motion contributes. Small on purpose. */
+const LEG_RISE = 0.28;
+/** Idle sway, so a mech holding station still has weight hanging off it. */
+const LEG_IDLE = 2.6 * DEG;
+const LEG_IDLE_RATE = 0.028;
+/**
+ * Phase offset between the two legs' idle sway.
+ *
+ * Not `PI`. Exact antiphase is a march — the legs mirror each other and the
+ * pair reads as a single scissoring unit. Roughly two fifths of a cycle keeps
+ * them visibly independent without ever looking like a walk.
+ */
+const LEG_SWAY_OFFSET = 2.4;
+/**
+ * Spring stiffness and damping per leg, `[near, far]`.
+ *
+ * **Deliberately different values.** Identical springs driven by an identical
+ * target return identical angles forever, which is the welded-together look
+ * this exists to fix. The far leg is a little slacker and a little slower to
+ * settle, so the two cross and separate on every direction change.
+ */
+const LEG_SPRING = [0.058, 0.045];
+const LEG_DAMP = [0.80, 0.845];
+
 const SHIELD_TAKEN = {
   /** Ordinary shots — 95 % off. */
   gunfire: 0.05,
@@ -386,6 +419,31 @@ export class Combatant implements FlightState {
   walkPhase = 0;
   /** Stride weight 0..1, eased so stopping settles rather than snapping. */
   stride = 0;
+
+  /**
+   * Airborne leg dangle: current swing angle per leg, `[near, far]`, in radians.
+   *
+   * **This machine flies, and the legs did not know that.** The walk cycle is
+   * the only thing that ever moved them, and it is gated on `grounded && !flying`
+   * — which measured **0.0 % of every fight**. So `stride` sat at 0 and the legs
+   * resolved to a fixed ±`STANCE` splay for the entire match: two sprites,
+   * welded, never moving relative to one another or to the chassis. A player
+   * described them as "stuck together and just stationary", which is exactly
+   * what the code says they were.
+   *
+   * They hang from the hip and lag the machine, so they trail when it
+   * accelerates, stream under thrust and settle when it holds station. Each leg
+   * is its own spring with its own stiffness, which is what stops them reading
+   * as one piece: identical springs would return identical angles forever.
+   *
+   * Simulated rather than done in the renderer, for the same reason the bank and
+   * the walk cycle are — a replay has to reproduce the pose.
+   */
+  readonly legSwing: number[] = [0, 0];
+  /** Angular velocity of each leg, for the spring in `updateLegs`. */
+  private readonly legVel: number[] = [0, 0];
+  /** Idle sway phase, so a hovering mech is never perfectly still. */
+  private legPhase = 0;
 
   /**
    * Active status affliction, mirroring the reference's `var(54)`.
@@ -2493,6 +2551,45 @@ export class Combatant implements FlightState {
       this.walkPhase += (speed / STRIDE_LENGTH) * Math.PI * 2 * Math.sign(this.vx || 1);
       if (this.walkPhase > Math.PI * 4) this.walkPhase -= Math.PI * 4;
       if (this.walkPhase < -Math.PI * 4) this.walkPhase += Math.PI * 4;
+    }
+
+    this.updateLegs();
+  }
+
+  /**
+   * Advances the airborne leg dangle. See `legSwing`.
+   *
+   * A spring-damper per leg rather than a sine: a driven oscillator overshoots
+   * and settles on its own, so the legs keep swinging for a moment after the
+   * machine stops and catch up late when it starts. That lag is the whole read —
+   * a sine locked to velocity arrives exactly when the chassis does and looks
+   * bolted on, which is the problem being fixed rather than a different shape of
+   * it.
+   *
+   * World-space, like `bank` and `walkPhase`; `MechRenderer` negates for facing.
+   */
+  private updateLegs(): void {
+    const f = this.def.flight;
+    const vmax = Math.max(1, f.boostMaxSpeed);
+    this.legPhase += LEG_IDLE_RATE;
+    if (this.legPhase > Math.PI * 2) this.legPhase -= Math.PI * 2;
+
+    // Trail the motion, and stream further back the harder the thrusters work.
+    const drag = clamp(this.vx / vmax, -1, 1) * (LEG_TRAIL_BASE + this.thrust * LEG_TRAIL_THRUST);
+    // Sinking pulls the feet forward under the hips, climbing lets them hang
+    // back — small, but it stops a vertical boost looking like a hover.
+    const rise = clamp(this.vy / vmax, -1, 1) * LEG_RISE;
+    const base = clamp(drag + rise, -1.4, 1.4) * LEG_DANGLE_MAX;
+
+    for (let i = 0; i < 2; i++) {
+      // The two sways are deliberately not half a cycle apart. Antiphase reads
+      // as a march; an irrational-ish offset reads as two limbs that happen to
+      // be hanging from the same machine.
+      const sway = Math.sin(this.legPhase + i * LEG_SWAY_OFFSET) * LEG_IDLE;
+      const target = base + sway;
+      this.legVel[i] += (target - this.legSwing[i]) * LEG_SPRING[i];
+      this.legVel[i] *= LEG_DAMP[i];
+      this.legSwing[i] += this.legVel[i];
     }
   }
 
