@@ -22,7 +22,7 @@ import {
   WEAPON_SLOT_COUNT,
 } from './types';
 import { DEG, approachAngle, clamp, lerp } from '../core/MathUtil';
-import { Supporter } from './Supporter';
+import { Supporter, type DecoyState } from './Supporter';
 import { Rng } from '../core/Rng';
 import { Element, StatusState } from './Status';
 
@@ -419,6 +419,16 @@ export class Combatant implements FlightState {
   sniperCooldown = 0;
 
   /**
+   * LAST STAND: ticks of reprieve left, and whether it has been spent.
+   *
+   * `lastStandUsed` is deliberately never cleared inside a match — see
+   * `MechDef.lastStand`. It is once, and the whole weight of the moment is that
+   * it is once.
+   */
+  lastStandTicks = 0;
+  lastStandUsed = false;
+
+  /**
    * Ticks each weapon is offline for, indexed by `WeaponSlot`.
    *
    * A fixed three-slot array rather than three fields so the HUD, the AI and the
@@ -764,6 +774,53 @@ export class Combatant implements FlightState {
     }
     events.push({ t: 'disarm', x: this.x, y: this.y, victimId: this.id, slot });
     return slot;
+  }
+
+  /** True while the mech is refusing to die. */
+  get lastStandActive(): boolean {
+    return this.lastStandTicks > 0;
+  }
+
+  /**
+   * Called by `MatchSim` after damage has been resolved and before the match is
+   * asked whether anyone died.
+   *
+   * Placed there rather than inside `takeHit` on purpose: hull is taken off in a
+   * dozen places — gunfire, melee, mines, burning ground, the arc tether, status
+   * chip — and a check that lived in one of them would be a passive that worked
+   * against some damage and not others. One gate, after everything, catches all
+   * of it and cannot be forgotten by the next weapon.
+   *
+   * Returns `'triggered'` on the tick it opens and `'ended'` on the tick the
+   * clock runs out, so the caller can announce both.
+   */
+  stepLastStand(): 'triggered' | 'ended' | null {
+    // The clock and the clamp, together, because they must both run at a moment
+    // the machine is nominally dead.
+    //
+    // **This cannot live in `step`.** `Combatant.step` early-returns when
+    // `life <= 0` and coasts the wreck, so a clamp placed in the ordinary gauge
+    // update is unreachable at exactly the life total it exists to prevent — the
+    // reprieve would trigger once and then fail to stop the very next hit. A
+    // test caught it; nothing about reading the code would have.
+    if (this.lastStandTicks > 0) {
+      this.lastStandTicks--;
+      this.life = Math.max(this.life, 1);
+      return this.lastStandTicks === 0 ? 'ended' : null;
+    }
+
+    const def = this.def.lastStand;
+    if (!def || this.lastStandUsed || this.life > 0) return null;
+    this.lastStandUsed = true;
+    this.lastStandTicks = def.ticks;
+    this.life = 1;
+    // Whatever it was doing when the killing blow landed is over.
+    this.attack = null;
+    this.coAttack = null;
+    this.meleeLock = null;
+    this.hitstun = 0;
+    this.act = ActState.Free;
+    return 'triggered';
   }
 
   /** True while the sniper stance is up. */
@@ -1308,8 +1365,20 @@ export class Combatant implements FlightState {
      * than a permanent one to suffer.
      */
     const sup = target?.supporter;
-    if (sup && sup.decoyTicks > 0 && target!.def.supporter.role === 'decoy') {
-      return { x: sup.decoyX, y: sup.decoyY };
+    if (sup && sup.decoyLive && target!.def.supporter.role === 'decoy') {
+      // With two silhouettes up, the mounts swing onto the nearer one — the same
+      // mistake a pilot makes, and deterministic so a replay reproduces it.
+      let best: DecoyState | null = null;
+      let bestD = Infinity;
+      for (const dec of sup.decoys) {
+        if (dec.ticks <= 0) continue;
+        const dd = Math.hypot(dec.x - this.x, dec.y - this.y);
+        if (dd < bestD) {
+          bestD = dd;
+          best = dec;
+        }
+      }
+      if (best) return { x: best.x, y: best.y };
     }
 
     if (!mech) return drone ? { x: drone.x, y: drone.y } : null;

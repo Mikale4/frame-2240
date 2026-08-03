@@ -38,6 +38,8 @@ export type BanterTrigger =
   | 'hurt'
   /** Their guard was broken. */
   | 'guardBroken'
+  /** They refused a killing blow. LAST STAND. */
+  | 'lastStand'
   | 'win'
   | 'lose';
 
@@ -59,6 +61,10 @@ export const BANTER_PRIORITY: Record<BanterTrigger, number> = {
   guardBroken: 4,
   droneLost: 4,
   burnout: 4,
+  // Above every in-fight line and below only the KO. Refusing to die is the
+  // loudest thing that can happen without the match ending, and a combo line
+  // stomping it would be absurd.
+  lastStand: 8,
   win: 9,
   lose: 9,
 };
@@ -76,6 +82,11 @@ export const BANTER: Record<string, BanterLines> = {
     intro: ['Concord Skyward, cleared to engage.'],
     firstHit: ['Registered.', 'That is the range I wanted.'],
     combo: ['Stay still. It is easier for both of us.', 'You are behind. Again.'],
+    lastStand: [
+      'Not yet.',
+      'Reactor is gone. I am not.',
+      'You will have to do that twice.',
+    ],
     saturation: [
       'Opening it up.',
       'Reactor to full. Watch closely.',

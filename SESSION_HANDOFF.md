@@ -38,9 +38,9 @@ tiers, eight playstyles, eight drone roles, and an Archive of 21 lore entries.
 
 ## 3. Current status — verified
 
-* **551 tests pass** (26 files), typecheck clean, production build clean.
+* **567 tests pass** (27 files), typecheck clean, production build clean.
 * **Working tree clean** on `master`. No other branches.
-* `docs/DECISIONS.md` runs to **D112**.
+* `docs/DECISIONS.md` runs to **D113**.
 * **Suite runtime ~35s.** Deliberate — see §8a.
 * **`tools/probe/balance.ts` is the roster instrument** (D97). A full eight-mech
   sweep is ~20s:
@@ -135,16 +135,16 @@ both slot orders on the same seed, real 180s round cap. Standard error ~0.045.
 
 | | EXTREME | |
 | --- | --- | --- |
-| 1 | TERRAMOTH +0.089 | |
-| 2 | PYRE +0.050 | |
-| 3 | NOCTURNE +0.044 | |
-| 4 | CIRRUS −0.010 | |
-| 5 | NULLTIDE −0.026 | |
-| 6 | OBELISK −0.033 | |
-| 7 | HALCYON −0.035 | |
-| 8 | VESPER −0.079 | |
+| 1 | **NULLTIDE +0.257** | |
+| 2 | HALCYON +0.048 | |
+| 3 | TERRAMOTH +0.031 | |
+| 4 | PYRE −0.004 | |
+| 5 | NOCTURNE −0.026 | |
+| 6 | CIRRUS −0.096 | |
+| 7 | VESPER −0.102 | |
+| 8 | OBELISK −0.108 | |
 
-spread: **EXTREME 0.169, HARD 0.257** (12 seeds; SE ~0.03). **No machine is outside ±0.09 of the field** — the tightest the roster has measured.
+spread: **EXTREME 0.364** (12 seeds; SE ~0.03). NULLTIDE's two projections (D113) are the outlier; the other seven span 0.156.
 
 > **This is a chosen state, not a regression.** The roster was at 0.169 / 0.242
 > with no outliers after the tuning pass (D97–D104). D105 and D107–D109 are
@@ -266,6 +266,11 @@ four rules worth carrying:
 * **Do not trust a code comment about behaviour — measure it.** `chooseAttack`
   claimed the rival never produces command motions. A branch was built on that
   and thrown away when a player said he had watched every mech fire one.
+
+**`difficulty.test.ts` measures tiers with a HALCYON mirror**, so HALCYON's kit
+moves it. A shared passive collapsed every rung to a third of its value (D113);
+the ladder now uses `LADDER_MECH` — HALCYON with the passive stripped — which
+restored D92's calibration exactly. Insulated against *shared passives* only.
 
 **`Combatant.fire` builds its projectile spawn field by field.** A new
 `AttackDef` property that is not explicitly copied there never reaches the

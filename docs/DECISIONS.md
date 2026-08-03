@@ -4411,3 +4411,110 @@ doing it. Nobody designed that; it falls out of giving a fake machine a hurtbox,
 and it is exactly what a decoy is supposed to do. It also means the counterplay
 requires no new AI: an opponent shooting at where she seems to be is already
 performing it.
+
+---
+
+## D113 — Two projections, a 50 % disarm, and LAST STAND
+
+Three requested changes in one block.
+
+### NULLTIDE throws two
+
+`DECOY_COUNT = 2`, and the decoy's whole state moved from nine loose fields on
+`Supporter` into a `DecoyState[]`. They are thrown to **opposite sides** of the
+owner-to-target line — two on one flank is one question asked twice — and their
+fire timers are staggered by half a period, so the pair reads as two machines
+shooting independently rather than one weapon with a double barrel.
+
+Everything that touched a projection had to learn to iterate: the collision pass
+(**one hit key per projection**, or a shared key would silently make the second
+unhittable for the rest of a projectile's life), the camera framing, the
+renderer, and soft-lock — which now swings onto the **nearer** silhouette, the
+same mistake a pilot makes.
+
+**NULLTIDE −0.026 → +0.257.** Two projections restore essentially all of the
+value D112 removed, which is the honest cost of the request and is recorded
+rather than tuned away.
+
+### VESPER's disarm to 50 %
+
+`disarms` 0.30 → 0.50 — roughly one in every two stance shots that lands takes a
+weapon off the target. VESPER **−0.085 → −0.102**, i.e. nothing: the disarm is a
+character knob rather than a power one at this cadence, exactly as D111 found.
+
+### LAST STAND
+
+`MechDef.lastStand`, HALCYON only. A hit that would take the chassis to zero
+leaves it on its feet at 1 hull with a ten-second clock. Nothing kills it while
+the clock runs; everything still hurts it; it is still on 1 hull when the clock
+stops. **Once per match** — an unlimited version is not a comeback mechanic, it
+is immortality, and the drama is entirely in it being the last one.
+
+Three implementation notes, each of which was a bug first:
+
+* **The gate lives in `MatchSim`, after every damage source and immediately
+  before `checkEnd`.** Hull comes off in a dozen places — gunfire, melee, mines,
+  burning ground, the arc tether, status chip — and a check inside any one of
+  them would be a passive that saves you from bullets and not from fire.
+* **The clock cannot live in `Combatant.step`.** `step` early-returns when
+  `life <= 0` and coasts the wreck, so a clamp in the ordinary gauge update is
+  unreachable at exactly the life total it exists to prevent: the reprieve would
+  trigger once and then fail to stop the very next hit. A test caught it; reading
+  the code would not have.
+* **NOCTURNE inherited it.** It is built as `{ ...HALCYON }`, so it silently
+  gained a once-a-match refusal to die the moment the field was added. Now
+  `lastStand: undefined` with a comment, beside the `supporter` block that
+  already carries a warning about this exact hazard.
+
+Presentation, because a once-a-match moment that passes in one frame is
+indistinguishable from a rounding error on the life bar: a hard screen shake, the
+pilot's cutscene card reading **LAST STAND / REFUSING TERMINATION** with a new
+banter cue, a HUD banner, a saturation-grade burst at the chassis, a hard fast
+strobe on the rig (deliberately unlike saturation's smooth breath — the two
+states mean opposite things and must never be confused at a glance), and a
+world-space aura of three offset rings plus a **countdown arc that visibly
+closes**. The last fifth goes red and speeds up, because that is when killing the
+machine becomes possible again. `lastStandEnd` gets its own `EXPOSED` banner.
+
+**HALCYON −0.092 → +0.048**, and its `ko` is +0.40, the highest on the roster —
+it survives things that kill everyone else. It also answers the standing
+complaint that the roster's designated yardstick won no matchup at all.
+
+### It broke the difficulty ladder, and the fix is the interesting part
+
+`difficulty.test.ts` measures tiers by fighting **HALCYON against itself**, so
+both sides got LAST STAND — and a guaranteed ten-second reprieve for each means
+the better pilot cannot convert an advantage into a finish. Every rung collapsed
+to about a third:
+
+```
+                     with LAST STAND    without
+  NORMAL vs EASY       0.057 (2.7σ)     0.193 (3.6σ)
+  EXTREME vs HARD      0.041 (2.1σ)     0.110 (2.6σ)
+```
+
+The right-hand column is **D92's original calibration to three decimal places**.
+That is the whole argument: the ladder was always measuring this, and a passive
+both sides carry contributes no signal and a great deal of noise.
+
+So the ladder's yardstick is now `{ ...HALCYON, lastStand: undefined }`, named
+`LADDER_MECH` and documented. This is **restoring the instrument, not moving the
+goalposts** — the alternative was recalibrating the floors onto a blinded test,
+which is precisely the state D92 was written to end.
+
+§8a has warned since D92 that measuring tiers with HALCYON mirrors couples that
+file to HALCYON's kit. This is that coupling arriving. It is now insulated
+against *shared passives* only; a change to HALCYON's weapons would still move
+those numbers, and the real fix remains a yardstick that is not a roster mech at
+all.
+
+### Where the roster landed
+
+```
+  NULLTIDE  +0.257    PYRE      -0.004    VESPER   -0.102
+  HALCYON   +0.048    NOCTURNE  -0.026    OBELISK  -0.108
+  TERRAMOTH +0.031    CIRRUS    -0.096
+```
+
+spread **0.364**, against 0.169 before this block. NULLTIDE is the outlier again,
+and it is the two projections that put her there.

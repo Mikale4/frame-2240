@@ -540,6 +540,20 @@ export interface MechDef {
   melee: AttackDef[];
   meleeLock: MeleeProfile;
   /**
+   * LAST STAND — refuses to die, once per match, for a window.
+   *
+   * A hit that would take the chassis to zero instead leaves it on its feet with
+   * a sliver of hull and a clock. Nothing can kill it until the clock runs out;
+   * everything can hurt it, and it is still on a sliver when the clock stops.
+   *
+   * Once per match by design. An unlimited version is not a comeback mechanic,
+   * it is immortality — the drama is entirely in it being the *last* one.
+   *
+   * Absent on seven of eight machines, and absence is the normal case.
+   */
+  lastStand?: { ticks: number };
+
+  /**
    * Optional stance replacing the heavy shot. See `SniperModeDef`.
    *
    * Absent on seven of eight machines, and absence is the normal case: `Btn.Heavy`

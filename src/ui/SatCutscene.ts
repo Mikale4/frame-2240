@@ -163,6 +163,16 @@ export class SatCutscene {
     screenFrac: number;
     /** True when the meter was not full — the burst is a gamble. */
     partial?: boolean;
+    /**
+     * Overrides the big headline. Defaults to the saturation mode's name.
+     *
+     * The card is the only place in the game with room for a portrait and a
+     * line, so anything that deserves that treatment reuses it rather than
+     * growing a second one — LAST STAND is the first such thing.
+     */
+    label?: string;
+    /** Overrides the small line under the headline. */
+    sub?: string;
   }): void {
     this.ticks = CUTSCENE_TICKS;
     // The portrait enters from the same side as its machine, so the cutscene
@@ -177,11 +187,11 @@ export class SatCutscene {
     this.portraitPanel.setStrokeStyle(2, opts.tint, 0.9);
     this.portraitEdge.setFillStyle(opts.tint, 1);
 
-    this.modeText.setText(`${SAT_MODE_NAMES[opts.mode] ?? 'SATURATION'}`);
+    this.modeText.setText(opts.label ?? `${SAT_MODE_NAMES[opts.mode] ?? 'SATURATION'}`);
     // A forced burst is labelled as one and goes red, so the cutscene never
     // implies the pilot got what they wanted.
     this.modeText.setColor(opts.partial ? '#ff6a4a' : '#' + opts.tint.toString(16).padStart(6, '0'));
-    this.subText.setText(opts.partial ? 'FORCED — OVERHEAT IMMINENT' : 'SATURATION');
+    this.subText.setText(opts.sub ?? (opts.partial ? 'FORCED — OVERHEAT IMMINENT' : 'SATURATION'));
     this.subText.setColor(opts.partial ? '#ff9a7a' : '#8fa3bf');
     this.pilotText.setText(opts.pilot);
     this.lineText.setText(opts.line ?? '');

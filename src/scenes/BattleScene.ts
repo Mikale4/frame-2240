@@ -27,7 +27,7 @@ import { music } from '../audio/Music';
 import { DANGER_LIFE_FRACTION, pickBattleCue } from '../audio/MusicBank';
 import { MatchPhase, ProjKind, SAT_MODE_NAMES, SatMode, emptyInput, type InputFrame } from '../combat/types';
 import { ELEMENTS, type Element } from '../combat/Status';
-import { DOME_MAX, DroneMode } from '../combat/Supporter';
+import { DOME_MAX, DroneMode, DECOY_COUNT } from '../combat/Supporter';
 import type { Combatant } from '../combat/Combatant';
 import { clamp, wrapAngle } from '../core/MathUtil';
 import { depthScaleAt, depthSortAt } from '../core/Depth';
@@ -154,9 +154,11 @@ export class BattleScene extends Phaser.Scene {
    * branching the render path on a chassis.
    */
   private sniperMarks: Phaser.GameObjects.Graphics[] = [];
+  /** LAST STAND aura, one per side. Empty on the seven that never trigger it. */
+  private lastStandAuras: Phaser.GameObjects.Graphics[] = [];
   /** One per side; only a `decoy` drone ever shows its own. */
   private decoyGhosts: MechRenderer[] = [];
-  /** Per-side animation state for the decoy, keyed by combatant id. */
+  /** Animation state per projection, keyed by `combatantId * DECOY_COUNT + slot`. */
   private decoyAnim: Record<number, { bobPhase: number; bank: number }> = {};
 
   /** Pilot speech boxes, indexed the same way as `combatants`. */
@@ -225,6 +227,7 @@ export class BattleScene extends Phaser.Scene {
     this.tetherRope = [];
     this.paintMarks = [];
     this.sniperMarks = [];
+    this.lastStandAuras = [];
     this.decoyGhosts = [];
     this.decoyAnim = {};
     this.worldObjects = [];
@@ -336,6 +339,9 @@ export class BattleScene extends Phaser.Scene {
       const sniper = this.add.graphics();
       sniper.setBlendMode(Phaser.BlendModes.ADD);
       this.sniperMarks.push(sniper);
+      const stand = this.add.graphics();
+      stand.setBlendMode(Phaser.BlendModes.ADD);
+      this.lastStandAuras.push(stand);
       this.droneRings.push(this.add.graphics());
 
       /**
@@ -350,7 +356,10 @@ export class BattleScene extends Phaser.Scene {
        * Built for every mech and left invisible on the seven that never project
        * one, which is cheaper than branching the render path on a role.
        */
-      this.decoyGhosts.push(this.buildDecoyRenderer(def));
+      // One per projection, since NULLTIDE now puts two on the field at once.
+      // Flattened per side into a fixed-stride array: side `i` owns
+      // `[i * DECOY_COUNT, i * DECOY_COUNT + DECOY_COUNT)`.
+      for (let k = 0; k < DECOY_COUNT; k++) this.decoyGhosts.push(this.buildDecoyRenderer(def));
     }
 
     this.hud = new Hud(this, this.sim);
@@ -402,6 +411,9 @@ export class BattleScene extends Phaser.Scene {
       // floating in the middle of the arena. `docs/TESTING_PROTOCOL.md` §4.7
       // records this trap; it caught the next person anyway.
       ...this.sniperMarks,
+      // Same rule as every other world-space Graphics: in this list or the UI
+      // camera draws a second copy of it somewhere else. See D107.
+      ...this.lastStandAuras,
       ...this.decoyGhosts.map((r) => r.root),
       this.effects.container,
       ...this.debug.worldObjects,
@@ -872,6 +884,48 @@ export class BattleScene extends Phaser.Scene {
           sfx.hit();
           break;
         }
+        case 'lastStand': {
+          /**
+           * The moment the passive exists for, given the full treatment.
+           *
+           * A once-a-match refusal to die that went past in a single frame would
+           * be indistinguishable from a rounding error on the life bar — the
+           * player has to *know* the kill was taken away from them, and the
+           * pilot has to know they are still standing. So: a hard freeze of the
+           * screen, the pilot's own cutscene card, a banner, and a burst at the
+           * chassis.
+           */
+          const c = this.byId(ev.id);
+          this.shake = Math.max(this.shake, 9);
+          sfx.guardBreak();
+          sfx.saturation();
+          if (c) {
+            this.effects.saturationBurst(c.x, c.y, SatMode.Shield, c.def.tint.accent, c.facing);
+            this.effects.guardBreak(c.x, c.y);
+            this.cutscene.play({
+              portraitKey: `pilot_${c.def.id}`,
+              pilot: c.def.pilot,
+              mode: SatMode.Shield,
+              line: pickBanter(c.def.id, 'lastStand', this.banterRng.next()),
+              tint: c.def.tint.accent,
+              screenFrac: c.x / ARENA_W,
+              label: 'LAST STAND',
+              sub: 'REFUSING TERMINATION',
+            });
+          }
+          this.hud.banner('LAST STAND', 110);
+          break;
+        }
+
+        case 'lastStandEnd': {
+          // The clock running out is when the opponent's next hit starts
+          // mattering again, so it gets its own beat rather than silently
+          // lapsing.
+          this.hud.banner('EXPOSED', 70);
+          sfx.satBurnout();
+          break;
+        }
+
         case 'decoyPop': {
           /**
            * A projection shot out of the air.
@@ -1046,25 +1100,28 @@ export class BattleScene extends Phaser.Scene {
    * duck-typed against the fields `MechRenderer.sync` actually reads rather than
    * faking a whole `Combatant`.
    */
-  private decoyState(c: Combatant, dt: number): Combatant {
-    const s = c.supporter;
-    const st = (this.decoyAnim[c.id] ??= { bobPhase: 0, bank: 0 });
+  private decoyState(c: Combatant, slot: number, dt: number): Combatant {
+    const dec = c.supporter.decoys[slot];
+    // Keyed per projection, so the two do not share a bob phase and read as one
+    // object drawn twice.
+    const key = c.id * DECOY_COUNT + slot;
+    const st = (this.decoyAnim[key] ??= { bobPhase: slot * 1.7, bank: 0 });
     st.bobPhase += dt * 2.4;
     // Bank into the drift, the way the flight model banks a real chassis.
-    const wantBank = clamp(s.decoyVx * 0.055, -0.38, 0.38) * (s.decoyFacing < 0 ? -1 : 1);
+    const wantBank = clamp(dec.vx * 0.055, -0.38, 0.38) * (dec.facing < 0 ? -1 : 1);
     st.bank += (wantBank - st.bank) * 0.12;
 
     return {
       alive: true,
       act: 0,
-      y: s.decoyY,
+      y: dec.y,
       // Straight from the simulation, so the mounts point exactly where the
       // projection's rounds actually leave from. A rig aiming somewhere its own
       // shots do not come from is the clearest tell there is.
-      aim: s.decoyAim,
+      aim: dec.aim,
       bank: st.bank,
       bobPhase: st.bobPhase,
-      facing: s.decoyFacing,
+      facing: dec.facing,
       hitstop: 0,
       reach: 0,
       spin: 0,
@@ -1085,17 +1142,18 @@ export class BattleScene extends Phaser.Scene {
     const s = c.supporter;
 
     // ---- decoy ------------------------------------------------------------
-    const ghost = this.decoyGhosts[i];
-    if (ghost) {
-      const showing = c.alive && s.decoyTicks > 0 && c.def.supporter.role === 'decoy';
+    for (let k = 0; k < DECOY_COUNT; k++) {
+      const ghost = this.decoyGhosts[i * DECOY_COUNT + k];
+      if (!ghost) continue;
+      const dec = s.decoys[k];
+      const showing = c.alive && dec.ticks > 0 && c.def.supporter.role === 'decoy';
       ghost.setVisible(showing);
-      if (showing) {
-        ghost.sync(this.decoyState(c, 1 / 60), s.decoyX, s.decoyY, 1 / 60);
-        // Solid for almost all of its life, dissolving only at the very end —
-        // that flicker is the tell, and it arrives too late to help much.
-        const life = s.decoyTicks / 110;
-        ghost.setAlpha(life > 0.2 ? 1 : life * 5);
-      }
+      if (!showing) continue;
+      ghost.sync(this.decoyState(c, k, 1 / 60), dec.x, dec.y, 1 / 60);
+      // Solid for almost all of its life, dissolving only at the very end —
+      // that flicker is the tell, and it arrives too late to help much.
+      const life = dec.ticks / 110;
+      ghost.setAlpha(life > 0.2 ? 1 : life * 5);
     }
 
     // ---- dome -------------------------------------------------------------
@@ -1542,6 +1600,46 @@ export class BattleScene extends Phaser.Scene {
    * Deliberately in the sniper's *own* accent colour, unlike the paint reticle:
    * this is something the machine is doing, not something being done to it.
    */
+  /**
+   * The LAST STAND aura: a machine held together by refusal.
+   *
+   * Three rings on different phases rather than one, so it reads as something
+   * straining rather than something glowing, plus a countdown arc that visibly
+   * closes — the whole passive is a clock, and a clock the opponent cannot see
+   * is one they cannot play around. The last two seconds go red and speed up,
+   * because that is when killing this machine becomes possible again.
+   */
+  private drawLastStand(i: number, c: Combatant): void {
+    const g = this.lastStandAuras[i];
+    if (!g) return;
+    g.clear();
+    if (!c.alive || !c.lastStandActive) return;
+
+    const total = c.def.lastStand?.ticks ?? 1;
+    const left = c.lastStandTicks / total;
+    const t = this.sim.tick;
+    // Runs out red: the reprieve ending is the opponent's window reopening.
+    const dying = left < 0.2;
+    const tint = dying ? 0xff4a4a : c.def.tint.accent;
+    const rate = dying ? 0.34 : 0.16;
+    const r = c.def.barrier.radius;
+    g.setDepth(40);
+
+    for (let k = 0; k < 3; k++) {
+      const phase = t * rate + k * 2.1;
+      const pulse = 0.5 + 0.5 * Math.sin(phase);
+      const radius = r * (1.25 + k * 0.28) + pulse * 9;
+      g.lineStyle(2.5 - k * 0.6, tint, (0.5 - k * 0.13) * (0.55 + pulse * 0.45));
+      g.strokeCircle(c.x, c.y, radius);
+    }
+
+    // The clock, drawn as an arc that closes anticlockwise from the top.
+    g.lineStyle(3.5, tint, 0.9);
+    g.beginPath();
+    g.arc(c.x, c.y, r * 2.05, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left, false);
+    g.strokePath();
+  }
+
   private drawSniper(i: number, c: Combatant): void {
     const g = this.sniperMarks[i];
     if (!g) return;
@@ -1704,8 +1802,11 @@ export class BattleScene extends Phaser.Scene {
     const pts: Array<{ x: number; y: number }> = [p, e];
     for (const c of s.combatants) {
       const sup = c.supporter;
-      if (c.alive && sup.decoyTicks > 0 && c.def.supporter.role === 'decoy') {
-        pts.push({ x: sup.decoyX, y: sup.decoyY });
+      if (!c.alive || c.def.supporter.role !== 'decoy') continue;
+      // Every live projection, so the camera keeps both in frame — a silhouette
+      // outside the visible band is not a deception, it is a missing feature.
+      for (const dec of sup.decoys) {
+        if (dec.ticks > 0) pts.push({ x: dec.x, y: dec.y });
       }
     }
     const minX = Math.min(...pts.map((q) => q.x));
@@ -1839,6 +1940,7 @@ export class BattleScene extends Phaser.Scene {
       this.drawDrone(i, c, dt);
       this.drawPaint(i, c);
       this.drawSniper(i, c);
+      this.drawLastStand(i, c);
 
       // WARDEN's repair, on the machine receiving it.
       //

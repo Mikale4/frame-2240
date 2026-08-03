@@ -4,6 +4,7 @@ import { AI_PROFILES, AiTactic, RivalAI } from '../ai/RivalAI';
 import { Rng } from '../core/Rng';
 import { DIFFICULTY_COUNT, DIFFICULTY_NAMES, Difficulty, session } from '../core/Session';
 import { HALCYON } from '../data/mechs';
+import type { MechDef } from '../mechs/MechDef';
 import { MatchPhase, Team } from '../combat/types';
 import { Combatant } from '../combat/Combatant';
 import { ProjectilePool } from '../projectiles/Projectile';
@@ -27,9 +28,36 @@ import { ProjectilePool } from '../projectiles/Projectile';
 const W = 2400;
 const H = 1200;
 
+/**
+ * The ladder's yardstick: HALCYON, **without LAST STAND**.
+ *
+ * This file measures *tiers*, by fighting the same chassis against itself. A
+ * passive both sides carry therefore contributes no signal — and this one
+ * contributes a great deal of noise, because a guaranteed ten-second reprieve
+ * for each of them means the better pilot cannot convert its advantage into a
+ * finish. Measured, adding it collapsed every rung to about a third:
+ *
+ * ```
+ *                     with LAST STAND    without
+ *   NORMAL vs EASY      0.057 (2.7σ)     0.193 (3.6σ)
+ *   EXTREME vs HARD     0.041 (2.1σ)     0.110 (2.6σ)
+ * ```
+ *
+ * The right-hand column is D92's original calibration to three decimal places,
+ * which is the point: **the ladder was always measuring this, and stripping the
+ * shared passive restores the instrument rather than moving the goalposts.**
+ *
+ * §8a of the handoff has warned since D92 that measuring tiers with HALCYON
+ * mirrors couples this file to HALCYON's kit. This is that coupling arriving.
+ * It is now insulated from *shared* passives; a change to HALCYON's weapons
+ * would still move these numbers, and the real fix remains a yardstick that is
+ * not a roster mech at all.
+ */
+const LADDER_MECH: MechDef = { ...HALCYON, lastStand: undefined };
+
 /** One duel on identical machines. >0 means side A finished ahead. */
 function duel(a: Difficulty, b: Difficulty, seed: number): number {
-  const s = new MatchSim({ playerDef: HALCYON, enemyDef: HALCYON, seed, introTicks: 1 });
+  const s = new MatchSim({ playerDef: LADDER_MECH, enemyDef: LADDER_MECH, seed, introTicks: 1 });
   const ai1 = new RivalAI({ difficulty: a }, new Rng(seed ^ 0x1111));
   const ai2 = new RivalAI({ difficulty: b }, new Rng(seed ^ 0x2222));
   for (let i = 0; i < 5400 && s.phase !== MatchPhase.Over; i++) {
@@ -37,7 +65,7 @@ function duel(a: Difficulty, b: Difficulty, seed: number): number {
     const pb = ai2.think(s.enemy, s.player, s.activeProjectiles(), W, H);
     s.step(pa, pb);
   }
-  const max = HALCYON.gauges.maxLife;
+  const max = LADDER_MECH.gauges.maxLife;
   return s.player.life / max - s.enemy.life / max;
 }
 
@@ -282,7 +310,7 @@ describe('what EXTREME does that the others do not', () => {
 describe('resource management', () => {
   /** Runs a mirror match and reports how the boost gauge was managed. */
   function boostUse(d: Difficulty, seed: number): { mean: number; dry: number } {
-    const s = new MatchSim({ playerDef: HALCYON, enemyDef: HALCYON, seed, introTicks: 1 });
+    const s = new MatchSim({ playerDef: LADDER_MECH, enemyDef: LADDER_MECH, seed, introTicks: 1 });
     const a = new RivalAI({ difficulty: d }, new Rng(seed ^ 0x1111));
     const b = new RivalAI({ difficulty: d }, new Rng(seed ^ 0x2222));
     let sum = 0;
@@ -293,8 +321,8 @@ describe('resource management', () => {
         a.think(s.player, s.enemy, s.activeProjectiles(), W, H),
         b.think(s.enemy, s.player, s.activeProjectiles(), W, H),
       );
-      sum += s.player.boost / HALCYON.flight.maxBoost;
-      if (s.player.boost < HALCYON.flight.dashCost) dry++;
+      sum += s.player.boost / LADDER_MECH.flight.maxBoost;
+      if (s.player.boost < LADDER_MECH.flight.dashCost) dry++;
       n++;
     }
     return { mean: sum / n, dry: dry / n };

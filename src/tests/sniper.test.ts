@@ -389,7 +389,7 @@ describe('the disarm', () => {
   });
 
   it('rides only the stance shot, not his ordinary guns', () => {
-    expect(VESPER.sniper!.shot.disarms).toBeCloseTo(0.3, 5);
+    expect(VESPER.sniper!.shot.disarms).toBeCloseTo(0.5, 5);
     expect(VESPER.main.disarms ?? 0).toBe(0);
     expect(VESPER.heavy.disarms ?? 0).toBe(0);
     expect(VESPER.lance.disarms ?? 0).toBe(0);

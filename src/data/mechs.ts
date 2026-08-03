@@ -211,6 +211,21 @@ export const HALCYON: MechDef = {
   barrier: BASE_BARRIER,
   // Light frame: takes full damage, braces a little when planted.
   defence: { mul: 1.0, groundedMul: 0.9 },
+  /**
+   * LAST STAND — ten seconds in which Naia Vesk does not go down.
+   *
+   * HALCYON is the roster's reference machine and had been measurably the worst
+   * kind of average: lowest polarisation on the board and, at one point, winning
+   * *no* matchup at all. A generalist with no edge anywhere is a yardstick, not
+   * a pilot. This is the edge, and it is deliberately the one thing a generalist
+   * can carry without distorting any single range band — it changes nothing
+   * about how the machine fights and everything about when the fight is over.
+   *
+   * Ten seconds is long. That is the point: it is not a survival buffer, it is a
+   * window in which the other pilot has to *finish something they thought they
+   * had finished*, and cannot.
+   */
+  lastStand: { ticks: 600 },
   rig: HALCYON_RIG,
 
   main: attack({
@@ -552,6 +567,18 @@ export const NOCTURNE: MechDef = {
   barrier: { ...BASE_BARRIER, cost: 34 },
   // Heavy frame: thicker armour, and very hard to shift once planted.
   defence: { mul: 0.82, groundedMul: 0.8 },
+  /**
+   * **Explicitly not HALCYON's.** NOCTURNE is built as `{ ...HALCYON }`, so it
+   * inherits every field this file does not override — and it silently inherited
+   * LAST STAND the moment that was added, giving a second machine a once-a-match
+   * refusal to die that nobody designed for it.
+   *
+   * The `supporter` block already carries a note about exactly this hazard
+   * ("Inherits nothing it should not"); this is the same trap on a new field.
+   * Any future `MechDef` flag added to HALCYON needs a line here saying whether
+   * Halden Rook gets it too.
+   */
+  lastStand: undefined,
   rig: NOCTURNE_RIG,
   // WARDEN: the heavy frame's drone stands further off and is slower to bring
   // to bear, but its volley is the harder one.

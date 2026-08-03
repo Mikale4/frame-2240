@@ -206,6 +206,22 @@ export class MechRenderer {
     // Saturation aura: gently pulse the whole rig's alpha while a mode is up.
     this.root.alpha = c.satActive ? 0.86 + Math.sin(c.bobPhase * 4) * 0.14 : 1;
 
+    /**
+     * LAST STAND: a hard, fast strobe, deliberately unlike the saturation
+     * shimmer above.
+     *
+     * Saturation is a smooth 0.86–1.00 breath and reads as power held. This is
+     * twice the rate and four times the depth, so a machine refusing to die does
+     * not look like a machine with its meter up — the two states mean opposite
+     * things and must never be confused at a glance.
+     *
+     * Read defensively because `MechRenderer` is also driven by the decoy's
+     * synthetic state object, which is not a real `Combatant`.
+     */
+    if ((c as { lastStandActive?: boolean }).lastStandActive) {
+      this.root.alpha = 0.5 + Math.abs(Math.sin(c.bobPhase * 9)) * 0.5;
+    }
+
     // Dead mechs tumble.
     if (!c.alive) {
       this.root.rotation += 0.06 * dt * 60 * 0.016;

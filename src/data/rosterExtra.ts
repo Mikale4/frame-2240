@@ -587,13 +587,15 @@ export const VESPER: MechDef = {
        * shot only, so it exists exactly while Kestrel is standing still and
        * paying for it.
        *
-       * Raised from 0.25 to compensate the bolt-action cadence. The two move
-       * together and should keep moving together: at 25 ticks a shot this landed
-       * **2.43 disarms a fight**, and slowing to 60 dropped it to 1.14 — the
-       * per-shot chance is only half the rate, and the other half is how often he
-       * gets to shoot. 0.30 puts it back to about 1.4.
+       * Raised twice, both times to compensate the bolt-action cadence. The two
+       * move together and should keep moving together: at 25 ticks a shot this
+       * landed **2.43 disarms a fight**, and slowing to 60 dropped it to 1.14 —
+       * the per-shot chance is only half the rate, and the other half is how
+       * often he gets to shoot. 0.25 → 0.30 put it at 1.43; **0.50** takes it to
+       * roughly one every other shot, which is the point at which planting reads
+       * as *taking something off* the opponent rather than hoping to.
        */
-      disarms: 0.3,
+      disarms: 0.5,
       muzzleForward: 52,
     }),
   },

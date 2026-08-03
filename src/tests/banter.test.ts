@@ -25,9 +25,19 @@ describe('pilot banter — coverage', () => {
     }
   });
 
-  it('covers every trigger for every pilot', () => {
+  /**
+   * Most triggers can happen to anyone. `lastStand` cannot: it fires only on a
+   * chassis that declares `MechDef.lastStand`, which is HALCYON alone.
+   *
+   * So the rule is **exactly the pilots who can reach it**, in both directions.
+   * Blanket coverage would force seven pilots to carry lines that can never
+   * play — dead content, and the same landmine D74 describes. Requiring only
+   * *some* pilot to have them would let the one who can trigger it ship silent.
+   */
+  it('covers every universal trigger for every pilot', () => {
     for (const m of ROSTER) {
       for (const t of TRIGGERS) {
+        if (t === 'lastStand') continue;
         const lines = BANTER[m.id][t];
         expect(lines, `${m.id} has nothing for ${t}`).toBeTruthy();
         expect(lines!.length, `${m.id}.${t} is empty`).toBeGreaterThan(0);
@@ -35,10 +45,22 @@ describe('pilot banter — coverage', () => {
     }
   });
 
+  it('gives lastStand lines to exactly the pilots who can trigger it', () => {
+    for (const m of ROSTER) {
+      const lines = BANTER[m.id].lastStand;
+      if (m.lastStand) {
+        expect(lines, `${m.id} can trigger LAST STAND and says nothing`).toBeTruthy();
+        expect(lines!.length).toBeGreaterThan(0);
+      } else {
+        expect(lines, `${m.id} cannot trigger LAST STAND but carries lines`).toBeUndefined();
+      }
+    }
+  });
+
   it('keeps every line short enough to read mid-fight', () => {
     for (const m of ROSTER) {
       for (const t of TRIGGERS) {
-        for (const line of BANTER[m.id][t]!) {
+        for (const line of BANTER[m.id][t] ?? []) {
           expect(line.length, `${m.id}.${t}: "${line}"`).toBeLessThanOrEqual(46);
           expect(line.trim()).toBe(line);
           expect(line.length).toBeGreaterThan(2);
@@ -80,7 +102,7 @@ describe('pilot banter — coverage', () => {
     const seen = new Map<string, string>();
     for (const m of ROSTER) {
       for (const t of TRIGGERS) {
-        for (const line of BANTER[m.id][t]!) {
+        for (const line of BANTER[m.id][t] ?? []) {
           const key = line.toLowerCase();
           const owner = seen.get(key);
           expect(owner, `"${line}" used by both ${owner} and ${m.id}`).toBeUndefined();
@@ -95,10 +117,17 @@ describe('pilot banter — selection', () => {
   it('returns a line the pilot actually owns', () => {
     for (const m of ROSTER) {
       for (const t of TRIGGERS) {
+        const owned = BANTER[m.id][t];
         for (const roll of [0, 0.25, 0.5, 0.99]) {
           const line = pickBanter(m.id, t, roll);
+          // A pilot with no lines for a trigger they can never reach returns
+          // null, and that is correct — `lastStand` is HALCYON's alone.
+          if (!owned) {
+            expect(line, `${m.id}.${t} should be silent`).toBeNull();
+            continue;
+          }
           expect(line).not.toBeNull();
-          expect(BANTER[m.id][t]).toContain(line!);
+          expect(owned).toContain(line!);
         }
       }
     }

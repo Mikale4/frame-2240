@@ -50,7 +50,7 @@ function droneHitKey(ownerId: number): number {
 
 /** The same trick again for a decoy projection, which is a third target type. */
 function decoyHitKey(ownerId: number): number {
-  return 2000 + ownerId;
+  return 2000 + ownerId * 8;
 }
 
 /** How hard a repelled melee attacker is thrown off, and for how long. */
@@ -254,6 +254,7 @@ export class MatchSim {
     this.stepDroneRoles();
     this.resolveMineIntercepts();
     this.pushApart();
+    this.resolveLastStand();
     this.checkEnd();
   }
 
@@ -585,19 +586,28 @@ export class MatchSim {
       if (!p.active || p.damage <= 0) continue;
       for (const c of this.combatants) {
         const s = c.supporter;
-        if (s.decoyTicks <= 0) continue;
+        if (!s.decoyLive) continue;
         if (c.team === p.team || c.id === p.ownerId) continue;
-        const key = decoyHitKey(c.id);
-        if (p.hitIds.has(key)) continue;
-        if (!sweptHit(p, s.decoyX, s.decoyY, c.def.rig.hurtRadius)) continue;
+        // One key per projection, so a shot that popped one is still allowed to
+        // reach the other — it will not, since the round is spent, but a shared
+        // key would silently make the second silhouette unhittable for the rest
+        // of that projectile's life.
+        for (let i = 0; i < s.decoys.length; i++) {
+          const dec = s.decoys[i];
+          if (dec.ticks <= 0) continue;
+          const key = decoyHitKey(c.id) + i;
+          if (p.hitIds.has(key)) continue;
+          if (!sweptHit(p, dec.x, dec.y, c.def.rig.hurtRadius)) continue;
 
-        p.hitIds.add(key);
-        s.popDecoy();
-        this.events.push({ t: 'decoyPop', x: s.decoyX, y: s.decoyY, ownerId: c.id });
-        this.events.push({ t: 'explode', x: s.decoyX, y: s.decoyY, big: false });
-        // The round is spent on the fake. That is the trade.
-        p.active = false;
-        break;
+          p.hitIds.add(key);
+          this.events.push({ t: 'decoyPop', x: dec.x, y: dec.y, ownerId: c.id });
+          this.events.push({ t: 'explode', x: dec.x, y: dec.y, big: false });
+          s.popDecoy(i);
+          // The round is spent on the fake. That is the trade.
+          p.active = false;
+          break;
+        }
+        if (!p.active) break;
       }
     }
   }
@@ -847,6 +857,29 @@ export class MatchSim {
       if (!c.flying && c.y > c.groundY) {
         c.y = c.groundY;
         if (c.vy > 0) c.vy = 0;
+      }
+    }
+  }
+
+  /**
+   * The LAST STAND gate.
+   *
+   * Runs after every damage source has resolved and immediately before
+   * `checkEnd` asks whether anyone died — which is the only place it can live
+   * and be honest. Hull comes off in a dozen places; a check inside any one of
+   * them would be a passive that saves you from bullets and not from burning
+   * ground.
+   */
+  private resolveLastStand(): void {
+    for (const c of this.combatants) {
+      const r = c.stepLastStand();
+      if (r === 'triggered') {
+        this.events.push({ t: 'lastStand', x: c.x, y: c.y, id: c.id });
+        this.events.push({ t: 'explode', x: c.x, y: c.y, big: true });
+      } else if (r === 'ended') {
+        // The clock hitting zero is when the opponent's next hit starts
+        // mattering again, so it gets announced rather than silently lapsing.
+        this.events.push({ t: 'lastStandEnd', x: c.x, y: c.y, id: c.id });
       }
     }
   }

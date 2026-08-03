@@ -3,6 +3,7 @@ import { MatchSim } from '../combat/MatchSim';
 import { Combatant } from '../combat/Combatant';
 import { MECHS } from '../data/mechs';
 import {
+  DECOY_COUNT,
   DECOY_DAMAGE,
   DECOY_FIRE_PERIOD,
   DECOY_LIFE,
@@ -185,10 +186,40 @@ describe('the projection itself', () => {
     const samples: Array<{ tick: number; live: boolean; x: number; y: number }> = [];
     for (let i = 0; i < ticks && s.phase !== MatchPhase.Over; i++) {
       s.step(emptyInput(), emptyInput());
-      samples.push({ tick: i, live: sup.decoyTicks > 0, x: sup.decoyX, y: sup.decoyY });
+      samples.push({ tick: i, live: sup.decoys[0].ticks > 0, x: sup.decoys[0].x, y: sup.decoys[0].y });
     }
     return { s, sup, samples };
   }
+
+  it('throws two of them, on opposite sides of the firing line', () => {
+    const s = harness();
+    for (let i = 0; i < 400 && !s.player.supporter.decoyLive; i++) {
+      s.step(emptyInput(), emptyInput());
+    }
+    const sup = s.player.supporter;
+    expect(DECOY_COUNT).toBe(2);
+    expect(sup.decoys.filter((d) => d.ticks > 0)).toHaveLength(2);
+
+    // Straddling the axis between the two pilots, not stacked on one flank:
+    // two silhouettes on the same side is one question asked twice.
+    const lx = s.enemy.x - s.player.x;
+    const ly = s.enemy.y - s.player.y;
+    const side = (d: { x: number; y: number }) =>
+      Math.sign(-ly * (d.x - sup.x) + lx * (d.y - sup.y));
+    expect(side(sup.decoys[0])).toBe(-side(sup.decoys[1]));
+  });
+
+  it('staggers their fire so the pair does not volley in unison', () => {
+    const s = harness();
+    for (let i = 0; i < 400 && !s.player.supporter.decoyLive; i++) {
+      s.step(emptyInput(), emptyInput());
+    }
+    // Offset by half a period at birth, so they alternate rather than doubling up.
+    const [a, b] = s.player.supporter.decoys;
+    expect(Math.abs(a.fireTimer - b.fireTimer)).toBeGreaterThanOrEqual(
+      Math.floor(DECOY_FIRE_PERIOD / 2) - 1,
+    );
+  });
 
   it('is thrown at all, and is the role NULLTIDE carries', () => {
     expect(NULLTIDE.supporter!.role).toBe('decoy');
@@ -310,10 +341,10 @@ describe('the projection can be shot down', () => {
   /** Runs until a projection is live, then returns the sim. */
   function withLiveDecoy(): MatchSim {
     const s = harness();
-    for (let i = 0; i < 400 && s.player.supporter.decoyTicks <= 0; i++) {
+    for (let i = 0; i < 400 && s.player.supporter.decoys[0].ticks <= 0; i++) {
       s.step(emptyInput(), emptyInput());
     }
-    expect(s.player.supporter.decoyTicks).toBeGreaterThan(0);
+    expect(s.player.supporter.decoys[0].ticks).toBeGreaterThan(0);
     return s;
   }
 
@@ -321,32 +352,49 @@ describe('the projection can be shot down', () => {
     const s = withLiveDecoy();
     const sup = s.player.supporter;
     // Put an enemy round exactly on the silhouette.
-    s.enemy.x = sup.decoyX - 30;
-    s.enemy.y = sup.decoyY;
+    s.enemy.x = sup.decoys[0].x - 30;
+    s.enemy.y = sup.decoys[0].y;
     let popped = false;
     for (let i = 0; i < 60 && !popped; i++) {
       s.step(emptyInput(), { ...emptyInput(), pressed: 1 << Btn.Main, held: 1 << Btn.Main });
       if (s.events.some((e) => e.t === 'decoyPop')) popped = true;
       // Keep the shooter on top of it while it drifts.
-      s.enemy.x = sup.decoyX - 30;
-      s.enemy.y = sup.decoyY;
+      s.enemy.x = sup.decoys[0].x - 30;
+      s.enemy.y = sup.decoys[0].y;
     }
     expect(popped).toBe(true);
-    expect(sup.decoyTicks).toBe(0);
+    expect(sup.decoys[0].ticks).toBe(0);
   });
 
-  it('stops shooting once it is gone', () => {
+  it('stops shooting once every projection is gone', () => {
     const s = withLiveDecoy();
     const sup = s.player.supporter;
-    sup.popDecoy();
+    for (let i = 0; i < DECOY_COUNT; i++) sup.popDecoy(i);
     let rounds = 0;
     for (let i = 0; i < 90; i++) {
       s.step(emptyInput(), emptyInput());
       rounds += s.activeProjectiles().filter((p) => p.decoyShot).length;
-      // A fresh projection may be thrown on cadence; stop counting if so.
-      if (sup.decoyTicks > 0) break;
+      // A fresh pair may be thrown on cadence; stop counting if so.
+      if (sup.decoyLive) break;
     }
     expect(rounds).toBe(0);
+  });
+
+  /**
+   * Popping one must not pop the other. They are separate objects with separate
+   * hit keys, and a shared key would silently make the second silhouette
+   * unhittable for the rest of the popping projectile's life.
+   */
+  it('takes them one at a time', () => {
+    const s = withLiveDecoy();
+    const sup = s.player.supporter;
+    expect(sup.decoys.every((d) => d.ticks > 0)).toBe(true);
+    sup.popDecoy(0);
+    expect(sup.decoys[0].ticks).toBe(0);
+    expect(sup.decoys[1].ticks).toBeGreaterThan(0);
+    expect(sup.decoyLive).toBe(true);
+    sup.popDecoy(1);
+    expect(sup.decoyLive).toBe(false);
   });
 
   /**
@@ -358,7 +406,7 @@ describe('the projection can be shot down', () => {
     const s = withLiveDecoy();
     const sup = s.player.supporter;
     // Popped early, well inside its natural life.
-    expect(sup.decoyTicks).toBeGreaterThan(30);
+    expect(sup.decoys[0].ticks).toBeGreaterThan(30);
     sup.popDecoy();
     // The next one arrives on the cadence, not immediately — so there is a real
     // window with no silhouette on the field. Asserted on the observable gap
@@ -366,7 +414,7 @@ describe('the projection can be shot down', () => {
     let dark = 0;
     for (let i = 0; i < 40; i++) {
       s.step(emptyInput(), emptyInput());
-      if (sup.decoyTicks <= 0) dark++;
+      if (sup.decoys[0].ticks <= 0) dark++;
     }
     expect(dark).toBe(40);
   });
@@ -375,13 +423,13 @@ describe('the projection can be shot down', () => {
     const s = withLiveDecoy();
     const sup = s.player.supporter;
     // NULLTIDE's own fire passes straight through her own projection.
-    s.player.x = sup.decoyX - 30;
-    s.player.y = sup.decoyY;
+    s.player.x = sup.decoys[0].x - 30;
+    s.player.y = sup.decoys[0].y;
     for (let i = 0; i < 40; i++) {
       s.step({ ...emptyInput(), pressed: 1 << Btn.Main, held: 1 << Btn.Main }, emptyInput());
-      if (sup.decoyTicks <= 0) break;
-      s.player.x = sup.decoyX - 30;
-      s.player.y = sup.decoyY;
+      if (sup.decoys[0].ticks <= 0) break;
+      s.player.x = sup.decoys[0].x - 30;
+      s.player.y = sup.decoys[0].y;
     }
     expect(s.events.some((e) => e.t === 'decoyPop')).toBe(false);
   });

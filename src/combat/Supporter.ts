@@ -261,6 +261,45 @@ const ARC_MIN_SPAN = 150;
  * **75 %** of the time rather than always. Killing the escort, or driving it off
  * station, is still the answer — which is as it should be.
  */
+/**
+ * How many projections are on the field at once.
+ *
+ * **Two, not one.** One silhouette is a question the opponent answers by
+ * checking it; two is a question they have to answer twice, and the second one
+ * is what turns "which is real" into a cost rather than a glance. They are
+ * thrown to opposite sides of the owner-to-target line, so the check is in two
+ * different directions.
+ */
+export const DECOY_COUNT = 2;
+
+/** One projection's whole state. See `Supporter.decoys`. */
+export interface DecoyState {
+  /** Ticks of life left. Zero means there is no projection. */
+  ticks: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** Heading it is drifting along, in radians. */
+  heading: number;
+  /** Which way it faces, for the renderer. */
+  facing: number;
+  /**
+   * Where its mounts point.
+   *
+   * Lives in the simulation rather than the renderer because it decides where
+   * the rounds actually go. A rig aiming somewhere its own shots do not come
+   * from is the clearest tell a decoy can give.
+   */
+  aim: number;
+  /** Ticks until it fires again. */
+  fireTimer: number;
+}
+
+export function emptyDecoy(): DecoyState {
+  return { ticks: 0, x: 0, y: 0, vx: 0, vy: 0, heading: 0, facing: 1, aim: 0, fireTimer: 0 };
+}
+
 export const DECOY_PERIOD = 150;
 export const DECOY_LIFE = 150;
 // Far enough out that a fooled shot genuinely misses. At 130 the silhouette sat
@@ -580,33 +619,23 @@ export class Supporter {
   /** `dome`: ticks until a broken shell finishes rebuilding itself. */
   domeDownTicks = 0;
   /**
-   * `decoy`: the false machine — how long it has left, where it is, and where it
-   * is going.
+   * `decoy`: the false machines — where they are and where they are going.
    *
-   * It *moves*. A silhouette standing perfectly still is identifiable in about
+   * They *move*. A silhouette standing perfectly still is identifiable in about
    * half a second and then ignored for the rest of its life, which makes the
    * whole ability a marker rather than a deception. Drifting like a mech that is
    * holding station is what buys the doubt.
-   */
-  decoyTicks = 0;
-  decoyX = 0;
-  decoyY = 0;
-  decoyVx = 0;
-  decoyVy = 0;
-  /** Heading the projection is currently drifting along, in radians. */
-  private decoyHeading = 0;
-  /** Which way the projection is facing, for the renderer. */
-  decoyFacing = 1;
-  /** Ticks until the projection fires again. */
-  private decoyFireTimer = 0;
-  /**
-   * Where the projection's mounts are pointing.
    *
-   * Lives in the simulation rather than the renderer because it decides where
-   * the rounds actually go. A rig aiming somewhere its own shots do not come
-   * from is the clearest tell a decoy can give.
+   * A fixed-length array rather than a growable one: the count is a design
+   * constant, and a fixed array means the renderer and the collision pass can
+   * both index it without asking whether a slot exists.
    */
-  decoyAim = 0;
+  readonly decoys: DecoyState[] = Array.from({ length: DECOY_COUNT }, emptyDecoy);
+
+  /** True while any projection is on the field. */
+  get decoyLive(): boolean {
+    return this.decoys.some((d) => d.ticks > 0);
+  }
   /** `arcTether`: true while the wire between drone and owner is live. */
   tetherLive = false;
   /** `arcTether`: ticks before the wire may bite again. */
@@ -826,7 +855,7 @@ export class Supporter {
       this.roleTimer = 0;
       this.domeActive = false;
       this.tetherLive = false;
-      this.decoyTicks = 0;
+      for (const d of this.decoys) d.ticks = 0;
       return;
     }
 
@@ -885,8 +914,9 @@ export class Supporter {
    * gap until the cadence comes round again. That gap is the whole counterplay,
    * and resetting the timer here would quietly delete it.
    */
-  popDecoy(): void {
-    this.decoyTicks = 0;
+  popDecoy(index = 0): void {
+    const d = this.decoys[index];
+    if (d) d.ticks = 0;
   }
 
   /**
@@ -937,9 +967,10 @@ export class Supporter {
     this.domeActive = false;
     this.tetherLive = false;
     if (this.roleTimer > 0) this.roleTimer--;
-    if (this.decoyTicks > 0) this.decoyTicks--;
-
-    if (this.decoyTicks > 0) this.stepDecoy(owner, target, spawns, events);
+    for (const d of this.decoys) {
+      if (d.ticks > 0) d.ticks--;
+      if (d.ticks > 0) this.stepDecoy(d, owner, target, spawns, events);
+    }
 
     if (!this.onStation || !owner.alive) return;
     const live = target && target.alive;
@@ -974,31 +1005,48 @@ export class Supporter {
         // positions and cannot simply be learned once and ignored.
         if (this.roleTimer <= 0 && live && reach <= d.fireRange) {
           this.roleTimer = DECOY_PERIOD;
-          this.decoyTicks = DECOY_LIFE;
           /**
-           * Thrown *across* the fight rather than away from it.
+           * Thrown *across* the fight rather than away from it, and **one to
+           * each side**.
            *
-           * The first cut pushed it straight out along the owner-to-drone line,
-           * which put the silhouette wherever the escort happened to be —
-           * frequently below the floor line and outside the camera, which frames
-           * on the two machines. A decoy nobody can see is not a decoy, it is a
-           * bug report. Offsetting perpendicular to the line between the two
-           * pilots keeps it inside the frame the fight is being watched in, and
+           * The first cut pushed a single silhouette straight out along the
+           * owner-to-drone line, which put it wherever the escort happened to be
+           * — frequently below the floor line and outside the camera, which
+           * frames on the two machines. A decoy nobody can see is not a decoy, it
+           * is a bug report. Offsetting perpendicular to the line between the two
+           * pilots keeps both inside the frame the fight is being watched in, and
            * makes a fooled shot swing *sideways*, which is a clean miss rather
            * than a near one.
+           *
+           * Opposite sides matter: two silhouettes stacked on one flank is one
+           * question asked twice, and two straddling the axis is a check the
+           * opponent has to make in both directions.
            */
           const lx = target!.x - owner.x;
           const ly = target!.y - owner.y;
           const ll = Math.hypot(lx, ly) || 1;
-          const side = this.y >= owner.y ? 1 : -1;
-          this.decoyX = this.x + (-ly / ll) * DECOY_THROW * side;
-          this.decoyY = this.y + (lx / ll) * DECOY_THROW * side;
-          // Launched drifting back toward the fight, so its first movement is
-          // the movement a real pilot would be making.
-          this.decoyHeading = Math.atan2(ly, lx);
-          this.decoyFacing = lx >= 0 ? 1 : -1;
-          this.decoyAim = Math.atan2(target!.y - this.decoyY, target!.x - this.decoyX);
-          events.push({ t: 'assist', x: this.decoyX, y: this.decoyY, angle: this.aim, ownerId: owner.id, auto: true });
+          const base = this.y >= owner.y ? 1 : -1;
+          for (let i = 0; i < DECOY_COUNT; i++) {
+            const dec = this.decoys[i];
+            const side = i % 2 === 0 ? base : -base;
+            dec.ticks = DECOY_LIFE;
+            dec.x = this.x + (-ly / ll) * DECOY_THROW * side;
+            dec.y = this.y + (lx / ll) * DECOY_THROW * side;
+            // Launched drifting back toward the fight, so the first movement is
+            // the movement a real pilot would be making.
+            dec.heading = Math.atan2(ly, lx);
+            dec.facing = lx >= 0 ? 1 : -1;
+            dec.aim = Math.atan2(target!.y - dec.y, target!.x - dec.x);
+            /**
+             * Staggered, so the pair does not volley in unison.
+             *
+             * Two silhouettes firing on the same frame read as one weapon with a
+             * double barrel; offset by half a period they read as two machines
+             * shooting independently, which is the entire illusion.
+             */
+            dec.fireTimer = Math.floor((i * DECOY_FIRE_PERIOD) / DECOY_COUNT);
+            events.push({ t: 'assist', x: dec.x, y: dec.y, angle: this.aim, ownerId: owner.id, auto: true });
+          }
         }
         break;
 
@@ -1091,12 +1139,13 @@ export class Supporter {
    * reproduces its path exactly.
    */
   private stepDecoy(
+    dec: DecoyState,
     owner: SupporterOwner,
     target: SupporterOwner | null,
     spawns: ProjectileSpawn[],
     events: SimEvent[],
   ): void {
-    const age = DECOY_LIFE - this.decoyTicks;
+    const age = DECOY_LIFE - dec.ticks;
     const speed = (owner.topSpeed ?? DECOY_SPEED_FALLBACK) * DECOY_SPEED_FRAC;
     /**
      * A folded S-curve rather than a random walk, so it never doubles back in a
@@ -1111,12 +1160,12 @@ export class Supporter {
      * Still deterministic — every term comes off the projection's own age, so a
      * replay reproduces its path exactly.
      */
-    this.decoyHeading += Math.sin(age * 0.045) * 0.052 + Math.sin(age * 0.017) * 0.031;
-    this.decoyVx = Math.cos(this.decoyHeading) * speed;
-    this.decoyVy = Math.sin(this.decoyHeading) * speed + Math.sin(age * 0.11) * 0.55;
-    this.decoyX += this.decoyVx;
-    this.decoyY += this.decoyVy;
-    if (Math.abs(this.decoyVx) > 0.05) this.decoyFacing = this.decoyVx >= 0 ? 1 : -1;
+    dec.heading += Math.sin(age * 0.045) * 0.052 + Math.sin(age * 0.017) * 0.031;
+    dec.vx = Math.cos(dec.heading) * speed;
+    dec.vy = Math.sin(dec.heading) * speed + Math.sin(age * 0.11) * 0.55;
+    dec.x += dec.vx;
+    dec.y += dec.vy;
+    if (Math.abs(dec.vx) > 0.05) dec.facing = dec.vx >= 0 ? 1 : -1;
 
     /**
      * **It shoots.**
@@ -1134,19 +1183,19 @@ export class Supporter {
     if (!target || !target.alive) return;
     // Slewed at the drone's own turret rate rather than snapped, exactly as a
     // real chassis leads its mounts round.
-    const want = Math.atan2(target.y - this.decoyY, target.x - this.decoyX);
-    const delta = wrapAngle(want - this.decoyAim);
+    const want = Math.atan2(target.y - dec.y, target.x - dec.x);
+    const delta = wrapAngle(want - dec.aim);
     const rate = this.def.turretRate;
-    this.decoyAim = wrapAngle(this.decoyAim + Math.max(-rate, Math.min(rate, delta)));
+    dec.aim = wrapAngle(dec.aim + Math.max(-rate, Math.min(rate, delta)));
 
-    if (this.decoyFireTimer-- > 0) return;
-    this.decoyFireTimer = DECOY_FIRE_PERIOD;
-    const ang = this.decoyAim;
+    if (dec.fireTimer-- > 0) return;
+    dec.fireTimer = DECOY_FIRE_PERIOD;
+    const ang = dec.aim;
     // Rolled at spawn out of the match generator, so a replay reproduces it.
     const stun = this.rng.chance(DECOY_STUN_CHANCE);
     spawns.push({
-      x: this.decoyX + Math.cos(ang) * 26,
-      y: this.decoyY + Math.sin(ang) * 26,
+      x: dec.x + Math.cos(ang) * 26,
+      y: dec.y + Math.sin(ang) * 26,
       vx: Math.cos(ang) * DECOY_SHOT_SPEED,
       vy: Math.sin(ang) * DECOY_SHOT_SPEED,
       damage: DECOY_DAMAGE,
@@ -1178,8 +1227,8 @@ export class Supporter {
     });
     events.push({
       t: 'fire',
-      x: this.decoyX,
-      y: this.decoyY,
+      x: dec.x,
+      y: dec.y,
       angle: ang,
       kind: ProjKind.Bullet,
       ownerId: owner.id,
