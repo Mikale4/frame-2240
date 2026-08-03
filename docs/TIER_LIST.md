@@ -9,7 +9,7 @@ standard error** on lead and **0.05–0.10** on an individual matchup.
 npx vite-node tools/probe/balance.ts -- --tier extreme --seeds 12 --matrix
 ```
 
-Current as of **D121**. `tools/probe/telemetry.ts` is the companion instrument:
+Current as of **D125** — the deck became solid, which moved these numbers. `tools/probe/telemetry.ts` is the companion instrument:
 same duels, same seeds, reporting *how* a machine spent its match rather than who
 won it. Reach for it before proposing a fix — three OBELISK passes were spent on
 reasoned hypotheses that each measured near zero, and VESPER's recorded diagnosis
@@ -39,49 +39,31 @@ into narrow survivals, and **you have to read both**. Two live examples:
 
 ## 1. EXTREME
 
-| Mech | Win | Lead | ± |
-| --- | --- | --- | --- |
-| VESPER | 49 % | +0.088 | 0.037 |
-| CIRRUS | 57 % | +0.059 | 0.025 |
-| NULLTIDE | 53 % | +0.004 | 0.026 |
-| OBELISK | 50 % | −0.003 | 0.028 |
-| HALCYON | 53 % | −0.011 | 0.022 |
-| TERRAMOTH | 53 % | −0.037 | 0.035 |
-| PYRE | 41 % | −0.044 | 0.024 |
-| NOCTURNE | 43 % | −0.055 | 0.030 |
+| Mech | Win | Lead | ± | z(lead/win) |
+| --- | --- | --- | --- | --- |
+| VESPER | 60 % | +0.136 | 0.034 | +1.77 / +1.31 |
+| OBELISK | 55 % | +0.049 | 0.029 | +0.64 / +0.64 |
+| CIRRUS | 54 % | +0.058 | 0.024 | +0.75 / +0.49 |
+| HALCYON | 52 % | −0.014 | 0.021 | −0.18 / +0.30 |
+| NULLTIDE | 51 % | −0.032 | 0.023 | −0.41 / +0.19 |
+| PYRE | 48 % | −0.025 | 0.022 | −0.33 / −0.30 |
+| TERRAMOTH | 45 % | −0.071 | 0.033 | −0.92 / −0.60 |
+| **NOCTURNE** | **34 %** | **−0.101** | 0.026 | −1.32 / **−2.02** |
 
-**spread 0.143 — the tightest the roster has ever measured** (0.208 before D118).
-The win-rate range is 16 points, down from 21.
+**spread 0.237.** lead SD 0.077 (true 0.072). **Outlier: NOCTURNE**, on record.
 
-### Nobody is an outlier, and the probe now says so
+### The deck cost this, and it is worth knowing why
 
-| | EXTREME | HARD |
-| --- | --- | --- |
-| lead SD | 0.050 (**true 0.041**, 18 % is measurement noise) | 0.073 (true 0.066) |
-| win-rate SD | 5.5 points | 10.1 points |
-| beyond ±2σ | **none** | **none** |
+The spread was **0.143** before the floor became solid (D125). Making it solid
+cost 0.075 for the mech half and 0.019 for the projectile half. Neither is a
+tuning mistake — the floor had never been solid in flight and the game was
+balanced around a hole in it.
 
-`balance.ts` prints a `z` column and this block on every full sweep. **Read them
-before calling anything an outlier.** The most extreme machine at EXTREME is
-VESPER at **+1.75σ — at the top**; the lowest *lead* is NOCTURNE at −1.10σ and
-the lowest *record* is PYRE at −1.57σ, and neither is separable from the field.
-
-A sorted table always has a last row. That is not the same as having a problem,
-and the difference cost a wasted investigation into NOCTURNE (D122). Roughly a
-fifth of the visible dispersion at 12 seeds is measurement error, so a gap of
-0.01 between adjacent machines is noise by construction.
-
-### Every fight ends by KO
-
-Measured in `tools/probe/outcomes.ts`: across 1344 duels, **zero** were decided
-by the clock. The 180-second cap is never reached, so `lead` — documented as the
-game's timeout tiebreaker — never acts as one in AI play. Read it as "how
-comfortably this machine kills", not as a tiebreak.
-
-**Draws are now a real outcome.** Letting a status land the killing blow (D121)
-made double KOs possible; they run about 11 of 168 fights for PYRE. `balance.ts`
-scores them as half a win each. It did not until D121, and the bug flattered
-whichever machine sat later in `ROSTER`.
+**The mechanism is small and the response is large.** Measured on VESPER across
+the change: 4.5 % more damage dealt, 2.3 % more taken. That is what an
+eight-point record swing is made of, because at a spread this tight a couple of
+percent of net edge flips a great many near-even matchups. Expect any mechanical
+change to read as a balance event from here on.
 
 ## 2. Fairness
 
@@ -116,21 +98,21 @@ Row beats column.
 
 ## 4. HARD
 
-| Mech | Win | Lead |
-| --- | --- | --- |
-| CIRRUS | 59 % | +0.070 |
-| VESPER | 54 % | +0.052 |
-| NULLTIDE | 55 % | +0.040 |
-| HALCYON | 60 % | +0.039 |
-| PYRE | 43 % | +0.013 |
-| OBELISK | 56 % | +0.009 |
-| NOCTURNE | 38 % | −0.087 |
-| TERRAMOTH | **34 %** | **−0.136** |
+| Mech | Win | Lead | z(lead/win) |
+| --- | --- | --- | --- |
+| NULLTIDE | 58 % | +0.047 | +0.74 / +0.85 |
+| HALCYON | 61 % | +0.013 | +0.20 / +1.14 |
+| OBELISK | 57 % | +0.029 | +0.46 / +0.73 |
+| CIRRUS | 54 % | +0.051 | +0.81 / +0.47 |
+| VESPER | 51 % | +0.040 | +0.63 / +0.06 |
+| PYRE | 43 % | −0.001 | −0.01 / −0.76 |
+| NOCTURNE | 43 % | −0.042 | −0.67 / −0.73 |
+| **TERRAMOTH** | **33 %** | **−0.136** | **−2.17** / −1.77 |
 
-**spread 0.206** (0.265 before D118). Six of eight sit inside 0.061 of each
-other. The two that do not are NOCTURNE and TERRAMOTH, and TERRAMOTH has been the
-weakest machine at HARD in every measurement taken — 37 % before the VESPER work
-and 38 % before D118, so neither change caused it.
+**spread 0.186 — improved** from 0.206, the one place the deck helped. Six of
+eight sit inside 0.09. **Outlier: TERRAMOTH**, and it has been the weakest
+machine at HARD in every measurement taken this session, before and after every
+change. Left alone by design decision — see §5 and D120.
 
 ---
 
@@ -153,20 +135,20 @@ Do not "fix" this without re-reading D120 first.
 
 ## 6. What is left
 
-1. **NOCTURNE, 43 % / −0.055 at EXTREME and 38 % / −0.087 at HARD.** The lowest
-   lead in the game and the second-lowest record at both tiers. Unlike PYRE
-   before D121, the aggregates agree it is genuinely losing the exchange:
-   96.9 bar/min dealt against 108.1 taken, the worst net on the roster, and the
-   lowest `arrive` figure at 6.2 %. It is `{ ...HALCYON }` with a different
-   escort and it is 15 points behind her.
-2. **TERRAMOTH at HARD**, 34 % / −0.136. Long-standing, predates D118 and D120,
-   and separate from the VESPER pairing in §5.
-3. **Acid is carried by nobody.** `Element.Corrosive` is implemented, tuned at
-   0.42/tick over 210 ticks and applied by **no weapon on the roster** — it
-   appears only in test files. Either give it to something or delete it.
-4. **The lance connects 1–2 % of the time for every machine.** It is close to
-   worthless in AI hands, which the rival's inability to choose a command motion
-   (§8d) fully explains and does not excuse.
+1. **NOCTURNE at EXTREME, 34 % / −0.101, −2.02σ.** The only flagged outlier at
+   that tier and the lowest record in the game. Note that D122 explicitly found
+   it *was not* an outlier and that calling it one was an error — that was true
+   then and the deck change made it true no longer. Relevant context from the
+   same entry: **HALCYON with LAST STAND stripped measures 36 %**, so the AV
+   frame both machines share is the weakest chassis in the game and NOCTURNE is
+   the one riding it without a signature.
+2. **The EXTREME spread, 0.143 → 0.237.** Owed to the deck being solid rather
+   than to any machine's tuning. One pass over the whole roster, not eight
+   individual ones.
+3. **VESPER at +1.77σ.** Not flagged, but the highest on the board and the
+   machine that gained most from the deck.
+4. **Acid is carried by nobody.** `Element.Corrosive` is implemented, tuned at
+   0.42/tick over 210 ticks and applied by no weapon on the roster.
 
 ---
 
