@@ -4836,3 +4836,175 @@ STAND five — which was not designed for but reads consistently.
 loops. All of them now derive from `HALCYON.lastStand.ticks`, one commit after
 `overdrive.test.ts` learned the same lesson. A balance dial should never be
 pinned by an equality assertion; bound it instead.
+
+---
+
+## D118 — Obelisk stops buying shell with the meter it earns
+
+**Requested**: buff OBELISK, under a standing constraint — *"He is a heavy class
+mech, so of course he's going to move slower and stand out as a big target. If
+you want him to hit harder then increase dps by making his attacks stronger, but
+do not do this at the cost of his defensive capabilities."*
+
+Three previous passes had ruled out dome durability (D95/D99, worth 0.001),
+reach (D100, worth −0.033) and part of raw damage (D103, worth ~+0.10), and it
+was still last on the roster at both tiers on both metrics: **36 % / −0.100 at
+EXTREME, 32 % / −0.114 at HARD**, and the only machine with no winning matchup
+anywhere.
+
+### The instrument came first
+
+`balance.ts` says who is losing and nothing about why, which is how three passes
+went on hypotheses. `tools/probe/telemetry.ts` is the counterpart: same duels,
+same seeds, reporting what each machine did with its 180 seconds. Two faults had
+to be fixed in the probe before anything it said could be believed, and both are
+worth knowing about:
+
+* **Status chip damage emits no `hit` event.** It is applied inside
+  `Combatant.step` and never reaches the event stream, so damage read off events
+  omits every burn and acid tick on the roster. It made PYRE measure as the worst
+  machine in the game. It now reads hull deltas instead.
+* **`MatchSim` culls rounds 260 px outside the arena**, deactivating them *with
+  life left* — the exact signature of being eaten. Conflated with contact,
+  OBELISK's main gun read as 52 % effective. It is 17 %.
+
+### What it found
+
+Not what any of the three previous passes assumed. In the currency `lead` is
+made of, OBELISK dealt **75.4 bar/min, the lowest on the roster**, and took 82.6,
+the second-lowest. A tank that cannot hurt anyone.
+
+**It is not an accuracy problem.** Against the other heavy, connect rates were
+within two points across the board — main 17 % vs 15 %, heavy 25 % vs 23 %,
+spread 7 % vs 9 % — and TERRAMOTH was +0.059. The same gun, opposite results.
+
+The leak was that its rounds **died in open air**: 48 % of BREACH GUN rounds and
+62 % of SCATTERGUN pellets expired before reaching anything. Giving them reach
+does not fix it — a `projLife` sweep went −0.057 / −0.091 / −0.098, non-monotone
+and inside noise, which is a dial that has run out of resolution rather than a
+lever. That is D100 confirmed from a second angle.
+
+The actual finding was upstream of all of it. **OBELISK generates more saturation
+than anything on the roster** — 11.4 charge/s against CIRRUS's 5.9, because the
+dome and the guard between them eat some seventy-five rounds a minute — and it
+spent every point on SHIELD, the one mode that adds no offence *and* drains the
+meter at double rate for half the duration. The most-charged pilot in the game
+was buying more of the only thing it already had a surplus of, in the shortest
+bursts available.
+
+### The change
+
+Two lines, no stat touched.
+
+1. `PLAYSTYLES.obelisk.satPreference` **Shield → Shoot**.
+2. `Supporter.spendsCharges` — a `dome` keeps its gun permanently, rather than
+   only while its own shell is broken.
+
+Shoot is the *specific* answer to the measured leak rather than a generic
+uplift: it grants unlimited projectile lifetime, and expiry falls exactly where
+predicted — BREACH GUN 48 % to 34 %, SCATTERGUN 62 % to 47 %.
+
+The second is OBELISK-only because AEGIS is the only `dome` on the roster, and
+it is pure addition. D99 had already softened the gate to "a broken emitter falls
+back on its weapon"; the round counts showed what that was worth — AEGIS fired
+1179 rounds across a 12-seed sweep where BULWARK, doing a comparable job for the
+other heavy, fired 3147. That ratio *is* the share of the match its shell spends
+broken. The gun was gated on the escort failing.
+
+### Measured — 12 seeds, both slot orders, n = 84
+
+```
+  EXTREME   36 % / -0.100  ->  57 % / +0.053
+  HARD      32 % / -0.114  ->  61 % / +0.040
+```
+
+Zero winning matchups became **three of seven**, and three of the four remaining
+losses are −0.02, −0.03 and −0.03 — coin flips rather than defeats. Its worst
+matchup went from −0.21 to **−0.10**, and no new lopsided pairing was created.
+Roster-wide, matchups inside ±0.10 went **13 of 28 → 15 of 28**.
+
+Worth being exact about, because the intermediate measurement disagreed: the
+saturation change *alone* produced five winning matchups and a worse worst case
+(−0.19). Adding the escort's gun redistributed rather than added — OBELISK gained
+against NULLTIDE and lost ground against HALCYON and PYRE. The final shape is
+flatter and fairer than the bigger-sounding number.
+
+**The defensive constraint held, and was measured rather than asserted**: every
+defensive stat is untouched, it still absorbs 72 rounds a minute, and damage
+taken rose **6 %** while damage dealt rose **22 %**.
+
+### What was measured and rejected
+
+| option | EXTREME | why not |
+| --- | --- | --- |
+| RAM CHARGE 170 to 260 | 44 % / −0.007 | +53 % damage for less than a free change |
+| SCATTERGUN reach | noise, non-monotone | not a lever; confirms D100 |
+| `meleeAppetite` 0.1 to 0.3 | 38 % / −0.061 | small, and the dial is a threshold |
+
+`meleeAppetite` measured *identically* at 0.3, 0.5 and 0.75, which looked like
+the `hitAndRun` failure of D104. It is not: the value is consumed as a threshold
+(`>= BRAWLER_APPETITE`), so saturation above it is correct behaviour.
+
+### The spread did not move, and that is the expected result
+
+```
+  EXTREME spread   0.208 -> 0.216
+```
+
+Lifting the floor made VESPER the floor: he was one of the few machines OBELISK
+lost to, and OBELISK now beats him +0.14, taking him −0.083 to −0.119. Nothing at
+the top moves the spread until VESPER comes up too, which is the next task.
+
+### A behavioural test, not a screenshot
+
+The AEGIS change is invisible from outside: the escort fired before, drew the
+same muzzle flash, spent the same charges, and only a round count showed it was
+doing so for a third of the match. So the guard asserts on the *conditional* —
+a shot leaving while `domeActive` is true — and was checked red against the old
+gate before being kept. Firing at all proves nothing, because the old behaviour
+fired too.
+
+`playstyles.test.ts` had named OBELISK as its Shield-preferring exemplar and went
+red on a change it had nothing to say about — the same coupling as the ladder
+test's dependence on HALCYON. It now derives the fixture from the property.
+
+---
+
+## D119 — The Shield drain becomes a chassis dial
+
+**Requested**, and the request was the correct instinct.
+
+The first version of the OBELISK fix considered lowering the Shield burst's
+double drain rate. Measured roster-wide it worked and cost too much elsewhere:
+at 1.0 it took OBELISK to 52 % / +0.012 and simultaneously handed TERRAMOTH — the
+roster's other Shield pilot — a jump from 58 % to **71 %**, a new outlier at the
+top. A single shared constant cannot say "this machine is good at guarding".
+
+So `MechDef.gauges.satShieldDrain` is now per-chassis, defaulting to the standing
+2, with OBELISK at **1**. It is the only machine that gets a full-length Shield
+burst, which is the correct place for the barrier specialist to be different.
+Verified OBELISK-only: TERRAMOTH sat unmoved at +0.032 to +0.033 across the change.
+
+### It measures as inert in AI play, and that is honest
+
+With D118 in place the rival never *picks* Shield on OBELISK, so the harness
+cannot see this at all: +0.057 to +0.053, well inside a 0.029 standard error. It
+is a human-facing buff, and the AI-vs-AI instrument is structurally unable to
+value it — the same blind spot as §8f, where the rival never chooses a
+sub-weapon either.
+
+That is worth stating plainly rather than quoting the flat number as if it were
+a disappointment. A player who picks OBELISK and holds SHIELD gets twice the
+burst; nothing in the measurement disagrees, it simply never runs the experiment.
+
+### The alternative it replaced, and why HARD killed it
+
+Keeping OBELISK on Shield and making the per-chassis drain the load-bearing
+change measured *better* at EXTREME than the change actually shipped — 55 % /
++0.067 and a roster spread of **0.177**, the best number seen all session.
+
+At HARD it collapsed to **37 % / −0.083**, against a 32 % / −0.114 baseline:
+barely moved. The fix was EXTREME-only, which is the same structural disease
+VESPER has and the reason HARD is run as a corroborating second sample at all.
+An EXTREME-only spread of 0.177 is worth less than a fix that works at both
+tiers, and reading only the first number would have shipped the wrong one.

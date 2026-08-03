@@ -25,8 +25,18 @@ and `AI_PROFILES` in `src/ai/RivalAI.ts` gates whole traits behind tier:
 | `leadShots` — solves the intercept, aims via manual aim | ❌ | ❌ | ✅ | ✅ |
 | `resourceIq` — reads the opponent's gauges | ❌ | ❌ | ❌ | ✅ |
 | `droneIq` — values both escorts | ❌ | ❌ | ❌ | ✅ |
+| `rangeIq` — reads reach and holds a computed distance | ❌ | ❌ | ❌ | ✅ |
+| `tempoIq` — reads the exchange's rhythm | ❌ | ❌ | ❌ | ✅ |
+| `planIq` — commits to a plan across ticks | ❌ | ❌ | ❌ | ✅ |
 
-`resourceIq` and `droneIq` **only ever execute at EXTREME**. A test run at NORMAL
+**Five** traits only ever execute at EXTREME: `resourceIq`, `droneIq`,
+`rangeIq`, `tempoIq` and `planIq` (`RivalAI.ts:393–478`). This table listed two
+of them until D118, which mattered — VESPER's whole diagnosis rests on `rangeIq`
+being EXTREME-only, and the durable document did not record the trait it rests
+on. **Check the source before trusting this table**; it is hand-maintained and
+has been wrong once.
+
+A test run at NORMAL
 does not touch that code at all, so a fault living in it passes the test. EXTREME
 also produces the longest matches, which means more of everything happens per
 run — saturation bursts, desperation, drone rebuilds, guard breaks.

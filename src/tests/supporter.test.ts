@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MatchSim } from '../combat/MatchSim';
 import { HALCYON, NOCTURNE } from '../data/mechs';
+import { OBELISK } from '../data/rosterExtra';
 import { ROSTER } from '../data/mechs';
 import { DroneMode, REBUILD_TICKS, Supporter, type DroneThreat } from '../combat/Supporter';
 import { Btn, MatchPhase, Team, emptyInput, type InputFrame, type SimEvent } from '../combat/types';
@@ -686,6 +687,54 @@ describe('supporter — auto-fire', () => {
     expect(p.supporter.readyFraction).toBe(1);
     stepUntil(s, () => p.supporter.state !== 0, 300);
     expect(p.supporter.readyFraction).toBe(0);
+  });
+});
+
+/**
+ * AEGIS keeps its gun while its shell is up (D118).
+ *
+ * The gate used to be `role === 'dome' && domeDownTicks > 0` — the escort could
+ * only shoot while *failing*. That is invisible from the outside in the worst
+ * way: AEGIS still fired, still drew a muzzle flash, still spent charges, and a
+ * round count is the only thing that shows it was doing so for barely a third
+ * of the match.
+ *
+ * So the assertion is deliberately conditioned on `domeActive`: firing at all
+ * proves nothing, because the old behaviour fired too. What has to be true is
+ * that a shot leaves *while the bubble is up*.
+ */
+describe('supporter — a dome keeps its gun', () => {
+  it('fires while its own shell is still up', () => {
+    const s = sim({ playerDef: OBELISK, enemyDef: NOCTURNE });
+    toFight(s);
+    close(s);
+    const p = s.player;
+
+    let firedWithDomeUp = false;
+    for (let i = 0; i < 900 && !firedWithDomeUp; i++) {
+      s.step(emptyInput(), emptyInput());
+      if (!p.supporter.domeActive) continue;
+      // The pooled projectile, not the attack — §8b of the handoff. A spawn
+      // that never reaches the pool is exactly the failure this guards.
+      firedWithDomeUp = eventsOfType(s, 'fire').some((e) => e.ownerId === p.id);
+    }
+    expect(firedWithDomeUp).toBe(true);
+  });
+
+  it('still holds the bubble up while it shoots', () => {
+    const s = sim({ playerDef: OBELISK, enemyDef: NOCTURNE });
+    toFight(s);
+    close(s);
+    const p = s.player;
+    let domeUp = 0;
+    for (let i = 0; i < 600; i++) {
+      s.step(emptyInput(), emptyInput());
+      if (p.supporter.domeActive) domeUp++;
+    }
+    // Bounded, not pinned: the shell is consumable and an opponent is shooting
+    // at it, so the exact share moves with tuning. What must not happen is the
+    // gun costing the dome its uptime.
+    expect(domeUp).toBeGreaterThan(300);
   });
 });
 

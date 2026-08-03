@@ -222,13 +222,39 @@ export const PLAYSTYLES: Record<string, Playstyle> = {
       'Saar Tengku — steady, patient, defensive. The only pilot whose kit is built ' +
       'around the barrier itself: biggest pool, fastest regen, cheapest burst. Holds ' +
       'the line and lets the opponent break themselves on it, then answers with the ' +
-      'ram shield. Keeps his drone tucked in, because the passive is the point.',
+      'ram shield. Keeps his drone tucked in, because the passive is the point. ' +
+      'Banks the fire he eats and spends it on the answer, not on more shell.',
     aggressionMul: 0.92,
     rangeMul: 0.94,
     meleeAppetite: 0.1,
     dashMul: 0.85,
     guardMul: 1.3,
-    satPreference: SatMode.Shield,
+    /**
+     * **Shoot, on the machine whose identity is the barrier.** Not a
+     * contradiction — the barrier is how he *earns* the meter, and this is
+     * what he buys with it.
+     *
+     * He generates more saturation than anything on the roster, 11.4 charge/s
+     * against CIRRUS's 5.9, because the dome and the guard between them eat
+     * some seventy-five rounds a minute. Shield spent all of it on the one
+     * thing he already had a surplus of: measured, he took the second-least
+     * damage on the roster and dealt the least of anyone. Worse, Shield drains
+     * the meter at double rate, so the most-charged pilot in the game was also
+     * getting the shortest bursts.
+     *
+     * Shoot is the *specific* answer to how his damage was being lost, rather
+     * than a generic uplift. His measured leak was rounds dying in open air —
+     * 48 % of BREACH GUN and 62 % of SCATTERGUN expired before reaching
+     * anything, and giving them more reach measured as noise (D100). A Shoot
+     * burst grants unlimited projectile lifetime, and the leak closes exactly
+     * there: expiry falls to 34 % and 47 %.
+     *
+     * **It costs no defensive capability**, which was the standing design
+     * constraint on this chassis. Every defensive stat is untouched and he
+     * still absorbs 72 rounds a minute; damage taken rose 6 % while damage
+     * dealt rose 22 %. See D118.
+     */
+    satPreference: SatMode.Shoot,
     droneDoctrine: 'shadow',
     hitAndRun: false,
     kites: false,

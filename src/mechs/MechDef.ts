@@ -62,6 +62,18 @@ export interface GaugeDef {
   /** Ticks a full saturation activation lasts. */
   satDuration: number;
   /**
+   * Meter spent per tick by a **Shield** burst, where the other two modes spend
+   * one. Omitted means the standing 2 — half the duration, as the reference did
+   * for its barrier-type concentration.
+   *
+   * A chassis dial rather than a global constant, so a machine can be *good at
+   * guarding* in the one place that costs the most. A single shared number
+   * cannot express that: lowering it lifts every Shield pilot at once, which
+   * measured as a 13-point win-rate gift to TERRAMOTH while fixing OBELISK.
+   * Made per-chassis by request for exactly that reason. See D119.
+   */
+  satShieldDrain?: number;
+  /**
    * Saturation granted per point of damage *taken*. A losing pilot builds
    * toward their overdrive — a comeback valve the working Iron Babel build uses
    * (`target.sat += damage * .35`).

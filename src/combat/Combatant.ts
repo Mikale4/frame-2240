@@ -1270,7 +1270,11 @@ export class Combatant implements FlightState {
       // Shield mode burns the meter faster, as the reference did for its
       // barrier-type concentration. It also now buys the most: a free permanent
       // guard on top of the projectile-erasing bubble, so it pays in duration.
-      this.satTicks -= this.satMode === SatMode.Shield ? 2 : 1;
+      //
+      // The rate is a chassis dial (`satShieldDrain`, default 2) rather than a
+      // constant, so a barrier specialist can hold the mode its whole identity
+      // is named after without paying the standing penalty. See D119.
+      this.satTicks -= this.satMode === SatMode.Shield ? (g.satShieldDrain ?? 2) : 1;
       this.sat = Math.max(0, (this.satTicks / g.satDuration) * g.maxSaturation);
       if (this.satTicks <= 0) {
         this.satActive = false;

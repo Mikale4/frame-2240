@@ -1211,6 +1211,10 @@ export const OBELISK: MechDef = {
     barrierRegenDelay: 30,
     guardDrain: 0.42,
     satOnAbsorb: 42,
+    // The one chassis that gets a full-length Shield burst. Every other machine
+    // spends the meter at 2/tick in that mode and gets half a burst for it;
+    // Saar Tengku is the barrier specialist, and this is the place to say so.
+    satShieldDrain: 1,
   },
   barrier: { ...BARRIER, cost: 20, invulnTicks: 44, shieldBonusTicks: 34, guardScale: 0.14, meleeGuardScale: 0.38, pierceGuardScale: 0.38, radius: 54, breakStun: 44 },
   defence: { mul: 0.86, groundedMul: 0.76 },

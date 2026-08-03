@@ -5,7 +5,7 @@ import { MatchSim } from '../combat/MatchSim';
 import { RivalAI } from '../ai/RivalAI';
 import { Rng } from '../core/Rng';
 import { Difficulty } from '../core/Session';
-import { MatchPhase, SatMode } from '../combat/types';
+import { MatchPhase, SAT_MODE_NAMES, SatMode } from '../combat/types';
 
 /**
  * Playstyles are the layer that says *who* a pilot is, on top of the tier that
@@ -132,26 +132,41 @@ describe('saturation preference is a lean, not an override', () => {
     );
   };
 
+  /**
+   * A pilot who currently prefers `mode`, found rather than named.
+   *
+   * These cases are about `chooseSatMode`, not about any one machine — the
+   * mech is only standing in for "somebody who prefers this". Naming one
+   * couples a behavioural test to a balance dial, and it duly broke when
+   * OBELISK's preference moved in D118: two red tests that had nothing to say
+   * about the change that turned them red. Same fault as the ladder test's
+   * HALCYON coupling in §8a of the handoff, and the same fix — derive the
+   * fixture from the property instead of hard-coding it.
+   */
+  const pilotPreferring = (mode: SatMode): string => {
+    const m = ROSTER.find((r) => PLAYSTYLES[r.id]?.satPreference === mode);
+    if (!m) throw new Error(`no pilot on the roster prefers ${SAT_MODE_NAMES[mode] ?? mode}`);
+    return m.id;
+  };
+
   it('still picks SHOOT at range for a pilot who prefers SHIELD', () => {
-    expect(PLAYSTYLES.obelisk.satPreference).toBe(SatMode.Shield);
-    expect(modeAt('obelisk', 0.9, 700)).toBe(SatMode.Shoot);
+    expect(modeAt(pilotPreferring(SatMode.Shield), 0.9, 700)).toBe(SatMode.Shoot);
   });
 
   it('still picks SHOOT at range for a pilot who prefers SPEED', () => {
-    expect(PLAYSTYLES.cirrus.satPreference).toBe(SatMode.Speed);
-    expect(modeAt('cirrus', 0.9, 700)).toBe(SatMode.Shoot);
+    expect(modeAt(pilotPreferring(SatMode.Speed), 0.9, 700)).toBe(SatMode.Shoot);
   });
 
   it('reaches for SHIELD earlier for a pilot who prefers it', () => {
     // 0.42 life: past a Shield-preferring pilot's threshold, short of everyone else's.
-    expect(modeAt('obelisk', 0.42, 700)).toBe(SatMode.Shield);
-    expect(modeAt('halcyon', 0.42, 700)).toBe(SatMode.Shoot);
+    expect(modeAt(pilotPreferring(SatMode.Shield), 0.42, 700)).toBe(SatMode.Shield);
+    expect(modeAt(pilotPreferring(SatMode.Shoot), 0.42, 700)).toBe(SatMode.Shoot);
   });
 
   it('reaches for SPEED from further out for a pilot who prefers it', () => {
-    // 300px: inside CIRRUS's widened window, outside the default one.
-    expect(modeAt('cirrus', 0.9, 300)).toBe(SatMode.Speed);
-    expect(modeAt('halcyon', 0.9, 300)).toBe(SatMode.Shoot);
+    // 300px: inside a Speed-preferring pilot's widened window, outside the default.
+    expect(modeAt(pilotPreferring(SatMode.Speed), 0.9, 300)).toBe(SatMode.Speed);
+    expect(modeAt(pilotPreferring(SatMode.Shoot), 0.9, 300)).toBe(SatMode.Shoot);
   });
 });
 
