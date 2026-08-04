@@ -983,15 +983,20 @@ export const CIRRUS: MechDef = {
    *   240  (4s) -> +0.096, 58% wins, roster spread 0.200
    * ```
    *
-   * 240 is where the lever stops paying. She lands inside the top group rather
-   * than above it — +0.096 against TERRAMOTH's +0.055 is 1.3σ — and below this
-   * the spread is bound by OBELISK's floor rather than by her ceiling, so
-   * shortening further would cost the moment without buying balance.
+   * 240 was where that sweep stopped paying. She landed inside the top group
+   * rather than above it — +0.096 against TERRAMOTH's +0.055 is 1.3σ — and below
+   * it the spread was bound by OBELISK's floor rather than by her ceiling, so
+   * shortening further cost the moment without buying balance.
    *
    * A shorter window also shifts weight onto the blade-only phase, which is the
    * half that already measured fair. That is the right way round.
+   *
+   * **Now 330 — five and a half seconds, by request.** The sweep above is kept
+   * for its shape, not its values: it was taken against a roster that has since
+   * had OBELISK, VESPER and PYRE rebuilt and a solid deck added under all of
+   * them. Read it as "this dial is steep", not as a lookup table.
    */
-  overdrive: { threshold: 0.25, ticks: 240, meleeMul: 1.5 },
+  overdrive: { threshold: 0.25, ticks: 330, meleeMul: 1.5 },
   flight: {
     ...FLIGHT,
     accel: 2.15,
