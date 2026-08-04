@@ -17,6 +17,15 @@ import { depthSortAt } from '../core/Depth';
  */
 const NEAR_LIP_ROW = 748;
 
+/**
+ * The painted sky's scroll rate and how much of the gradient shows through it.
+ *
+ * 0.02 because the sky is the one thing in a parallax stack that is genuinely at
+ * infinity — it should barely acknowledge the camera at all.
+ */
+const SKY_SCROLL = 0.02;
+const SKY_ALPHA = 0.88;
+
 /** How much faster than the world the foreground columns travel. */
 const FORE_SCROLL = 1.35;
 /**
@@ -33,6 +42,17 @@ const FORE_DEPTH = 60;
  */
 export class Backdrop {
   private readonly sky: Phaser.GameObjects.Graphics;
+  /**
+   * The painted night sky, over the gradient rather than instead of it.
+   *
+   * Held at `SKY_ALPHA` so the gradient beneath shows through and **lifts it**.
+   * The art measures luminance 15/23/31/43/88 by fifths against a gradient
+   * pitched at 22/44/66/80/86 — darker than intended through the middle, which
+   * a tint cannot fix because tinting only multiplies down. Letting the brighter
+   * gradient through is the one cheap way to raise it, and it keeps the gradient
+   * doing useful work rather than becoming a fallback nobody ever sees.
+   */
+  private readonly skyArt: Phaser.GameObjects.TileSprite;
   private readonly far: Phaser.GameObjects.TileSprite;
   /**
    * Mid-distance haze: cranes and gantry platforms between the skyline and the
@@ -74,7 +94,7 @@ export class Backdrop {
 
   /** All backdrop objects, so the scene can assign them to the right camera. */
   get objects(): Phaser.GameObjects.GameObject[] {
-    return [this.sky, this.stars, this.far, this.haze, this.mid, this.near, this.fore, this.dust];
+    return [this.sky, this.skyArt, this.stars, this.far, this.haze, this.mid, this.near, this.fore, this.dust];
   }
 
   constructor(scene: Phaser.Scene) {
@@ -85,6 +105,13 @@ export class Backdrop {
     this.sky = scene.add.graphics();
     this.sky.setDepth(-100);
     this.paintSky();
+
+    // ---- painted sky ------------------------------------------------------
+    // Mirrored to 3072 like `far` and `haze`. It scrolls slower than anything
+    // else on the stack: it is the sky, and the sky does not move.
+    this.skyArt = scene.add.tileSprite(0, 0, VIEW_W, 1024, 'arena_sky');
+    this.skyArt.setOrigin(0, 0).setDepth(-98);
+    this.skyArt.setAlpha(SKY_ALPHA);
 
     // ---- stars -----------------------------------------------------------
     // Behind every strip and in front of nothing but the gradient. Concentrated
@@ -327,6 +354,8 @@ export class Backdrop {
      * ends is a fragment the camera can catch.
      */
     place(this.fore, -230 + vFrac * 150, FORE_SCROLL);
+    // Behind everything, and barely moving.
+    place(this.skyArt, -240 + vFrac * 150, SKY_SCROLL);
     place(this.far, -110 + vFrac * 70, 0.06);
     this.far.tilePositionY = vFrac * 24;
     // Between far (0.06) and mid (0.18), and offset up so its structure band

@@ -10,6 +10,7 @@ Art direction and the full specification live in `docs/STAGE_ART_BRIEF.md`.
 
 | Shipped | Size | Source | Derivation |
 | --- | --- | --- | --- |
+| `arena_sky.png` | 3072 x 1024 | `sky_master_1536.png` | **Mirrored**, same reason |
 | `arena_far.png` | 3072 x 1024 | `far_master_1536.png` | **Mirrored.** See below. |
 | `arena_haze.png` | 3072 x 1024 | `haze_master_1536.png` | **Mirrored**, same reason |
 | `arena_mid.png` | 1536 x 1024 | `mid_master_1536.png` | Straight copy |
@@ -21,6 +22,18 @@ the stack had a factor-of-three gap in its scroll rates (0.06 to 0.18) and read
 as two flats. It scrolls at 0.11. Its master ran off both edges exactly as the
 far layer's did — 106 of 256 rows, mismatch up to 113 — and is mirrored by the
 same recipe.
+
+`arena_sky.png` is the painted night sky, drawn *over* the engine's own gradient
+at 88 % alpha rather than instead of it. The art measures luminance 15/23/31/43/88
+by fifths against a gradient pitched at 22/44/66/80/86 — darker than intended
+through the middle — and a tint cannot lift it, because tinting only multiplies
+down. Letting the brighter gradient through is the cheap fix. It scrolls at 0.02:
+the sky is the one thing genuinely at infinity.
+
+Two candidates were delivered. The one not used was 1672x941 and brighter
+(mean 59.6, SD 41.3) with roughly twice the edge mismatch; this one is 1536x1024,
+matching every other layer, mean 46.3 and SD 35.2. **It is easier to lift a dark
+backdrop than to tame a bright one**, and that decided it.
 
 ### `arena_far.png` is the one that matters
 
@@ -76,7 +89,7 @@ print(sorted(tops)[len(tops)//2])   # -> NEAR_LIP_ROW
 
 ## Expect tiling to fail
 
-Four of the five delivered layers did not tile. Two happened to be safe because
+Five of the six delivered layers did not tile. Two happened to be safe because
 their structure did not reach the image edges; the far layer had to be mirrored.
 **Assume seamlessness is the engine's job, not the generator's**, and measure it
 rather than trusting it:
