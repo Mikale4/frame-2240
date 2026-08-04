@@ -496,18 +496,150 @@ def _mix(nt, fac, a, b):
     return n, io
 
 
+# ------------------------------------------------------- surface textures
+#
+# CC0 maps from Poly Haven, processed to 512px greyscale. See
+# `assets/blender/textures/README.md` for provenance, the exact source URLs and
+# the 16-bit conversion trap.
+#
+# They drive **masks, roughness and bump — never albedo colour**. The palette
+# rule below requires the identity hue to dominate the surface so eight machines
+# stay tellable apart at gameplay scale, and photographic albedo would pull every
+# one of them toward the same brown-grey.
+
+_TEXTURE_DIR_OVERRIDE = None
+_IMG_CACHE = {}
+
+
+def _texture_dir():
+    """Textures live beside the .blend, in `assets/blender/textures`."""
+    if _TEXTURE_DIR_OVERRIDE:
+        return _TEXTURE_DIR_OVERRIDE
+    if bpy.data.filepath:
+        return os.path.join(os.path.dirname(bpy.data.filepath), "textures")
+    return None
+
+
+def _load_image(filename, non_color=False):
+    """Loads a texture once and reuses it. None if it is missing.
+
+    Missing textures are not an error: every material falls back to the
+    procedural-only path, so the build still produces sprites on a checkout that
+    has not fetched them.
+    """
+    if filename in _IMG_CACHE:
+        return _IMG_CACHE[filename]
+    d = _texture_dir()
+    path = os.path.join(d, filename) if d else None
+    img = None
+    if path and os.path.exists(path):
+        try:
+            img = bpy.data.images.get(filename) or bpy.data.images.load(path)
+            if non_color:
+                img.colorspace_settings.name = "Non-Color"
+        except (RuntimeError, OSError):
+            img = None
+    _IMG_CACHE[filename] = img
+    return img
+
+
+# Repeats per Blender unit.
+#
+# Swept at 2.2 / 4.0 / 6.5 / 10.0 and it measured **flat** - hull SD 36.10,
+# 36.03, 36.02, 36.03 - because at any of these the texture modulates by at most
+# ~25 of 255 while the 3D form's own shading spans far more. The scale is
+# therefore *not* the sensitive dial it was assumed to be; the strengths below
+# are. 4.0 is kept because it puts 1.5-2.5 repeats across a typical 0.4 BU part,
+# which is coarse enough to survive to the 35-100 logical px a part occupies.
+TEX_SCALE = 4.0
+# A second, much coarser sampling of the same maps. One scale alone gives a
+# single grain; a coarse layer under a fine one is what makes a surface look
+# *aged* rather than *speckled*, and it is the layer that survives to sprite size.
+TEX_SCALE_BROAD = 0.9
+# How far the scuff mask pulls the surface toward its worn tone.
+#
+# These were 0.34/0.30/0.28 on the first pass and the result was, correctly,
+# called invisible. A part face is large and flat and takes one lighting value,
+# so *all* the tonal variation within a panel has to come from here. Timid
+# values produce a 25-of-255 modulation that vanishes against the form's own
+# shading. They are deliberately aggressive now.
+WEAR_STRENGTH = 1.0
+WEAR_DARK = 0.34
+BROAD_STRENGTH = 0.70
+BROAD_DARK = 0.55
+# Oxide. `RUST_GATE` is the mask threshold - raising it makes rust rarer, which
+# is the difference between "weathered machine" and "abandoned wreck".
+RUST_STRENGTH = 0.62
+RUST_GATE = 0.46
+# How much the roughness map varies the base roughness. This is what breaks up
+# the smooth specular sweep that made the sprites read as moulded plastic.
+ROUGH_TEX_STRENGTH = 0.45
+# Crevice darkening. Pointiness above 0.5 is convex (an edge), below is concave
+# (a corner, a panel gap, the seam where two boxes meet). The material brightened
+# convex edges from the start and did nothing with concave ones, so every inside
+# corner stayed as bright as the middle of a face — which is a large part of why
+# the chassis read as untextured boxes. This is the single biggest contributor to
+# perceived depth on geometry this blocky.
+CAVITY_STRENGTH = 0.85
+CAVITY_DARK = 0.30
+# Surface relief, driven from the wear map's luminance. A normal map is not
+# usable here: the meshes carry no UVs, so there is no tangent basis for a
+# NormalMap node to work in. Bump needs none.
+BUMP_STRENGTH = 0.40
+# The oxide tone, sampled from rust_coarse_01 rather than invented: hue 23.8deg,
+# against the deck's sodium practicals at 30.3deg. Same warm family, so the
+# corrosion reads as native to CATHEDRAL YARD.
+RUST_RGB = (0.30, 0.15, 0.07)
+
+
+def _tex(nt, coord, filename, scale=None, non_color=False):
+    """An image texture in object space, box-projected. Returns None if absent.
+
+    Box projection because the meshes have **no UV maps** - every procedural
+    node in this file drives off object coordinates for the same reason. Box
+    projection needs no unwrap and gives all six faces sane, seam-free coverage.
+    """
+    img = _load_image(filename, non_color=non_color)
+    if img is None:
+        return None
+    mapping = nt.nodes.new("ShaderNodeMapping")
+    s = TEX_SCALE if scale is None else scale
+    mapping.inputs["Scale"].default_value = (s, s, s)
+    nt.links.new(coord.outputs["Object"], mapping.inputs["Vector"])
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = img
+    tex.projection = "BOX"
+    tex.projection_blend = 0.35
+    tex.extension = "REPEAT"
+    nt.links.new(mapping.outputs["Vector"], tex.inputs["Vector"])
+    return tex
+
+
 def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail=True):
     """
-    Armour material with procedural surface interest.
+    Armour material with procedural surface interest plus photographic wear.
 
     Flat albedo is what makes an untextured model read as "clunky plastic". The
     reference sprites have machined highlights along every edge, panel seams, and
-    uneven grime. All three are generated procedurally here so no texture files
-    are needed and the result stays original:
+    uneven grime. The procedural half generates:
 
       * Pointiness  -> bright worn edges (and slightly glossier there)
       * Wave x2     -> a panel-seam grid in object space
       * Noise x2    -> fine grime plus broad tonal drift
+
+    That got the shape right and the *surface* wrong: measured against the stage,
+    the sprites sat at luminance 133-188 with a 95th percentile of **255** —
+    blowing out to pure white — where CATHEDRAL YARD's steel runs 44 and tops out
+    at 104. Smooth gradients climbing to white is exactly the plastic read. The
+    texture half fixes that:
+
+      * plate_wear   -> scuffs, abrasion and vertical panel seams
+      * rust_mask    -> sparse oxide, tinted to the deck's own warm family
+      * plate_rough  -> roughness break-up, which kills the specular sweep
+      * bump         -> a whisper of relief, from the wear map's luminance
+
+    Missing texture files degrade to the procedural-only result rather than
+    failing the build.
     """
     mat = bpy.data.materials.get(name)
     if mat is None:
@@ -615,13 +747,77 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
         nt.links.new(broad.outputs["Fac"], broad_fac.inputs[0])
         _n2, c2 = _mix(nt, broad_fac.outputs[0], c1, drift)
 
+        # Seams were mixed at 0.45 toward rgb*0.40, which on a part occupying
+        # 35-100 px produced a line you had to be told was there. Because each
+        # part is rendered *in isolation* — `render_parts` hides every other mesh,
+        # so nothing ever shadows anything — panel structure is one of the only
+        # sources of depth a sprite has. It is now near-black and near-opaque.
         seam_fac = nt.nodes.new("ShaderNodeMath")
         seam_fac.operation = "MULTIPLY"
-        seam_fac.inputs[1].default_value = 0.45
+        seam_fac.inputs[1].default_value = 0.90
         nt.links.new(seam_inv.outputs[0], seam_fac.inputs[0])
-        _n3, c3 = _mix(nt, seam_fac.outputs[0], c2, seam_col)
+        _n3, c3 = _mix(nt, seam_fac.outputs[0], c2, _scale_rgb(rgb, 0.16))
 
-        _n4, c4 = _mix(nt, edge_r.outputs["Color"], c3, edge)
+        # --- photographic wear ------------------------------------------
+        # Sits between the panelling and the edge highlight deliberately: edge
+        # wear must stay last so machined edges read *on top of* the grime and
+        # the silhouette keeps the crisp contour Freestyle draws around it.
+        surf = c3
+
+        # Coarse layer first: big soft blotches of tonal drift across a whole
+        # panel, at roughly one repeat per part. This is the layer that reads at
+        # sprite size — fine grain averages away, a gradient across a face does
+        # not.
+        broad_tex = _tex(nt, coord, "rust_mask.png", scale=TEX_SCALE_BROAD, non_color=True)
+        if broad_tex is not None:
+            broad_f = nt.nodes.new("ShaderNodeMath")
+            broad_f.operation = "MULTIPLY"
+            broad_f.inputs[1].default_value = BROAD_STRENGTH
+            nt.links.new(broad_tex.outputs["Color"], broad_f.inputs[0])
+            _nb, surf = _mix(nt, broad_f.outputs[0], surf, _scale_rgb(rgb, BROAD_DARK))
+
+        wear_tex = _tex(nt, coord, "plate_wear.png", non_color=True)
+        if wear_tex is not None:
+            wear_fac = nt.nodes.new("ShaderNodeMath")
+            wear_fac.operation = "MULTIPLY"
+            wear_fac.inputs[1].default_value = WEAR_STRENGTH
+            nt.links.new(wear_tex.outputs["Color"], wear_fac.inputs[0])
+            _nw, surf = _mix(nt, wear_fac.outputs[0], surf, _scale_rgb(rgb, WEAR_DARK))
+
+        rust_tex = _tex(nt, coord, "rust_mask.png", non_color=True)
+        if rust_tex is not None:
+            # Gated sparse. Full-coverage rust is an abandoned wreck; these are
+            # machines somebody maintains and flies.
+            rust_ramp = nt.nodes.new("ShaderNodeValToRGB")
+            rust_ramp.color_ramp.elements[0].position = RUST_GATE
+            rust_ramp.color_ramp.elements[1].position = min(1.0, RUST_GATE + 0.30)
+            nt.links.new(rust_tex.outputs["Color"], rust_ramp.inputs["Fac"])
+            rust_fac = nt.nodes.new("ShaderNodeMath")
+            rust_fac.operation = "MULTIPLY"
+            rust_fac.inputs[1].default_value = RUST_STRENGTH
+            nt.links.new(rust_ramp.outputs["Color"], rust_fac.inputs[0])
+            _nr, surf = _mix(nt, rust_fac.outputs[0], surf, RUST_RGB)
+
+        # --- crevice darkening -------------------------------------------
+        # Pointiness > 0.5 is convex, < 0.5 is concave. The material has always
+        # brightened convex edges and done nothing with concave ones, so every
+        # inside corner and panel gap sat at the same value as the middle of a
+        # face. On geometry this blocky that is most of the "untextured box"
+        # read, and no amount of albedo texture substitutes for it.
+        cav_r = nt.nodes.new("ShaderNodeValToRGB")
+        cav_r.color_ramp.elements[0].position = 0.34
+        cav_r.color_ramp.elements[0].color = (1, 1, 1, 1)   # deep concave: full
+        cav_r.color_ramp.elements[1].position = 0.50
+        cav_r.color_ramp.elements[1].color = (0, 0, 0, 1)   # flat: none
+        nt.links.new(geo.outputs["Pointiness"], cav_r.inputs["Fac"])
+        cav_f = nt.nodes.new("ShaderNodeMath")
+        cav_f.operation = "MULTIPLY"
+        cav_f.inputs[1].default_value = CAVITY_STRENGTH
+        nt.links.new(cav_r.outputs["Color"], cav_f.inputs[0])
+        _nc, surf = _mix(nt, cav_f.outputs[0], surf, _scale_rgb(rgb, CAVITY_DARK))
+
+        # Edge highlight stays last so machined edges read on top of everything.
+        _n4, c4 = _mix(nt, edge_r.outputs["Color"], surf, edge)
         nt.links.new(c4, bsdf.inputs["Base Color"])
 
         # Edges are polished, flats are duller.
@@ -631,7 +827,36 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
         rough_mix.inputs["To Min"].default_value = roughness
         rough_mix.inputs["To Max"].default_value = max(0.08, roughness * 0.5)
         nt.links.new(edge_r.outputs["Color"], rough_mix.inputs["Value"])
-        nt.links.new(rough_mix.outputs["Result"], bsdf.inputs["Roughness"])
+
+        # The measured roughness map, added as a signed offset around whatever
+        # the edge term produced. This is the node that matters most for the
+        # plastic read: a constant roughness gives one smooth specular sweep
+        # climbing to pure white, and breaking it up is what caps the highlight.
+        rough_tex = _tex(nt, coord, "plate_rough.png", non_color=True)
+        if rough_tex is not None:
+            r_range = nt.nodes.new("ShaderNodeMapRange")
+            r_range.inputs["From Min"].default_value = 0.0
+            r_range.inputs["From Max"].default_value = 1.0
+            r_range.inputs["To Min"].default_value = -ROUGH_TEX_STRENGTH
+            r_range.inputs["To Max"].default_value = ROUGH_TEX_STRENGTH
+            nt.links.new(rough_tex.outputs["Color"], r_range.inputs["Value"])
+            r_add = nt.nodes.new("ShaderNodeMath")
+            r_add.operation = "ADD"
+            r_add.use_clamp = True
+            nt.links.new(rough_mix.outputs["Result"], r_add.inputs[0])
+            nt.links.new(r_range.outputs["Result"], r_add.inputs[1])
+            nt.links.new(r_add.outputs[0], bsdf.inputs["Roughness"])
+        else:
+            nt.links.new(rough_mix.outputs["Result"], bsdf.inputs["Roughness"])
+
+        # Relief from the wear map's luminance. Bump rather than NormalMap: the
+        # meshes carry no UVs, so there is no tangent basis a normal map could
+        # be interpreted in, and box-projected tangents are undefined.
+        if wear_tex is not None:
+            bump = nt.nodes.new("ShaderNodeBump")
+            bump.inputs["Strength"].default_value = BUMP_STRENGTH
+            nt.links.new(wear_tex.outputs["Color"], bump.inputs["Height"])
+            nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
     except (AttributeError, KeyError, RuntimeError, IndexError, TypeError):
         # Any node-API drift falls back to a plain shaded material.
         bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
@@ -2273,7 +2498,24 @@ def setup_world_and_lights():
     nt.links.new(bg.outputs[0], out.inputs[0])
     scene.world = world
 
-    for opt, val in (("taa_render_samples", 64), ("use_gtao", True)):
+    # `use_gtao` was set here for years and **has done nothing since Blender 4.2**.
+    # EEVEE Next removed it along with every `gtao_*` property; the setattr sat
+    # inside this try/except and its AttributeError was swallowed in silence. The
+    # renders had no ambient occlusion at all, which on geometry this blocky is a
+    # real part of why the sprites read as untextured boxes.
+    #
+    # Both spellings are attempted so the script still works on 3.x/4.0.
+    for opt, val in (
+        ("taa_render_samples", 64),
+        ("use_gtao", True),              # <=4.1 only
+        ("gtao_distance", 0.35),         # <=4.1 only
+        ("use_raytracing", True),        # 4.2+ EEVEE Next
+        ("use_fast_gi", True),
+        ("fast_gi_method", "AMBIENT_OCCLUSION"),
+        ("fast_gi_distance", 0.5),
+        ("fast_gi_ray_count", 4),
+        ("fast_gi_step_count", 12),
+    ):
         try:
             setattr(scene.eevee, opt, val)
         except (AttributeError, TypeError):
@@ -2297,7 +2539,26 @@ def setup_world_and_lights():
 
     # Hard, small key for crisp terminators; minimal fill so shadowed planes stay
     # genuinely dark; a tight rim to separate the silhouette from the arena.
-    lamp("BSR_key", "AREA", (-2.6, -3.0, 4.0), 1500.0, (1.0, 0.97, 0.92), size=1.4)
+    #
+    # **The key was 1500 and that is what made the sprites read as plastic** — not
+    # the flat albedo it was blamed on. Sitting above at z=4.0 it drove every
+    # upward-facing panel to pure white: measured against CATHEDRAL YARD, the
+    # mechs ran a 95th percentile of 238 with 4.3 % of the armour at >=250, while
+    # nothing in the entire stage exceeds ~208 (its sodium practicals) and the
+    # deck's steel sits at 44.
+    #
+    # Swept against the real backdrop:
+    #
+    #   energy   mean   p95    >=250
+    #   1500    120.9  238.3   4.26 %
+    #   1100    111.5  231.4   3.79 %
+    #    800    102.4  212.2   2.08 %
+    #
+    # 800 puts the 95th percentile at 212, i.e. level with the brightest thing in
+    # the arena, and leaves the armour still 2.3x the deck's value so a machine
+    # reads clearly against it. The residual >=250 is the emissive accent and
+    # glow cores, which are *supposed* to be white.
+    lamp("BSR_key", "AREA", (-2.6, -3.0, 4.0), 800.0, (1.0, 0.97, 0.92), size=1.4)
     lamp("BSR_fill", "AREA", (3.8, -2.6, 0.2), 120.0, (0.58, 0.70, 0.95), size=5.0)
     lamp("BSR_rim", "AREA", (1.0, 3.6, 2.6), 460.0, (1.00, 0.82, 0.66), size=1.8)
     lamp("BSR_bounce", "AREA", (0.0, -1.4, -3.4), 55.0, (0.45, 0.55, 0.85), size=5.0)

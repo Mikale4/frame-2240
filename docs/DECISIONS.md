@@ -5793,3 +5793,157 @@ row table, which reproduced exactly. NOCTURNE–OBELISK read −0.20 against a
 measured −0.33, and the HALCYON/NOCTURNE cells were sign-swapped. Regenerated
 from the same run as the rows, along with the fairness counts, which were
 computed off the stale chart.
+
+## D128 — The mechs get a surface, and the key light turns out to be the culprit
+
+**Goal**: make the machines belong to CATHEDRAL YARD. They did not — they read as
+clean plastic toys standing on a rusted industrial gantry.
+
+Two changes, both measured, both separable:
+
+1. **Real surface textures** — three CC0 maps drive wear, oxide, roughness and
+   bump in `make_material()`.
+2. **Key light 1500 → 800.** This turned out to matter *more* than the textures,
+   and it was not what anyone would have guessed was wrong.
+
+### The diagnosis, measured against the stage rather than judged by eye
+
+Sampling `arena_near.png`'s structural band against the eight sprite atlases:
+
+| | luminance | p5–p95 | hue / sat |
+| --- | --- | --- | --- |
+| Deck steel | **44.2** | 2 – **104** | 209° / 0.22 |
+| Sodium practicals | 134.8 | 92 – **208** | 30° / 0.79 |
+| Mechs | 133 – 188 | 56 – **255** | — |
+
+**Nothing in the entire stage exceeds ~208. Every mech blew out to pure white.**
+CIRRUS had **49.7 %** of its armour at or above 235. Smooth gradients climbing to
+paper white is the plastic read, and it is a *lighting* fault, not an albedo one.
+
+### The wrong diagnosis, and how it was caught
+
+Bucketing pixels by hue attributed 23.4 % of NOCTURNE's surface to a "near-white
+trim" bucket, 15 % of it blown — which pointed at the `trim` palette entry and a
+change to all eight machines' identity colours.
+
+**That was wrong.** Measuring actual mesh surface area by material shows `trim`
+is only **4.2 %** of the chassis. The low-saturation pixels were never the trim
+material — they were **specular highlights on every material**, desaturating
+toward white as they blew out. Bucketing by colour cannot distinguish "a white
+thing" from "a red thing with a blown highlight".
+
+Darkening the trim would have repainted the whole roster to fix something that
+was not the cause. The check that caught it cost one query.
+
+### The key-light sweep
+
+Rendered against the real backdrop, armour only:
+
+| energy | mean | p95 | ≥250 |
+| --- | --- | --- | --- |
+| 1500 — was | 120.9 | 238.3 | 4.26 % |
+| 1100 | 111.5 | 231.4 | 3.79 % |
+| **800 — landed** | **102.4** | **212.2** | **2.08 %** |
+
+800 puts the 95th percentile at 212, level with the brightest object in the
+arena, while leaving the armour 2.3× the deck's value so a machine still reads
+clearly against it. Result across the roster:
+
+| mech | luminance | ≥235 blown |
+| --- | --- | --- |
+| HALCYON | 128.1 → 109.8 | 20.4 % → 14.2 % |
+| NOCTURNE | 133.0 → 106.2 | 4.9 % → 3.8 % |
+| VESPER | 133.9 → 113.9 | 20.9 % → 16.9 % |
+| TERRAMOTH | 134.1 → 110.7 | 22.6 % → 15.2 % |
+| **CIRRUS** | 188.2 → 159.0 | **49.7 % → 18.3 %** |
+| OBELISK | 152.1 → 123.1 | 14.6 % → 8.8 % |
+| PYRE | 129.2 → 114.2 | 19.8 % → 15.3 % |
+| NULLTIDE | 135.5 → 114.5 | 12.4 % → 11.9 % |
+
+**Identity is preserved**, which was the binding constraint — eight machines have
+to be tellable apart instantly. Saturation held or rose slightly (NOCTURNE
+0.336 → 0.342, PYRE 0.406 → 0.417) and no hue moved more than 0.5°.
+
+*Caveat on that table*: the emissive filter excludes accent and glow by hue, and
+HALCYON's accent is orange at ~21°, outside the excluded bands. Its "armour"
+figure therefore still counts glowing parts. **Within-mech** before/after is
+valid; cross-mech absolutes are not comparable.
+
+### The textures
+
+Two CC0 sources from Poly Haven, processed to 512² greyscale — `blue_metal_plate`
+(scuffs, vertical panel seams) and `rust_coarse_01` (coarse corrosion). Provenance,
+URLs and the rebuild recipe are in `assets/blender/textures/README.md`. 25 MB of
+masters were **not** committed: they are one `curl` away and the derived maps are
+612 KB.
+
+**They drive masks, roughness and bump — never albedo colour.** The palette rule
+requires the identity hue to dominate, and photographic albedo would pull all
+eight toward the same brown-grey. The oxide tint is taken from the texture rather
+than invented: hue **23.8°**, against the deck's practicals at 30.3° — same warm
+family, so the corrosion reads as native to the yard.
+
+Box projection off object coordinates, because **the meshes carry no UVs** —
+every procedural node in the file already drives off object space for that
+reason. Bump rather than a normal map for the same reason: without UVs there is
+no tangent basis a `NormalMap` node could be interpreted in.
+
+### `TEX_SCALE` measured flat, and that is the useful finding
+
+Swept 2.2 / 4.0 / 6.5 / 10.0 — hull SD **36.10 / 36.03 / 36.02 / 36.03**. The
+renders do differ, but by at most 25 levels of 255, while the 3D form's own
+shading spans far more. **Texture scale is not a sensitive dial here**; the
+strengths are. 4.0 is kept for putting 1.5–2.5 repeats across a typical 0.4 BU
+part.
+
+The honest consequence: **at gameplay scale the surface texture is nearly
+invisible.** A part occupies 35–100 logical px and what reads at that size is
+value and saturation, not detail. The textures earn their keep in the large
+views — mech select, results, the assembled previews. The stage match at combat
+scale is almost entirely the light.
+
+### Two traps for next time
+
+* **A 16-bit map will silently flatten.** `blue_metal_plate_rough` is `I;16` with
+  a real range of 8951–65529. `Image.convert('L')` **clamps rather than scales**,
+  producing a map with mean 255.0 and SD **0.0** — perfectly inert, no error, and
+  it would have supported the false conclusion "roughness variation doesn't
+  help". Always check SD > 0 on a processed map.
+* **`build_all(only=[...])` writes a partial `manifest.json`**, dropping the other
+  seven mechs from a file `roster.test.ts` and `pack_atlases.py` both read. Back
+  it up before a single-mech iteration. Material-only changes leave its contents
+  identical, so restoring the backup is safe.
+
+### Not done
+
+`tools/pack_atlases.py` must be re-run after any part re-render or the game keeps
+loading the old atlas — the per-part PNGs are not what ships.
+
+### D128 addendum — the direction was partly wrong, corrected by studying the source
+
+Written after running Babel Sword 2005 and reading its data. See
+`docs/REFERENCE_ART_STUDY.md`.
+
+**The blowout fix stands. The value-grounding reasoning does not.** Capping
+armour highlights was a real defect fix — nothing should sit at pure white by
+accident. But the accompanying idea, that the mechs should be pulled *down*
+toward the deck's luminance to belong to the stage, is the opposite of what the
+original does: its environments are mid-value and busy, its ground plane is often
+near-white, and the machines separate by **chroma and hard edges, not by being
+darker than the background**. Do not extend the grounding reasoning further.
+
+**Textures were never going to carry this.** The material work here (wear, oxide,
+crevice darkening, strong panel seams) is a genuine improvement and it is kept,
+but the real gaps are structural and were invisible from inside the Blender
+pipeline:
+
+* the original animates at **true 60 fps with 35-47 unique drawings per melee
+  action**, where Reignition poses a 13-part rig procedurally and no part ever
+  changes shape;
+* it shades **hard, ~4 value steps, with black separation lines between adjacent
+  components**, where EEVEE gives continuous gradients and an outline only on the
+  silhouette;
+* its roster spans **~3x in size**, where Reignition spans 1.57x with six of
+  eight machines inside a 33 % band;
+* it carries far more projectile **types and patterns** than Reignition's `line`
+  and `stack`.
