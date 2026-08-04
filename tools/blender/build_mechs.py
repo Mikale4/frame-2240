@@ -2611,8 +2611,13 @@ def build_mech(mech_id, palette_key=None):
         # directly *behind* the emitter on the haft axis makes the blade leave
         # the head at ninety degrees and curve back. That one placement is the
         # whole difference between a scythe and a spear.
-        arc_r, segs = 1.25, 34
-        span = math.radians(108.0)
+        # **Long and extended, not a tight hook.** At r=1.25 over 108 degrees the
+        # blade curled into a sickle barely longer than the shaft. The reference
+        # sweeps a similar angle over a far larger radius, so it *reaches*: r=2.2
+        # gives a 219 logical px blade against a 132 px staff, 1.66x, which is
+        # the proportion the reference holds.
+        arc_r, segs = 2.20, 34
+        span = math.radians(95.0)
         start_a = 0.0
         cx = 1.58 - arc_r          # straight back along the haft
         cz = 0.02

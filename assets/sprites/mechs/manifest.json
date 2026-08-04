@@ -1933,16 +1933,16 @@
       },
       "meleeEnergy": {
         "file": "pyre_meleeEnergy.png",
-        "tile": 512,
+        "tile": 576,
         "dims_bu": [
-          1.8954,
+          2.6267,
           0.052,
-          1.3205
+          2.2273
         ],
         "dims_logical_px": [
-          113.7,
+          157.6,
           3.1,
-          79.2
+          133.6
         ]
       }
     },

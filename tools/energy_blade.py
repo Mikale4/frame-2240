@@ -34,6 +34,7 @@ Output: assets/sprites/mechs/<mech>_meleeEnergy.png       (frame 0)
         assets/sprites/mechs/<mech>_meleeEnergy_<n>.png   (frames 1..N-1)
 """
 
+import json
 import math
 import os
 import random
@@ -262,17 +263,39 @@ def render_blade(spec, seed, size=512):
 # blade leave the shaft at a right angle instead of continuing along it.
 BLADES = {
     "pyre": dict(
-        arc_r=1.25, cx=1.58 - 1.25, cz=0.02, span_deg=108.0, start_deg=0.0,
-        width=0.34, peak_at=0.18,
+        # Must mirror the scythe branch in build_mechs.py — the modelled emitter
+        # sits at the arc's root, and a mismatch detaches the blade from it.
+        arc_r=2.20, cx=1.58 - 2.20, cz=0.02, span_deg=95.0, start_deg=0.0,
+        width=0.34, peak_at=0.16, flare=34.0,
         dim=(214, 96, 12), body=(255, 186, 34), core=(255, 253, 232),
     ),
 }
 
 
+def _tile_for(mech):
+    """
+    Canvas size, taken from the manifest rather than hardcoded.
+
+    Blender still builds the scythe's energy geometry and records its tile; this
+    generator then overwrites the PNG. Deriving the canvas from that recorded
+    tile is what keeps the two from silently disagreeing — they matched at 512
+    by coincidence once, and a longer blade would have broken it.
+    """
+    path = os.path.join(SPRITES, "manifest.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            m = json.load(fh)
+        return int(m["parts"][mech]["meleeEnergy"]["tile"])
+    except (OSError, KeyError, ValueError, TypeError):
+        return 512
+
+
 def main():
     for mech, spec in BLADES.items():
+        size = _tile_for(mech)
+        print(f"{mech}: canvas {size} (from manifest)")
         for i in range(FRAMES):
-            img = render_blade(spec, seed=1000 + i * 37)
+            img = render_blade(spec, seed=1000 + i * 37, size=size)
             name = f"{mech}_meleeEnergy.png" if i == 0 else f"{mech}_meleeEnergy_{i}.png"
             img.save(os.path.join(SPRITES, name))
             print(f"  {name}  {img.size}")

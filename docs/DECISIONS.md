@@ -6275,3 +6275,24 @@ The manifest's tile therefore comes from Blender while the pixels come from the
 generator. They agree at 512 today by coincidence, not by construction. If the
 blade is ever resized, the two must be reconciled — ideally by having the scythe
 branch stop building energy geometry at all now that the generator owns it.
+
+### D133 addendum — the arc extends instead of curling
+
+At `arc_r 1.25` over 108° the blade was a **sickle**: 141 logical px, barely
+longer than the 132 px staff, and it curled back on itself. The reference sweeps
+a comparable angle over a far larger radius, so it *reaches*.
+
+Now `arc_r 2.20` over 95°: **219 logical px**, 1.66x the staff, which is the
+proportion the reference holds. The whole weapon is 178 x 168 logical px against
+a 104 px chassis — deliberately larger than the machine carrying it, as the
+reference is.
+
+**The fragile coupling flagged above bit immediately and is now fixed.** The
+longer blade pushed Blender's computed tile from 512 to **576**, while the
+generator still hardcoded 512 — the two would have disagreed silently and the
+blade would have been drawn at the wrong scale on its emitter. `energy_blade.py`
+now reads the tile out of `manifest.json` instead, so the canvas can only ever be
+the one the manifest records.
+
+Order matters when rebuilding: **Blender first, merge the manifest, then run the
+generator** — it needs the tile the build just recorded.
