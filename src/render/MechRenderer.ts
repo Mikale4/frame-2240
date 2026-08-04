@@ -83,6 +83,15 @@ export class MechRenderer {
   private energyHalo: Phaser.GameObjects.Image | null = null;
   /** Free-running clock for the blade's surge, in seconds. */
   private energyPhase = 0;
+  /**
+   * Turbulence frames of the projected blade, if the atlas carries any.
+   *
+   * `tools/energy_blade.py` emits several variants with independent noise, and
+   * cycling them is what makes the blade *churn*. Pulsing one static frame's
+   * alpha reads as a decal being dimmed, however well the alpha is animated —
+   * the shape has to change too.
+   */
+  private energyFrames: string[] = [];
   /** Layer base; the y term in depthSortAt orders mechs within the layer. */
   private depthBase = 20;
 
@@ -144,6 +153,18 @@ export class MechRenderer {
       halo.setAlpha(0.35);
       energy.container.addAt(halo, 0);
       this.energyHalo = halo;
+
+      // Collect whatever turbulence frames the atlas actually carries. Frame 0
+      // keeps the bare part name, so a blade with no variants still works and
+      // simply does not churn.
+      const tex = scene.textures.get(energy.sprite.texture.key);
+      const base = energy.sprite.frame.name;
+      this.energyFrames = [base];
+      for (let i = 1; ; i++) {
+        const name = `${base}_${i}`;
+        if (!tex.has(name)) break;
+        this.energyFrames.push(name);
+      }
     }
 
     // Apply the authored draw order by re-sorting siblings within each parent.
@@ -375,6 +396,22 @@ export class MechRenderer {
       PART_SCALE * (1 + 0.045 * swell + 0.02 * flicker),
       PART_SCALE * (1 + 0.018 * swell),
     );
+
+    // Churn: advance the turbulence frame on its own clock. 14 Hz is fast enough
+    // to read as unstable and slow enough that each shape registers; tying it to
+    // the swell instead would make the shape change land on the brightness peak
+    // every time, which reads as a mechanical strobe rather than as plasma.
+    const nf = this.energyFrames.length;
+    if (nf > 1) {
+      const idx = Math.floor(t * 14) % nf;
+      const name = this.energyFrames[idx];
+      if (node.sprite.frame.name !== name) {
+        node.sprite.setFrame(name);
+        // The halo trails by one frame, so the bloom is always the shape the
+        // blade *was* — a cheap way to suggest energy shedding outward.
+        this.energyHalo?.setFrame(this.energyFrames[(idx + nf - 1) % nf]);
+      }
+    }
 
     const halo = this.energyHalo;
     if (!halo) return;

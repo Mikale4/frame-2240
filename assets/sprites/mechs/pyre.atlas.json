@@ -4,26 +4,86 @@
    "frame": {
     "x": 0,
     "y": 0,
-    "w": 832,
-    "h": 832
+    "w": 512,
+    "h": 512
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 832,
-    "h": 832
+    "w": 512,
+    "h": 512
    },
    "sourceSize": {
-    "w": 832,
-    "h": 832
+    "w": 512,
+    "h": 512
+   }
+  },
+  "meleeEnergy_1": {
+   "frame": {
+    "x": 512,
+    "y": 0,
+    "w": 512,
+    "h": 512
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 512
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 512
+   }
+  },
+  "meleeEnergy_2": {
+   "frame": {
+    "x": 0,
+    "y": 512,
+    "w": 512,
+    "h": 512
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 512
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 512
+   }
+  },
+  "meleeEnergy_3": {
+   "frame": {
+    "x": 512,
+    "y": 512,
+    "w": 512,
+    "h": 512
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 512
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 512
    }
   },
   "meleeWeapon": {
    "frame": {
     "x": 0,
-    "y": 832,
+    "y": 1024,
     "w": 448,
     "h": 448
    },
@@ -43,7 +103,7 @@
   "core": {
    "frame": {
     "x": 448,
-    "y": 832,
+    "y": 1024,
     "w": 320,
     "h": 320
    },
@@ -63,7 +123,7 @@
   "head": {
    "frame": {
     "x": 0,
-    "y": 1280,
+    "y": 1472,
     "w": 320,
     "h": 320
    },
@@ -83,7 +143,7 @@
   "backpack": {
    "frame": {
     "x": 320,
-    "y": 1280,
+    "y": 1472,
     "w": 320,
     "h": 320
    },
@@ -103,7 +163,7 @@
   "lowerBody": {
    "frame": {
     "x": 640,
-    "y": 1280,
+    "y": 1472,
     "w": 320,
     "h": 320
    },
@@ -123,7 +183,7 @@
   "legFar": {
    "frame": {
     "x": 0,
-    "y": 1600,
+    "y": 1792,
     "w": 320,
     "h": 320
    },
@@ -143,7 +203,7 @@
   "legNear": {
    "frame": {
     "x": 320,
-    "y": 1600,
+    "y": 1792,
     "w": 320,
     "h": 320
    },
@@ -163,7 +223,7 @@
   "leftArm": {
    "frame": {
     "x": 640,
-    "y": 1600,
+    "y": 1792,
     "w": 320,
     "h": 320
    },
@@ -183,7 +243,7 @@
   "subWeapon": {
    "frame": {
     "x": 0,
-    "y": 1920,
+    "y": 2112,
     "w": 320,
     "h": 320
    },
@@ -203,7 +263,7 @@
   "rightArm": {
    "frame": {
     "x": 320,
-    "y": 1920,
+    "y": 2112,
     "w": 320,
     "h": 320
    },
@@ -223,7 +283,7 @@
   "mainWeapon": {
    "frame": {
     "x": 640,
-    "y": 1920,
+    "y": 2112,
     "w": 320,
     "h": 320
    },
@@ -243,7 +303,7 @@
   "leftThruster": {
    "frame": {
     "x": 0,
-    "y": 2240,
+    "y": 2432,
     "w": 320,
     "h": 320
    },
@@ -263,7 +323,7 @@
   "rightThruster": {
    "frame": {
     "x": 320,
-    "y": 2240,
+    "y": 2432,
     "w": 320,
     "h": 320
    },
@@ -283,7 +343,7 @@
   "drone": {
    "frame": {
     "x": 640,
-    "y": 2240,
+    "y": 2432,
     "w": 320,
     "h": 320
    },
@@ -307,7 +367,7 @@
   "format": "RGBA8888",
   "size": {
    "w": 1024,
-   "h": 2560
+   "h": 2752
   },
   "scale": "1",
   "note": "Untrimmed: each frame is square with its pivot at the centre."

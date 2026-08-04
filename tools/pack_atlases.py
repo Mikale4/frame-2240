@@ -45,7 +45,9 @@ PARTS = [
 # `meleeEnergy` is the projected blade, split out of `meleeWeapon` so it can skip
 # the Freestyle contour and be animated on its own. NOCTURNE's claw, TERRAMOTH's
 # pile driver and OBELISK's shield project nothing and have none.
-OPTIONAL_PARTS = ["meleeEnergy"]
+# Frames 1..N of an animated part. Frame 0 keeps the bare name so the rig can
+# reference it without knowing the part is animated at all.
+OPTIONAL_PARTS = ["meleeEnergy", "meleeEnergy_1", "meleeEnergy_2", "meleeEnergy_3"]
 
 
 def pack_mech(mech_id):

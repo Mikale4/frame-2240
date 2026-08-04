@@ -6148,3 +6148,57 @@ Deathscythe reference is a beam **as long as the machine is tall**, sweeping
 about thirty degrees, widest near the base and tapering over a great distance to
 a needle. Now 34° over 2.9 BU radius: a 1.72 BU blade, 103 logical px against a
 104 px chassis.
+
+## D132 — The blade stops being geometry
+
+PYRE's projected blade is now **generated 2D VFX** (`tools/energy_blade.py`),
+not a swept mesh. The hardware — snath, grip bands, emitter head — stays modelled
+in Blender.
+
+### Why a mesh could never work
+
+**A mesh has a silhouette. Projected energy does not.** Three passes were spent
+tuning a solid swept blade — banded emissive materials, a thin hot core, the
+Freestyle contour removed entirely — and it still read as a *glowing object*
+rather than as light, because a hard boundary is the one thing the form must not
+have. A supplied reference of a plasma scythe settled it: white-hot spine, ragged
+edges dissolving into wisps, no boundary anywhere.
+
+The `meleeEnergy` split (D131) is what made the fix possible: the blade already
+had its own sprite layer, so it could be drawn by something other than Blender.
+
+### How it is drawn
+
+A tapered ribbon along the scythe curve, a blurred spine for the white-hot core,
+then **domain-warped** fractal noise. The warp is the important part: eroding the
+edge with noise only produces a blob with a soft rim, whereas displacing *where
+the mask is sampled from* drags the boundary into tongues. Wisps are a wider,
+fainter, noisier copy of the torn mask.
+
+Four frames per blade with independent turbulence. The renderer cycles them at
+14 Hz on a clock separate from the swell — tying the two together lands every
+shape change on the brightness peak, which strobes. The halo runs **one frame
+behind**, so the bloom is always the shape the blade *was*.
+
+### Two corrections along the way
+
+* **The blade was mounted wrong.** The arc was anchored with its tangent parallel
+  to the haft, so it continued forward like a spear point. A scythe mounts across
+  the end of the snath; an arc's tangent is perpendicular to its radius, so
+  putting the centre directly behind the emitter *on the haft axis* is what makes
+  the blade leave at ninety degrees and hook back. Caught by the user.
+* **Colour.** Hot orange at hue 28°, moved to hue 41.5° — mean (255, 194, 59),
+  which is essentially PYRE's own glow colour (255, 194, 71), so the blade reads
+  as part of the machine rather than an effect bolted onto it.
+
+### Still open
+
+Only PYRE is converted. HALCYON's saber, VESPER's bayonet, CIRRUS's daggers and
+NULLTIDE's glaive are still modelled energy and still carry the old look. The
+generator takes a centreline, a width profile and two colours, so extending it is
+data rather than code.
+
+The result is also **smoother than the reference**, which has fine filaments
+licking off the edge. Some of that detail dies at the ~50 px a blade occupies in
+play, but not all of it, and the warp amplitude and noise frequency are the dials
+if more is wanted.

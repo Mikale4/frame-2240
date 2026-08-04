@@ -2554,20 +2554,21 @@ def build_mech(mech_id, palette_key=None):
             ("mid",  0.00, 0.62, (1.00, 0.52, 0.10), 0.70),
             ("core", 0.00, 0.26, (1.00, 0.86, 0.46), 1.15),
         ]
-        # **Long and barely curved, not a farm hook.** The supplied Deathscythe
-        # reference is a beam as long as the machine is tall, sweeping through
-        # perhaps thirty degrees — widest near the base, then tapering over a
-        # great distance to a needle. The first pass ran 102 degrees over 0.9 BU,
-        # which is a sickle: far too short and curled far too hard.
+        # **The blade leaves the haft at a right angle.** This is the thing the
+        # first two passes got wrong: the arc was anchored with its tangent
+        # *parallel* to the shaft, so the blade continued forward like a spear
+        # point. A scythe — and the supplied Deathscythe reference — mounts the
+        # blade across the end of the snath and hooks it back toward the wielder.
         #
-        # `START_A` and the centre are chosen so the blade leaves the emitter head
-        # exactly, then bends gently forward and down.
-        arc_r, segs = 2.90, 34
-        span = math.radians(34.0)
-        start_a = math.radians(100.0)
-        # Anchor the arc so its first station sits on the emitter.
-        cx = 1.58 - arc_r * math.cos(start_a)
-        cz = 0.02 - arc_r * math.sin(start_a)
+        # An arc's tangent is perpendicular to its radius, so putting the centre
+        # directly *behind* the emitter on the haft axis makes the blade leave
+        # the head at ninety degrees and curve back. That one placement is the
+        # whole difference between a scythe and a spear.
+        arc_r, segs = 1.25, 34
+        span = math.radians(108.0)
+        start_a = 0.0
+        cx = 1.58 - arc_r          # straight back along the haft
+        cz = 0.02
         # Where the blade is at its widest, as a fraction of its length. A scythe
         # swells fast out of the emitter and tapers slowly — the long taper is
         # most of what makes it read as a beam rather than a leaf.
@@ -2584,11 +2585,13 @@ def build_mech(mech_id, palette_key=None):
                     prof = f / PEAK_AT
                 else:
                     prof = ((1.0 - f) / (1.0 - PEAK_AT)) ** 1.25
-                wide = 0.30 * prof + 0.010
-                # Bands are measured inward from the cutting edge, so they stay
-                # concentric with the curve and nest without crossing.
-                ri = arc_r - wide * f_out
-                ro = arc_r - wide * f_in
+                wide = 0.34 * prof + 0.010
+                # Bands grow **outward** from the arc, so the arc itself is the
+                # concave cutting edge and the spine sits behind it. A scythe is
+                # sharpened on the inside of its curve; measuring inward put the
+                # hot edge on the blunt side.
+                ri = arc_r + wide * f_in
+                ro = arc_r + wide * f_out
                 st.append((piv.x + cx + ri * ca, piv.z + cz + ri * sa,
                            piv.x + cx + ro * ca, piv.z + cz + ro * sa))
             # Each band sits a hair proud of the one beneath so they do not
