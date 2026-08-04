@@ -5947,3 +5947,61 @@ pipeline:
   eight machines inside a 33 % band;
 * it carries far more projectile **types and patterns** than Reignition's `line`
   and `stack`.
+
+## D129 — Five powers, five finishes; and the art direction settled
+
+### The direction, after three corrections
+
+The target is **semi-realistic machines that belong in CATHEDRAL YARD's painted
+world** — real material response, weathered painted steel, believable light —
+while still separating from the background as foreground subjects. Getting there
+took three wrong turns, all recorded so they are not repeated:
+
+1. **Grounding the mechs to the stage's luminance was wrong** (D128). The key
+   light went 1500 → 800 partly to fix a genuine defect (armour at pure white)
+   and partly on the theory that matching the deck's value register was what
+   belonging meant. It is not: a machine sharing the deck's value stops reading
+   as the subject. Key is now **1150**, and the **rim 460 → 640** — the rim buys
+   figure-ground separation without adding a lumen to the broad faces that blow
+   out, which is the cheaper contrast.
+2. **Cel shading was built, rendered and rejected.** It reproduces the 2005
+   reference's flat poster look faithfully, and that is not this project's
+   target. `CEL_SHADE` is kept as a working toon path and set `False`; the
+   decision is an art call, not a technical one.
+3. **Textures alone were never going to carry it.** The first pass measured as
+   invisible because the strengths were timid — a 25-of-255 modulation against a
+   form whose own shading spans far more.
+
+### What actually moved the needle
+
+* **Crevice darkening.** Pointiness above 0.5 is convex, below is concave. The
+  material had brightened convex edges since it was written and done *nothing*
+  with concave ones, so every inside corner and panel gap sat at the same value
+  as the middle of a face. On geometry this blocky that was most of the
+  "untextured box" read.
+* **Panel seams 0.45 → 0.90, toward `rgb*0.16` instead of `rgb*0.40`.** Each part
+  renders in **isolation** — `render_parts` hides every other mesh — so nothing
+  ever shadows anything and panel structure is one of very few depth cues a
+  sprite has.
+* **Ambient occlusion had been off for years.** `use_gtao` was removed in Blender
+  4.2's EEVEE Next and the `setattr` sat inside a `try/except` swallowing the
+  `AttributeError`. Both spellings are now set.
+
+### Five powers, five finishes
+
+Every machine wearing identical grime wastes the setting. `FACTION_SURFACE`
+scales the shared wear stack per power, taken from the Archive's own words
+("THE FIVE POWERS") rather than invented:
+
+| Power | Machines | Archive says | Finish |
+| --- | --- | --- | --- |
+| **CONCORD SKYWARD** | HALCYON, VESPER | "reliability the first requirement", extended trials, central certification | Even factory paint, crisp panels, **rust 0.10** — the cleanest on the roster |
+| **IRONWAKE COLLIERY** | TERRAMOTH, OBELISK | excavation walkers "rated for seam collapse and falling ore" | The most beaten: **wear 1.00, rust 0.72** at the lowest gate, ore dust in every recess |
+| **EMBERLINE PACT** | NOCTURNE | Concord frames "rebuilt to Pact standards and returned to service without Concord certification" | A paint *history*: **broad drift 1.00**, the highest — panels resprayed at different times over corrosion that was painted rather than cured |
+| **FREE LATITUDE** | CIRRUS, NULLTIDE | "assembled from salvage, copied patterns and recovered systems" | Barely painted: **wear 0.95, rust 0.22**. Salvage crews run corrosion-resistant recovered stock; they just never finish it |
+| **ASHFALL IRREGULARS** | PYRE | "built for short engagements and replacement from contract revenue" | Cheap thin paint and **soot rather than rust** — grime tinted near-black, PYRE being the incendiary frame |
+
+Escorts inherit their parent chassis's finish: same yard, same maintenance. Note
+`_drone_materials` and `build_mech` **share material names**, so whichever runs
+second rebuilds the other's nodes — they must agree, and now both pass the same
+`faction_surface(mech_id)`.

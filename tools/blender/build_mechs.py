@@ -586,10 +586,122 @@ CAVITY_DARK = 0.30
 # usable here: the meshes carry no UVs, so there is no tangent basis for a
 # NormalMap node to work in. Bump needs none.
 BUMP_STRENGTH = 0.40
+
+# ---------------------------------------------------------------- cel shading
+#
+# The reference shades **hard**: roughly four flat value steps per form, with no
+# soft gradient anywhere, and a black line between every adjacent component. A
+# continuous EEVEE gradient is the single strongest "this came out of Blender"
+# signal, and no amount of albedo texture hides it — see
+# `docs/REFERENCE_ART_STUDY.md` §3.
+#
+# Implemented by taking the diffuse lighting result through `Shader to RGB`
+# (EEVEE-only, verified present in 5.1), quantising it with a CONSTANT-
+# interpolation ramp, and multiplying the textured albedo by the result. The
+# albedo keeps all of its detail; only the *lighting* is stepped, which is what
+# cel shading actually means.
+#
+# **Off, by direction.** Built, rendered, and rejected: it produces exactly the
+# flat poster look the 2005 reference has, and the target for this project is
+# semi-realistic machines that belong in the same world as CATHEDRAL YARD's
+# painted art — real material response, weathered painted steel, believable
+# light — while still separating from the background as foreground subjects.
+# Kept intact rather than deleted because it is a working toon path and the
+# decision is an art call, not a technical one.
+CEL_SHADE = False
+CEL_STEPS = 4
+# Darkest band. The reference's shadow side stays clearly readable rather than
+# going black - separation there is done by the line work, not by crushing.
+CEL_SHADOW = 0.46
+# Where the lit/shadow terminator falls. Below 0.5 puts more of each form in
+# light, which is what keeps the machines bright against a busy background.
+CEL_BIAS = 0.42
 # The oxide tone, sampled from rust_coarse_01 rather than invented: hue 23.8deg,
 # against the deck's sodium practicals at 30.3deg. Same warm family, so the
 # corrosion reads as native to CATHEDRAL YARD.
 RUST_RGB = (0.30, 0.15, 0.07)
+
+
+# ------------------------------------------------- per-faction surface finish
+#
+# **Five powers, five ways of building and maintaining a machine.** Taken from
+# `src/data/archive.ts` ("THE FIVE POWERS") rather than invented, because the
+# Archive already says how each of them treats hardware, and a roster where every
+# chassis carries the same grime is a roster that wastes its own fiction.
+#
+# Each entry scales the shared wear stack. Values are multipliers/overrides on
+# the module defaults below; anything omitted falls back to them.
+FACTIONS = {
+    "halcyon": "CONCORD SKYWARD",
+    "vesper": "CONCORD SKYWARD",
+    "nocturne": "EMBERLINE PACT",
+    "terramoth": "IRONWAKE COLLIERY",
+    "obelisk": "IRONWAKE COLLIERY",
+    "cirrus": "FREE LATITUDE",
+    "nulltide": "FREE LATITUDE",
+    "pyre": "ASHFALL IRREGULARS",
+}
+
+FACTION_SURFACE = {
+    # "Reliability the first requirement." Published doctrine, central
+    # certification, extended trials. These are maintained to a standard: even
+    # factory paint, crisp panel work, very little corrosion.
+    "CONCORD SKYWARD": dict(
+        wear=0.42, broad=0.40, rust=0.10, rust_gate=0.80,
+        rough=0.26, cavity=0.75, seam=0.95, seam_dark=0.14,
+    ),
+    # Excavation walkers "rated for seam collapse and falling ore", rebuilt for
+    # yard defence. The most beaten hardware on the roster: thick scuffed paint,
+    # impact scarring, ore dust in every recess.
+    "IRONWAKE COLLIERY": dict(
+        wear=1.00, broad=0.85, rust=0.72, rust_gate=0.40,
+        rough=0.52, cavity=1.00, seam=0.90, seam_dark=0.16,
+    ),
+    # Concord airframes "rebuilt to Pact standards and returned to service
+    # without Concord certification". A machine with a paint history: the
+    # heaviest broad tonal drift on the roster, standing in for panels resprayed
+    # at different times, over corrosion that was painted rather than cured.
+    "EMBERLINE PACT": dict(
+        wear=0.80, broad=1.00, rust=0.55, rust_gate=0.52,
+        rough=0.44, cavity=0.90, seam=0.95, seam_dark=0.15,
+    ),
+    # "Assembled from salvage, copied patterns and recovered systems. Individual
+    # machines differ substantially." Barely painted at all — CIRRUS is already
+    # the one unpainted machine in the palette notes. Bare alloy scuffs bright
+    # rather than dark, so wear is high and rust is low: salvage crews run
+    # corrosion-resistant recovered stock, they just never finish it.
+    "FREE LATITUDE": dict(
+        wear=0.95, broad=0.60, rust=0.22, rust_gate=0.66,
+        rough=0.58, cavity=0.85, seam=0.80, seam_dark=0.22,
+    ),
+    # "Built for short engagements and replacement from contract revenue."
+    # Cheap thin paint, no refit budget, and — PYRE being the incendiary frame —
+    # scorched by its own weapon. Soot rather than rust.
+    "ASHFALL IRREGULARS": dict(
+        wear=0.88, broad=0.75, rust=0.38, rust_gate=0.58,
+        rough=0.46, cavity=0.95, seam=0.85, seam_dark=0.10,
+    ),
+}
+
+# The oxide tone per faction. Ironwake corrodes; Ashfall soots; Free Latitude
+# shows bare metal where paint has gone rather than rust.
+FACTION_GRIME_RGB = {
+    "CONCORD SKYWARD": (0.26, 0.22, 0.18),
+    "IRONWAKE COLLIERY": (0.32, 0.15, 0.06),
+    "EMBERLINE PACT": (0.30, 0.15, 0.07),
+    "FREE LATITUDE": (0.34, 0.34, 0.33),
+    "ASHFALL IRREGULARS": (0.13, 0.11, 0.10),
+}
+
+
+def faction_surface(mech_id):
+    """Surface finish for a chassis, or None to use the module defaults."""
+    fac = FACTIONS.get(mech_id)
+    if fac is None:
+        return None
+    s = dict(FACTION_SURFACE[fac])
+    s["grime"] = FACTION_GRIME_RGB[fac]
+    return s
 
 
 def _tex(nt, coord, filename, scale=None, non_color=False):
@@ -615,7 +727,8 @@ def _tex(nt, coord, filename, scale=None, non_color=False):
     return tex
 
 
-def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail=True):
+def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail=True,
+                  surface=None):
     """
     Armour material with procedural surface interest plus photographic wear.
 
@@ -664,6 +777,20 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
     if not detail or emission > 0.0:
         bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
         return mat
+
+    # Per-faction finish, falling back to the module defaults for anything the
+    # faction does not override (and for the drone/effect materials, which pass
+    # no surface at all).
+    sf = surface or {}
+    s_wear = sf.get("wear", WEAR_STRENGTH)
+    s_broad = sf.get("broad", BROAD_STRENGTH)
+    s_rust = sf.get("rust", RUST_STRENGTH)
+    s_rust_gate = sf.get("rust_gate", RUST_GATE)
+    s_rough = sf.get("rough", ROUGH_TEX_STRENGTH)
+    s_cavity = sf.get("cavity", CAVITY_STRENGTH)
+    s_seam = sf.get("seam", 0.90)
+    s_seam_dark = sf.get("seam_dark", 0.16)
+    s_grime = sf.get("grime", RUST_RGB)
 
     try:
         coord = nt.nodes.new("ShaderNodeTexCoord")
@@ -754,9 +881,9 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
         # sources of depth a sprite has. It is now near-black and near-opaque.
         seam_fac = nt.nodes.new("ShaderNodeMath")
         seam_fac.operation = "MULTIPLY"
-        seam_fac.inputs[1].default_value = 0.90
+        seam_fac.inputs[1].default_value = s_seam
         nt.links.new(seam_inv.outputs[0], seam_fac.inputs[0])
-        _n3, c3 = _mix(nt, seam_fac.outputs[0], c2, _scale_rgb(rgb, 0.16))
+        _n3, c3 = _mix(nt, seam_fac.outputs[0], c2, _scale_rgb(rgb, s_seam_dark))
 
         # --- photographic wear ------------------------------------------
         # Sits between the panelling and the edge highlight deliberately: edge
@@ -772,7 +899,7 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
         if broad_tex is not None:
             broad_f = nt.nodes.new("ShaderNodeMath")
             broad_f.operation = "MULTIPLY"
-            broad_f.inputs[1].default_value = BROAD_STRENGTH
+            broad_f.inputs[1].default_value = s_broad
             nt.links.new(broad_tex.outputs["Color"], broad_f.inputs[0])
             _nb, surf = _mix(nt, broad_f.outputs[0], surf, _scale_rgb(rgb, BROAD_DARK))
 
@@ -780,7 +907,7 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
         if wear_tex is not None:
             wear_fac = nt.nodes.new("ShaderNodeMath")
             wear_fac.operation = "MULTIPLY"
-            wear_fac.inputs[1].default_value = WEAR_STRENGTH
+            wear_fac.inputs[1].default_value = s_wear
             nt.links.new(wear_tex.outputs["Color"], wear_fac.inputs[0])
             _nw, surf = _mix(nt, wear_fac.outputs[0], surf, _scale_rgb(rgb, WEAR_DARK))
 
@@ -789,14 +916,14 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
             # Gated sparse. Full-coverage rust is an abandoned wreck; these are
             # machines somebody maintains and flies.
             rust_ramp = nt.nodes.new("ShaderNodeValToRGB")
-            rust_ramp.color_ramp.elements[0].position = RUST_GATE
-            rust_ramp.color_ramp.elements[1].position = min(1.0, RUST_GATE + 0.30)
+            rust_ramp.color_ramp.elements[0].position = s_rust_gate
+            rust_ramp.color_ramp.elements[1].position = min(1.0, s_rust_gate + 0.30)
             nt.links.new(rust_tex.outputs["Color"], rust_ramp.inputs["Fac"])
             rust_fac = nt.nodes.new("ShaderNodeMath")
             rust_fac.operation = "MULTIPLY"
-            rust_fac.inputs[1].default_value = RUST_STRENGTH
+            rust_fac.inputs[1].default_value = s_rust
             nt.links.new(rust_ramp.outputs["Color"], rust_fac.inputs[0])
-            _nr, surf = _mix(nt, rust_fac.outputs[0], surf, RUST_RGB)
+            _nr, surf = _mix(nt, rust_fac.outputs[0], surf, s_grime)
 
         # --- crevice darkening -------------------------------------------
         # Pointiness > 0.5 is convex, < 0.5 is concave. The material has always
@@ -812,7 +939,7 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
         nt.links.new(geo.outputs["Pointiness"], cav_r.inputs["Fac"])
         cav_f = nt.nodes.new("ShaderNodeMath")
         cav_f.operation = "MULTIPLY"
-        cav_f.inputs[1].default_value = CAVITY_STRENGTH
+        cav_f.inputs[1].default_value = s_cavity
         nt.links.new(cav_r.outputs["Color"], cav_f.inputs[0])
         _nc, surf = _mix(nt, cav_f.outputs[0], surf, _scale_rgb(rgb, CAVITY_DARK))
 
@@ -837,8 +964,8 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
             r_range = nt.nodes.new("ShaderNodeMapRange")
             r_range.inputs["From Min"].default_value = 0.0
             r_range.inputs["From Max"].default_value = 1.0
-            r_range.inputs["To Min"].default_value = -ROUGH_TEX_STRENGTH
-            r_range.inputs["To Max"].default_value = ROUGH_TEX_STRENGTH
+            r_range.inputs["To Min"].default_value = -s_rough
+            r_range.inputs["To Max"].default_value = s_rough
             nt.links.new(rough_tex.outputs["Color"], r_range.inputs["Value"])
             r_add = nt.nodes.new("ShaderNodeMath")
             r_add.operation = "ADD"
@@ -857,6 +984,51 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
             bump.inputs["Strength"].default_value = BUMP_STRENGTH
             nt.links.new(wear_tex.outputs["Color"], bump.inputs["Height"])
             nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+
+        # --- quantise the lighting into flat bands --------------------------
+        if CEL_SHADE:
+            # A white diffuse lobe, sampled through Shader to RGB, is the scene's
+            # lighting with the albedo divided out. Quantising *that* and then
+            # multiplying the albedo back in keeps every bit of texture detail
+            # while making the light itself step.
+            lit = nt.nodes.new("ShaderNodeBsdfDiffuse")
+            lit.inputs["Color"].default_value = (1.0, 1.0, 1.0, 1.0)
+            if wear_tex is not None:
+                nt.links.new(bump.outputs["Normal"], lit.inputs["Normal"])
+            s2rgb = nt.nodes.new("ShaderNodeShaderToRGB")
+            nt.links.new(lit.outputs[0], s2rgb.inputs[0])
+
+            steps = nt.nodes.new("ShaderNodeValToRGB")
+            cr = steps.color_ramp
+            cr.interpolation = "CONSTANT"
+            # CONSTANT holds each stop's colour from its position upward, so the
+            # stops must ascend and the first must sit at 0.
+            while len(cr.elements) > 1:
+                cr.elements.remove(cr.elements[-1])
+            cr.elements[0].position = 0.0
+            v0 = CEL_SHADOW
+            cr.elements[0].color = (v0, v0, v0, 1.0)
+            for k in range(1, CEL_STEPS):
+                # Bands are spread across the terminator rather than 0..1, so the
+                # steps land where the light actually falls off.
+                pos = CEL_BIAS * k / (CEL_STEPS - 1) + 0.02
+                v = v0 + (1.0 - v0) * (k / (CEL_STEPS - 1))
+                e = cr.elements.new(min(0.99, pos))
+                e.color = (v, v, v, 1.0)
+            nt.links.new(s2rgb.outputs["Color"], steps.inputs["Fac"])
+
+            shaded = nt.nodes.new("ShaderNodeMixRGB")
+            shaded.blend_type = "MULTIPLY"
+            shaded.inputs[0].default_value = 1.0
+            nt.links.new(c4, shaded.inputs[1])
+            nt.links.new(steps.outputs["Color"], shaded.inputs[2])
+
+            emit = nt.nodes.new("ShaderNodeEmission")
+            emit.inputs["Strength"].default_value = 1.0
+            nt.links.new(shaded.outputs[0], emit.inputs["Color"])
+            # Replace the Principled path entirely. Freestyle is a geometric
+            # post-process and is unaffected by this.
+            nt.links.new(emit.outputs[0], out.inputs[0])
     except (AttributeError, KeyError, RuntimeError, IndexError, TypeError):
         # Any node-API drift falls back to a plain shaded material.
         bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
@@ -1119,13 +1291,21 @@ DRONE_LENGTH_BU = 0.72  # ~43 logical px nose to tail, for the baseline drone
 
 
 def _drone_materials(mech_id, pal):
-    """The seven materials every drone shares. Named per mech so they are reused."""
+    """The seven materials every drone shares. Named per mech so they are reused.
+
+    An escort is built and maintained by the same yard as its parent chassis, so
+    it takes the same faction finish. The material names are shared with the
+    chassis, which means this must agree with `build_mech` or whichever runs
+    second silently rebuilds the other's nodes.
+    """
+    _sf = faction_surface(mech_id)
     return {
-        "hull": make_material(f"{mech_id}_hull", pal["primary"], roughness=0.44),
-        "far": make_material(f"{mech_id}_far", pal["far"], roughness=0.5),
-        "sub": make_material(f"{mech_id}_sub", pal["secondary"], roughness=0.5),
-        "trim": make_material(f"{mech_id}_trim", pal["trim"], roughness=0.40),
-        "frame": make_material(f"{mech_id}_frame", pal["frame"], roughness=0.62, metallic=0.7),
+        # Per-faction finish; see FACTION_SURFACE.
+        "hull": make_material(f"{mech_id}_hull", pal["primary"], roughness=0.44, surface=_sf),
+        "far": make_material(f"{mech_id}_far", pal["far"], roughness=0.5, surface=_sf),
+        "sub": make_material(f"{mech_id}_sub", pal["secondary"], roughness=0.5, surface=_sf),
+        "trim": make_material(f"{mech_id}_trim", pal["trim"], roughness=0.40, surface=_sf),
+        "frame": make_material(f"{mech_id}_frame", pal["frame"], roughness=0.62, metallic=0.7, surface=_sf),
         "acc": make_material(f"{mech_id}_accent", pal["accent"], emission=1.1, roughness=0.35),
         "glow": make_material(f"{mech_id}_glow", pal["glow"], emission=2.1, roughness=0.2, metallic=0.0),
     }
@@ -1752,11 +1932,12 @@ def build_mech(mech_id, palette_key=None):
     clear_collection(coll_name)
     coll = ensure_collection(coll_name)
 
-    M_HULL = make_material(f"{mech_id}_hull", pal["primary"], roughness=0.44)
-    M_FAR = make_material(f"{mech_id}_far", pal["far"], roughness=0.5)
-    M_SUB = make_material(f"{mech_id}_sub", pal["secondary"], roughness=0.5)
-    M_TRIM = make_material(f"{mech_id}_trim", pal["trim"], roughness=0.40)
-    M_FRAME = make_material(f"{mech_id}_frame", pal["frame"], roughness=0.62, metallic=0.7)
+    _sf = faction_surface(mech_id)
+    M_HULL = make_material(f"{mech_id}_hull", pal["primary"], roughness=0.44, surface=_sf)
+    M_FAR = make_material(f"{mech_id}_far", pal["far"], roughness=0.5, surface=_sf)
+    M_SUB = make_material(f"{mech_id}_sub", pal["secondary"], roughness=0.5, surface=_sf)
+    M_TRIM = make_material(f"{mech_id}_trim", pal["trim"], roughness=0.40, surface=_sf)
+    M_FRAME = make_material(f"{mech_id}_frame", pal["frame"], roughness=0.62, metallic=0.7, surface=_sf)
     M_ACC = make_material(f"{mech_id}_accent", pal["accent"], emission=1.1, roughness=0.35)
     M_GLOW = make_material(f"{mech_id}_glow", pal["glow"], emission=2.1, roughness=0.2, metallic=0.0)
 
@@ -2558,9 +2739,20 @@ def setup_world_and_lights():
     # the arena, and leaves the armour still 2.3x the deck's value so a machine
     # reads clearly against it. The residual >=250 is the emissive accent and
     # glow cores, which are *supposed* to be white.
-    lamp("BSR_key", "AREA", (-2.6, -3.0, 4.0), 800.0, (1.0, 0.97, 0.92), size=1.4)
+    # **1150, not 800.** D128 dropped this to 800 to pull the machines down to
+    # the deck's luminance, on the theory that matching the stage's value register
+    # was what "belonging" meant. That was wrong in both directions: the reference
+    # keeps its machines *brighter* than their background, and a mech that shares
+    # the deck's value stops reading as the foreground subject. 1150 keeps the
+    # blowout fix — the defect was armour at pure white, not armour being bright —
+    # while restoring the separation.
+    lamp("BSR_key", "AREA", (-2.6, -3.0, 4.0), 1150.0, (1.0, 0.97, 0.92), size=1.4)
     lamp("BSR_fill", "AREA", (3.8, -2.6, 0.2), 120.0, (0.58, 0.70, 0.95), size=5.0)
-    lamp("BSR_rim", "AREA", (1.0, 3.6, 2.6), 460.0, (1.00, 0.82, 0.66), size=1.8)
+    # The rim does figure-ground separation on its own terms: it lights only the
+    # edge facing away from camera, so it lifts the silhouette off a dark
+    # backdrop without adding a single lumen to the broad faces that blow out.
+    # Cheaper contrast than the key, and warm, to sit with the yard's sodium.
+    lamp("BSR_rim", "AREA", (1.0, 3.6, 2.6), 640.0, (1.00, 0.82, 0.66), size=1.8)
     lamp("BSR_bounce", "AREA", (0.0, -1.4, -3.4), 55.0, (0.45, 0.55, 0.85), size=5.0)
 
 
