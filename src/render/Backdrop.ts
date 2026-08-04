@@ -24,7 +24,7 @@ const NEAR_LIP_ROW = 748;
  * infinity — it should barely acknowledge the camera at all.
  */
 const SKY_SCROLL = 0.02;
-const SKY_ALPHA = 0.88;
+const SKY_ALPHA = 1;
 
 /** How much faster than the world the foreground columns travel. */
 const FORE_SCROLL = 1.35;
@@ -43,14 +43,23 @@ const FORE_DEPTH = 60;
 export class Backdrop {
   private readonly sky: Phaser.GameObjects.Graphics;
   /**
-   * The painted night sky, over the gradient rather than instead of it.
+   * The painted night sky.
    *
-   * Held at `SKY_ALPHA` so the gradient beneath shows through and **lifts it**.
-   * The art measures luminance 15/23/31/43/88 by fifths against a gradient
-   * pitched at 22/44/66/80/86 — darker than intended through the middle, which
-   * a tint cannot fix because tinting only multiplies down. Letting the brighter
-   * gradient through is the one cheap way to raise it, and it keeps the gradient
-   * doing useful work rather than becoming a fallback nobody ever sees.
+   * **Its levels are corrected in the asset, not at runtime.** As delivered it
+   * measured luminance 15/23/31/43/88 by fifths against a gradient pitched at
+   * 22/44/66/80/86 — far darker through the middle — and dropping it in at 0.88
+   * alpha made the composite ~35 in the band `arena_far` occupies, against that
+   * strip's ~89. A ratio of 2.5, where the procedural gradient had been 1.35.
+   * The far layer stopped reading as distant fog and started glowing against a
+   * void, which is the exact fault the gradient rework had just fixed.
+   *
+   * Neither alpha nor tint can raise a backdrop — tint only multiplies down and
+   * alpha only blends toward whatever is behind. So the fix belongs in the
+   * asset: `source/sky_master_1536_lifted.png` applies a shadow lift,
+   * `new = old + L(1 - old/255)`, with `L` a smoothstepped hump across the
+   * height. That form raises the dark sky field while leaving the stars, which
+   * are already near maximum, essentially untouched. Result 24/42/60/68/96, and
+   * a far-to-sky ratio back in the 1.3–1.5 that reads correctly.
    */
   private readonly skyArt: Phaser.GameObjects.TileSprite;
   private readonly far: Phaser.GameObjects.TileSprite;

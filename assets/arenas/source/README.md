@@ -10,7 +10,7 @@ Art direction and the full specification live in `docs/STAGE_ART_BRIEF.md`.
 
 | Shipped | Size | Source | Derivation |
 | --- | --- | --- | --- |
-| `arena_sky.png` | 3072 x 1024 | `sky_master_1536.png` | **Mirrored**, same reason |
+| `arena_sky.png` | 3072 x 1024 | `sky_master_1536_lifted.png` | **Levels lifted, then mirrored.** See below. |
 | `arena_far.png` | 3072 x 1024 | `far_master_1536.png` | **Mirrored.** See below. |
 | `arena_haze.png` | 3072 x 1024 | `haze_master_1536.png` | **Mirrored**, same reason |
 | `arena_mid.png` | 1536 x 1024 | `mid_master_1536.png` | Straight copy |
@@ -23,12 +23,27 @@ as two flats. It scrolls at 0.11. Its master ran off both edges exactly as the
 far layer's did — 106 of 256 rows, mismatch up to 113 — and is mirrored by the
 same recipe.
 
-`arena_sky.png` is the painted night sky, drawn *over* the engine's own gradient
-at 88 % alpha rather than instead of it. The art measures luminance 15/23/31/43/88
-by fifths against a gradient pitched at 22/44/66/80/86 — darker than intended
-through the middle — and a tint cannot lift it, because tinting only multiplies
-down. Letting the brighter gradient through is the cheap fix. It scrolls at 0.02:
-the sky is the one thing genuinely at infinity.
+### `arena_sky.png` has its levels corrected, and that is not optional
+
+As delivered the sky measured luminance **15/23/31/43/88** by fifths, against a
+gradient pitched at 22/44/66/80/86. Dropped in as-is it composited to about **35
+in the band `arena_far` occupies, against that strip's ~89** — a ratio of 2.5,
+where the procedural gradient it replaced had been 1.35. The far layer stopped
+reading as distant fog and began glowing against a void, which a player reported
+immediately.
+
+**Neither alpha nor tint can fix this.** Tint only multiplies down; alpha only
+blends toward whatever is behind. Raising a backdrop has to happen in the asset.
+
+`sky_master_1536_lifted.png` applies a shadow lift — `new = old + L(1 - old/255)`
+with `L` a smoothstepped hump across the height, peaking around 37 at 65 % down
+and tapering to 0 at both ends. That form raises the dark sky field while leaving
+the stars, already near maximum, essentially untouched. Result **24/42/60/68/96**,
+and a far-to-sky ratio back at 1.3–1.5.
+
+Rebuild it from the *unlifted* master with the same curve if the art changes; do
+not lift an already-lifted file. It then mirrors to 3072 like the others, and
+scrolls at 0.02 — the sky is the one thing genuinely at infinity.
 
 Two candidates were delivered. The one not used was 1672x941 and brighter
 (mean 59.6, SD 41.3) with roughly twice the edge mismatch; this one is 1536x1024,
