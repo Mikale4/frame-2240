@@ -6202,3 +6202,34 @@ The result is also **smoother than the reference**, which has fine filaments
 licking off the edge. Some of that detail dies at the ~50 px a blade occupies in
 play, but not all of it, and the warp amplitude and noise frequency are the dials
 if more is wanted.
+
+### D132 addendum — filaments, not an eroded solid
+
+The first drawn blade filled a tapered ribbon and chewed its edges with warped
+noise. Closer than a mesh, still wrong, and the reason is the construction:
+**eroding a solid gives a solid with a ragged rim.** It read as a soft blob.
+
+A supplied pixel-art reference at game resolution settled it. The blade is
+**accumulated from filaments** — hundreds of thin luminous streaks following the
+curve, offset laterally as a fraction of the *local* half-width so they converge
+where the blade narrows and the taper falls out of the construction instead of
+being imposed on it. Density variation, gaps, and edge breakup are then what the
+accumulation naturally does, not effects applied afterwards.
+
+Four bands, matching the art direction's three systems (the shaft is system one,
+and is modelled):
+
+| band | count | spread | role |
+| --- | --- | --- | --- |
+| `body` | 230 | 0.92 | carries the silhouette |
+| `mass` | 120 | 0.52 | inner density — without it the blade reads as a sparkler |
+| `core` | 52 | 0.15 | the white-hot spine |
+| `tongues` | 90 | 1.55 | short, wide-ranging: detaching flare |
+| `spray` | 220 pts | 1.70 | particle shedding |
+
+**Density and colour are separate dials, and confusing them cost a pass.**
+Raising the filament counts without raising the intensity normalisers drove
+nearly the whole blade past the white-core threshold and bleached the yellow out
+of it entirely. The normalisers — not the counts — decide how much goes white.
+Current result: mean (253, 194, 69), hue 40.8°, **0 %** of the blade at full
+white, against PYRE's own glow colour of (255, 194, 71).
