@@ -1704,7 +1704,18 @@ export const PYRE: MechDef = {
     gap: 7,
     // A scythe: thrown out wide, accelerating through the arc, and drawn
     // back *through* the target. It ends nearer than it started.
-    arc: { windup: 104, sweep: 236, windupFrac: 0.36, alternate: true, motion: 'reap', reach: 30 },
+    arc: {
+      windup: 104,
+      sweep: 236,
+      // 0.19, from the reference clip: the raise is short and the strike is
+      // what takes the time out of the animation, not the wind-up.
+      windupFrac: 0.19,
+      alternate: true,
+      motion: 'reap',
+      reach: 30,
+      // A blade longer than the machine cannot be swung one-handed.
+      twoHanded: true,
+    },
     damage: [54, 58, 88],
     knock: [5, 6, 15],
     finisherKnock: 18,

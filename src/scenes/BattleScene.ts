@@ -1199,6 +1199,10 @@ export class BattleScene extends Phaser.Scene {
     return {
       alive: true,
       act: 0,
+      // A decoy never swings, so it never grips — but the field is required by
+      // `MechPoseSource` on purpose (§8i): the compiler catching this is exactly
+      // what the structural contract is for.
+      grip: 0,
       y: dec.y,
       // Straight from the simulation, so the mounts point exactly where the
       // projection's rounds actually leave from. A rig aiming somewhere its own

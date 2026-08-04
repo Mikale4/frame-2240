@@ -6296,3 +6296,57 @@ the one the manifest records.
 
 Order matters when rebuilding: **Blender first, merge the manifest, then run the
 generator** — it needs the tile the build just recorded.
+
+## D134 — PYRE swings the scythe with both hands, on measured timing
+
+A blade longer than the machine cannot be swung one-handed and should not look as
+though it is.
+
+### The off-arm already rotated; it never moved
+
+`leftArm` is a top-level turret part, so `partLocalRotation` hands it `pose.spin`
+for free and it was *already* rotating with every strike. What it did not do was
+travel — it stayed parked at its rest offset while the other arm swung a weapon
+larger than the chassis, which reads as waving a lamppost.
+
+`SwingArc.twoHanded` plus `Combatant.grip` (0..1, presentation only, like `spin`
+and `reach`) now slide the off-hand onto the shaft. It takes hold during the
+wind-up — you grab a weapon *before* you swing it — holds through the strike, and
+releases only in the last fifth of the follow-through, so it never snaps back
+mid-slash. A chain holds the grip across the gap between hits.
+
+`MechPoseSource` gained the field, which made the compiler reject
+`BattleScene.decoyState` until it was updated too. That is §8i working as
+intended: the structural contract caught the stand-in rather than the player.
+
+### Numbers taken from the reference, not invented
+
+`animation examples/Great Sword Slash.fbx`, imported and sampled per frame —
+shoulder-to-hand vector projected into the sagittal plane, then unwrapped
+(the raw signal crosses ±180° and reads as a 355° sweep that never happened):
+
+| | measured | what we had |
+| --- | --- | --- |
+| wind-up fraction | **0.187** | 0.36 |
+| strike duration | **3 frames of 107** | ~64 % of the swing |
+| peak angular speed | **49.9 °/frame** | — |
+| sweep during strike | **89°** | spread evenly |
+| hand separation | **0.043–0.101** of a 1.7-unit figure | — |
+
+Two things changed as a result:
+
+* **`windupFrac` 0.36 → 0.19.** The raise is short; the strike is what takes the
+  time out of the animation.
+* **The `reap` curve front-loads.** Squaring `s` spread the sweep evenly across
+  the whole post-windup, which reads as a heavy thing being *pushed*. It now
+  spends the arc in the first ~43 % and leaves the rest as follow-through.
+* **`GRIP_SPACING` 16 → 5 px.** The reference keeps the hands 2.5–6 % of body
+  height apart; on a 104 px chassis that is 3–6 px. 16 is 15 %, which reads as
+  two people holding one weapon.
+
+### Blender hung, and it was self-inflicted
+
+Cleaning the imported armature out of the scene with a `bpy.data.objects.remove`
+loop over a live list hung the process. **Import references into a scratch file,
+not into the scene `build_all` saves** — `mechs.blend` is written by every build
+and must not acquire a Mixamo rig.

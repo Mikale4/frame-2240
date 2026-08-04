@@ -229,6 +229,16 @@ export interface SwingArc {
    * bigger lunge here never changes what the move actually hits.
    */
   reach?: number;
+  /**
+   * Bring the off-hand onto the shaft for the swing.
+   *
+   * A weapon this size cannot be swung one-handed and should not look as though
+   * it is. The off-arm already rotates with the strike — it is a top-level
+   * turret part, so it picks up `pose.spin` for free — but without this it stays
+   * parked at its rest position while the other arm does all the work, which
+   * reads as the mech waving a lamppost.
+   */
+  twoHanded?: boolean;
 }
 
 /**

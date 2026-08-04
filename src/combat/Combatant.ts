@@ -260,6 +260,22 @@ const SAT_MIN_FRACTION = 0.25;
 const STAB_SPOTS = [-0.34, 0.28, -0.12, 0.40, -0.26, 0.08];
 
 /**
+ * How committed the off-hand is to the shaft at swing progress `t`, 0..1.
+ *
+ * Takes hold fast during the wind-up — you grab the weapon *before* you swing it
+ * — holds through the strike, and releases only at the very end of the
+ * follow-through. Releasing early would make the arm snap back mid-slash.
+ */
+export function swingGrip(arc: SwingArc, t: number): number {
+  if (!arc.twoHanded) return 0;
+  const k = clamp(t, 0, 1);
+  const wf = clamp(arc.windupFrac, 0.05, 0.95);
+  if (k <= wf) return 1 - Math.pow(1 - k / wf, 2);
+  const s = (k - wf) / (1 - wf);
+  return s < 0.82 ? 1 : 1 - (s - 0.82) / 0.18;
+}
+
+/**
  * Arm angle at normalised swing progress `t`, in radians relative to the aim.
  *
  * Two phases, matching how the reference drove its arm helper: the arm winds
@@ -309,10 +325,20 @@ export function swingArcAngle(arc: SwingArc, t: number, hitIndex: number): numbe
     }
 
     case 'reap': {
-      // A scythe **accelerates through** its arc and finishes closer to the
-      // wielder than it started — the blade hooks and draws in. Squaring `s`
-      // is the acceleration; the pull is in `swingReach`.
-      deg = k <= wf ? arc.windup * Math.pow(k / wf, 0.8) : arc.windup - arc.sweep * s * s;
+      // A scythe accelerates through its arc and finishes closer to the wielder
+      // than it started; the pull itself is in `swingReach`.
+      //
+      // **The strike is a burst, not a sweep.** Measured off the supplied
+      // great-sword reference: the wind-up is 19 % of the action and the strike
+      // itself lasts three frames of a hundred and seven, covering 89 degrees at
+      // a peak of 50 deg/frame. Spreading the sweep evenly across the whole
+      // post-windup — which squaring `s` did — reads as a heavy thing being
+      // pushed rather than swung. `s * 2.3` front-loads it so the arc is spent
+      // in the first ~43 % and the rest is follow-through.
+      const burst = Math.min(1.0, s * 2.3);
+      deg = k <= wf
+        ? arc.windup * Math.pow(k / wf, 0.8)
+        : arc.windup - arc.sweep * (1 - Math.pow(1 - burst, 2.4));
       break;
     }
 
@@ -494,6 +520,11 @@ export class Combatant implements FlightState {
    * Presentation only — the hit itself is driven by the attack's own range.
    */
   reach = 0;
+  /**
+   * Off-hand commitment to the shaft, 0..1. Presentation only — like `spin` and
+   * `reach` it is read by `MechRenderer` and never by the simulation.
+   */
+  grip = 0;
   /**
    * Set by whichever melee path drove the arc this tick; folded into `swinging`
    * at the end of the step and cleared. Two fields because `updateVisualAngles`
@@ -1975,6 +2006,7 @@ export class Combatant implements FlightState {
       const ramp = Math.min(1, ml.timer / 8);
       this.spin = swingArcAngle(p.arc, 0, ml.hitIndex) * ramp;
       this.reach = swingReach(p.arc, 0, ml.hitIndex) * ramp;
+      this.grip = swingGrip(p.arc, 0) * ramp;
 
       /**
        * Desperation Speed closes from anywhere on the map, and the ordinary
@@ -2041,6 +2073,8 @@ export class Combatant implements FlightState {
       // The weapon recovers to its next start position rather than snapping, so
       // a piston visibly retracts between strokes.
       this.reach = lerp(swingReach(p.arc, 1, ml.hitIndex), swingReach(p.arc, 0, ml.hitIndex + 1), gapT);
+      // Held across the gap between hits: a chain is one continuous grip.
+      this.grip = Math.max(swingGrip(p.arc, 1), swingGrip(p.arc, 0));
       this.vx *= 0.86;
       this.vy *= 0.86;
       if (ml.timer >= p.gap) {
@@ -2062,6 +2096,7 @@ export class Combatant implements FlightState {
     const swingT = ml.hitTimer / Math.max(1, p.swing);
     this.spin = swingArcAngle(p.arc, swingT, ml.hitIndex);
     this.reach = swingReach(p.arc, swingT, ml.hitIndex);
+    this.grip = swingGrip(p.arc, swingT);
 
     // Reposition to a point beside the target that shifts each hit, so the
     // sequence circles rather than bulldozing straight through.
@@ -2374,6 +2409,7 @@ export class Combatant implements FlightState {
       const lockT = this.attackTick / total;
       this.spin = swingArcAngle(this.def.meleeLock.arc, lockT, this.meleeCount - 1);
       this.reach = swingReach(this.def.meleeLock.arc, lockT, this.meleeCount - 1);
+      this.grip = swingGrip(this.def.meleeLock.arc, lockT);
     }
 
     if (this.autoFireTimer > 0) this.autoFireTimer--;
@@ -2709,6 +2745,8 @@ export class Combatant implements FlightState {
       // its shield or ram left hanging out after a sequence ends.
       this.reach *= 0.82;
       if (Math.abs(this.reach) < 0.05) this.reach = 0;
+      this.grip *= 0.82;
+      if (this.grip < 0.02) this.grip = 0;
     }
   }
 

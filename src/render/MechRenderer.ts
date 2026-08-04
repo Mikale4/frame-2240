@@ -49,6 +49,8 @@ export interface MechPoseSource {
   bobPhase: number;
   spin: number;
   reach: number;
+  /** Off-hand commitment to the shaft, 0..1, for two-handed swings. */
+  grip: number;
   thrust: number;
   swinging: boolean;
   /** Freeze frames on impact; the renderer jitters the rig while it runs. */
@@ -72,6 +74,17 @@ export interface MechPoseSource {
  * Facing is handled by mirroring the root container. Local rotations are
  * therefore authored in "facing right" space and converted on the way in.
  */
+/**
+ * How far back along the shaft the off-hand sits from the weapon hand, in
+ * logical pixels.
+ *
+ * **Measured, not guessed.** In the supplied Mixamo great-sword reference the
+ * hands stay 0.043-0.101 units apart on a ~1.7-unit figure — 2.5-6 % of body
+ * height. On a 104 px chassis that is 3-6 px. The first guess here was 16, which
+ * is 15 % of height and reads as two people holding one weapon.
+ */
+const GRIP_SPACING = 5;
+
 export class MechRenderer {
   readonly root: Phaser.GameObjects.Container;
   private readonly bank: Phaser.GameObjects.Container;
@@ -271,6 +284,7 @@ export class MechRenderer {
       node.container.setPosition(node.def.x + off.x, node.def.y + off.y);
     }
 
+    this.applyTwoHandedGrip(c.grip, turretRot + spinLocal);
     this.animateEnergy(dt);
 
     // Damage flash: tint every part white briefly. A status affliction otherwise
@@ -379,6 +393,37 @@ export class MechRenderer {
    * swells as the core dims. That counter-motion is most of what sells it as
    * radiated light rather than a glowing decal.
    */
+  /**
+   * Slides the off-hand onto the shaft for a two-handed swing.
+   *
+   * The off-arm already *rotates* with the strike — it is a top-level turret
+   * part, so `partLocalRotation` hands it `pose.spin` for free. What it does not
+   * do is move, so without this it stays parked at its rest offset while the
+   * other arm swings a weapon larger than the machine.
+   *
+   * The target is the weapon arm's own mount, pushed a little back along the
+   * shaft so the two hands are spaced rather than stacked. `grip` fades the
+   * whole thing in and out, so the arm travels rather than snapping.
+   */
+  private applyTwoHandedGrip(grip: number, aim: number): void {
+    const left = this.nodes.get('leftArm');
+    if (!left) return;
+    if (grip <= 0) return;
+
+    const right = this.nodes.get('rightArm');
+    if (!right) return;
+    // Toward the weapon hand...
+    const dx = right.def.x - left.def.x;
+    const dy = right.def.y - left.def.y;
+    // ...then back down the shaft, so the hands do not occupy the same point.
+    const bx = -Math.cos(aim) * GRIP_SPACING;
+    const by = -Math.sin(aim) * GRIP_SPACING;
+    left.container.setPosition(
+      left.container.x + (dx + bx) * grip,
+      left.container.y + (dy + by) * grip,
+    );
+  }
+
   private animateEnergy(dt: number): void {
     const node = this.nodes.get('meleeEnergy');
     if (!node || !node.container.visible) return;
