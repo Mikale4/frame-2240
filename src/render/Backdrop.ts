@@ -155,8 +155,21 @@ export class Backdrop {
     // fog, scrolls at 0.06 and is tinted and faded on top of that.
     this.far = scene.add.tileSprite(0, 0, VIEW_W, 1024, 'arena_far');
     this.far.setOrigin(0, 0).setDepth(-90);
-    this.far.setTint(0x6f7fa8);
-    this.far.setAlpha(0.85);
+    /**
+     * **Held well back — a stopgap, not the fix.**
+     *
+     * The delivered far and haze layers are heavy grey fog banks, and against a
+     * clear starfield they read as an out-of-place graveyard rather than as
+     * distance. That is a content problem: the Archive has the air above the
+     * storm layer as "clear, cold and thin", so thick fog does not belong at
+     * dock level at all — haze belongs *below*, at the storm deck.
+     *
+     * Until they are redrawn, these two are pushed back hard: darker tint,
+     * lower alpha. It makes them recede rather than compete, but it cannot make
+     * fog into structure.
+     */
+    this.far.setTint(0x4a5578);
+    this.far.setAlpha(0.5);
 
     // Mirrored to 3072 for the same reason as `far`: the delivered art ran off
     // both edges. Its structure sits in the lower two thirds of its own image,
@@ -164,8 +177,9 @@ export class Backdrop {
     // is the scroll rate, not the height.
     this.haze = scene.add.tileSprite(0, 0, VIEW_W, 1024, 'arena_haze');
     this.haze.setOrigin(0, 0).setDepth(-85);
-    this.haze.setTint(0x8290b4);
-    this.haze.setAlpha(0.92);
+    // Same stopgap as `far`, one step less severe since it sits nearer.
+    this.haze.setTint(0x5d6b92);
+    this.haze.setAlpha(0.62);
 
     // 1024, not 512: the hand-authored mid art is 1536x1024. A tile sprite
     // shorter than its texture crops rather than fits, so the strip has to match
