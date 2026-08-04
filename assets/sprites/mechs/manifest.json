@@ -493,7 +493,7 @@
       "weapon": "flamer",
       "booster": "twin",
       "pod": "rack",
-      "blade": "cleaver"
+      "blade": "scythe"
     },
     "nulltide": {
       "pitch": 28.0,
@@ -1863,16 +1863,16 @@
       },
       "meleeWeapon": {
         "file": "pyre_meleeWeapon.png",
-        "tile": 384,
+        "tile": 640,
         "dims_bu": [
-          1.41,
-          0.2,
-          0.37
+          2.71,
+          0.14,
+          1.1459
         ],
         "dims_logical_px": [
-          84.6,
-          12.0,
-          22.2
+          162.6,
+          8.4,
+          68.8
         ]
       },
       "drone": {

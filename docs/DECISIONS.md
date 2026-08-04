@@ -6005,3 +6005,80 @@ Escorts inherit their parent chassis's finish: same yard, same maintenance. Note
 `_drone_materials` and `build_mech` **share material names**, so whichever runs
 second rebuilds the other's nodes — they must agree, and now both pass the same
 `faction_surface(mech_id)`.
+
+## D130 — Eight melee motions, a scythe, and the grid comes off
+
+### The panel grid is gone, and it was mine
+
+A player asked what the lines on the mechs were. They were two crossed
+`TexWave` bands in **object space at fixed scales**, so every part of every
+chassis wore the same grid at the same spacing regardless of its shape — graph
+paper laid over the model. It had been there for a long time at 0.45 strength
+toward `rgb*0.40`, subtle enough to pass; **D129 cranked it to 0.90 toward
+`rgb*0.16`** chasing depth, and that is what made it visible.
+
+Removed outright, along with the now-dead `seam`/`seam_dark` faction parameters.
+Freestyle's crease pass already draws the real panel lines and those follow the
+geometry. **Two independent line systems was the actual fault** — the procedural
+one corresponded to nothing.
+
+### Every machine swung like a sword because the code made them
+
+`swingArcAngle` **did not branch on motion at all**. All eight ran one
+wind-back-then-decelerating-slash curve and differed only in their windup/sweep
+numbers, so a pile driver, a shield and a pair of daggers moved identically. The
+eight weapons were never the problem.
+
+| | motion | curve |
+| --- | --- | --- |
+| NOCTURNE claw | `swipe` | front-loaded rake that drags to a halt — the inverse of a blade, which loads slow and is fastest at contact |
+| CIRRUS daggers | `stab` | six stab angles cycled, each hit at a different part of the target, withdrawn before the next |
+| PYRE scythe | `reap` | accelerates through the arc and **ends nearer than it started** |
+| OBELISK shield | `bash` | now a ram: drives in, **holds at full extension**, recovers |
+| NULLTIDE glaive | `sweep` | constant-momentum polearm arc |
+| HALCYON / VESPER / TERRAMOTH | unchanged | saber / bayonet thrust / pile driver |
+
+**Render-only.** `spin` and `reach` feed `MechRenderer` and `RigRotation`; hit
+timing comes from `hits`/`swing`/`gap`. No balance sweep needed, and the existing
+four motions keep their exact curves so `motion.test.ts` and `roster.test.ts`
+stay valid.
+
+### PYRE carries a scythe
+
+Requested, with Gundam Deathscythe supplied as reference: a long snath, an
+emitter head, and a **projected energy crescent** rather than a forged blade.
+`reap` is the one strike that ends nearer the wielder than it began, and a
+straight chopping blade could not express that — the silhouette now states the
+motion.
+
+Three attempts, and the failures are the useful part:
+
+* **Chorded boxes do not work.** A curve made of overlapping cubes stair-steps,
+  and far worse, **Freestyle outlines every one of them** — a 22-segment crescent
+  rendered as a heap of shingles. Added `add_swept_blade()`, which builds the
+  blade as **one mesh**: a ruled surface between an inner and outer edge, 26
+  stations, smooth-shaded. One mesh, one outline.
+* **The sabre's emissive materials blow out on a wide blade.** `M_CORE` is pure
+  white at emission 3.0 and `M_BEAM` runs the glow colour at 2.4 — correct for a
+  thin hot line, a white slab across a crescent. Compounded by `make_material`
+  stacking lit base colour *on top of* emission from the same rgb. The blade now
+  uses its own banded materials and the hot core is a thin line inside the
+  cutting edge rather than a third of the width. Saturation **0.27 → 0.53**.
+* **The reference draws energy as hard concentric bands** — pale core, saturated
+  mid, deep rim, no gradient — and with **no outline at all**. The bands are in;
+  the outline is not yet solved, see below.
+
+### Known-open: energy still carries a black contour
+
+Freestyle draws it, proven by ablation: **28.4 % dark pixels in the blade region
+with Freestyle on, 2.4 % off.** `.freestyle_face` marks survive the join (303 of
+439 faces) but Freestyle ignores them — neither `face_mark_condition` of `ONE`
+nor `BOTH` moved a single pixel. **Filtering within a joined mesh is not
+available**, so the energy must become its own object to be excluded by
+collection.
+
+That is the same change flicker needs: the blade is currently baked into one
+sprite with the metal haft, so it cannot pulse without the haft pulsing. Both are
+answered by a `meleeEnergy` rig part — roster-wide, since HALCYON's saber,
+VESPER's bayonet, CIRRUS's daggers and NULLTIDE's glaive all have energy
+sections with the same fault.

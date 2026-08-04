@@ -175,7 +175,29 @@ export interface DefenceDef {
  * - `bash`   — a short shoulder-first shove that returns. Ram shields.
  * - `piston` — no wind-up rotation, then a violent short extension. Pile drivers.
  */
-export type MeleeMotion = 'swing' | 'thrust' | 'bash' | 'piston';
+/**
+ * How a melee weapon is *used*, as distinct from what it looks like.
+ *
+ * This mattered more than anyone expected. Until D130 `swingArcAngle` did not
+ * branch on motion at all — every machine ran the same wind-back-then-
+ * decelerating-slash curve and differed only in its windup/sweep *numbers*. A
+ * pile driver, a shield and a pair of daggers all moved like a sword, which is
+ * exactly what a player reported. The weapons were never the problem; the
+ * single shared curve was.
+ */
+export type MeleeMotion =
+  | 'swing'
+  | 'thrust'
+  | 'bash'
+  | 'piston'
+  /** A raking claw swipe: short wind, violent lateral tear, alternating hands. */
+  | 'swipe'
+  /** Assassin's knifework — repeated stabs, each at a **different** height. */
+  | 'stab'
+  /** A scythe's reap: accelerating arc that **pulls in** rather than through. */
+  | 'reap'
+  /** Wide, constant-momentum arc at reach. A polearm carries its own weight. */
+  | 'sweep';
 
 /**
  * Which family of melee sound a chassis uses.

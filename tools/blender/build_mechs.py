@@ -264,7 +264,7 @@ CHASSIS = {
         "weapon": "flamer",
         "booster": "twin",
         "pod": "rack",
-        "blade": "cleaver",
+        "blade": "scythe",
         "pivots": {
             "core": (0, 0, 0.0),
             "head": (22, -5, -0.05),
@@ -648,14 +648,14 @@ FACTION_SURFACE = {
     # factory paint, crisp panel work, very little corrosion.
     "CONCORD SKYWARD": dict(
         wear=0.42, broad=0.40, rust=0.10, rust_gate=0.80,
-        rough=0.26, cavity=0.75, seam=0.95, seam_dark=0.14,
+        rough=0.26, cavity=0.75,
     ),
     # Excavation walkers "rated for seam collapse and falling ore", rebuilt for
     # yard defence. The most beaten hardware on the roster: thick scuffed paint,
     # impact scarring, ore dust in every recess.
     "IRONWAKE COLLIERY": dict(
         wear=1.00, broad=0.85, rust=0.72, rust_gate=0.40,
-        rough=0.52, cavity=1.00, seam=0.90, seam_dark=0.16,
+        rough=0.52, cavity=1.00,
     ),
     # Concord airframes "rebuilt to Pact standards and returned to service
     # without Concord certification". A machine with a paint history: the
@@ -663,7 +663,7 @@ FACTION_SURFACE = {
     # at different times, over corrosion that was painted rather than cured.
     "EMBERLINE PACT": dict(
         wear=0.80, broad=1.00, rust=0.55, rust_gate=0.52,
-        rough=0.44, cavity=0.90, seam=0.95, seam_dark=0.15,
+        rough=0.44, cavity=0.90,
     ),
     # "Assembled from salvage, copied patterns and recovered systems. Individual
     # machines differ substantially." Barely painted at all — CIRRUS is already
@@ -672,14 +672,14 @@ FACTION_SURFACE = {
     # corrosion-resistant recovered stock, they just never finish it.
     "FREE LATITUDE": dict(
         wear=0.95, broad=0.60, rust=0.22, rust_gate=0.66,
-        rough=0.58, cavity=0.85, seam=0.80, seam_dark=0.22,
+        rough=0.58, cavity=0.85,
     ),
     # "Built for short engagements and replacement from contract revenue."
     # Cheap thin paint, no refit budget, and — PYRE being the incendiary frame —
     # scorched by its own weapon. Soot rather than rust.
     "ASHFALL IRREGULARS": dict(
         wear=0.88, broad=0.75, rust=0.38, rust_gate=0.58,
-        rough=0.46, cavity=0.95, seam=0.85, seam_dark=0.10,
+        rough=0.46, cavity=0.95,
     ),
 }
 
@@ -736,9 +736,12 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
     reference sprites have machined highlights along every edge, panel seams, and
     uneven grime. The procedural half generates:
 
-      * Pointiness  -> bright worn edges (and slightly glossier there)
-      * Wave x2     -> a panel-seam grid in object space
+      * Pointiness  -> bright worn edges, and dark crevices
       * Noise x2    -> fine grime plus broad tonal drift
+
+    Panel lines are **not** generated here. A procedural grid in object space
+    tiles identically across every part regardless of its shape; Freestyle's
+    crease pass draws the real ones, from the geometry.
 
     That got the shape right and the *surface* wrong: measured against the stage,
     the sprites sat at luminance 133-188 with a 95th percentile of **255** —
@@ -788,48 +791,17 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
     s_rust_gate = sf.get("rust_gate", RUST_GATE)
     s_rough = sf.get("rough", ROUGH_TEX_STRENGTH)
     s_cavity = sf.get("cavity", CAVITY_STRENGTH)
-    s_seam = sf.get("seam", 0.90)
-    s_seam_dark = sf.get("seam_dark", 0.16)
     s_grime = sf.get("grime", RUST_RGB)
 
     try:
         coord = nt.nodes.new("ShaderNodeTexCoord")
 
-        # --- panel seams: two banded waves crossed into a grid ---------
-        # Panels must stay large: a part is only ~35 logical px on screen, so a
-        # dense grid turns into halftone mush rather than reading as panelling.
-        seams = []
-        for axis, scale in (("X", 2.2), ("Z", 1.7)):
-            w = nt.nodes.new("ShaderNodeTexWave")
-            w.wave_type = "BANDS"
-            try:
-                w.bands_direction = axis
-            except (AttributeError, TypeError):
-                pass
-            w.inputs["Scale"].default_value = scale
-            w.inputs["Distortion"].default_value = 0.0
-            nt.links.new(coord.outputs["Object"], w.inputs["Vector"])
-            # Black inside the thin band, white elsewhere. With CONSTANT
-            # interpolation the stop colour applies from its position upward, so
-            # these must be in this order - reversing them yields isolated dots
-            # at the band crossings instead of a line grid.
-            r = nt.nodes.new("ShaderNodeValToRGB")
-            r.color_ramp.interpolation = "CONSTANT"
-            r.color_ramp.elements[0].position = 0.0
-            r.color_ramp.elements[0].color = (0, 0, 0, 1)
-            r.color_ramp.elements[1].position = 0.045  # end of the seam band
-            r.color_ramp.elements[1].color = (1, 1, 1, 1)
-            nt.links.new(w.outputs["Fac"], r.inputs["Fac"])
-            seams.append(r.outputs["Color"])
-        seam_mix = nt.nodes.new("ShaderNodeMath")
-        seam_mix.operation = "MULTIPLY"
-        nt.links.new(seams[0], seam_mix.inputs[0])
-        nt.links.new(seams[1], seam_mix.inputs[1])
-        # 0 in the seam, 1 elsewhere -> invert into a "seam strength" factor.
-        seam_inv = nt.nodes.new("ShaderNodeMath")
-        seam_inv.operation = "SUBTRACT"
-        seam_inv.inputs[0].default_value = 1.0
-        nt.links.new(seam_mix.outputs[0], seam_inv.inputs[1])
+        # **No procedural panel grid.** Two crossed wave bands in *object space*
+        # at fixed scales tile the same lines across every part of every mech
+        # regardless of its shape, so it reads as graph paper laid over the
+        # model rather than as panelling — and it fights the real panel lines,
+        # which Freestyle already draws from the geometry's own creases.
+        # Removed at the user's direction; the crease pass is the panel liner.
 
         # --- grime + broad tonal drift ----------------------------------
         fine = nt.nodes.new("ShaderNodeTexNoise")
@@ -857,7 +829,6 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
         grime = _scale_rgb(rgb, 0.70)
         drift = _scale_rgb(rgb, 0.88)
         edge = _scale_rgb(rgb, 0.55, toward=(1.0, 1.0, 1.0))
-        seam_col = _scale_rgb(rgb, 0.40)
 
         n1, c1 = _mix(nt, fine_r.outputs["Color"], rgb, grime)
         n1.inputs[0].default_value = 0.0
@@ -874,16 +845,7 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
         nt.links.new(broad.outputs["Fac"], broad_fac.inputs[0])
         _n2, c2 = _mix(nt, broad_fac.outputs[0], c1, drift)
 
-        # Seams were mixed at 0.45 toward rgb*0.40, which on a part occupying
-        # 35-100 px produced a line you had to be told was there. Because each
-        # part is rendered *in isolation* — `render_parts` hides every other mesh,
-        # so nothing ever shadows anything — panel structure is one of the only
-        # sources of depth a sprite has. It is now near-black and near-opaque.
-        seam_fac = nt.nodes.new("ShaderNodeMath")
-        seam_fac.operation = "MULTIPLY"
-        seam_fac.inputs[1].default_value = s_seam
-        nt.links.new(seam_inv.outputs[0], seam_fac.inputs[0])
-        _n3, c3 = _mix(nt, seam_fac.outputs[0], c2, _scale_rgb(rgb, s_seam_dark))
+        c3 = c2
 
         # --- photographic wear ------------------------------------------
         # Sits between the panelling and the edge highlight deliberately: edge
@@ -1204,6 +1166,66 @@ def segmented_limb(prefix, hip, angle, length, width, depth, coll, shell, frame,
                         bevel=0.004, coll=coll, mat=frame)
             )
     return out
+
+
+def add_swept_blade(name, stations, thickness, coll=None, mat=None):
+    """
+    A curved, tapering blade built as **one mesh**.
+
+    `stations` is a list of `(x_inner, z_inner, x_outer, z_outer)` in object
+    space, walked from root to tip; the blade is the ruled surface between the
+    inner and outer edges, given `thickness` in Y.
+
+    **This exists because chorded boxes cannot make a curved blade here.** A run
+    of overlapping cubes stair-steps along the silhouette, and — far worse —
+    Freestyle draws a contour around *every one of them*, so a 22-segment
+    crescent renders as a heap of outlined shingles rather than a blade. A single
+    mesh has a single outline, which is the whole point of the crease pass.
+    """
+    t = thickness * 0.5
+    verts, faces = [], []
+    for (xi, zi, xo, zo) in stations:
+        base = len(verts)
+        verts.extend([
+            (xi, -t, zi), (xo, -t, zo),   # front inner, front outer
+            (xi, t, zi), (xo, t, zo),     # back inner, back outer
+        ])
+        del base
+    n = len(stations)
+    for i in range(n - 1):
+        a, b = i * 4, (i + 1) * 4
+        faces.append((a + 0, a + 1, b + 1, b + 0))   # front
+        faces.append((a + 2, b + 2, b + 3, a + 3))   # back
+        faces.append((a + 1, a + 3, b + 3, b + 1))   # outer wall
+        faces.append((a + 0, b + 0, b + 2, a + 2))   # inner wall
+    # Cap the root so the blade is closed where it meets the emitter.
+    faces.append((0, 2, 3, 1))
+    me = bpy.data.meshes.new(name + "_mesh")
+    me.from_pydata(verts, [], faces)
+    me.validate()
+    me.update()
+
+    # **Freestyle face marks, so the line pass skips this.** Energy in the
+    # reference carries no black contour at all — the hardware is outlined and
+    # the blade is not, and outlining a projected blade is what makes it read as
+    # a painted metal object. Marks moved to a generic boolean attribute in
+    # Blender 4; `setup_outlines` excludes anything marked.
+    try:
+        attr = me.attributes.get(".freestyle_face") or \
+               me.attributes.new(".freestyle_face", 'BOOLEAN', 'FACE')
+        for d in attr.data:
+            d.value = True
+    except (AttributeError, RuntimeError, TypeError):
+        pass
+
+    obj = bpy.data.objects.new(name, me)
+    (coll or bpy.context.scene.collection).objects.link(obj)
+    if mat is not None:
+        obj.data.materials.append(mat)
+    # Smooth shading across the sweep so the curve does not facet under light.
+    for p in obj.data.polygons:
+        p.use_smooth = True
+    return obj
 
 
 def add_cyl(name, radius, depth, loc, rot=(0, 0, 0), verts=16, coll=None,
@@ -2434,22 +2456,71 @@ def build_mech(mech_id, palette_key=None):
                              piv + Vector((0.22 + dl / 2, dy, 0.02)),
                              (0, math.radians(90), 0), 10, coll=coll, cone_r2=0.003, mat=M_CORE))
         parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
-    elif spec["blade"] == "cleaver":
-        # PYRE: a thick chopping blade heated to glowing, not a plasma edge.
-        # Solid metal with a molten cutting edge and heat vents down the spine.
-        o.append(add_box("m_grip", (0.20, 0.11, 0.11), piv, coll=coll, mat=M_FRAME))
-        o.append(add_box("m_guard", (0.07, 0.20, 0.20), piv + Vector((0.14, 0, 0)),
-                         coll=coll, mat=M_HULL))
-        o.append(add_box("m_blade", (0.86, 0.07, 0.34), piv + Vector((0.60, 0, 0.02)),
-                         coll=coll, mat=M_SUB))
-        o.append(add_wedge("m_tip", (0.26, 0.07, 0.34), 1.2, piv + Vector((1.14, 0, 0.02)),
-                           (0, math.radians(90), 0), coll=coll, mat=M_SUB))
-        # The edge itself is the only emissive part: heat, not energy.
-        o.append(add_box("m_edge", (1.06, 0.045, 0.05), piv + Vector((0.66, 0, -0.14)),
-                         coll=coll, mat=M_GLOW))
+    elif spec["blade"] == "scythe":
+        # PYRE: a reaping scythe, replacing the cleaver it carried until D130.
+        #
+        # **The silhouette has to state the motion.** `reap` is the one strike on
+        # the roster that ends *nearer* the wielder than it began — the blade is
+        # thrown out wide and drawn back through the target — and a straight
+        # chopping blade cannot express that. A hooked blade set across the end
+        # of a haft can: the shape is the pull.
+        # Per the supplied reference the blade is **projected energy**, not forged
+        # steel: a long solid snath carrying an emitter head, and a glowing
+        # crescent thrown from it — wide at the root, tapering to a fine point.
+        # PYRE's glow is amber (1.00, 0.76, 0.30), so the crescent reads as flame,
+        # which is the right element for the incendiary frame.
+        o.append(add_box("m_butt", (0.14, 0.10, 0.10), piv + Vector((-0.16, 0, 0)),
+                         coll=coll, mat=M_FRAME))
+        o.append(add_cyl("m_haft", 0.048, 1.66, piv + Vector((0.70, 0, 0)),
+                         (0, math.radians(90), 0), 12, coll=coll, mat=M_FRAME))
         for i in range(4):
-            o.append(add_box(f"m_vent{i}", (0.07, 0.09, 0.07),
-                             piv + Vector((0.34 + i * 0.20, 0, 0.17)), coll=coll, mat=M_ACC))
+            o.append(add_cyl(f"m_grip{i}", 0.064, 0.05, piv + Vector((0.06 + i * 0.32, 0, 0)),
+                             (0, math.radians(90), 0), 12, coll=coll, mat=M_ACC))
+        # Emitter head at the far end, with a vent stack — the crescent needs a
+        # believable source or it looks stuck on.
+        o.append(add_box("m_head", (0.24, 0.14, 0.21), piv + Vector((1.58, 0, 0.02)),
+                         coll=coll, mat=M_HULL))
+        o.append(add_cyl("m_vent", 0.055, 0.11, piv + Vector((1.66, 0, -0.12)),
+                         (math.radians(90), 0, 0), 12, coll=coll, mat=M_ACC))
+        # **Dedicated crescent materials, at much lower emission than the saber's.**
+        # `M_BEAM` runs the glow colour at emission 2.4 and `M_CORE` is pure white
+        # at 3.0. On a thin sabre blade that is correct — a hot line reads as
+        # white-hot. Spread across a wide crescent it clips both the red and green
+        # channels and the whole blade renders as a white slab, losing PYRE's
+        # amber entirely. At 0.95 the glow survives as (242, 184, 69).
+        # **Hard concentric bands, not a shaded surface.** The reference draws
+        # energy as three or four flat colour steps — pale core, saturated mid,
+        # deep rim — with no gradient and no outline. A smoothly lit surface, however
+        # well tuned, reads as a glowing solid; flat bands read as light.
+        BANDS = [
+            # (name, inner frac, outer frac, rgb, emission)
+            ("rim",  0.00, 1.00, (1.00, 0.26, 0.05), 0.42),
+            ("mid",  0.00, 0.62, (1.00, 0.52, 0.10), 0.70),
+            ("core", 0.00, 0.26, (1.00, 0.86, 0.46), 1.15),
+        ]
+        arc_r, cx, cz, segs = 0.90, 1.58, -0.74, 26
+        span = math.radians(102.0)
+        for bname, f_in, f_out, rgb, emis in BANDS:
+            mat = make_material(f"{mech_id}_scythe_{bname}", rgb, emission=emis,
+                                roughness=0.22, metallic=0.0, detail=False)
+            st = []
+            for i in range(segs):
+                f = i / (segs - 1)
+                a = math.radians(86.0) - f * span
+                ca, sa = math.cos(a), math.sin(a)
+                wide = 0.34 * (1.0 - f) ** 1.5 + 0.012
+                # Bands are measured inward from the cutting edge, so they stay
+                # concentric with the curve and nest without crossing.
+                ri = arc_r - wide * f_out
+                ro = arc_r - wide * f_in
+                st.append((piv.x + cx + ri * ca, piv.z + cz + ri * sa,
+                           piv.x + cx + ro * ca, piv.z + cz + ro * sa))
+            # Each band sits a hair proud of the one beneath so they do not
+            # z-fight; the outermost is thickest.
+            th = 0.052 - 0.010 * BANDS.index((bname, f_in, f_out, rgb, emis))
+            b = add_swept_blade(pn(f"m_crescent_{bname}"), st, th, coll=coll, mat=mat)
+            b.location.y += piv.y
+            o.append(b)
         parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
     elif spec["blade"] == "glaive":
         # NULLTIDE: a polearm. Long haft, discharge head at the far end, so its
@@ -2637,6 +2708,16 @@ def setup_outlines():
         lineset.select_border = True
         lineset.select_crease = True
         lineset.select_edge_mark = False
+        # Skip anything face-marked. `add_swept_blade` marks projected-energy
+        # geometry, which must not be outlined: in the reference the hardware
+        # carries a black contour and the energy carries none, and a blade with
+        # a contour reads as a painted metal object rather than as light.
+        try:
+            lineset.select_by_face_marks = True
+            lineset.face_mark_negation = "EXCLUSIVE"
+            lineset.face_mark_condition = "ONE"
+        except (AttributeError, TypeError):
+            pass
         style = lineset.linestyle
         style.color = (0.035, 0.040, 0.055)
         style.thickness = OUTLINE_THICKNESS

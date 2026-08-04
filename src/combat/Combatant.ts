@@ -250,6 +250,16 @@ const SAT_OVERHEAT_LIFE_FRAC = 0.05;
 const SAT_MIN_FRACTION = 0.25;
 
 /**
+ * Where successive `stab` hits land, as a fraction of the arc's sweep.
+ *
+ * An assassin picks separate targets on a body — throat, flank, under the arm —
+ * rather than stabbing the same spot repeatedly. Cycling these is what turns a
+ * chain of jabs into knifework. Deliberately not symmetrical: an even
+ * high/low/high/low alternation reads as a machine oscillating.
+ */
+const STAB_SPOTS = [-0.34, 0.28, -0.12, 0.40, -0.26, 0.08];
+
+/**
  * Arm angle at normalised swing progress `t`, in radians relative to the aim.
  *
  * Two phases, matching how the reference drove its arm helper: the arm winds
@@ -270,16 +280,60 @@ export function swingArcAngle(arc: SwingArc, t: number, hitIndex: number): numbe
   const k = clamp(t, 0, 1);
   const dir = arc.alternate && hitIndex % 2 === 1 ? -1 : 1;
   const wf = clamp(arc.windupFrac, 0.05, 0.95);
+  const motion = arc.motion ?? 'swing';
+  /** Progress through the strike, 0 at the top of the windup, 1 at the end. */
+  const s = k <= wf ? 0 : (k - wf) / (1 - wf);
 
   let deg: number;
-  if (k <= wf) {
-    // Wind back, easing out so the arm settles at the top of the swing.
-    const w = k / wf;
-    deg = arc.windup * (1 - (1 - w) * (1 - w));
-  } else {
-    // Slash through, decelerating into the follow-through.
-    const s = (k - wf) / (1 - wf);
-    deg = arc.windup - arc.sweep * (1 - Math.pow(1 - s, 2.4));
+  switch (motion) {
+    case 'swipe':
+      // A claw tears rather than cuts: almost no wind-up, then a violent,
+      // front-loaded rake that is fastest at the start and drags to a halt.
+      // The opposite curve to a sword, which is slow to load and fastest at
+      // the moment of contact.
+      deg =
+        k <= wf
+          ? arc.windup * Math.pow(k / wf, 0.55)
+          : arc.windup - arc.sweep * Math.pow(s, 0.62);
+      break;
+
+    case 'stab': {
+      // Knifework, not swordplay. The arm barely rotates — the extension does
+      // the killing — but **each hit is angled at a different part of the
+      // target**, so a chain reads as someone picking separate spots rather
+      // than repeating one stroke. That variety is the whole character.
+      const spot = STAB_SPOTS[hitIndex % STAB_SPOTS.length] * arc.sweep;
+      const settle = k <= wf ? k / wf : 1;
+      deg = spot * settle + (k <= wf ? arc.windup * (1 - k / wf) : 0);
+      break;
+    }
+
+    case 'reap': {
+      // A scythe **accelerates through** its arc and finishes closer to the
+      // wielder than it started — the blade hooks and draws in. Squaring `s`
+      // is the acceleration; the pull is in `swingReach`.
+      deg = k <= wf ? arc.windup * Math.pow(k / wf, 0.8) : arc.windup - arc.sweep * s * s;
+      break;
+    }
+
+    case 'sweep': {
+      // Smoothstep both ends: a polearm is heavy at the grip and travels a wide
+      // arc at near-constant speed once moving. Reads as momentum rather than
+      // as a wrist flick.
+      const e = s * s * (3 - 2 * s);
+      deg = k <= wf ? arc.windup * (k / wf) : arc.windup - arc.sweep * e;
+      break;
+    }
+
+    default:
+      // swing / thrust / bash / piston keep the original curve exactly.
+      if (k <= wf) {
+        const w = k / wf;
+        deg = arc.windup * (1 - (1 - w) * (1 - w));
+      } else {
+        deg = arc.windup - arc.sweep * (1 - Math.pow(1 - s, 2.4));
+      }
+      break;
   }
   return -deg * DEG * dir;
 }
@@ -313,15 +367,52 @@ export function swingReach(arc: SwingArc, t: number, _hitIndex: number): number 
     return R * (1 - Math.pow(1 - s, 6));
   }
 
+  if (motion === 'swipe') {
+    // Claws reach at the start of the rake and stay out through it — the tear
+    // happens across the target, not into it. Retracts only at the very end.
+    if (k <= wf) return R * 0.30 * (k / wf);
+    const s = (k - wf) / (1 - wf);
+    return R * (0.30 + 0.70 * Math.sin(Math.PI * Math.min(1, s * 0.92)));
+  }
+
+  if (motion === 'stab') {
+    // The whole attack. A hard, deep, near-instant extension that is already
+    // withdrawing before the next hit begins, so six stabs read as six.
+    if (k <= wf) return -R * 0.12 * (k / wf);
+    const s = (k - wf) / (1 - wf);
+    return R * Math.sin(Math.PI * Math.min(1, Math.pow(s, 0.7) * 1.05));
+  }
+
+  if (motion === 'reap') {
+    // **Pulls in.** A scythe is thrown out wide and then drawn back through the
+    // target; the blade finishes nearer the wielder than it began. Nothing else
+    // on the roster ends a strike closer than it started.
+    if (k <= wf) return R * (k / wf);
+    const s = (k - wf) / (1 - wf);
+    return R * (1 - 1.25 * s * s);
+  }
+
+  if (motion === 'sweep') {
+    // A polearm is held at reach for the entire arc — it never extends, because
+    // it was already out there. Nearly flat, which is the whole point.
+    if (k <= wf) return R * 0.55 * (k / wf);
+    return R * (0.55 + 0.45 * Math.sin(Math.PI * ((k - wf) / (1 - wf))));
+  }
+
   // Both remaining motions pull back before committing.
   const drawBack = motion === 'bash' ? 0.15 : 0.22;
   if (k <= wf) return -R * drawBack * (k / wf);
 
   const s = (k - wf) / (1 - wf);
   if (motion === 'bash') {
-    // Out and back inside the active window, so the shove reads as an impact
-    // rather than a lunge that leaves the mech hanging forward.
-    return R * Math.sin(Math.PI * Math.min(1, s * 1.35));
+    // **A ram, not a shove.** Drives forward fast, holds at full extension
+    // while the slab is buried in the target, then recovers — a wall arriving,
+    // rather than an arm poking. The plateau is what separates the two, and the
+    // asymmetric return keeps it from reading as a bounce.
+    if (s < 0.30) return R * (1 - Math.pow(1 - s / 0.30, 3));
+    if (s < 0.62) return R;
+    const back = (s - 0.62) / 0.38;
+    return R * (1 - back * back);
   }
   // thrust: straight out, easing into the extension.
   return R * (1 - Math.pow(1 - s, 3));

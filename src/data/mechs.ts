@@ -631,7 +631,18 @@ export const NOCTURNE: MechDef = {
     // Heavy overhead chops: a longer, higher wind-up and a shorter, blunter
     // sweep than the saber. Still a swing — the claw comes down through the
     // target rather than being shoved into it — but it reads as weight.
-    arc: { windup: 96, sweep: 168, windupFrac: 0.44, alternate: true },
+    // **A claw swipe, not a sword stroke.** Almost no wind-up, then a violent
+    // front-loaded rake that drags to a halt — the opposite curve to a blade,
+    // which loads slowly and is fastest at contact. Alternating, because three
+    // talons tearing across a hull come from alternate sides.
+    arc: {
+      windup: 62,
+      sweep: 184,
+      windupFrac: 0.26,
+      alternate: true,
+      motion: 'swipe',
+      reach: 28,
+    },
     damage: [62, 70, 118],
     knock: [6, 8, 16],
     finisherKnock: 20,

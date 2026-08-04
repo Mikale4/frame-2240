@@ -1186,7 +1186,9 @@ export const CIRRUS: MechDef = {
     lockout: 54,
     swing: 7,
     gap: 3,
-    arc: { windup: 66, sweep: 224, windupFrac: 0.3, alternate: true },
+    // Knifework. Eight stabs, each angled at a different part of the target,
+    // withdrawn before the next begins - an assassin picking spots.
+    arc: { windup: 34, sweep: 96, windupFrac: 0.18, alternate: false, motion: 'stab', reach: 22 },
     damage: [18, 18, 20, 20, 22, 22, 26, 58],
     knock: [2, 2, 3, 3, 3, 4, 4, 11],
     finisherKnock: 13,
@@ -1684,7 +1686,9 @@ export const PYRE: MechDef = {
     lockout: 64,
     swing: 12,
     gap: 7,
-    arc: { windup: 82, sweep: 176, windupFrac: 0.38, alternate: true },
+    // A scythe: thrown out wide, accelerating through the arc, and drawn
+    // back *through* the target. It ends nearer than it started.
+    arc: { windup: 104, sweep: 236, windupFrac: 0.36, alternate: true, motion: 'reap', reach: 30 },
     damage: [54, 58, 88],
     knock: [5, 6, 15],
     finisherKnock: 18,
@@ -1927,7 +1931,9 @@ export const NULLTIDE: MechDef = {
     lockout: 58,
     swing: 9,
     gap: 5,
-    arc: { windup: 68, sweep: 218, windupFrac: 0.32, alternate: true },
+    // A polearm held out at reach for the whole arc. Constant momentum through
+    // a wide sweep; it never extends because it was already out there.
+    arc: { windup: 68, sweep: 246, windupFrac: 0.30, alternate: true, motion: 'sweep', reach: 30 },
     damage: [26, 26, 30, 30, 72],
     knock: [3, 3, 4, 4, 13],
     finisherKnock: 15,
