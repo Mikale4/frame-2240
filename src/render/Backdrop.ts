@@ -156,20 +156,15 @@ export class Backdrop {
     this.far = scene.add.tileSprite(0, 0, VIEW_W, 1024, 'arena_far');
     this.far.setOrigin(0, 0).setDepth(-90);
     /**
-     * **Held well back — a stopgap, not the fix.**
+     * No tint and no suppression: the art is already a dark silhouette.
      *
-     * The delivered far and haze layers are heavy grey fog banks, and against a
-     * clear starfield they read as an out-of-place graveyard rather than as
-     * distance. That is a content problem: the Archive has the air above the
-     * storm layer as "clear, cold and thin", so thick fog does not belong at
-     * dock level at all — haze belongs *below*, at the storm deck.
-     *
-     * Until they are redrawn, these two are pushed back hard: darker tint,
-     * lower alpha. It makes them recede rather than compete, but it cannot make
-     * fog into structure.
+     * The first far layer was a grey fog bank measuring luminance ~89 against a
+     * sky of ~60, so it glowed rather than receding and had to be held back with
+     * a dark tint at half alpha. The replacement is dock structure drawn as
+     * silhouette — 31 and 35 in the two bands it occupies, against a sky at 57
+     * and 75 — so it recedes on its own and needs nothing done to it.
      */
-    this.far.setTint(0x4a5578);
-    this.far.setAlpha(0.5);
+    this.far.setAlpha(1);
 
     // Mirrored to 3072 for the same reason as `far`: the delivered art ran off
     // both edges. Its structure sits in the lower two thirds of its own image,
@@ -177,9 +172,16 @@ export class Backdrop {
     // is the scroll rate, not the height.
     this.haze = scene.add.tileSprite(0, 0, VIEW_W, 1024, 'arena_haze');
     this.haze.setOrigin(0, 0).setDepth(-85);
-    // Same stopgap as `far`, one step less severe since it sits nearer.
-    this.haze.setTint(0x5d6b92);
-    this.haze.setAlpha(0.62);
+    /**
+     * Held at 0.64 to put it back in the right place in the depth order.
+     *
+     * As delivered it measures 10–12, which is *darker than `mid`* at 24–25 —
+     * inverted, because the middle-distance layer should not be blacker than the
+     * nearer one. Alpha blends it toward the sky behind, and 0.64 lands it near
+     * 27: between `mid` at 25 and `far` at 31, so the three read as a gradient
+     * from near-black to nearly-sky as they recede.
+     */
+    this.haze.setAlpha(0.64);
 
     // 1024, not 512: the hand-authored mid art is 1536x1024. A tile sprite
     // shorter than its texture crops rather than fits, so the strip has to match

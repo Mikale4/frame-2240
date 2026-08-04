@@ -12,7 +12,7 @@ Art direction and the full specification live in `docs/STAGE_ART_BRIEF.md`.
 | --- | --- | --- | --- |
 | `arena_sky.png` | 3072 x 1024 | `sky_master_1536_lifted.png` | **Levels lifted, then mirrored.** See below. |
 | `arena_far.png` | 3072 x 1024 | `far_master_1536.png` | **Mirrored.** See below. |
-| `arena_haze.png` | 3072 x 1024 | `haze_master_1536.png` | **Mirrored**, same reason |
+| `arena_haze.png` | 3072 x 1024 | `haze_master_1536.png` | **Mirrored** |
 | `arena_mid.png` | 1536 x 1024 | `mid_master_1536.png` | Straight copy |
 | `arena_near.png` | 1536 x 1024 | `deck_master_1536.png` | Straight copy |
 | `arena_fore.png` | 1536 x 1024 | `fore_master_1536.png` | Straight copy |
@@ -102,9 +102,35 @@ print(sorted(tops)[len(tops)//2])   # -> NEAR_LIP_ROW
 * `blender_far/mid/near.png` — the original procedural strips built by
   `tools/blender/build_arena.py`, which these replaced.
 
+## The layers are silhouettes, not weather
+
+The first far and haze layers were grey fog banks, measuring luminance ~89
+against a sky of ~60 — brighter than their own sky, so they glowed instead of
+receding, and a player called them "an out of place super foggy graveyard".
+
+The rule that fixed it, and the one to hold new art to: **every structural layer
+must be DARKER than the sky behind it.** A silhouette recedes; anything paler
+than the sky is fog, and there is no fog at this altitude — the Archive has the
+air above the storm layer as "clear, cold and thin". Haze belongs at the storm
+deck far below, and nowhere else.
+
+The stack now runs as a depth gradient, measured in the bands each occupies:
+
+```
+  mid   25      nearest, near-black
+  haze  27      (10 in the asset, lifted by alpha 0.64 over the sky)
+  far   31
+  sky   57      the backdrop everything silhouettes against
+```
+
+`haze` needs that alpha because it was delivered *darker than `mid`*, which
+inverts the cue — a middle-distance layer has no business being blacker than a
+nearer one. Alpha blends it toward the sky, which is the only direction available:
+tint multiplies down and cannot lift anything.
+
 ## Expect tiling to fail
 
-Five of the six delivered layers did not tile. Two happened to be safe because
+Eight of the nine delivered layers did not tile. Two happened to be safe because
 their structure did not reach the image edges; the far layer had to be mirrored.
 **Assume seamlessness is the engine's job, not the generator's**, and measure it
 rather than trusting it:
