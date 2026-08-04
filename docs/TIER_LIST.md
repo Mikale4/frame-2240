@@ -9,7 +9,7 @@ standard error** on lead and **0.05–0.10** on an individual matchup.
 npx vite-node tools/probe/balance.ts -- --tier extreme --seeds 12 --matrix
 ```
 
-Current as of **D125** — the deck became solid, which moved these numbers. `tools/probe/telemetry.ts` is the companion instrument:
+Current as of **D126**. `tools/probe/telemetry.ts` is the companion instrument:
 same duels, same seeds, reporting *how* a machine spent its match rather than who
 won it. Reach for it before proposing a fix — three OBELISK passes were spent on
 reasoned hypotheses that each measured near zero, and VESPER's recorded diagnosis
@@ -41,29 +41,28 @@ into narrow survivals, and **you have to read both**. Two live examples:
 
 | Mech | Win | Lead | ± | z(lead/win) |
 | --- | --- | --- | --- | --- |
-| VESPER | 60 % | +0.136 | 0.034 | +1.77 / +1.31 |
-| OBELISK | 55 % | +0.049 | 0.029 | +0.64 / +0.64 |
-| CIRRUS | 54 % | +0.058 | 0.024 | +0.75 / +0.49 |
-| HALCYON | 52 % | −0.014 | 0.021 | −0.18 / +0.30 |
-| NULLTIDE | 51 % | −0.032 | 0.023 | −0.41 / +0.19 |
-| PYRE | 48 % | −0.025 | 0.022 | −0.33 / −0.30 |
-| TERRAMOTH | 45 % | −0.071 | 0.033 | −0.92 / −0.60 |
-| **NOCTURNE** | **34 %** | **−0.101** | 0.026 | −1.32 / **−2.02** |
+| VESPER | 60 % | +0.127 | 0.035 | +1.48 / +1.02 |
+| CIRRUS | **65 %** | +0.116 | 0.022 | +1.35 / +1.48 |
+| OBELISK | 54 % | +0.039 | 0.029 | +0.45 / +0.38 |
+| HALCYON | 51 % | −0.017 | 0.021 | −0.19 / +0.12 |
+| PYRE | 45 % | −0.040 | 0.022 | −0.46 / −0.46 |
+| NULLTIDE | 49 % | −0.042 | 0.024 | −0.49 / −0.09 |
+| TERRAMOTH | 42 % | −0.082 | 0.032 | −0.95 / −0.75 |
+| **NOCTURNE** | **33 %** | **−0.102** | 0.026 | −1.19 / −1.68 |
 
-**spread 0.237.** lead SD 0.077 (true 0.072). **Outlier: NOCTURNE**, on record.
+**spread 0.230.** lead SD 0.086 (true 0.082). **No outliers** — the field is one
+population at both tiers.
 
-### The deck cost this, and it is worth knowing why
+### The spread rose from 0.143 and that is not a regression
 
-The spread was **0.143** before the floor became solid (D125). Making it solid
-cost 0.075 for the mech half and 0.019 for the projectile half. Neither is a
-tuning mistake — the floor had never been solid in flight and the game was
-balanced around a hole in it.
+Two deliberate changes account for it. **The deck became solid** (D125) — the
+game had been balanced around a floor that did not exist in flight, and putting
+it back cost 0.075 for machines and 0.019 for rounds. **OVERDRIVE went back to
+5.5 seconds** by request (D126), which is most of the rest.
 
-**The mechanism is small and the response is large.** Measured on VESPER across
-the change: 4.5 % more damage dealt, 2.3 % more taken. That is what an
-eight-point record swing is made of, because at a spread this tight a couple of
-percent of net edge flips a great many near-even matchups. Expect any mechanical
-change to read as a balance event from here on.
+**At this spread, record is a very sensitive function of margin.** VESPER gained
+4.5 % output against 2.3 % intake from the deck, and that moved him eight points
+of win rate. Expect any mechanical change to read as a balance event.
 
 ## 2. Fairness
 
@@ -100,19 +99,18 @@ Row beats column.
 
 | Mech | Win | Lead | z(lead/win) |
 | --- | --- | --- | --- |
-| NULLTIDE | 58 % | +0.047 | +0.74 / +0.85 |
-| HALCYON | 61 % | +0.013 | +0.20 / +1.14 |
-| OBELISK | 57 % | +0.029 | +0.46 / +0.73 |
-| CIRRUS | 54 % | +0.051 | +0.81 / +0.47 |
-| VESPER | 51 % | +0.040 | +0.63 / +0.06 |
-| PYRE | 43 % | −0.001 | −0.01 / −0.76 |
-| NOCTURNE | 43 % | −0.042 | −0.67 / −0.73 |
-| **TERRAMOTH** | **33 %** | **−0.136** | **−2.17** / −1.77 |
+| CIRRUS | 66 % | +0.118 | +1.56 / +1.42 |
+| NULLTIDE | 55 % | +0.036 | +0.47 / +0.47 |
+| VESPER | 51 % | +0.034 | +0.44 / +0.05 |
+| OBELISK | 55 % | +0.016 | +0.21 / +0.45 |
+| HALCYON | 60 % | +0.006 | +0.08 / +0.84 |
+| PYRE | 40 % | −0.012 | −0.16 / −0.87 |
+| NOCTURNE | 41 % | −0.054 | −0.70 / −0.79 |
+| **TERRAMOTH** | **32 %** | **−0.144** | −1.89 / −1.58 |
 
-**spread 0.186 — improved** from 0.206, the one place the deck helped. Six of
-eight sit inside 0.09. **Outlier: TERRAMOTH**, and it has been the weakest
-machine at HARD in every measurement taken this session, before and after every
-change. Left alone by design decision — see §5 and D120.
+**spread 0.262.** No outliers. TERRAMOTH has been the weakest machine at HARD in
+every measurement taken across two sessions, before and after every change —
+left alone by design decision, see §5 and D120.
 
 ---
 
@@ -135,20 +133,15 @@ Do not "fix" this without re-reading D120 first.
 
 ## 6. What is left
 
-1. **NOCTURNE at EXTREME, 34 % / −0.101, −2.02σ.** The only flagged outlier at
-   that tier and the lowest record in the game. Note that D122 explicitly found
-   it *was not* an outlier and that calling it one was an error — that was true
-   then and the deck change made it true no longer. Relevant context from the
-   same entry: **HALCYON with LAST STAND stripped measures 36 %**, so the AV
-   frame both machines share is the weakest chassis in the game and NOCTURNE is
-   the one riding it without a signature.
-2. **The EXTREME spread, 0.143 → 0.237.** Owed to the deck being solid rather
-   than to any machine's tuning. One pass over the whole roster, not eight
-   individual ones.
-3. **VESPER at +1.77σ.** Not flagged, but the highest on the board and the
-   machine that gained most from the deck.
-4. **Acid is carried by nobody.** `Element.Corrosive` is implemented, tuned at
-   0.42/tick over 210 ticks and applied by no weapon on the roster.
+1. **NOCTURNE at EXTREME, 33 % / −0.102.** The lowest record in the game. Options
+   are already swept and the answer is projectile speed — see `SESSION_HANDOFF.md`
+   §4 for the table and the two cautions attached to it.
+2. **TERRAMOTH at HARD**, 32 % / −0.144. Long-standing, and out of scope by
+   design decision.
+3. **Acid is carried by nobody.** `Element.Corrosive` is implemented and applied
+   by no weapon on the roster.
+4. **The lance connects 1–2 % of the time for every machine**, which the rival's
+   inability to choose a command motion (§8d) explains and does not excuse.
 
 ---
 

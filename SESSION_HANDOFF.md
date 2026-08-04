@@ -1,8 +1,8 @@
 # Session Handoff — Babel Sword: Reignition
 
-> Rewritten at the end of a long session (11 commits, D97–D117).
-> Supersedes the previous handoff. Everything marked **verified** was confirmed by
-> running it.
+> Rewritten at the end of a long session (15 commits, D118–D126).
+> Supersedes the previous handoff. Everything marked **verified** was confirmed
+> by running it.
 > Read this, then `CLAUDE.md`, then **`docs/TESTING_PROTOCOL.md`**, then §9.
 
 ---
@@ -10,21 +10,19 @@
 ## 1. Do these before working
 
 1. **Read `docs/TESTING_PROTOCOL.md`.** It is the durable home for the rules in
-   §9 — this file is rewritten every session and that one is not. Its first rule:
-   **test by playing at EXTREME**, never the default NORMAL, because `resourceIq`
-   and `droneIq` execute at no other tier.
-2. **Report EXTREME first.** HARD is a corroborating second sample.
-3. **Report win rate, not just lead.** They are different numbers and were
-   confused once this session. See §5.
-4. **Keep the app window foregrounded.** When the Browser pane loses focus the
-   browser stops compositing: rAF drops under 1 fps and the Phaser loop freezes.
-   **`document.hidden` still reports `false`** — measure rAF, or just use
-   `setTimeout` waits, which keep working when throttled.
+   §9 — this file is rewritten every session and that one is not. Its first
+   rule: **test by playing at EXTREME**, never the default NORMAL, because five
+   AI traits execute at no other tier.
+2. **Report EXTREME first.** HARD is a corroborating second sample. It has
+   overturned an EXTREME-only conclusion at least once (D120).
+3. **Report win rate, not just lead.** They are different numbers and disagree
+   whenever an ability converts losses into narrow survivals.
+4. **"Last" is not "outlier".** `balance.ts` now prints a `z` column and a
+   dispersion line on every full sweep. Use them. See §5 and D122.
 5. **Start the dev server**: `npm run dev` from Bash. It takes the first free
-   port; this session used **5180**.
+   port; this session used **5182**.
 6. **Write commit messages and long doc blocks to a file, then `git commit -F`.**
-   Backticks and quotes inside a shell heredoc break the command. This cost time
-   three times this session.
+   Backticks and quotes inside a shell heredoc break the command.
 
 ---
 
@@ -37,203 +35,211 @@ workspace root, entirely original in code, art, audio, characters and story.
 
 **State: well past the vertical slice.** Title → menu → mech select → battle →
 results, 8 mechs, full SFX, a 17-track score, real art, pilot dialogue, four AI
-tiers, eight playstyles, eight drone roles, two chassis passives, and an Archive
-of 21 lore entries.
+tiers, eight playstyles, eight drone roles, three chassis passives, an Archive of
+21 lore entries, and **a hand-authored six-layer parallax stage**.
 
 ---
 
 ## 3. Current status — verified
 
-* **585 tests pass** (28 files), typecheck clean, production build clean.
-* **Working tree clean** on `master`. No other branches.
-* `docs/DECISIONS.md` runs to **D117**.
-* **`tools/probe/balance.ts` is the roster instrument** (D97). A full eight-mech
-  sweep at 12 seeds is ~50s:
+* **592 tests pass** (28 files), typecheck clean, production build clean.
+* **Working tree clean** on `master`. No other branches. HEAD **`211d700`**.
+* `docs/DECISIONS.md` runs to **D126**.
+* **Three probes** in `tools/probe/`. Run `--selftest` before believing any A/B:
 
   ```
-  npx vite-node tools/probe/balance.ts -- --tier extreme --seeds 12 --matrix
-  npx vite-node tools/probe/balance.ts -- --only cirrus --seeds 12
-  npx vite-node tools/probe/balance.ts -- --selftest
+  npx vite-node tools/probe/balance.ts   -- --tier extreme --seeds 12 --matrix
+  npx vite-node tools/probe/telemetry.ts -- --tier extreme --seeds 12 --only pyre
+  npx vite-node tools/probe/outcomes.ts  -- --tier extreme --seeds 12
+  npx vite-node tools/probe/balance.ts   -- --selftest
   ```
 
-  **Run `--selftest` before believing any A/B measured through it.** It requires
-  two identical runs to produce bit-identical samples.
+  * **`balance.ts`** — who is winning. Now prints `z` scores, noise-corrected
+    dispersion and an explicit outlier verdict.
+  * **`telemetry.ts`** — *how* a machine spent its match: what it threw, how much
+    arrived, where the rest went, how it spent its ticks.
+  * **`outcomes.ts`** — *how fights ended*. Kills, clock, draws, and how often a
+    machine left an opponent alive at one hull.
 
 ---
 
-## 4. NEXT TASK — buff OBELISK, then VESPER
+## 4. NEXT TASK — NOCTURNE, and it is measured and waiting
 
-Decided at the end of this session. They are the two machines outside the pack,
-and **OBELISK is now what binds the roster spread at both ends** — every further
-nerf at the top moves the spread by nothing until the floor comes up.
+NOCTURNE is the weakest machine at EXTREME. Options were swept and **the answer
+is option B**; it was never landed because the session ended.
 
-### 4.1 OBELISK — 36 % wins, −0.100 at EXTREME; 32 %, −0.114 at HARD
+Baseline 34 % / −0.101 at the time of the sweep:
 
-Last at or near the bottom of **every** measurement taken this session, at both
-tiers. It has had three passes already and none of them was the answer:
+| | change | result |
+| --- | --- | --- |
+| **B** | `projSpeed` main 12→16, heavy 10.2→13.5 | **55 % / +0.050** |
+| D | `maxLife` 1750 → 2000 | 47 % / +0.005 |
+| A | `defence.mul` 0.82 → 0.76 | 45 % / −0.031 |
+| C | main/heavy damage +20 % | 43 % / −0.025 |
 
-* **Dome durability is not the lever.** `DOME_MAX` 620→900 and `DOME_RECOVER`
-  600→420 moved EXTREME by **0.001**.
-* **Reach is not the lever.** Its main gun reaches 528px and it fights at 563px,
-  which looks damning; giving it 864px measured **−0.033, i.e. nothing** (D100).
-* **The dome going inert *was* part of it, and is fixed.** The shell is down
-  36.9 % of every fight and `dome` has no gun, so AEGIS contributed nothing for a
-  third of the match. A broken emitter now falls back on the charge rack (D99),
-  worth +0.034.
-* **Damage helped** (D103): BREACH GUN 58→66, RAM CHARGE 146→170, AEGIS BEAM
-  186→214, SCATTERGUN 32→37, worth ~+0.10.
+**Why B and not the others.** NOCTURNE throws the **second-highest nominal damage
+on the roster** (397/min) and lands the **least of it** (5.7 % arrive, lowest),
+with the **worst net exchange in the game** (89.6 dealt against 106.0 taken). It
+is not short of output — its output does not connect. Note that raising damage
+20 % is worth less than half of B: more damage on shots that miss is the same
+trap three OBELISK passes fell into.
 
-What still points somewhere: its output is **second-lowest on the roster** while
-its durability is second-highest, and it loses ~4.5 dps of escort gun that six
-other machines get.
+**Two cautions.** The dial is not linear — a smaller step (main 12→14, heavy
+10.2→12) measured **flat** — so sweep 14/15/16 before picking rather than
+assuming 16. And these numbers predate the CIRRUS change in D126, so re-measure
+the baseline first.
 
-**The standing design constraint is the user's**: *"He is a heavy class mech, so
-of course he's going to move slower and stand out as a big target. If you want
-him to hit harder then increase dps by making his attacks stronger, but do not
-do this at the cost of his defensive capabilities."*
-
-### 4.2 VESPER — 40 % wins, −0.083 EXTREME; 41 %, −0.148 HARD
-
-**Worse at HARD than at EXTREME, and that is the diagnosis.** His kit rests on
-`kites` and the sniper stance, and holding range depends on `rangeIq`, which is
-**EXTREME-only**. At HARD he cannot enforce the spacing his whole design assumes,
-so CIRRUS simply walks him down. It is structural, not numeric — a stat tweak
-will not fix a tier-gated dependency.
-
-Two honest directions: give the kite a tier-independent floor, or give him
-something that works while crowded.
+**Relevant context from D122**: HALCYON with LAST STAND stripped measures 36 %,
+so the AV frame both machines share is the weakest chassis in the game, and
+NOCTURNE is the one riding it without a signature. A chassis passive is the other
+honest direction, and it is a design decision rather than a tuning one.
 
 ---
 
 ## 5. Roster balance — measured
 
 12 seeds per matchup, both slot orders on the same seed, real 180s round cap.
-84 samples per mech; SE ~0.03 on lead.
+84 samples per mech.
 
-| Mech | EXTREME | HARD |
+### EXTREME — spread 0.230, no outliers
+
+| Mech | Win | Lead | z(lead/win) |
+| --- | --- | --- | --- |
+| VESPER | 60 % | +0.127 | +1.48 / +1.02 |
+| CIRRUS | **65 %** | +0.116 | +1.35 / +1.48 |
+| OBELISK | 54 % | +0.039 | +0.45 / +0.38 |
+| HALCYON | 51 % | −0.017 | −0.19 / +0.12 |
+| PYRE | 45 % | −0.040 | −0.46 / −0.46 |
+| NULLTIDE | 49 % | −0.042 | −0.49 / −0.09 |
+| TERRAMOTH | 42 % | −0.082 | −0.95 / −0.75 |
+| **NOCTURNE** | **33 %** | **−0.102** | −1.19 / −1.68 |
+
+### HARD — spread 0.262, no outliers
+
+| Mech | Win | Lead |
 | --- | --- | --- |
-| CIRRUS | **60 % / +0.108** | 60 % / +0.117 |
-| TERRAMOTH | 58 % / +0.059 | 38 % / −0.068 |
-| NULLTIDE | 54 % / +0.022 | 58 % / +0.086 |
-| HALCYON | **60 % / +0.012** | **71 % / +0.103** |
-| NOCTURNE | 48 % / +0.008 | 46 % / −0.029 |
-| PYRE | 45 % / −0.026 | 51 % / +0.053 |
-| VESPER | 40 % / −0.083 | 41 % / −0.148 |
-| OBELISK | **36 % / −0.100** | **32 % / −0.114** |
+| CIRRUS | 66 % | +0.118 |
+| NULLTIDE | 55 % | +0.036 |
+| VESPER | 51 % | +0.034 |
+| OBELISK | 55 % | +0.016 |
+| HALCYON | 60 % | +0.006 |
+| PYRE | 40 % | −0.012 |
+| NOCTURNE | 41 % | −0.054 |
+| **TERRAMOTH** | **32 %** | **−0.144** |
 
-spread: **EXTREME 0.208, HARD 0.265**.
+### Read the dispersion line, not the sort order
 
-### Win rate and lead are different numbers
+**Nothing is beyond ±2σ at either tier.** A sorted table always has a bottom row;
+that is not the same as having a problem, and calling NOCTURNE "the outlier" off
+a sorted list cost a wasted investigation (D122). Roughly 5–12 % of the visible
+spread is measurement error at 12 seeds, so a 0.01 gap between neighbours is
+noise by construction.
 
-`lead` is the life-bar *margin* a machine finishes ahead by — the game's own
-timeout tiebreaker. `win` is the *record*. They disagree whenever an ability
-converts losses into narrow survivals rather than winning bigger.
+**The spread rose from 0.143 to 0.230 this session and that is not a
+regression.** It is the honest cost of the deck becoming solid (D125): the game
+had been balanced around a floor that did not exist in flight. Roughly a third of
+the remaining rise is D126's OVERDRIVE extension, which was requested.
 
-**HALCYON is the standing example**: a mid-pack +0.012 lead and the joint-highest
-60 % win rate at EXTREME, 71 % at HARD. Reading only the spread would say there
-is nothing to look at. That mistake was made once this session; the probe now
-prints both.
+**At this spread, record is a very sensitive function of margin.** VESPER gained
+4.5 % output against 2.3 % intake from the deck and that moved him eight points
+of win rate. Expect any mechanical change to read as a balance event.
 
 ---
 
-## 6. The two chassis passives
+## 6. The three chassis passives
 
-Declared as `MechDef` fields and absent on the other six. Both once per match.
+Declared as `MechDef` fields and absent on the other five. All once per match.
 
-* **HALCYON — LAST STAND** (D113/D114/D117). A killing blow leaves it at 1 hull
-  with a **five-second** clock in which nothing can kill it. It stops the death
-  and *nothing else*: hitstun, knockback, statuses and the cancelled attack all
-  land normally. Worth +8 points of win rate over its stripped baseline; at ten
-  seconds it was worth +29, and it is worth more at HARD than at EXTREME.
-* **CIRRUS — OVERDRIVE** (D115/D116). At a quarter hull, all three saturation
-  modes run at once for **four seconds** with no burst of her own available. Then
-  the thrusters and both guns are **destroyed** for the rest of the match and the
-  sword hits ×1.5. She does not become invulnerable — Shield's reduction applies
-  but she can be killed throughout.
+* **HALCYON — LAST STAND**. A killing blow leaves it at 1 hull with a five-second
+  clock in which nothing can kill it. Stops the death and *nothing else*.
+* **CIRRUS — OVERDRIVE**. At a quarter hull, all three saturation modes at once
+  for **5.5 seconds** (D126, up from 4), then thrusters and both guns destroyed
+  and the sword at ×1.5.
+* **OBELISK — full-length SHIELD** (D119). `gauges.satShieldDrain` is a chassis
+  dial defaulting to 2; OBELISK alone has 1. **It measures as inert in AI play**
+  because the rival never picks SHIELD on that chassis any more — a human-facing
+  buff the harness structurally cannot value.
 
 **A test that drives a mech to low life must strip the passive it is not
-testing.** `difficulty.test.ts` uses `LADDER_MECH` and `desperation.test.ts` uses
-a CIRRUS without `overdrive`, both for this reason. **Never pin a balance dial
-with an equality assertion** — bound it. Two test files broke on tuning this
-session for exactly that.
+testing.** **Never pin a balance dial with an equality assertion** — bound it, or
+derive it from the def. Three test files learned this the hard way.
 
 ---
 
 ## 7. Open questions the user still owes an answer on
 
-1. **A forced SHIELD burst is a losing trade until 75 % meter.**
+1. **A forced SHIELD burst is a losing trade until 75 % meter** — *partly
+   answered* by D118/D119. It is mechanically half-length and offenceless; the
+   drain is now a per-chassis dial rather than a global constant.
 2. **Music level.** Ships at 70 % against SFX 80 %, picked by reasoning not ear.
 3. **Audio duration targets** in `docs/AUDIO_CUE_SHEET.md` are far shorter than
    what was generated.
 4. **The Archive says EMBER is "the frailest among current escort units."** True
    by raw hull, false by damage absorbed.
-5. **OVERDRIVE's opening fires three full saturation bursts at once**, which
-   fills a quarter of the screen for about a second. It reads unambiguously as
-   "all three" and it is transient, but it is very loud.
+5. **OVERDRIVE's opening fires three full saturation bursts at once.**
+6. **CATHEDRAL YARD has no Archive entry.** `docs/STAGE_ART_BRIEF.md` §2.3
+   contains a *proposed* backstory — abandoned post-war drydock, lift network cut
+   in the settlement, held by nobody, which is *why* disputes are settled there.
+   **It is not canon and must be approved before it is treated as such.**
+7. **The codebase calls the arena an "abandoned orbital drydock"** in `README.md`
+   and `tools/blender/build_arena.py`. "Orbital" contradicts a setting explicitly
+   above a cloud deck at 2,000 m on spars and gantries.
+8. **The 110 procedural stars** are kept alongside the painted starfield so the
+   two can be compared in play. They add a slow twinkle the painted layer cannot;
+   they are otherwise indistinguishable. Drop or keep.
 
 ---
 
 ## 8. Known-open defects
 
 ### 8a. The ladder test is slow, and coupled to HALCYON
-
-40 seed pairs on the narrow top rung, 16 on the rest. It measures tiers with
-**HALCYON mirrors**, so HALCYON's kit moves it — adding LAST STAND collapsed
-every rung to a third of its value (D113). It now uses `LADDER_MECH`, HALCYON
-with the passive stripped, which restored D92's calibration exactly. **Insulated
-against shared passives only**; a weapon change would still move it. The real fix
-is a yardstick that is not a roster mech.
+Uses `LADDER_MECH`, HALCYON with the passive stripped. Insulated against shared
+passives only; a weapon change would still move it. The real fix is a yardstick
+that is not a roster mech.
 
 ### 8b. `Combatant.fire` builds its projectile spawn field by field
-
-A new `AttackDef` property that is not explicitly copied there never reaches the
-projectile — the feature is fully written, the data says it is on, and nothing
-happens. **Three times in one session**: `decoyShot` (D102), `homingTicks`, and
-`disarms` (D109). Assert on the *pooled projectile*, never on the attack. The
-real fix is to spread rather than copy.
+A new `AttackDef` property not copied there never reaches the projectile. Three
+times in one session. **Assert on the pooled projectile, never on the attack.**
+D123 is the same fault in a different place — see 8i.
 
 ### 8c. Any new world-space `Graphics` must join `BattleScene.worldObjects`
-
-Or the UI camera draws a second copy at zoom 1 somewhere else on screen. This is
-§4.7 of the protocol, it was read this session, and the sniper overlay shipped
-with the bug anyway — a player reported it as a stray empty target box in the
-middle of the stage (D107). Cannot be caught in node; the scene needs Phaser.
+Or the UI camera draws a second copy at zoom 1 elsewhere on screen.
 
 ### 8d. The AI never *chooses* a command motion
-
-It fires lances and spreads 6–13 per minute by accident. Making it deliberate is
-tractable: two queued frames, and it preserves the no-private-path rule. It also
-closes a real gap — a human has a weapon the CPU never intentionally uses.
+Fires lances and spreads 6–13 per minute by accident. **The lance connects 1–2 %
+of the time for every machine on the roster** and is close to worthless in AI
+hands.
 
 ### 8e. The ground game does not exist in AI play
-
-`grounded` is **0.0 %** for all eight machines, so `groundedMul`, `walkSpeed`,
-`takeoffImpulse` and `groundedBoostRegen` are dead code in anything the harness
-measures. TERRAMOTH's identity claims it plays the ground game; it never does.
+`grounded` is **0.0 %** for all eight machines. This is what hid the leg fault
+(D123) and the floor fault (D125) for so long.
 
 ### 8f. The AI never chooses a sub-weapon
-
-`Btn.Sub` deploys and recalls the drone; the *drone* fires the owner's sub. So a
-sub-weapon's whole contribution in any AI-vs-AI measurement is its escort's
-doing, and the two gunless roles supply none of it.
+A sub-weapon's whole contribution in AI-vs-AI is its escort's doing.
 
 ### 8g. The roster is spatially homogeneous — partly addressed
+`solveEvade` is load-bearing beyond anything else in the class.
 
-33–58 % of every fight is `Evade`. Six attempts to fix it inside `solveEvade` all
-cost the top rung; `solveEvade` is load-bearing beyond anything else in the
-class. Improved from the *preference* side instead (D94). Do not read "wants X,
-gets Y" as a bug by default — it is a symptom on VESPER and correct play on
-NULLTIDE (D96).
+### 8h. Acid is carried by nobody
+`Element.Corrosive` is implemented, tuned at 0.42/tick over 210 ticks, and
+applied by **no weapon on the roster** — it appears only in test files. Now that
+every other element damages, it is the one dead element left.
 
-### 8h. The rest
+### 8i. Hand-built stand-ins for growing objects
+`BattleScene.decoyState` fabricates a `Combatant` for NULLTIDE's projections and
+used `as unknown as Combatant`, which silenced the compiler on exactly the thing
+that needed checking. Adding a field to the renderer's pose crashed the live game
+while 592 tests stayed green (D123). It now uses `MechPoseSource`. **Look for the
+next one of these.**
 
+### 8j. The rest
 * **An explicit override equal to its default is a landmine** (D74). A sweep of
   all eight supporter defs is still owed.
-* **NOCTURNE is `{ ...HALCYON }`** and silently inherited LAST STAND. Any new
-  `MechDef` field added to HALCYON needs a line on NOCTURNE saying whether Halden
-  Rook gets it too.
+* **NOCTURNE is `{ ...HALCYON }`** — the only mech derived from another. It
+  inherits `lance`, `spread`, `melee`, `subCharges`, `subRechargeTicks`,
+  `lockCone`, `lockRange`. Any new `MechDef` field added to HALCYON needs a line
+  on NOCTURNE saying whether Halden Rook gets it too.
 * `droneDeploy` / `droneRecall` events are unreachable.
-* `Supporter.Stowed` / `Recalling` are nearly dead states.
 * Cues with no trigger: `footstep`, `melee_ignite`, `thruster_loop`, `drone_hover`.
 
 ---
@@ -243,72 +249,111 @@ NULLTIDE (D96).
 That file is authoritative and is not rewritten each session. What this session
 added:
 
-* **A dial that disagrees with itself has run out of resolution.** Sniper
-  projectile speed rose then *fell* past 130; decoy fire period read the same at
-  70 and 95. Both were stopping points, not noise to average through.
-* **Sweep a dial, never guess it.** Every balance number this session came from a
-  3–5 point sweep. Several "obvious" values were wrong by a factor of two.
+* **Never bundle an incidental change with a fix.** D125 raised the deck floor
+  *and* changed the arena's bottom edge from bouncing to absorbing, on reasoning
+  that was never measured. Ablated, the incidental change was worth **more than
+  the fix it rode in beside** — VESPER 49 % → 61 %, spread 0.143 → 0.229.
+* **A play report outranks the harness, and outranks the metric too.** Six for
+  six this session. The PYRE case added a wrinkle: his report was right *and* the
+  number he was disputing was itself wrong — chasing it exposed a draw-scoring
+  bug in `balance.ts` latent since D97.
+* **A metric that is fine today can be made wrong by a gameplay change.** Letting
+  a status land the killing blow made double KOs common, and the tie branch that
+  had been correct-by-irrelevance started crediting draws to whichever machine
+  sat later in `ROSTER`.
+* **Ask what a number means before acting on it.** `telemetry.ts` counts a round
+  stopped by the deck as *contact*, so VESPER's main-gun connect rate appeared to
+  jump 17 % → 39 % across D125 with no accuracy change whatsoever.
+* **Sweep a dial, never guess it**, and **a dial that disagrees with itself has
+  run out of resolution**.
 * **A mechanic can be 75 % implemented, measure as present, and be worth
-  nothing.** `hitAndRun` had a timer, a preferred range and a dedicated dash, and
-  no steering — inert for its whole life. Found by a player watching the game.
-* **Ask what a number means before acting on it.** "The beam only hits 23.7 % of
-  the time" was the *disarm rate among hits*; the connect rate was 49.8 %.
+  nothing.**
 
-**Driving the game from the Browser pane**: `window.__BSR__` is the Phaser game;
-`__BSR__.scene.getScene('Battle').sim` is the live `MatchSim`. Use
-`game.loop.sleep()`/`wake()`, never a rAF hijack. **`scene.start` will not take
-effect while the loop is asleep — wake it first.** A sim frozen at a fixed tick is
-usually the **pause menu**: call `scene.closePause()`. When the pane is not
-foregrounded it composites at ~12 fps — use `setTimeout` waits rather than rAF,
-and take a screenshot first to bring it forward. **Leave the game unpaused and
-restore any setting you touch.**
+**Driving the game from the Browser pane**: `window.__BSR__` is the Phaser game.
+**Keyboard input frequently does not reach the page at all**, and
+`computer{action:'key'}` never reaches Phaser. Clicking the canvas sometimes
+restores focus and sometimes does not. **The reliable route is to skip the menus
+entirely**:
+
+```js
+const mod = await import('/src/core/Session.ts');
+Object.assign(mod.session, { mode:'aiVsAi', playerMech:'terramoth',
+  enemyMech:'vesper', playerDifficulty:3, enemyDifficulty:3 });
+window.__BSR__.scene.start('Battle');
+```
+
+A sim frozen at a fixed tick is usually the **pause menu**: call
+`scene.closePause()`. Use `game.loop.sleep()`/`wake()`, never a rAF hijack.
+**Leave the game unpaused and restore any setting you touch.**
 
 ---
 
-## 10. Roster reference
+## 10. The stage — CATHEDRAL YARD
+
+Six hand-authored parallax layers (D124). **Read
+`assets/arenas/source/README.md` before touching any of it** — several shipped
+files are *derived* and cannot be regenerated without their masters.
+
+| layer | size | scroll | note |
+| --- | --- | --- | --- |
+| `sky` | 3072×1024 | 0.02 | levels lifted; over the gradient |
+| `far` | 3072×1024 | 0.06 | dark silhouette |
+| `haze` | 3072×1024 | 0.11 | alpha 0.64, to sit above `mid` |
+| `mid` | 1536×1024 | 0.18 | |
+| `near` | 1536×1024 | world | the deck; **`NEAR_LIP_ROW` 748** |
+| `fore` | 1536×1024 | **1.35** | alpha 0.62 |
+
+Plus a procedural sky gradient beneath, 110 procedural stars, and a 44-mote dust
+field.
+
+**Rules that came out of building it**, all in D124 and the source README:
+structural layers must be **darker than the sky** or they read as weather; the
+deck's contact row must be **measured, never estimated**; **tint cannot lift
+anything**; expect delivered art **not to tile** and mirror it; a foreground must
+not terminate inside the frame, and must be semi-transparent over the fight.
+
+`docs/STAGE_ART_BRIEF.md` is the spec new art is produced against and contains
+the prompt that works.
+
+---
+
+## 11. Roster reference
 
 | Mech | Pilot | HP | Drone | Role | Passive |
 | --- | --- | --- | --- | --- | --- |
 | HALCYON `AV-07` | Naia Vesk | 1750 | ARBITER | designator + paint | energy regen ×1.45 · **LAST STAND** |
 | NOCTURNE `AV-13` | Halden Rook | 1750 | WARDEN | tether | barrier regen ×2 |
-| VESPER `AV-12` | Kestrel Doyne | 1490 | SIGHTLINE | interceptor + paint | damage dealt ×1.14 · **SNIPER MODE** |
+| VESPER `AV-12` | Kestrel Doyne | 1490 | SIGHTLINE | interceptor + paint | damage dealt ×1.14 · **SNIPER MODE (3s)** |
 | TERRAMOTH `HV-03` | Brunn Okonkwo | 2490 | BULWARK | miner | damage taken ×0.92 |
-| CIRRUS `LT-21` | Mira Holloway | 1440 | WISP | arcTether | boost regen ×2 · **OVERDRIVE** |
-| OBELISK `GD-09` | Saar Tengku | 2070 | AEGIS | dome | guard drain ×0.55 |
+| CIRRUS `LT-21` | Mira Holloway | 1440 | WISP | arcTether | boost regen ×2 · **OVERDRIVE (5.5s)** |
+| OBELISK `GD-09` | Saar Tengku | 2070 | AEGIS | dome **+ gun** | guard drain ×0.55 · **full-length SHIELD** |
 | PYRE `IN-05` | Rasa Volkov | 1860 | EMBER | hazard | saturation gain ×1.8 |
 | NULLTIDE `EW-14` | Io Senna | 1610 | STATIC | decoy ×2 | *opponent's* energy regen ×0.5 |
 
-**Paint is an ability, not a role** (D106): `SupporterDef.paints`, defaulting to
-`role === 'designator'`. ARBITER and SIGHTLINE both carry it.
+**Mines**: OBELISK carries `SHOCK MINE` and `MINEFIELD` as chassis weapons;
+TERRAMOTH's BULWARK runs the `miner` role. PYRE's EMBER is `hazard`, not mines.
 
-**VESPER has SNIPER MODE** (D107–D111): `Btn.Heavy` is a *switch* on that chassis,
-not a shot. Six seconds at a third movement speed, one weapon, a thin fast
-auto-aiming beam at one shot a second that is **not** a lance — a guard takes
-80 % off it — with a 50 % chance of knocking a weapon offline for five seconds.
-Anything that presses Heavy without knowing this will strobe the stance; there
-are three guards in `RivalAI` for exactly that.
-
-**NULLTIDE throws two projections** (D113), on opposite sides, staggered by half
-a period. Each can be **shot down** in one clean hit (D112) — and two thirds of
-them are, incidentally, because rounds aimed at her hit the silhouette instead.
+**Elements**: Incendiary 0.95/tick (PYRE ×7, NOCTURNE ×2), Shock 0.05 (OBELISK,
+NULLTIDE, HALCYON), Cryo 0.10 (NULLTIDE ×3), Corrosive 0.42 (**nobody**).
+**Every element can now land the killing blow** (D121).
 
 **Pilot genders are fixed by `docs/PILOT_PORTRAIT_SPEC.md`** — four women, four
 men. **Mechs are "it"; pilots get their own pronouns. The present is 43 CE.**
 
 ---
 
-## 11. Documents worth reading
+## 12. Documents worth reading
 
 | File | What it holds |
 | --- | --- |
 | `CLAUDE.md` (workspace root) | Project rules, structure, definition of done |
 | **`docs/TESTING_PROTOCOL.md`** | **How to verify. Test at EXTREME; the traps** |
-| **`docs/TIER_LIST.md`** | Measured tiers, the matchup chart, which fights are fair |
-| `docs/DECISIONS.md` | **D1–D117.** D97–D117 are this session's |
-| **`tools/probe/balance.ts`** | **The roster instrument.** Run `--selftest` first |
+| **`docs/TIER_LIST.md`** | Measured tiers, the matchup chart, dispersion |
+| `docs/DECISIONS.md` | **D1–D126.** D118–D126 are this session's |
+| **`docs/STAGE_ART_BRIEF.md`** | **The stage spec, and the prompt that works** |
+| **`assets/arenas/source/README.md`** | **Which art is derived, and how. Read before editing art** |
+| `tools/probe/balance.ts` | Who is winning. Run `--selftest` first |
+| `tools/probe/telemetry.ts` | How a machine spent its match |
+| `tools/probe/outcomes.ts` | How fights ended |
 | `src/data/archive.ts` | The story bible: 21 entries |
-| `src/data/droneRoles.ts` | What each escort does, on the select screen |
 | `docs/PILOT_PORTRAIT_SPEC.md` | **Authoritative** on pilot gender, age, appearance |
-| `docs/MUSIC_CUE_SHEET.md` | 17 tracks, every Suno prompt |
-| `docs/AUDIO_CUE_SHEET.md` | 40 SFX cues / 71 files |
-| `docs/IMPLEMENTATION_PLAN.md` | Architecture and milestones |

@@ -5366,6 +5366,142 @@ and not something the numbers are asking for.
 
 ---
 
+## D123 — Legs that hang, and the cast that hid it
+
+**Found by a player**: *"mech legs suffer from no animated and fluent movement.
+They seem to be stuck together and just stationary."*
+
+They were, and the reason is a single gate. The only thing that ever moved the
+legs is the walk cycle, and `Combatant.updateWalk` computes it from
+`grounded && !flying`. `grounded` measures **0.0 % of every fight** (§8e). So
+`stride` sat at 0, `walkPhase` never advanced, and `RigRotation` resolved both
+legs to a fixed ±`STANCE` splay for entire matches. **They have never once
+animated in flight, which is the only state this game has.**
+
+They were already three separate pieces — `lowerBody`, `legFar`, `legNear`, each
+with its own sprite. They read as welded because they never moved *relative to
+one another*.
+
+### A spring, not a sine
+
+Each leg is now a damped spring hanging from the hip, driven by a target derived
+from velocity and thruster load, with a slow idle sway so a hovering machine
+still has weight under it.
+
+A driven oscillator rather than a sine locked to velocity, because a sine arrives
+exactly when the chassis does and looks bolted on. A spring overshoots and
+settles, so the legs keep swinging after the machine stops and catch up late when
+it starts — that lag is the entire read.
+
+**The two legs use deliberately different stiffness and damping.** Identical
+springs on an identical target return identical angles forever, which is the
+welded look this exists to fix. The far leg is slacker and slower to settle, so
+the pair crosses and separates on every direction change.
+
+Simulated rather than done in the renderer, like `bank` and `walkPhase`, so a
+replay reproduces the pose.
+
+Measured live in an EXTREME CPU-vs-CPU match: `grounded` false and `stride` 0
+across 359 ticks, confirming no gait was running; **legNear sweeping 72.9°,
+legFar 81.3°**, separated on **346 of 359 frames** with a maximum separation of
+11.1°. Four of the five new tests were checked red with the driver disabled.
+
+### It crashed the game, and the cast is why
+
+```
+TypeError: Cannot read properties of undefined (reading '0')
+  at MechRenderer.sync        <- c.legSwing[0]
+  at BattleScene.drawDrone
+```
+
+`MechRenderer.sync` also draws NULLTIDE's decoy projections, from a stand-in
+object built by hand in `BattleScene.decoyState` and handed over as
+`{...} as unknown as Combatant` — **a cast that tells the compiler to stop
+checking the one thing that needed checking.** Adding `legSwing` to the pose
+compiled cleanly, passed 592 tests, and crashed on the first decoy of the first
+NULLTIDE match.
+
+`sync` now takes `MechPoseSource`, a structural interface naming exactly what it
+reads, so the stand-in is type-checked and the next field added here is a build
+error instead of a match ending. It immediately caught two more fields that had
+been missed.
+
+The decoy also mirrors its owner's leg swing rather than hanging straight: a
+silhouette that does not move like the thing it is imitating is the tell the
+whole ability exists to avoid.
+
+Verified with 1046 frames of decoys continuously on field and zero errors.
+
+**Same family as §8b.** A hand-built copy of a growing object is a silent
+breakage waiting for its next field, whether the copy is `Combatant.fire`'s spawn
+or a renderer stand-in.
+
+---
+
+## D124 — CATHEDRAL YARD gets real art
+
+Six hand-authored parallax layers replace the procedural Blender strips, plus a
+fast foreground and a painted sky the engine never had.
+
+| layer | size | scroll | note |
+| --- | --- | --- | --- |
+| `sky` | 3072×1024 | 0.02 | painted, levels lifted, over the gradient |
+| `far` | 3072×1024 | 0.06 | dark silhouette |
+| `haze` | 3072×1024 | 0.11 | alpha 0.64 |
+| `mid` | 1536×1024 | 0.18 | |
+| `near` | 1536×1024 | world | the deck; `NEAR_LIP_ROW` 748 |
+| `fore` | 1536×1024 | **1.35** | new; alpha 0.62 |
+
+`docs/STAGE_ART_BRIEF.md` is the specification the art was produced against.
+`assets/arenas/source/README.md` records every derivation and the measurement
+recipes, and must be read before the art is touched.
+
+### What was learned, and it generalises
+
+**Eight of nine delivered layers did not tile.** Two were saved only by their
+structure not reaching the image edges. Assume seamlessness is the engine's job;
+mirroring to `[A | mirror(A)]` makes the wrap exact by construction and is
+undetectable on soft-edged art.
+
+**The deck's contact row must be measured, never estimated.** `NEAR_LIP_ROW` is
+the image row where the deck becomes opaque, and the engine lands it exactly on
+`DECK_Y`. It moved 111 → 748 with the new art. Guessing puts the drawn floor and
+the simulated floor in different places, which this arena had already shipped
+once.
+
+**Image models invert value relationships when asked for transparency.** The
+first sky came back as dark marks on white — stars as *dark specks* — because
+"transparent background" reads as "paint on white". Telling the model to paint on
+a dark field and keying it out afterwards is far more reliable than asking it to
+reason about an invisible backdrop.
+
+**Tint cannot lift anything.** It multiplies down. Alpha only blends toward
+what is behind. A backdrop that is too dark has to be corrected *in the asset* —
+`sky_master_1536_lifted.png` applies `new = old + L(1 - old/255)` with `L` a
+smoothstepped hump, which raises the dark sky field and leaves stars, already
+near maximum, untouched.
+
+**Structural layers must be darker than the sky.** The first far and haze layers
+were grey fog banks measuring ~89 against a sky of ~60 — brighter than their own
+sky, so they glowed instead of receding, and a player called them "an out of
+place super foggy graveyard". The rule that fixed it: a silhouette recedes,
+anything paler than the sky is weather, and the Archive has the air above the
+storm layer as "clear, cold and thin". The stack now runs **mid 25 → haze 27 →
+far 31 → sky 57**.
+
+**A foreground must not terminate inside the frame.** The columns stop 44px from
+the top of their image, and at the original offset that termination drifted into
+view when the camera sat low, leaving machines above severed girders. Fixed by
+placement, not by size — the strip was always 1.9× the view height. If it is
+redrawn, the columns should run *off* both edges.
+
+**A foreground drawn over the fight must be semi-transparent.** At full opacity a
+machine passing behind a column vanished outright, and a depth cue that hides the
+thing you are controlling has stopped being one.
+
+
+---
+
 ## D125 — The floor was decorative
 
 **Reported by a player**, five for five: *"I do see a floor layer on the map, but
@@ -5509,3 +5645,20 @@ meaningfully.
 VESPER at 57–60 % is a balance question, not a correctness one, and the roster
 underneath him has moved three times today. It deserves its own measured pass
 rather than being folded into a bug fix. Flagged, not silently corrected.
+
+---
+
+## D126 — Overdrive back to five and a half seconds
+
+**Requested.** CIRRUS's OVERDRIVE window 240 → 330 ticks, four seconds to five
+and a half.
+
+D116 had cut it 600 → 240 because at ten seconds she won 85 % of her matches and
+the phase was demonstrably the reason. The sweep recorded there is kept in the
+comment for its *shape* — the dial is steep — but not as a lookup table: it was
+measured against a roster that has since had OBELISK, VESPER and PYRE rebuilt and
+a solid deck added under all of them.
+
+`overdrive.test.ts` derives its expectations from `CIRRUS.overdrive.ticks` rather
+than pinning the literal (the lesson of D116), so the dial moved without touching
+a test.
