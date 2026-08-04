@@ -20,7 +20,7 @@
 4. **"Last" is not "outlier".** `balance.ts` now prints a `z` column and a
    dispersion line on every full sweep. Use them. See §5 and D122.
 5. **Start the dev server**: `npm run dev` from Bash. It takes the first free
-   port; this session used **5182**.
+   port; the D127 session used **5173**.
 6. **Write commit messages and long doc blocks to a file, then `git commit -F`.**
    Backticks and quotes inside a shell heredoc break the command.
 
@@ -43,8 +43,11 @@ tiers, eight playstyles, eight drone roles, three chassis passives, an Archive o
 ## 3. Current status — verified
 
 * **592 tests pass** (28 files), typecheck clean, production build clean.
-* **Working tree clean** on `master`. No other branches. HEAD **`211d700`**.
-* `docs/DECISIONS.md` runs to **D126**.
+* On `master`, no other branches. `docs/DECISIONS.md` runs to **D127**.
+* **`assets/blender/mechs.blend` is modified in the tree and was not touched by
+  code work** — it arrived that way at the start of the D127 session (1128348 →
+  1137966 bytes), presumably a Blender autosave. Left alone deliberately. Decide
+  whether to commit or discard it.
 * **Three probes** in `tools/probe/`. Run `--selftest` before believing any A/B:
 
   ```
@@ -63,36 +66,44 @@ tiers, eight playstyles, eight drone roles, three chassis passives, an Archive o
 
 ---
 
-## 4. NEXT TASK — NOCTURNE, and it is measured and waiting
+## 4. NOCTURNE — done (D127). Next task is §7 or TERRAMOTH
 
-NOCTURNE is the weakest machine at EXTREME. Options were swept and **the answer
-is option B**; it was never landed because the session ended.
+**Landed: `projSpeed` main 12 → 15, heavy 10.2 → 12.75.** Nothing else changed.
+NOCTURNE went **33 % → 45 %** at EXTREME (lead −0.102 → −0.032), 41 % → 48 % at
+HARD, and the roster spread fell **0.230 → 0.198**, its best since the deck
+became solid.
 
-Baseline 34 % / −0.101 at the time of the sweep:
+Both cautions in the old handoff paid for themselves. The baseline re-measured
+identically, but **12 → 14 no longer measures flat** — it is worth eight points
+now, so the previous sweep's non-linearity did not survive D125. Assuming 16
+would have overshot: it puts NOCTURNE third of eight and gives the spread back.
 
-| | change | result |
+| main / heavy | NOCTURNE | spread |
 | --- | --- | --- |
-| **B** | `projSpeed` main 12→16, heavy 10.2→13.5 | **55 % / +0.050** |
-| D | `maxLife` 1750 → 2000 | 47 % / +0.005 |
-| A | `defence.mul` 0.82 → 0.76 | 45 % / −0.031 |
-| C | main/heavy damage +20 % | 43 % / −0.025 |
+| 12 / 10.2 | 33 % / −0.102 | 0.230 |
+| 14 / 12 | 41 % / −0.065 | 0.211 |
+| **15 / 12.75** | **45 % / −0.032** | **0.198** |
+| 16 / 13.5 | 52 % / +0.034 | 0.224 |
 
-**Why B and not the others.** NOCTURNE throws the **second-highest nominal damage
-on the roster** (397/min) and lands the **least of it** (5.7 % arrive, lowest),
-with the **worst net exchange in the game** (89.6 dealt against 106.0 taken). It
-is not short of output — its output does not connect. Note that raising damage
-20 % is worth less than half of B: more damage on shots that miss is the same
-trap three OBELISK passes fell into.
+The diagnosis held exactly: it now throws *slightly less* (nominal 397.7 → 380.6)
+and lands more (arrive 5.6 % → 7.0 %, net exchange −16.5 → −9.4, kills/deaths
+53/111 → 74/92). Only the two changed weapons moved their connect rate; spread and
+lance did not drift. Full detail in **D127**.
 
-**Two cautions.** The dial is not linear — a smaller step (main 12→14, heavy
-10.2→12) measured **flat** — so sweep 14/15/16 before picking rather than
-assuming 16. And these numbers predate the CIRRUS change in D126, so re-measure
-the baseline first.
+**What it cost, and the one thing left open.** At EXTREME the gain came out of
+OBELISK (−0.33 → −0.09) and VESPER (−0.21 → +0.02) and TERRAMOTH was untouched.
+**At HARD it came out of TERRAMOTH**, which crossed the outlier flag for the first
+time: −1.89σ → −2.14σ, 32 % → 29 %. That is one matchup (0.00 → +0.22) and all
+three swept values cause it equally, so it is not an argument for a smaller step.
+**Nothing was bundled to compensate** — see `TIER_LIST.md` §4 and §5. §5 now also
+records that **the reasoning D120 rests on has decayed**: TERRAMOTH's exchange
+rate is no longer even (76.0 out / 82.6 in) and its matchup row excluding VESPER
+is +0.003 rather than +0.063. That decay is *not* from D127.
 
-**Relevant context from D122**: HALCYON with LAST STAND stripped measures 36 %,
-so the AV frame both machines share is the weakest chassis in the game, and
-NOCTURNE is the one riding it without a signature. A chassis passive is the other
-honest direction, and it is a design decision rather than a tuning one.
+**Still true and still unused**: HALCYON with LAST STAND stripped measures 36 %
+(D122), so the AV frame both machines share is the weakest chassis in the game.
+NOCTURNE now performs without a signature; giving it one remains a design
+decision rather than a tuning one.
 
 ---
 
@@ -101,44 +112,48 @@ honest direction, and it is a design decision rather than a tuning one.
 12 seeds per matchup, both slot orders on the same seed, real 180s round cap.
 84 samples per mech.
 
-### EXTREME — spread 0.230, no outliers
+### EXTREME — spread 0.198, no outliers
 
 | Mech | Win | Lead | z(lead/win) |
 | --- | --- | --- | --- |
-| VESPER | 60 % | +0.127 | +1.48 / +1.02 |
-| CIRRUS | **65 %** | +0.116 | +1.35 / +1.48 |
-| OBELISK | 54 % | +0.039 | +0.45 / +0.38 |
-| HALCYON | 51 % | −0.017 | −0.19 / +0.12 |
-| PYRE | 45 % | −0.040 | −0.46 / −0.46 |
-| NULLTIDE | 49 % | −0.042 | −0.49 / −0.09 |
-| TERRAMOTH | 42 % | −0.082 | −0.95 / −0.75 |
-| **NOCTURNE** | **33 %** | **−0.102** | −1.19 / −1.68 |
+| CIRRUS | **65 %** | +0.118 | +1.69 / +1.94 |
+| VESPER | 56 % | +0.094 | +1.34 / +0.80 |
+| OBELISK | 51 % | +0.004 | +0.06 / +0.08 |
+| HALCYON | 50 % | −0.019 | −0.28 / +0.04 |
+| NOCTURNE | 45 % | −0.032 | −0.46 / −0.69 |
+| PYRE | 44 % | −0.039 | −0.56 / −0.76 |
+| NULLTIDE | 49 % | −0.046 | −0.66 / −0.19 |
+| **TERRAMOTH** | **40 %** | **−0.080** | −1.14 / −1.22 |
 
-### HARD — spread 0.262, no outliers
+### HARD — spread 0.284, TERRAMOTH flagged
 
-| Mech | Win | Lead |
-| --- | --- | --- |
-| CIRRUS | 66 % | +0.118 |
-| NULLTIDE | 55 % | +0.036 |
-| VESPER | 51 % | +0.034 |
-| OBELISK | 55 % | +0.016 |
-| HALCYON | 60 % | +0.006 |
-| PYRE | 40 % | −0.012 |
-| NOCTURNE | 41 % | −0.054 |
-| **TERRAMOTH** | **32 %** | **−0.144** |
+| Mech | Win | Lead | z(lead/win) |
+| --- | --- | --- | --- |
+| CIRRUS | 65 % | +0.109 | +1.33 / +1.31 |
+| VESPER | 50 % | +0.034 | +0.41 / −0.03 |
+| NULLTIDE | 55 % | +0.031 | +0.38 / +0.41 |
+| OBELISK | 55 % | +0.028 | +0.34 / +0.44 |
+| HALCYON | 60 % | +0.018 | +0.23 / +0.82 |
+| NOCTURNE | 48 % | −0.013 | −0.16 / −0.21 |
+| PYRE | 39 % | −0.033 | −0.40 / −0.93 |
+| **TERRAMOTH** | **29 %** | **−0.175** | **−2.14 / −1.83 ← outlier** |
 
 ### Read the dispersion line, not the sort order
 
-**Nothing is beyond ±2σ at either tier.** A sorted table always has a bottom row;
+**Nothing is beyond ±2σ at EXTREME.** A sorted table always has a bottom row;
 that is not the same as having a problem, and calling NOCTURNE "the outlier" off
 a sorted list cost a wasted investigation (D122). Roughly 5–12 % of the visible
 spread is measurement error at 12 seeds, so a 0.01 gap between neighbours is
 noise by construction.
 
-**The spread rose from 0.143 to 0.230 this session and that is not a
-regression.** It is the honest cost of the deck becoming solid (D125): the game
-had been balanced around a floor that did not exist in flight. Roughly a third of
-the remaining rise is D126's OVERDRIVE extension, which was requested.
+**TERRAMOTH at HARD is the first machine ever flagged**, and the flag is still
+not a verdict — it decomposes into a single matchup and fires identically for
+every value swept in D127. `TESTING_PROTOCOL.md` §4b now carries the worked
+example of how to take one apart.
+
+**The spread went 0.143 → 0.230 → 0.198.** The rise was the honest cost of the
+deck becoming solid (D125) plus D126's requested OVERDRIVE extension. The fall
+is D127, achieved by lifting the bottom rather than trimming the top.
 
 **At this spread, record is a very sensitive function of margin.** VESPER gained
 4.5 % output against 2.3 % intake from the deck and that moved him eight points
@@ -246,8 +261,23 @@ next one of these.**
 
 ## 9. Traps — see `docs/TESTING_PROTOCOL.md`
 
-That file is authoritative and is not rewritten each session. What this session
-added:
+That file is authoritative and is not rewritten each session. What D127 added:
+
+* **A caution to re-measure is worth obeying even when it looks like ceremony.**
+  The handoff said the dial might not be linear and the baseline was stale. Both
+  were live: the baseline reproduced to three decimals, but the step recorded as
+  *flat* had become worth eight points of win rate, and the value the previous
+  sweep pointed at overshoots on the current roster.
+* **When the outlier flag finally fires, take it apart before acting.** It
+  decomposed into one matchup and fired identically for every arm swept.
+* **A stale table beside a fresh one is worse than no table.** `TIER_LIST.md`
+  §1 reproduced exactly while §3 below it was wrong by up to 0.13 in a cell,
+  which hid a bad pairing and corrupted the §2 fairness counts derived from it.
+* **A kept decision's supporting numbers rot quietly.** D120's rationale for the
+  VESPER/TERRAMOTH matchup was four measurements; all four have since moved
+  against it and nothing prompted a re-read. Now recorded in `TIER_LIST.md` §5.
+
+What earlier sessions added:
 
 * **Never bundle an incidental change with a fix.** D125 raised the deck floor
   *and* changed the arena's bottom edge from bouncing to absorbing, on reasoning
@@ -279,8 +309,15 @@ entirely**:
 const mod = await import('/src/core/Session.ts');
 Object.assign(mod.session, { mode:'aiVsAi', playerMech:'terramoth',
   enemyMech:'vesper', playerDifficulty:3, enemyDifficulty:3 });
+// Stop the menu scenes first — `game.scene.start` does NOT stop its caller, and
+// Title left running renders *under* the match and *through* the results screen.
+window.__BSR__.scene.stop('Title'); window.__BSR__.scene.stop('Results');
 window.__BSR__.scene.start('Battle');
 ```
+
+`playerDifficulty:3` really is EXTREME — the results screen prints the tier next
+to each name, so screenshot it if you want the run's tier on the record.
+`getScenes(true)` should name exactly one scene.
 
 A sim frozen at a fixed tick is usually the **pause menu**: call
 `scene.closePause()`. Use `game.loop.sleep()`/`wake()`, never a rAF hijack.

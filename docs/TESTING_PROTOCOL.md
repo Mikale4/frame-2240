@@ -130,6 +130,24 @@ Four tricks, all required:
    `setScrollFactor(0)` and then `cameras.main.ignore([...])` so only the UI
    camera draws it. World→screen is
    `(x - cam.worldView.x) * cam.zoom`.
+8. **`game.scene.start('Battle')` does not stop the scene you were on**, and the
+   shortcut everyone uses to skip the menus goes through exactly that global
+   manager. Title stays active *underneath* the match, and when the fight ends
+   the results screen renders on top of a live title screen — "PRESS START"
+   overlapping "MECH SELECT", the title logo behind the score table.
+
+   **This is an artefact of the harness route, not a defect.** The shipped path
+   is `this.scene.start('Battle')` from `MechSelectScene.ts` — a *scene-instance*
+   call, which stops its caller. Stop the menu scenes yourself first:
+
+   ```js
+   game.scene.stop('Title'); game.scene.stop('Results');
+   game.scene.start('Battle');
+   ```
+
+   Check with `game.scene.getScenes(true).map(s => s.scene.key)` — that should
+   name **one** scene, and if it names two the screenshot you are about to take
+   is of two scenes stacked.
 
 A working key helper:
 
@@ -195,6 +213,20 @@ Two things follow:
   gives X 84 samples and everyone else 12; that is not a field. Detected by
   unequal `n`, because the first cut of this check read the flag instead and duly
   printed a confident "no outliers" over meaningless numbers.
+
+### And when the flag *does* fire, it is still not a verdict
+
+D127 produced the first one: TERRAMOTH crossed to −2.14σ at HARD. The useful move
+was not to act on the flag but to ask where it came from, and it decomposed
+completely — **one matchup** swung 0.22, which over seven opponents is 0.031 of
+mean lead, which was the entire observed drop. Field mean lead is zero by
+construction, so `z = lead / SD`; check whether the numerator moved or the
+denominator did before believing a σ has changed meaning.
+
+The tell that it was structural rather than caused by the change under test: the
+machine was already at −1.89σ, and **all three swept values flagged it equally**
+(−2.12, −2.14, −2.06σ). A flag that does not discriminate between your arms is
+not telling you about your arms.
 
 ---
 

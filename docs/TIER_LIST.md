@@ -9,7 +9,7 @@ standard error** on lead and **0.05–0.10** on an individual matchup.
 npx vite-node tools/probe/balance.ts -- --tier extreme --seeds 12 --matrix
 ```
 
-Current as of **D126**. `tools/probe/telemetry.ts` is the companion instrument:
+Current as of **D127**. `tools/probe/telemetry.ts` is the companion instrument:
 same duels, same seeds, reporting *how* a machine spent its match rather than who
 won it. Reach for it before proposing a fix — three OBELISK passes were spent on
 reasoned hypotheses that each measured near zero, and VESPER's recorded diagnosis
@@ -41,24 +41,28 @@ into narrow survivals, and **you have to read both**. Two live examples:
 
 | Mech | Win | Lead | ± | z(lead/win) |
 | --- | --- | --- | --- | --- |
-| VESPER | 60 % | +0.127 | 0.035 | +1.48 / +1.02 |
-| CIRRUS | **65 %** | +0.116 | 0.022 | +1.35 / +1.48 |
-| OBELISK | 54 % | +0.039 | 0.029 | +0.45 / +0.38 |
-| HALCYON | 51 % | −0.017 | 0.021 | −0.19 / +0.12 |
-| PYRE | 45 % | −0.040 | 0.022 | −0.46 / −0.46 |
-| NULLTIDE | 49 % | −0.042 | 0.024 | −0.49 / −0.09 |
-| TERRAMOTH | 42 % | −0.082 | 0.032 | −0.95 / −0.75 |
-| **NOCTURNE** | **33 %** | **−0.102** | 0.026 | −1.19 / −1.68 |
+| CIRRUS | **65 %** | +0.118 | 0.022 | +1.69 / +1.94 |
+| VESPER | 56 % | +0.094 | 0.034 | +1.34 / +0.80 |
+| OBELISK | 51 % | +0.004 | 0.026 | +0.06 / +0.08 |
+| HALCYON | 50 % | −0.019 | 0.021 | −0.28 / +0.04 |
+| NOCTURNE | 45 % | −0.032 | 0.026 | −0.46 / −0.69 |
+| PYRE | 44 % | −0.039 | 0.022 | −0.56 / −0.76 |
+| NULLTIDE | 49 % | −0.046 | 0.025 | −0.66 / −0.19 |
+| **TERRAMOTH** | **40 %** | **−0.080** | 0.033 | −1.14 / −1.22 |
 
-**spread 0.230.** lead SD 0.086 (true 0.082). **No outliers** — the field is one
-population at both tiers.
+**spread 0.198.** lead SD 0.070 (true 0.065, 8 % measurement noise). **No
+outliers** — the field is one population.
 
-### The spread rose from 0.143 and that is not a regression
+### The spread went 0.143 → 0.230 → 0.198
 
-Two deliberate changes account for it. **The deck became solid** (D125) — the
-game had been balanced around a floor that did not exist in flight, and putting
-it back cost 0.075 for machines and 0.019 for rounds. **OVERDRIVE went back to
-5.5 seconds** by request (D126), which is most of the rest.
+It rose to 0.230 for two deliberate reasons. **The deck became solid** (D125) —
+the game had been balanced around a floor that did not exist in flight, and
+putting it back cost 0.075 for machines and 0.019 for rounds. **OVERDRIVE went
+back to 5.5 seconds** by request (D126), which is most of the rest.
+
+It then fell to **0.198 — the lowest figure measured on this roster since the
+deck became solid** — by fixing the machine at the bottom rather than by trimming
+the top (D127). NOCTURNE went 33 % → 45 % on projectile speed alone.
 
 **At this spread, record is a very sensitive function of margin.** VESPER gained
 4.5 % output against 2.3 % intake from the deck, and that moved him eight points
@@ -66,82 +70,126 @@ of win rate. Expect any mechanical change to read as a balance event.
 
 ## 2. Fairness
 
-| | D117 | D118 | D120 | now |
-| --- | --- | --- | --- | --- |
-| Matchups inside ±0.10 — a real fight | 13/28 | 15/28 | 18/28 | **15/28** |
-| Matchups beyond ±0.30 — a bad fight | 1/28 | 1/28 | 1/28 | **1/28** |
+| | D117 | D118 | D120 | D126 | now |
+| --- | --- | --- | --- | --- | --- |
+| Matchups inside ±0.10 — a real fight | 13/28 | 15/28 | 18/28 | 17/28 | **19/28** |
+| Matchups beyond ±0.30 — a bad fight | 1/28 | 1/28 | 1/28 | 2/28 | **1/28** |
 
-Fairness peaked at D120 and gave some back in D121: making every element damage
+**The D126 column is a correction.** It was recorded as 15/28 and 1/28, computed
+off the §3 chart below — which had gone stale against its own §1 row table and
+was under-counting. Re-measured from the same run as the rows, D126 was 17/28 and
+**2/28**: the deck change had quietly created a second bad pairing,
+NOCTURNE–OBELISK at −0.33, and the stale chart was showing it as −0.20.
+
+D127 closed exactly that one. The single bad pairing is once again **VESPER over
+TERRAMOTH at +0.58**, kept by design decision — see §5, and read D120 before
+touching it.
+
+Fairness peaked at D120, gave some back in D121 (making every element damage
 moved several pairings, most of them NULLTIDE's, who carries three of the four
-elements in the game. The spread and the win-rate range both improved across the
-same change, so this is redistribution rather than regression — but it is worth
-watching rather than reading as noise.
-
-The single bad pairing is **VESPER over TERRAMOTH at +0.59**, kept by design
-decision. See §5, and read D120 before touching it.
+elements in the game), and is now at its best recorded value.
 
 ## 3. The full chart — EXTREME
 
-Row beats column.
+Row beats column. **Regenerate this from the same run as §1 whenever §1 moves.**
+It was allowed to drift out of step through D125–D126 and was wrong by up to 0.13
+in a cell while the row table above it was exact, which put a bad pairing out of
+sight and corrupted the §2 fairness counts.
 
 | | HAL | NOC | VES | TER | CIR | OBE | PYR | NUL |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **HALCYON** | — | −0.02 | +0.10 | +0.08 | −0.15 | +0.02 | +0.02 | −0.12 |
-| **NOCTURNE** | +0.02 | — | −0.13 | −0.20 | 0.00 | −0.20 | −0.04 | +0.15 |
-| **VESPER** | −0.10 | +0.13 | — | **+0.59** | −0.05 | +0.19 | −0.02 | −0.12 |
-| **TERRAMOTH** | −0.08 | +0.20 | **−0.59** | — | +0.09 | 0.00 | +0.14 | −0.02 |
-| **CIRRUS** | +0.15 | 0.00 | +0.05 | −0.09 | — | +0.10 | +0.07 | +0.14 |
-| **OBELISK** | −0.02 | +0.20 | −0.19 | 0.00 | −0.10 | — | −0.05 | +0.14 |
-| **PYRE** | −0.02 | +0.04 | +0.02 | −0.14 | −0.07 | +0.05 | — | −0.19 |
-| **NULLTIDE** | +0.12 | −0.15 | +0.12 | +0.02 | −0.14 | −0.14 | +0.19 | — |
+| **HALCYON** | — | 0.00 | −0.05 | +0.08 | −0.17 | +0.01 | +0.06 | −0.07 |
+| **NOCTURNE** | 0.00 | — | +0.02 | −0.18 | −0.08 | −0.09 | −0.06 | +0.17 |
+| **VESPER** | +0.05 | −0.02 | — | **+0.58** | −0.24 | +0.21 | +0.03 | +0.05 |
+| **TERRAMOTH** | −0.08 | +0.18 | **−0.58** | — | +0.05 | −0.09 | +0.02 | −0.06 |
+| **CIRRUS** | +0.17 | +0.08 | +0.24 | −0.05 | — | +0.18 | +0.08 | +0.14 |
+| **OBELISK** | −0.01 | +0.09 | −0.21 | +0.09 | −0.18 | — | +0.05 | +0.20 |
+| **PYRE** | −0.06 | +0.06 | −0.03 | −0.02 | −0.08 | −0.05 | — | −0.10 |
+| **NULLTIDE** | +0.07 | −0.17 | −0.05 | +0.06 | −0.14 | −0.20 | +0.10 | — |
 
 ## 4. HARD
 
 | Mech | Win | Lead | z(lead/win) |
 | --- | --- | --- | --- |
-| CIRRUS | 66 % | +0.118 | +1.56 / +1.42 |
-| NULLTIDE | 55 % | +0.036 | +0.47 / +0.47 |
-| VESPER | 51 % | +0.034 | +0.44 / +0.05 |
-| OBELISK | 55 % | +0.016 | +0.21 / +0.45 |
-| HALCYON | 60 % | +0.006 | +0.08 / +0.84 |
-| PYRE | 40 % | −0.012 | −0.16 / −0.87 |
-| NOCTURNE | 41 % | −0.054 | −0.70 / −0.79 |
-| **TERRAMOTH** | **32 %** | **−0.144** | −1.89 / −1.58 |
+| CIRRUS | 65 % | +0.109 | +1.33 / +1.31 |
+| VESPER | 50 % | +0.034 | +0.41 / −0.03 |
+| NULLTIDE | 55 % | +0.031 | +0.38 / +0.41 |
+| OBELISK | 55 % | +0.028 | +0.34 / +0.44 |
+| HALCYON | 60 % | +0.018 | +0.23 / +0.82 |
+| NOCTURNE | 48 % | −0.013 | −0.16 / −0.21 |
+| PYRE | 39 % | −0.033 | −0.40 / −0.93 |
+| **TERRAMOTH** | **29 %** | **−0.175** | **−2.14 / −1.83  ← outlier** |
 
-**spread 0.262.** No outliers. TERRAMOTH has been the weakest machine at HARD in
-every measurement taken across two sessions, before and after every change —
-left alone by design decision, see §5 and D120.
+**spread 0.284.** TERRAMOTH has been the weakest machine at HARD in every
+measurement taken across three sessions, before and after every change — left
+alone by design decision, see §5 and D120.
+
+### TERRAMOTH is now flagged at HARD, and it is one matchup
+
+It was **−1.89σ** before D127 and is **−2.14σ** after — the first flagged outlier
+in any sweep on this roster. The cause is not diffuse. NOCTURNE–TERRAMOTH at HARD
+went from a dead-even 0.00 to **+0.22** for NOCTURNE, and 0.22 spread over seven
+opponents is 0.031 of mean lead, which is exactly the drop observed
+(−0.144 → −0.175). Field mean lead is zero by construction and the field SD
+barely moved, so nothing else is involved.
+
+Three things about it, and none of them is that it does not matter:
+
+* **It does not discriminate between the swept values.** All three flag TERRAMOTH
+  at HARD (−2.12σ, −2.14σ, −2.06σ), and its response across them is flat within
+  one standard error. A smaller NOCTURNE change would not have avoided this.
+* TERRAMOTH was already at the edge. Any change lifting the bottom crosses it.
+* **At EXTREME it does not happen at all** — TERRAMOTH is −0.082 → −0.080 there,
+  and NOCTURNE's gain comes out of OBELISK and VESPER instead.
+
+**No compensating change was bundled with D127.** If this is to be addressed it
+gets its own sweep and its own entry — D125 is why.
 
 ---
 
 ## 5. The one bad matchup, and why it stays
 
-**VESPER over TERRAMOTH, +0.59.** Not an excess in any single dial — measured
+**VESPER over TERRAMOTH, +0.58.** Not an excess in any single dial — measured
 separately, VESPER's stance cut puts it at +0.50, his dash at +0.40 and his
 stance mobility at +0.50, each alone. The only change that leaves it alone
 (+0.13) is the one that made him *slower*. Any mobility at all breaks it: the
 slowest machine on the roster cannot answer a marksman who can disengage.
 
-**Kept, by design decision** (D120): TERRAMOTH's hull is high enough that it
-outlasts most of the field through bulk and trading, and the measurement supports
-that at EXTREME. Its exchange rate is **the most even on the roster — 76.7
-bar/min dealt against 76.5 taken** — on the lowest damage intake in the game, and
-excluding VESPER its matchup row averages **+0.063**, above average, with only
-two marginal losses. It sits at 52 % wins.
+**Kept, by design decision** (D120). Do not "fix" it without re-reading D120
+first.
 
-Do not "fix" this without re-reading D120 first.
+### The reasoning D120 rests on has decayed, and this is the record of it
+
+D120 kept the matchup because TERRAMOTH was paying for it elsewhere: it outlasted
+the field through bulk and trading. **Every number that argument was built on has
+moved against it**, and none of the movement is D127's — TERRAMOTH went 42 % →
+40 % across that change, while the decay below accumulated over D121–D126.
+
+| | at D120 | now |
+| --- | --- | --- |
+| Exchange rate | 76.7 out / 76.5 in — *the most even on the roster* | **76.0 out / 82.6 in, net −6.6** |
+| Matchup row excluding VESPER | **+0.063**, above average | **+0.003**, dead average |
+| Losses excluding VESPER | two, marginal | **three** |
+| Win rate at EXTREME | 52 % | **40 %** |
+| At HARD | −1.89σ, inside the flag | **−2.14σ, flagged** |
+
+The decision may still be the right one — bulk is a real identity and the fix
+options in D120 all measured badly. But it should be **re-decided on these
+numbers rather than inherited from those**, and that is a design call, not a
+tuning one.
 
 ## 6. What is left
 
-1. **NOCTURNE at EXTREME, 33 % / −0.102.** The lowest record in the game. Options
-   are already swept and the answer is projectile speed — see `SESSION_HANDOFF.md`
-   §4 for the table and the two cautions attached to it.
-2. **TERRAMOTH at HARD**, 32 % / −0.144. Long-standing, and out of scope by
-   design decision.
-3. **Acid is carried by nobody.** `Element.Corrosive` is implemented and applied
+1. **TERRAMOTH at HARD**, 29 % / −0.175, now past the outlier flag. Long-standing
+   and out of scope by design decision (D120) — but §4 above is new, and the
+   decision was taken when it was inside the flag rather than outside it. Worth a
+   deliberate answer rather than an inherited one.
+2. **Acid is carried by nobody.** `Element.Corrosive` is implemented and applied
    by no weapon on the roster.
-4. **The lance connects 1–2 % of the time for every machine**, which the rival's
+3. **The lance connects 1–2 % of the time for every machine**, which the rival's
    inability to choose a command motion (§8d) explains and does not excuse.
+4. **NOCTURNE is resolved** (D127): 33 % → 45 % at EXTREME on projectile speed,
+   and it now has no matchup worse than −0.18. Nothing is owed here.
 
 ---
 

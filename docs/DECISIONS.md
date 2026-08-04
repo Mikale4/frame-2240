@@ -5662,3 +5662,134 @@ a solid deck added under all of them.
 `overdrive.test.ts` derives its expectations from `CIRRUS.overdrive.ticks` rather
 than pinning the literal (the lesson of D116), so the dial moved without touching
 a test.
+
+## D127 — Nocturne's guns get faster, not harder
+
+**NOCTURNE main `projSpeed` 12 → 15, heavy 10.2 → 12.75.** Nothing else. It was
+the weakest machine in the game at EXTREME — 33 % / −0.102, the lowest record on
+the roster — and it is now 45 % / −0.032, fifth of eight.
+
+### The diagnosis was already made; this only picked the number
+
+The previous session measured the options and the answer was projectile speed.
+That is not re-derived here. What is re-derived is the *baseline*, because those
+figures predated D126, and the *step*, because the handoff recorded an explicit
+caution that the dial is not linear.
+
+Both cautions earned their keep. The baseline re-measured identically
+(33 % / −0.102, spread 0.230), but the **12 → 14 step that had measured flat no
+longer does** — it is worth eight points of win rate now. Whatever made it flat
+did not survive the deck becoming solid (D125). Had the sweep been skipped and 16
+assumed, the roster would have been worse off; see the table.
+
+### The sweep
+
+EXTREME, 12 seeds, both slot orders, real 180 s cap. 84 samples per mech.
+
+| main / heavy | NOCTURNE | roster spread | NOCTURNE at HARD |
+| --- | --- | --- | --- |
+| 12 / 10.2 — baseline | 33 % / −0.102 | 0.230 | 41 % / −0.054 |
+| 14 / 12 | 41 % / −0.065 | 0.211 | 43 % / −0.027 |
+| **15 / 12.75 — landed** | **45 % / −0.032** | **0.198** | **48 % / −0.013** |
+| 16 / 13.5 | 52 % / +0.034 | 0.224 | 50 % / −0.005 |
+
+Win rate and lead move monotonically together across all four points at both
+tiers, so **the dial has not run out of resolution** and the middle value is a
+real reading rather than an artefact.
+
+**15 was chosen on the roster's number, not NOCTURNE's.** 16 is the better
+outcome for NOCTURNE alone and the worse one for the game: it lifts NOCTURNE to
+third of eight and hands the spread back to 0.224, near baseline. 15 is the
+lowest spread measured on this roster since the deck became solid. The heavy is
+held to the main's ratio so the two barrels stay a matched pair.
+
+### Why speed and not damage — confirmed on this roster, not inherited
+
+`telemetry.ts`, same duels, same seeds:
+
+| | baseline | landed |
+| --- | --- | --- |
+| bar/min dealt | 89.4 | **103.5** |
+| bar/min taken | 105.9 | 112.9 |
+| net exchange | −16.5 | **−9.4** |
+| nominal damage thrown | 397.7 | **380.6** |
+| of it, arriving | 5.6 % | **7.0 %** |
+| kills / deaths | 53 / 111 | **74 / 92** |
+
+It now throws **slightly less** and lands considerably more. That is the whole
+argument for this dial over a damage raise, stated as plainly as the instrument
+can state it: NOCTURNE was never short of output.
+
+The differential is clean — only the two dials that moved changed their connect
+rate, and the weapons left alone did not drift:
+
+| weapon | baseline consumed | landed consumed |
+| --- | --- | --- |
+| main — *changed* | 31 % | **36 %** |
+| heavy — *changed* | 29 % | **32 %** |
+| spread — untouched | 28 % | 28 % |
+| lance — untouched | 17 % | 18 % |
+
+### Reach moves with speed, and that is probably the mechanism
+
+Range here is `projSpeed * projLife`, so the main went 12 × 72 = **864 px** to
+15 × 72 = **1080 px**. The baseline figure is the interesting one: NOCTURNE's
+`lockRange` is **900**. *The frame could lock a target it could not shoot.*
+
+That threshold sits between the old value and every swept value, which is the
+best available explanation for why a 12 → 14 step measured flat before D125 and
+does not now — and it is a hypothesis this entry is deliberately not claiming to
+have proven.
+
+### What it cost, measured rather than assumed
+
+At EXTREME the gain comes **entirely out of NOCTURNE's two worst matchups**, and
+TERRAMOTH is not touched:
+
+| NOCTURNE vs | base | now | Δ |
+| --- | --- | --- | --- |
+| OBELISK | −0.33 | −0.09 | **+0.24** |
+| VESPER | −0.21 | +0.02 | **+0.23** |
+| NULLTIDE | +0.14 | +0.17 | +0.03 |
+| HALCYON | −0.02 | 0.00 | +0.02 |
+| PYRE | −0.06 | −0.06 | 0.00 |
+| CIRRUS | −0.07 | −0.08 | −0.01 |
+| TERRAMOTH | −0.17 | −0.18 | −0.01 |
+
+Fairness improves with it: matchups inside ±0.10 go **17/28 → 19/28**, and
+matchups beyond ±0.30 go **2/28 → 1/28** — NOCTURNE–OBELISK was the second bad
+pairing in the game and is not one any more. Only VESPER over TERRAMOTH remains,
+kept by the D120 decision.
+
+**At HARD it is a different story and HARD is why it was checked.** There the
+gain is concentrated in TERRAMOTH (0.00 → +0.22) and PYRE (−0.17 → −0.02), and
+TERRAMOTH crosses the outlier flag: **−1.89σ → −2.14σ**, 32 % → 29 %.
+
+That is arithmetic rather than coincidence. Field mean lead is zero by
+construction and the field SD barely moved (0.076 → 0.082), so the z shift is
+TERRAMOTH's own lead falling 0.031 — and 0.22 of matchup swing spread over seven
+opponents is 0.031 exactly. **One matchup accounts for all of it.**
+
+Three things keep this from blocking the change, and none of them is that it does
+not matter:
+
+* It **does not discriminate between the arms.** All three swept values flag
+  TERRAMOTH at HARD (−2.12σ, −2.14σ, −2.06σ) and its response across them is
+  flat within one standard error. Picking 14 would not have avoided it.
+* TERRAMOTH began at **−1.89σ**, already at the edge. Any change that lifts the
+  bottom of the table crosses that line.
+* TERRAMOTH at HARD is out of scope by the **D120** decision and has been the
+  weakest machine there in every measurement across three sessions.
+
+**No compensating TERRAMOTH change was bundled with this one.** D125 is the
+reason that rule exists: an unmeasured tweak riding alongside a fix turned out to
+be worth more than the fix and made the cost attribution wrong. If TERRAMOTH at
+HARD is to be addressed it gets its own sweep and its own entry.
+
+### Housekeeping
+
+`TIER_LIST.md` §3's matchup chart was **stale** — it disagreed with its own §1
+row table, which reproduced exactly. NOCTURNE–OBELISK read −0.20 against a
+measured −0.33, and the HALCYON/NOCTURNE cells were sign-swapped. Regenerated
+from the same run as the rows, along with the fairness counts, which were
+computed off the stale chart.

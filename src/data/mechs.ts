@@ -639,6 +639,35 @@ export const NOCTURNE: MechDef = {
     maxLife: 150,
   },
 
+  /**
+   * **The two gun speeds are a balance dial, swept rather than chosen** (D127).
+   *
+   * NOCTURNE threw the second-highest nominal damage on the roster and landed
+   * the least of it — 5.6 % arriving, the worst figure in the game, on the worst
+   * net exchange (89.4 bar/min dealt against 105.9 taken). It was never short of
+   * output; its output did not connect. Raising damage 20 % measured worth less
+   * than half of this, which is the trap three OBELISK passes fell into.
+   *
+   * Swept at EXTREME, 12 seeds, both slot orders — win rate and lead move
+   * monotonically together, so the dial has not run out of resolution:
+   *
+   * | main / heavy | NOCTURNE | roster spread |
+   * | --- | --- | --- |
+   * | 12 / 10.2 | 33 % / −0.102 | 0.230 |
+   * | 14 / 12 | 41 % / −0.065 | 0.211 |
+   * | **15 / 12.75** | **45 % / −0.032** | **0.198** |
+   * | 16 / 13.5 | 52 % / +0.034 | 0.224 |
+   *
+   * 15 is the pick because it is the roster's best figure, not NOCTURNE's: 16
+   * lifts NOCTURNE to third and gives the spread back. The heavy is held to the
+   * same ratio as the main so the two barrels stay a matched pair.
+   *
+   * **Reach moves with speed** — range here is `projSpeed * projLife`, so the
+   * main went 12×72 = 864 px to 15×72 = 1080. Baseline was *shorter than its own
+   * `lockRange` of 900*: the frame could lock a target it could not reach. That
+   * threshold is the likeliest reason an earlier 12→14 sweep measured flat before
+   * the deck became solid (D125) and this one does not.
+   */
   main: attack({
     ...HALCYON.main,
     id: 'main',
@@ -647,7 +676,7 @@ export const NOCTURNE: MechDef = {
     recovery: 6,
     damage: 46,
     energyCost: 38,
-    projSpeed: 12,
+    projSpeed: 15,
   }),
   heavy: attack({
     ...HALCYON.heavy,
@@ -655,7 +684,7 @@ export const NOCTURNE: MechDef = {
     label: 'SLUG',
     damage: 130,
     energyCost: 132,
-    projSpeed: 10.2,
+    projSpeed: 12.75,
     projRadius: 13,
   }),
   sub: attack({
