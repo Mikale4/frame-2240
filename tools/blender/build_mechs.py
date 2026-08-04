@@ -2525,19 +2525,66 @@ def build_mech(mech_id, palette_key=None):
         # crescent thrown from it — wide at the root, tapering to a fine point.
         # PYRE's glow is amber (1.00, 0.76, 0.30), so the crescent reads as flame,
         # which is the right element for the incendiary frame.
-        o.append(add_box("m_butt", (0.14, 0.10, 0.10), piv + Vector((-0.16, 0, 0)),
-                         coll=coll, mat=M_FRAME))
-        o.append(add_cyl("m_haft", 0.048, 1.66, piv + Vector((0.70, 0, 0)),
-                         (0, math.radians(90), 0), 12, coll=coll, mat=M_FRAME))
-        for i in range(4):
-            o.append(add_cyl(f"m_grip{i}", 0.064, 0.05, piv + Vector((0.06 + i * 0.32, 0, 0)),
-                             (0, math.radians(90), 0), 12, coll=coll, mat=M_ACC))
-        # Emitter head at the far end, with a vent stack — the crescent needs a
-        # believable source or it looks stuck on.
-        o.append(add_box("m_head", (0.24, 0.14, 0.21), piv + Vector((1.58, 0, 0.02)),
-                         coll=coll, mat=M_HULL))
-        o.append(add_cyl("m_vent", 0.055, 0.11, piv + Vector((1.66, 0, -0.12)),
-                         (math.radians(90), 0, 0), 12, coll=coll, mat=M_ACC))
+        # ---- the snath ---------------------------------------------------
+        # Built to the supplied reference, which is a *machine*: alternating
+        # knurled grip runs and hex collars, glowing conduit slots along its
+        # length, a layered emitter head, and a finned counterweight. The plain
+        # rod it replaced was most of why the blade looked pasted on — energy
+        # with no visible plumbing has nowhere to have come from.
+        AX = (0, math.radians(90), 0)
+
+        # Finned counterweight at the butt.
+        o.append(add_cyl("m_spike", 0.052, 0.20, piv + Vector((-0.30, 0, 0)),
+                         AX, 8, coll=coll, cone_r2=0.004, mat=M_FRAME))
+        for i in range(3):
+            ang = math.radians(90 + i * 120)
+            o.append(add_box(f"m_fin{i}", (0.13, 0.018, 0.09),
+                             piv + Vector((-0.20, 0.05 * math.cos(ang), 0.05 * math.sin(ang))),
+                             (ang, 0, 0), coll=coll, mat=M_FRAME))
+
+        # Shaft: knurled runs between hex collars.
+        RUNS = ((-0.10, 0.34), (0.40, 0.74), (0.80, 1.14), (1.20, 1.46))
+        for i, (a, b) in enumerate(RUNS):
+            mid, ln = (a + b) * 0.5, (b - a)
+            o.append(add_cyl(f"m_run{i}", 0.044, ln, piv + Vector((mid, 0, 0)),
+                             AX, 12, coll=coll, mat=M_FRAME))
+            # Knurling: shallow rings, close enough to read as texture at scale.
+            k = max(2, int(ln / 0.055))
+            for j in range(k):
+                o.append(add_cyl(f"m_knurl{i}_{j}", 0.050, 0.014,
+                                 piv + Vector((a + 0.03 + j * (ln - 0.06) / max(1, k - 1), 0, 0)),
+                                 AX, 10, coll=coll, mat=M_FRAME))
+        for i, x in enumerate((0.37, 0.77, 1.17)):
+            o.append(add_cyl(f"m_collar{i}", 0.072, 0.075, piv + Vector((x, 0, 0)),
+                             AX, 6, coll=coll, mat=M_SUB))
+            # **The conduit slot.** This is where the plasma is running from.
+            o.append(add_box(f"m_conduit{i}", (0.030, 0.062, 0.030),
+                             piv + Vector((x, 0, 0.052)), coll=coll, mat=M_GLOW))
+
+        # ---- emitter head -------------------------------------------------
+        # Layered angular plates rather than one block, with a gold wedge under
+        # the mouth and twin prongs reaching past it. The blade roots at x=1.58,
+        # so the mouth has to sit just behind that.
+        o.append(add_box("m_neck", (0.14, 0.10, 0.12), piv + Vector((1.44, 0, 0.01)),
+                         coll=coll, mat=M_SUB))
+        o.append(add_box("m_headA", (0.26, 0.13, 0.20), piv + Vector((1.58, 0, 0.03)),
+                         (0, math.radians(-6), 0), coll=coll, mat=M_HULL))
+        o.append(add_box("m_headB", (0.20, 0.15, 0.11), piv + Vector((1.60, 0, -0.09)),
+                         (0, math.radians(4), 0), coll=coll, mat=M_FRAME))
+        # Gold wedge, the one warm note on the hardware.
+        o.append(add_wedge("m_wedge", (0.15, 0.11, 0.13), 1.7,
+                           piv + Vector((1.50, 0, -0.13)), (0, math.radians(96), 0),
+                           coll=coll, mat=M_ACC))
+        # Prongs reaching past the mouth, which the blade springs between.
+        for i, dy in enumerate((0.058, -0.058)):
+            o.append(add_box(f"m_prong{i}", (0.30, 0.028, 0.045),
+                             piv + Vector((1.78, dy, 0.05)),
+                             (0, math.radians(-7), 0), coll=coll, mat=M_FRAME))
+        # The mouth itself: the brightest fitting on the weapon.
+        o.append(add_box("m_mouth", (0.05, 0.075, 0.075), piv + Vector((1.60, 0, 0.02)),
+                         coll=coll, mat=M_GLOW))
+        o.append(add_cyl("m_vent", 0.048, 0.10, piv + Vector((1.52, 0, -0.16)),
+                         (math.radians(90), 0, 0), 10, coll=coll, mat=M_ACC))
         # **Dedicated crescent materials, at much lower emission than the saber's.**
         # `M_BEAM` runs the glow colour at emission 2.4 and `M_CORE` is pure white
         # at 3.0. On a thin sabre blade that is correct — a hot line reads as

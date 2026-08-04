@@ -98,7 +98,14 @@ def _filaments(size, pts, nrm, rnd, *, count, spread, span_lo, span_hi,
     acc = Image.new("L", (size, size), 0)
     n = len(pts)
     for _ in range(count):
-        f0 = rnd.uniform(-0.08, 0.90)
+        # Biased toward the root so the blade visibly springs from the
+        # emitter rather than fading in along its length.
+        # Power-biased from zero, then nudged negative — raising a *negative*
+        # sample to a fractional power yields a complex number, not a small one.
+        if rnd.random() < 0.55:
+            f0 = rnd.uniform(0.0, 0.90) ** 1.6 - 0.06
+        else:
+            f0 = rnd.uniform(0.0, 0.90)
         f1 = min(1.02, f0 + rnd.uniform(span_lo, span_hi))
         i0 = max(0, int(f0 * (n - 1)))
         i1 = min(n - 1, int(f1 * (n - 1)))
@@ -137,6 +144,43 @@ def _particles(size, pts, nrm, rnd, count, spread, bright):
     return img
 
 
+def _emitter_flare(size, pts, rnd, radius, bright):
+    """
+    A bloom at the emitter mouth, plus a little spill back along the shaft.
+
+    Without this the blade **butts up against the brass head and reads as pasted
+    on**: energy that simply begins at a hard boundary has no source. The sprite
+    layer draws over the modelled weapon, so a bloom here spills onto the metal
+    and fuses the two.
+    """
+    img = Image.new("L", (size, size), 0)
+    d = ImageDraw.Draw(img)
+    x0, y0, _w = pts[0]
+
+    # Concentric discs, brightest at the mouth.
+    steps = 9
+    for i in range(steps):
+        t = i / (steps - 1)
+        r = radius * (0.18 + 0.82 * t)
+        v = int(bright * (1.0 - t) ** 1.7)
+        if v <= 0:
+            continue
+        d.ellipse([x0 - r, y0 - r, x0 + r, y0 + r], fill=v)
+
+    # Tongues licking backwards over the head, so light crosses the join.
+    tx, ty = pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]
+    m = math.hypot(tx, ty) or 1.0
+    bx, by = -tx / m, -ty / m          # back along the blade, i.e. onto the shaft
+    for _ in range(14):
+        ln = rnd.uniform(6.0, radius * 1.5)
+        jitter = rnd.uniform(-0.5, 0.5)
+        ex = x0 + bx * ln + (-by) * jitter * ln * 0.5
+        ey = y0 + by * ln + (bx) * jitter * ln * 0.5
+        d.line([(x0, y0), (ex, ey)], fill=int(bright * 0.55),
+               width=rnd.choice([1, 1, 2]))
+    return img.filter(ImageFilter.GaussianBlur(2.2))
+
+
 def render_blade(spec, seed, size=512):
     """One frame of a projected blade, RGBA."""
     rnd = random.Random(seed)
@@ -163,13 +207,18 @@ def render_blade(spec, seed, size=512):
                          span_lo=0.05, span_hi=0.24, bright=26, wobble=0.42,
                          widths=[1])
     spray = _particles(size, pts, nrm, rnd, 220, 1.7, 55)
+    # Bloom at the emitter mouth, spilling back over the metal so the blade has
+    # a visible source instead of beginning at a hard boundary.
+    flare = _emitter_flare(size, pts, rnd, radius=spec.get("flare", 30.0), bright=150)
 
     glow = ImageChops.add(body, mass).filter(ImageFilter.GaussianBlur(7.0))
     field = ImageChops.add(ImageChops.add(body, mass), tongues)
     field = ImageChops.add(field, spray)
+    field = ImageChops.add(field, flare)
     field = ImageChops.add(field, glow.point(lambda v: int(v * 0.85)))
     field = field.filter(ImageFilter.GaussianBlur(0.7))
     hot = ImageChops.add(core, core.filter(ImageFilter.GaussianBlur(3.0)))
+    hot = ImageChops.add(hot, flare.point(lambda v: int(v * 0.75)))
 
     dim_rgb = spec.get("dim", spec["body"])
     body_rgb = spec["body"]

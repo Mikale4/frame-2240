@@ -1905,16 +1905,16 @@
       },
       "meleeWeapon": {
         "file": "pyre_meleeWeapon.png",
-        "tile": 448,
+        "tile": 512,
         "dims_bu": [
-          1.945,
-          0.14,
-          0.3
+          0.4038,
+          0.1842,
+          2.331
         ],
         "dims_logical_px": [
-          116.7,
-          8.4,
-          18.0
+          24.2,
+          11.1,
+          139.9
         ]
       },
       "drone": {

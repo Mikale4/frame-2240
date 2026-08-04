@@ -6233,3 +6233,45 @@ nearly the whole blade past the white-core threshold and bleached the yellow out
 of it entirely. The normalisers — not the counts — decide how much goes white.
 Current result: mean (253, 194, 69), hue 40.8°, **0 %** of the blade at full
 white, against PYRE's own glow colour of (255, 194, 71).
+
+## D133 — The snath becomes a machine, and the blade gets a source
+
+Two related fixes for the same complaint: the plasma looked *pasted on top of the
+staff*.
+
+### The staff was a rod with rings
+
+The supplied reference is engineered hardware, and the detail is the point.
+Rebuilt to match:
+
+* **Finned counterweight** at the butt — a tapered spike with three fins.
+* **Segmented shaft** — four knurled runs (shallow ring stacks) between three
+  hex collars, rather than one smooth cylinder.
+* **Glowing conduit slots** set into each collar. These matter most: they are
+  where the plasma is visibly *running from*. Energy with no plumbing has nowhere
+  to have come from, and that absence is a large part of why the blade read as
+  stuck on.
+* **A layered emitter head** — two angled armour plates, a gold wedge beneath,
+  twin prongs reaching past the mouth, and an emissive mouth block, in place of
+  the single brass box.
+
+### The blade had no source
+
+`_emitter_flare()` adds a bloom at the mouth plus tongues licking **backwards**
+over the head. Because `meleeEnergy` draws on top of `meleeWeapon` (D131), that
+bloom spills onto the metal and fuses the two rather than meeting it at a hard
+edge. Filament start positions are also power-biased toward the root, so the
+blade springs from the emitter instead of fading in along its length.
+
+A small trap on the way: the bias was written as `uniform(-0.10, 0.90) ** 1.6`,
+and **raising a negative sample to a fractional power yields a complex number**,
+not a small one. Bias from zero and shift afterwards.
+
+### Fragile coupling, recorded
+
+`build_mechs.py` still builds the scythe's energy geometry, `split_melee` still
+emits it as `meleeEnergy`, and `energy_blade.py` then **overwrites that PNG**.
+The manifest's tile therefore comes from Blender while the pixels come from the
+generator. They agree at 512 today by coincidence, not by construction. If the
+blade is ever resized, the two must be reconciled — ideally by having the scythe
+branch stop building energy geometry at all now that the generator owns it.
