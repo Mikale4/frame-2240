@@ -6350,3 +6350,73 @@ Cleaning the imported armature out of the scene with a `bpy.data.objects.remove`
 loop over a live list hung the process. **Import references into a scratch file,
 not into the scene `build_all` saves** — `mechs.blend` is written by every build
 and must not acquire a Mixamo rig.
+
+## D135 — The reap becomes a swing instead of a lever
+
+A player called the scythe stroke "a basic up-and-down sword swing", and the
+criticism was structural rather than a matter of tuning. The rig could express
+exactly two things during a strike: **one rotation applied rigidly to every
+turret part**, and a push **along the aim**. A lever pivoting in one plane is the
+only motion that description permits.
+
+### What the reference actually does
+
+`Great Sword Slash.fbx`, sampled per frame — hand position relative to the hips,
+hand orientation, hip rotation:
+
+| t (one slash) | hand fwd | hand up | note |
+| --- | --- | --- | --- |
+| 0.00 | −0.00 | −0.15 | low, at the body |
+| 0.44 | 0.17 | **+0.18** | raised and forward |
+| 0.66 | 0.24 | +0.18 | extended |
+| **0.72** | **0.29** | −0.02 | the strike |
+| 0.83 | 0.16 | **−0.23** | pulling down and back |
+| 1.00 | −0.03 | −0.15 | returned |
+
+Three things the rig could not say: the hand **traces a loop** rather than
+rotating about a fixed shoulder (≈18 px forward against ≈25 px vertical at our
+scale); the gripped hand **rotates through 150°+ independently of the arm**; and
+the **hips rotate hard** through the strike.
+
+### Three new pose terms
+
+* **`weaponSpin`** — rotation of the weapon *within the grip*. Weapon parts
+  inherit the arm's rotation and previously contributed nothing of their own, so
+  the blade could only pivot about the shoulder. It now cocks back 46° while
+  loading, whips 62° past neutral at the strike, then trails out. This is the
+  single biggest contributor to the arc having a shape.
+* **`lean`** — chassis commitment. Side-on we cannot show a twist about the
+  vertical, so the body rocks back 5° loading and drives 9° forward through the
+  blow.
+* **`lift`** — travel *across* the aim, at 1.4× `reach`. `partReachOffset` now
+  resolves two axes instead of one; a single forward axis can only produce a
+  lunge.
+
+All three are zero for every motion but `reap`, and all three are presentation
+only — like `spin` and `reach`, they are read by `MechRenderer` and never by the
+simulation, so no balance sweep is owed.
+
+`MechPoseSource` gained all three, which made the compiler reject
+`BattleScene.decoyState` and two test pose literals until they were updated. §8i
+again.
+
+### A measurement error, corrected
+
+`windupFrac` was set to **0.19** last session from "strike at frames 20–22 of
+107". That clip is **three slashes**, not one. Within a single slash the raise
+runs ~18 frames of 29, the strike 3, the recovery 8 — so the wind-up is **0.60**,
+not 0.19. The blade had been snapping up and then grinding through its arc.
+
+Composed result, from `tools/probe/swingcurve.ts`:
+
+```
+     t    arm°  weapon°   lean°   reach    lift   grip
+  0.58  -101.7    -46.0    -4.9    29.2   -42.0   1.00   <- loaded
+  0.67    58.0     23.0     3.0    29.0     8.5   1.00   <- strike
+  0.75   130.0     51.9     7.9    24.7    31.6   1.00
+  1.00   132.0      0.0     0.0    -7.5     0.0   0.00   <- pulled in
+```
+
+232° of arm sweep inside 17 % of the swing, the weapon rotating 98° against it,
+and `reach` finishing **negative** — the scythe drawing back through the target,
+which is the whole point of `reap`.

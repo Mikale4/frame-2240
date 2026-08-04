@@ -159,7 +159,10 @@ describe('walk cycle', () => {
     const pose: RigPose = {
       turretRot: 0,
       spin: 0,
+    weaponSpin: 0,
+    lean: 0,
       reach: 0,
+    lift: 0,
       thrust: 0,
       meleeing: false,
       walkPhase: Math.PI / 2,

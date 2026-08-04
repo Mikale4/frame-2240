@@ -1707,9 +1707,11 @@ export const PYRE: MechDef = {
     arc: {
       windup: 104,
       sweep: 236,
-      // 0.19, from the reference clip: the raise is short and the strike is
-      // what takes the time out of the animation, not the wind-up.
-      windupFrac: 0.19,
+      // **0.60, and the 0.19 that was here was a measurement error.** The strike
+      // was timed against the whole 107-frame reference clip — but that clip is
+      // *three* slashes. Within one slash the raise runs about 18 frames of 29,
+      // the strike 3, and the recovery 8.
+      windupFrac: 0.60,
       alternate: true,
       motion: 'reap',
       reach: 30,

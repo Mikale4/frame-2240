@@ -51,6 +51,12 @@ export interface MechPoseSource {
   reach: number;
   /** Off-hand commitment to the shaft, 0..1, for two-handed swings. */
   grip: number;
+  /** Weapon rotation within the grip, radians. */
+  weaponSpin: number;
+  /** Chassis commitment to a swing, radians. */
+  lean: number;
+  /** Weapon travel across the aim, logical px. */
+  lift: number;
   thrust: number;
   swinging: boolean;
   /** Freeze frames on impact; the renderer jitters the rig while it runs. */
@@ -265,7 +271,10 @@ export class MechRenderer {
     const pose: RigPose = {
       turretRot,
       spin: spinLocal,
+      weaponSpin: facing > 0 ? c.weaponSpin : -c.weaponSpin,
+      lean: facing > 0 ? c.lean : -c.lean,
       reach: c.reach,
+      lift: c.lift,
       thrust: c.thrust,
       meleeing,
       walkPhase: facing > 0 ? c.walkPhase : -c.walkPhase,

@@ -1203,6 +1203,9 @@ export class BattleScene extends Phaser.Scene {
       // `MechPoseSource` on purpose (§8i): the compiler catching this is exactly
       // what the structural contract is for.
       grip: 0,
+      weaponSpin: 0,
+      lean: 0,
+      lift: 0,
       y: dec.y,
       // Straight from the simulation, so the mounts point exactly where the
       // projection's rounds actually leave from. A rig aiming somewhere its own

@@ -18,10 +18,37 @@ import { DEG } from '../core/MathUtil';
 export interface RigPose {
   /** Aim, expressed relative to the banking chassis. */
   turretRot: number;
-  /** Melee sword spin. */
+  /** Melee sword spin, applied to every turret part. */
   spin: number;
+  /**
+   * Extra rotation for the melee weapon *relative to the arm holding it*.
+   *
+   * Without this a swing can only ever be a rigid lever: the weapon inherits the
+   * arm's rotation and contributes nothing, so the blade pivots about the
+   * shoulder and the arc has no shape. In the reference the gripped hand rotates
+   * through more than 150 degrees independently of where the arm is, which is
+   * what makes a blade lead into a cut and trail out of it.
+   */
+  weaponSpin: number;
+  /**
+   * Chassis commitment to the swing, in radians.
+   *
+   * The reference's hips rotate substantially through a strike. Side-on we
+   * cannot show a twist about the vertical, but leaning the chassis into the
+   * blow and recoiling out of it reads as the same commitment.
+   */
+  lean: number;
   /** Forward weapon extension in logical pixels, along the aim. See `partReachOffset`. */
   reach: number;
+  /**
+   * Weapon travel *across* the aim, in logical pixels.
+   *
+   * The reference's hand does not rotate about a fixed shoulder — it traces a
+   * loop, travelling roughly 18 px forward and 25 px vertically at our scale.
+   * `reach` alone can only push along the aim, which is why the swing read as
+   * flat.
+   */
+  lift: number;
   /** Normalised thruster load, 0..1. */
   thrust: number;
   /** True while a melee attack is actually swinging. */
@@ -51,6 +78,13 @@ export const STANCE = 5 * DEG;
 
 /** The head tracks the aim only partly, so the cockpit reads as leading it. */
 export const HEAD_TRACKING = 0.55;
+
+/**
+ * Parts that rotate *within the grip* during a swing.
+ *
+ * They inherit the arm's rotation already; `weaponSpin` is what they add on top.
+ */
+const WEAPON_PARTS = new Set(['meleeWeapon', 'meleeEnergy']);
 
 /**
  * For each part, whether an ancestor already follows the turret.
@@ -99,10 +133,18 @@ export function partReachOffset(
   inheritsTurret: boolean,
   pose: RigPose,
 ): { x: number; y: number } {
-  if (!pose.meleeing || pose.reach === 0) return { x: 0, y: 0 };
+  if (!pose.meleeing || (pose.reach === 0 && pose.lift === 0)) return { x: 0, y: 0 };
   if (part.follow !== 'turret' || inheritsTurret || part.name === 'head') return { x: 0, y: 0 };
   const a = pose.turretRot + pose.spin;
-  return { x: Math.cos(a) * pose.reach, y: Math.sin(a) * pose.reach };
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  // `reach` runs along the aim, `lift` across it. Two axes, because the
+  // reference's hand traces a loop rather than sliding along one line — a single
+  // forward axis can only ever produce a lunge.
+  return {
+    x: ca * pose.reach - sa * pose.lift,
+    y: sa * pose.reach + ca * pose.lift,
+  };
 }
 
 /**
@@ -115,8 +157,12 @@ export function partLocalRotation(part: RigPart, inheritsTurret: boolean, pose: 
 
   switch (part.follow) {
     case 'turret': {
-      // Already carried down from an ancestor: contribute only the authored offset.
-      if (inheritsTurret) return own;
+      // Already carried down from an ancestor: contribute only the authored
+      // offset — plus, for the weapon itself, its rotation *within the grip*.
+      // That term is what turns a rigid lever into a swing.
+      if (inheritsTurret) {
+        return pose.meleeing && WEAPON_PARTS.has(part.name) ? own + pose.weaponSpin : own;
+      }
       let r = own + pose.turretRot * (part.name === 'head' ? HEAD_TRACKING : 1);
       if (pose.meleeing && part.name !== 'head') r += pose.spin;
       return r;
@@ -141,6 +187,9 @@ export function partLocalRotation(part: RigPart, inheritsTurret: boolean, pose: 
       const dangle = (near ? pose.legNear : pose.legFar) * (1 - pose.stride);
       return own + swing + rest + dangle;
     }
+    case 'chassis':
+      // The body commits to the strike and recoils out of it.
+      return own + (pose.meleeing ? pose.lean : 0);
     default:
       return own;
   }

@@ -259,6 +259,16 @@ const SAT_MIN_FRACTION = 0.25;
  */
 const STAB_SPOTS = [-0.34, 0.28, -0.12, 0.40, -0.26, 0.08];
 
+/** Degrees the scythe cocks back in the grip during the wind-up. */
+const WEAPON_COCK = 46;
+/** Degrees it whips past neutral at the strike before trailing. */
+const WEAPON_LEAD = 62;
+/** Degrees the chassis rocks back while loading, and drives forward on the blow. */
+const LEAN_LOAD = 5;
+const LEAN_DRIVE = 9;
+/** Vertical travel as a multiple of `reach`; the reference runs ~1.4x. */
+const LIFT_RATIO = 1.4;
+
 /**
  * How committed the off-hand is to the shaft at swing progress `t`, 0..1.
  *
@@ -266,6 +276,89 @@ const STAB_SPOTS = [-0.34, 0.28, -0.12, 0.40, -0.26, 0.08];
  * — holds through the strike, and releases only at the very end of the
  * follow-through. Releasing early would make the arm snap back mid-slash.
  */
+/**
+ * Weapon rotation *within the grip* at swing progress `t`, in radians.
+ *
+ * Sampled from the reference: the gripped hand rotates through more than 150
+ * degrees across a single slash, and **not in step with the arm** — it cocks
+ * back hard during the wind-up, whips through ahead of the arm at the strike,
+ * then trails behind on the follow-through. That lead-and-trail is the whole
+ * difference between a blade being swung and a plank being rotated.
+ *
+ * Zero for every motion but `reap`, so nothing else changes.
+ */
+export function swingWeaponSpin(arc: SwingArc, t: number, hitIndex: number): number {
+  if ((arc.motion ?? 'swing') !== 'reap') return 0;
+  const k = clamp(t, 0, 1);
+  const wf = clamp(arc.windupFrac, 0.05, 0.95);
+  const dir = arc.alternate && hitIndex % 2 === 1 ? -1 : 1;
+  let deg: number;
+  if (k <= wf) {
+    // Cocking back, easing into the loaded position.
+    const w = k / wf;
+    deg = -WEAPON_COCK * (1 - (1 - w) * (1 - w));
+  } else {
+    const s = (k - wf) / (1 - wf);
+    // Whips past neutral at the strike, then settles back trailing.
+    const burst = Math.min(1.0, s * 2.3);
+    const lead = 1 - Math.pow(1 - burst, 2.2);
+    deg = -WEAPON_COCK + (WEAPON_COCK + WEAPON_LEAD) * lead - WEAPON_LEAD * s * s;
+  }
+  return deg * DEG * dir;
+}
+
+/**
+ * Chassis lean at swing progress `t`, in radians.
+ *
+ * The reference's hips rotate hard through the strike. Side-on we cannot show a
+ * twist about the vertical, so the body pitches into the blow and recoils out of
+ * it instead — the same commitment, expressed in the plane we can see.
+ */
+export function swingLean(arc: SwingArc, t: number, hitIndex: number): number {
+  if ((arc.motion ?? 'swing') !== 'reap') return 0;
+  const k = clamp(t, 0, 1);
+  const wf = clamp(arc.windupFrac, 0.05, 0.95);
+  const dir = arc.alternate && hitIndex % 2 === 1 ? -1 : 1;
+  let deg: number;
+  if (k <= wf) {
+    deg = -LEAN_LOAD * (k / wf);          // rock back as the weapon is raised
+  } else {
+    const s = (k - wf) / (1 - wf);
+    const burst = Math.min(1.0, s * 2.1);
+    deg = -LEAN_LOAD + (LEAN_LOAD + LEAN_DRIVE) * (1 - Math.pow(1 - burst, 2.0));
+    deg -= LEAN_DRIVE * Math.pow(s, 3);   // settle upright on the follow-through
+  }
+  return deg * DEG * dir;
+}
+
+/**
+ * Weapon travel *across* the aim at swing progress `t`, in logical pixels.
+ *
+ * Companion to `swingReach`, which only pushes along the aim. The reference's
+ * hand rises through the wind-up and drops hard through the strike — roughly 25
+ * px of vertical travel at our scale against 18 px of forward — so a swing built
+ * on the forward axis alone is missing more of the motion than it has.
+ */
+export function swingLift(arc: SwingArc, t: number, hitIndex: number): number {
+  if ((arc.motion ?? 'swing') !== 'reap') return 0;
+  const R = arc.reach ?? 0;
+  if (R === 0) return 0;
+  const k = clamp(t, 0, 1);
+  const wf = clamp(arc.windupFrac, 0.05, 0.95);
+  const dir = arc.alternate && hitIndex % 2 === 1 ? -1 : 1;
+  const amp = R * LIFT_RATIO;
+  let v: number;
+  if (k <= wf) {
+    v = -amp * Math.sin((k / wf) * Math.PI * 0.5);   // rises (screen-negative)
+  } else {
+    const s = (k - wf) / (1 - wf);
+    const burst = Math.min(1.0, s * 2.3);
+    v = -amp + amp * 1.85 * (1 - Math.pow(1 - burst, 2.2));
+    v -= amp * 0.85 * Math.pow(s, 2.5);             // recover toward rest
+  }
+  return v * dir;
+}
+
 export function swingGrip(arc: SwingArc, t: number): number {
   if (!arc.twoHanded) return 0;
   const k = clamp(t, 0, 1);
@@ -525,6 +618,12 @@ export class Combatant implements FlightState {
    * `reach` it is read by `MechRenderer` and never by the simulation.
    */
   grip = 0;
+  /** Weapon rotation within the grip; presentation only. */
+  weaponSpin = 0;
+  /** Chassis commitment to a swing, radians; presentation only. */
+  lean = 0;
+  /** Weapon travel across the aim, logical px; presentation only. */
+  lift = 0;
   /**
    * Set by whichever melee path drove the arc this tick; folded into `swinging`
    * at the end of the step and cleared. Two fields because `updateVisualAngles`
@@ -2007,6 +2106,9 @@ export class Combatant implements FlightState {
       this.spin = swingArcAngle(p.arc, 0, ml.hitIndex) * ramp;
       this.reach = swingReach(p.arc, 0, ml.hitIndex) * ramp;
       this.grip = swingGrip(p.arc, 0) * ramp;
+      this.weaponSpin = swingWeaponSpin(p.arc, 0, ml.hitIndex) * ramp;
+      this.lean = swingLean(p.arc, 0, ml.hitIndex) * ramp;
+      this.lift = swingLift(p.arc, 0, ml.hitIndex) * ramp;
 
       /**
        * Desperation Speed closes from anywhere on the map, and the ordinary
@@ -2075,6 +2177,12 @@ export class Combatant implements FlightState {
       this.reach = lerp(swingReach(p.arc, 1, ml.hitIndex), swingReach(p.arc, 0, ml.hitIndex + 1), gapT);
       // Held across the gap between hits: a chain is one continuous grip.
       this.grip = Math.max(swingGrip(p.arc, 1), swingGrip(p.arc, 0));
+      this.weaponSpin = lerp(swingWeaponSpin(p.arc, 1, ml.hitIndex),
+                             swingWeaponSpin(p.arc, 0, ml.hitIndex + 1), gapT);
+      this.lean = lerp(swingLean(p.arc, 1, ml.hitIndex),
+                       swingLean(p.arc, 0, ml.hitIndex + 1), gapT);
+      this.lift = lerp(swingLift(p.arc, 1, ml.hitIndex),
+                       swingLift(p.arc, 0, ml.hitIndex + 1), gapT);
       this.vx *= 0.86;
       this.vy *= 0.86;
       if (ml.timer >= p.gap) {
@@ -2097,6 +2205,9 @@ export class Combatant implements FlightState {
     this.spin = swingArcAngle(p.arc, swingT, ml.hitIndex);
     this.reach = swingReach(p.arc, swingT, ml.hitIndex);
     this.grip = swingGrip(p.arc, swingT);
+    this.weaponSpin = swingWeaponSpin(p.arc, swingT, ml.hitIndex);
+    this.lean = swingLean(p.arc, swingT, ml.hitIndex);
+    this.lift = swingLift(p.arc, swingT, ml.hitIndex);
 
     // Reposition to a point beside the target that shifts each hit, so the
     // sequence circles rather than bulldozing straight through.
@@ -2410,6 +2521,9 @@ export class Combatant implements FlightState {
       this.spin = swingArcAngle(this.def.meleeLock.arc, lockT, this.meleeCount - 1);
       this.reach = swingReach(this.def.meleeLock.arc, lockT, this.meleeCount - 1);
       this.grip = swingGrip(this.def.meleeLock.arc, lockT);
+      this.weaponSpin = swingWeaponSpin(this.def.meleeLock.arc, lockT, this.meleeCount - 1);
+      this.lean = swingLean(this.def.meleeLock.arc, lockT, this.meleeCount - 1);
+      this.lift = swingLift(this.def.meleeLock.arc, lockT, this.meleeCount - 1);
     }
 
     if (this.autoFireTimer > 0) this.autoFireTimer--;
@@ -2747,6 +2861,10 @@ export class Combatant implements FlightState {
       if (Math.abs(this.reach) < 0.05) this.reach = 0;
       this.grip *= 0.82;
       if (this.grip < 0.02) this.grip = 0;
+      this.weaponSpin *= 0.82;
+      this.lean *= 0.82;
+      this.lift *= 0.82;
+      if (Math.abs(this.lift) < 0.05) this.lift = 0;
     }
   }
 
