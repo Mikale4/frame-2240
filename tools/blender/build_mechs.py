@@ -90,6 +90,13 @@ PART_ORDER = [
     "meleeWeapon",
 ]
 
+# Parts that only some chassis carry, so a missing one is not a build error.
+#
+# `meleeEnergy` is the projected blade, split out of `meleeWeapon` so it can be
+# excluded from the Freestyle contour and flickered on its own. CLAW and
+# RAMSHIELD project nothing and therefore have none.
+OPTIONAL_PARTS = ["meleeEnergy"]
+
 """
 Chassis specifications.
 
@@ -1283,6 +1290,55 @@ def join_as(name, objs, pivot, coll):
     return obj
 
 
+# Objects linked here are excluded from the Freestyle line pass. See D131.
+NOLINE_COLLECTION = "BSR_NOLINE"
+
+
+def _is_energy_material(mat):
+    """True for projected-energy surfaces — the blade itself, not its fittings.
+
+    `M_GLOW` and `M_ACC` are deliberately *not* energy: they are indicator lamps,
+    heat vents and running lights bolted to the physical weapon. They should keep
+    their contour and should not flicker with the blade.
+    """
+    if mat is None:
+        return False
+    n = mat.name
+    return n.endswith("_beam") or n.endswith("_beamcore") or "_scythe_" in n
+
+
+def split_melee(parts, objs, pivot, coll, pn):
+    """
+    Splits accumulated melee geometry into hardware and **projected energy**.
+
+    Two reasons the blade cannot stay joined to its haft:
+
+    1. **Freestyle cannot be filtered inside one mesh.** Face marks survive the
+       join but are ignored by the line pass — measured at 28.4 % dark pixels
+       marked versus 2.4 % with Freestyle off, i.e. no effect whatsoever. A
+       separate object *can* be excluded, by collection.
+    2. **Flicker needs its own sprite.** Energy in the reference pulses like
+       flame; the metal haft does not. One sprite cannot do both.
+
+    Writes `parts['meleeWeapon']` always, and `parts['meleeEnergy']` only when
+    the weapon actually projects a blade — CLAW and RAMSHIELD do not.
+    """
+    energy, hardware = [], []
+    for x in objs:
+        mats = list(x.data.materials) if getattr(x, "type", None) == "MESH" else []
+        target = energy if (mats and _is_energy_material(mats[0])) else hardware
+        target.append(x)
+
+    parts["meleeWeapon"] = join_as(pn("meleeWeapon"), hardware, pivot, coll)
+    if not energy:
+        return
+    e = join_as(pn("meleeEnergy"), energy, pivot, coll)
+    parts["meleeEnergy"] = e
+    noline = ensure_collection(NOLINE_COLLECTION)
+    if e.name not in noline.objects:
+        noline.objects.link(e)
+
+
 # --------------------------------------------------------------- drone build
 
 
@@ -2424,7 +2480,7 @@ def build_mech(mech_id, palette_key=None):
                              (0, math.radians(90), 0), 10, coll=coll, mat=M_TRIM))
         o.append(add_cyl("m_pivotpin", 0.06, 0.30, piv + Vector((0.34, 0, 0)),
                          (math.radians(90), 0, 0), 12, coll=coll, mat=M_ACC))
-        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+        split_melee(parts, o, piv, coll, pn)
     elif spec["blade"] == "bayonet":
         # VESPER: a short straight beam spike clamped under the railgun. A
         # thrusting weapon - no cutting edge, no sweep, just a point.
@@ -2439,7 +2495,7 @@ def build_mech(mech_id, palette_key=None):
         o.append(add_cyl("m_core", 0.015, spike * 0.98,
                          piv + Vector((0.30 + spike / 2, 0, -0.02)),
                          (0, math.radians(90), 0), 12, coll=coll, cone_r2=0.003, mat=M_CORE))
-        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+        split_melee(parts, o, piv, coll, pn)
     elif spec["blade"] == "twindagger":
         # CIRRUS: two short blades on a shared mount, which is what an eight-hit
         # alternating flurry actually looks like.
@@ -2455,7 +2511,7 @@ def build_mech(mech_id, palette_key=None):
             o.append(add_cyl(f"m_core{i}", 0.014, dl * 0.98,
                              piv + Vector((0.22 + dl / 2, dy, 0.02)),
                              (0, math.radians(90), 0), 10, coll=coll, cone_r2=0.003, mat=M_CORE))
-        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+        split_melee(parts, o, piv, coll, pn)
     elif spec["blade"] == "scythe":
         # PYRE: a reaping scythe, replacing the cleaver it carried until D130.
         #
@@ -2498,17 +2554,37 @@ def build_mech(mech_id, palette_key=None):
             ("mid",  0.00, 0.62, (1.00, 0.52, 0.10), 0.70),
             ("core", 0.00, 0.26, (1.00, 0.86, 0.46), 1.15),
         ]
-        arc_r, cx, cz, segs = 0.90, 1.58, -0.74, 26
-        span = math.radians(102.0)
+        # **Long and barely curved, not a farm hook.** The supplied Deathscythe
+        # reference is a beam as long as the machine is tall, sweeping through
+        # perhaps thirty degrees — widest near the base, then tapering over a
+        # great distance to a needle. The first pass ran 102 degrees over 0.9 BU,
+        # which is a sickle: far too short and curled far too hard.
+        #
+        # `START_A` and the centre are chosen so the blade leaves the emitter head
+        # exactly, then bends gently forward and down.
+        arc_r, segs = 2.90, 34
+        span = math.radians(34.0)
+        start_a = math.radians(100.0)
+        # Anchor the arc so its first station sits on the emitter.
+        cx = 1.58 - arc_r * math.cos(start_a)
+        cz = 0.02 - arc_r * math.sin(start_a)
+        # Where the blade is at its widest, as a fraction of its length. A scythe
+        # swells fast out of the emitter and tapers slowly — the long taper is
+        # most of what makes it read as a beam rather than a leaf.
+        PEAK_AT = 0.18
         for bname, f_in, f_out, rgb, emis in BANDS:
             mat = make_material(f"{mech_id}_scythe_{bname}", rgb, emission=emis,
                                 roughness=0.22, metallic=0.0, detail=False)
             st = []
             for i in range(segs):
                 f = i / (segs - 1)
-                a = math.radians(86.0) - f * span
+                a = start_a - f * span
                 ca, sa = math.cos(a), math.sin(a)
-                wide = 0.34 * (1.0 - f) ** 1.5 + 0.012
+                if f < PEAK_AT:
+                    prof = f / PEAK_AT
+                else:
+                    prof = ((1.0 - f) / (1.0 - PEAK_AT)) ** 1.25
+                wide = 0.30 * prof + 0.010
                 # Bands are measured inward from the cutting edge, so they stay
                 # concentric with the curve and nest without crossing.
                 ri = arc_r - wide * f_out
@@ -2521,7 +2597,7 @@ def build_mech(mech_id, palette_key=None):
             b = add_swept_blade(pn(f"m_crescent_{bname}"), st, th, coll=coll, mat=mat)
             b.location.y += piv.y
             o.append(b)
-        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+        split_melee(parts, o, piv, coll, pn)
     elif spec["blade"] == "glaive":
         # NULLTIDE: a polearm. Long haft, discharge head at the far end, so its
         # wide sweeps have somewhere to come from.
@@ -2544,7 +2620,7 @@ def build_mech(mech_id, palette_key=None):
         for i, dz in enumerate((0.12, -0.12)):
             o.append(add_box(f"m_prong{i}", (0.16, 0.035, 0.035),
                              piv + Vector((1.10, 0, dz)), coll=coll, mat=M_GLOW))
-        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+        split_melee(parts, o, piv, coll, pn)
     elif spec["blade"] == "ramshield":
         # OBELISK: a powered tower shield with a central ram boss. It bashes; the
         # face is the weapon, so the silhouette is a slab, not an edge.
@@ -2564,7 +2640,7 @@ def build_mech(mech_id, palette_key=None):
                              piv + Vector((0.35, 0, dz)), coll=coll, mat=M_GLOW))
         o.append(add_box("m_strut", (0.24, 0.08, 0.10), piv + Vector((0.12, 0, -0.20)),
                          coll=coll, mat=M_TRIM))
-        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+        split_melee(parts, o, piv, coll, pn)
     elif spec["blade"] == "pile":
         # A pile driver: a blunt ram in a guide cage. Siege equipment, not a
         # sword - it hits once, enormously.
@@ -2583,7 +2659,7 @@ def build_mech(mech_id, palette_key=None):
         # Hydraulic accumulator behind the ram.
         o.append(add_cyl("m_accum", 0.09, 0.28, piv + Vector((-0.08, 0, 0.10)),
                          (0, math.radians(90), 0), 12, coll=coll, mat=M_GLOW))
-        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+        split_melee(parts, o, piv, coll, pn)
     else:
         # Hilt: gripped, ribbed, with a pommel.
         o.append(add_box("m_grip", (0.19, 0.10, 0.10), piv, coll=coll, mat=M_FRAME))
@@ -2609,7 +2685,7 @@ def build_mech(mech_id, palette_key=None):
         o.append(add_cyl("m_core", 0.017, blade_len * 0.985,
                          piv + Vector((0.26 + blade_len / 2, 0, 0)),
                          (0, math.radians(90), 0), 12, coll=coll, cone_r2=0.004, mat=M_CORE))
-        parts["meleeWeapon"] = join_as(pn("meleeWeapon"), o, piv, coll)
+        split_melee(parts, o, piv, coll, pn)
 
     # ---- thrusters: rear-facing bells -------------------------------------
     boost = spec["booster"]
@@ -2708,14 +2784,20 @@ def setup_outlines():
         lineset.select_border = True
         lineset.select_crease = True
         lineset.select_edge_mark = False
-        # Skip anything face-marked. `add_swept_blade` marks projected-energy
-        # geometry, which must not be outlined: in the reference the hardware
-        # carries a black contour and the energy carries none, and a blade with
-        # a contour reads as a painted metal object rather than as light.
+        # **Exclude projected energy from the line pass.** In the reference the
+        # hardware carries a black contour and the energy carries none; a blade
+        # with a contour reads as a painted metal object rather than as light.
+        #
+        # By *collection*, not by face mark. Face marks were tried first and do
+        # nothing: `.freestyle_face` survives the join — 303 of 439 faces marked
+        # — and the line pass ignores it, at both `ONE` and `BOTH`, measured to
+        # the pixel. Collection membership is honoured, which is why
+        # `split_melee` keeps the blade as its own object.
         try:
-            lineset.select_by_face_marks = True
-            lineset.face_mark_negation = "EXCLUSIVE"
-            lineset.face_mark_condition = "ONE"
+            noline = ensure_collection(NOLINE_COLLECTION)
+            lineset.select_by_collection = True
+            lineset.collection = noline
+            lineset.collection_negation = "EXCLUSIVE"
         except (AttributeError, TypeError):
             pass
         style = lineset.linestyle
@@ -2938,6 +3020,9 @@ def render_parts(coll, out_dir, mech_id, manifest):
     # The drone lives in the same collection but is not part of the rig; it is
     # rendered alongside so it shares the camera, lighting and outline settings.
     wanted = list(PART_ORDER) + ["drone"]
+    # Optional parts render when the chassis has them and are skipped silently
+    # when it does not — a weapon with no energy blade is not a build fault.
+    wanted += [n for n in OPTIONAL_PARTS if f"{mech_id}_{n}" in mech_objs]
     missing = [n for n in wanted if f"{mech_id}_{n}" not in mech_objs]
     if missing:
         raise RuntimeError(

@@ -6082,3 +6082,69 @@ sprite with the metal haft, so it cannot pulse without the haft pulsing. Both ar
 answered by a `meleeEnergy` rig part — roster-wide, since HALCYON's saber,
 VESPER's bayonet, CIRRUS's daggers and NULLTIDE's glaive all have energy
 sections with the same fault.
+
+## D131 — The energy blade becomes its own sprite
+
+Projected blades are now a separate rig part, `meleeEnergy`, rendered and
+animated independently of the metal that emits them. Five chassis have one —
+HALCYON's saber, VESPER's bayonet, CIRRUS's daggers, PYRE's scythe, NULLTIDE's
+glaive. **NOCTURNE's claw, TERRAMOTH's pile driver and OBELISK's shield project
+nothing and correctly have none.**
+
+### Two problems, one cause
+
+* **Energy carried a black contour, and in the reference it never does.** Proven
+  by ablation: 28.4 % dark pixels in the blade region with Freestyle on, 2.4 %
+  off.
+* **It could not flicker.** The blade was baked into one sprite with the haft, so
+  pulsing it would have pulsed the metal too.
+
+Both are the same fault — the blade was not separable.
+
+### Face marks do not work; collections do
+
+`.freestyle_face` marks **survive the join** (303 of 439 faces confirmed marked
+on the built object) and the line pass **ignores them**. Neither
+`face_mark_condition = 'ONE'` nor `'BOTH'` moved a single pixel: 28.4 % both
+ways. Do not spend time on that route again.
+
+`select_by_collection` with `EXCLUSIVE` **is** honoured — but it selects by
+*object*, which is what forced the split. `split_melee()` now partitions
+accumulated melee geometry by material (`_beam`, `_beamcore`, `_scythe_*`) and
+joins the two halves separately, linking the energy into `BSR_NOLINE`. Measured
+after: energy layer **0.0 %** dark, hardware **41 %** — the haft keeps its
+contour, the blade has none.
+
+`M_GLOW` and `M_ACC` are deliberately *not* energy. They are indicator lamps and
+heat vents bolted to the weapon; they should keep their outline and must not
+flicker with the blade.
+
+### Optional parts
+
+`meleeEnergy` is the project's first part that only some chassis carry.
+`OPTIONAL_PARTS` in both `build_mechs.py` and `pack_atlases.py` renders and packs
+it when present and skips it silently when absent — a weapon with no blade is not
+a build fault. `pack_atlases` also stopped multiplying its file count by a fixed
+part count, which no longer holds.
+
+### Making it look alive
+
+A baked sprite held still reads as a painted shape however well it is coloured.
+Three layers at deliberately incommensurable rates, so the loop never becomes
+visible: a slow swell (the blade breathing), a fast flicker (unstable discharge),
+and a stretch **along** the blade only, so the energy looks pushed out of the
+emitter rather than uniformly scaled. The halo runs the same terms in
+**anti-phase** and larger, so the bloom swells as the core dims.
+
+**Only the halo is additive.** The sprite is already rendered emissive, so
+`ADD` on the core against a dark stage drives every channel to full and the blade
+comes out white — PYRE's amber and NULLTIDE's cyan both disappeared. Verified in
+play: with the core on normal blend both read in their own colour.
+
+### PYRE's scythe, reshaped
+
+The first pass ran 102° of arc over 0.9 BU — a farm sickle. The supplied
+Deathscythe reference is a beam **as long as the machine is tall**, sweeping
+about thirty degrees, widest near the base and tapering over a great distance to
+a needle. Now 34° over 2.9 BU radius: a 1.72 BU blade, 103 logical px against a
+104 px chassis.

@@ -79,6 +79,10 @@ export class MechRenderer {
   private readonly def: MechDef;
   private flashTimer = 0;
   private hitFlash = 0;
+  /** Larger, fainter copy of the projected blade, pulsed out of phase with it. */
+  private energyHalo: Phaser.GameObjects.Image | null = null;
+  /** Free-running clock for the blade's surge, in seconds. */
+  private energyPhase = 0;
   /** Layer base; the y term in depthSortAt orders mechs within the layer. */
   private depthBase = 20;
 
@@ -120,6 +124,27 @@ export class MechRenderer {
 
     // The saber is stowed until a melee sequence lights it.
     this.setPartVisible('meleeWeapon', false);
+    this.setPartVisible('meleeEnergy', false);
+
+    // Projected energy is drawn additively so it reads as light rather than as
+    // a painted solid, and it gets a second, larger, fainter copy behind it:
+    // that halo is what makes the blade look radiated instead of cut out. The
+    // two are pulsed out of phase in `apply`.
+    const energy = this.nodes.get('meleeEnergy');
+    if (energy) {
+      // **The core blends normally; only the halo is additive.** The sprite is
+      // already rendered emissive, so adding it on top of a dark stage drives
+      // every channel to full and the blade comes out white — PYRE's amber and
+      // NULLTIDE's cyan both vanish. The halo can be additive because it is
+      // faint: that is where the bloom comes from.
+      const halo = scene.add.image(0, 0, energy.sprite.texture.key, energy.sprite.frame.name);
+      halo.setOrigin(0.5, 0.5);
+      halo.setScale(PART_SCALE);
+      halo.setBlendMode(Phaser.BlendModes.ADD);
+      halo.setAlpha(0.35);
+      energy.container.addAt(halo, 0);
+      this.energyHalo = halo;
+    }
 
     // Apply the authored draw order by re-sorting siblings within each parent.
     const order = def.rig.drawOrder;
@@ -225,6 +250,8 @@ export class MechRenderer {
       node.container.setPosition(node.def.x + off.x, node.def.y + off.y);
     }
 
+    this.animateEnergy(dt);
+
     // Damage flash: tint every part white briefly. A status affliction otherwise
     // washes the machine in its element's colour, the way the reference
     // palette-shifted an afterimage per element (see REFERENCE_AUDIT 4d.3).
@@ -314,6 +341,50 @@ export class MechRenderer {
   }
 
   /** Hides/shows a single part, e.g. stowing the rifle during a sword swing. */
+  /**
+   * Makes a projected blade look alive.
+   *
+   * A baked sprite held still reads as a painted shape no matter how well it is
+   * coloured — the reference's blades are never still, they surge and breathe.
+   * Three cheap layers, deliberately at incommensurable rates so the result
+   * never visibly repeats:
+   *
+   * * a slow swell, which is the blade *breathing*;
+   * * a fast flicker, which is the discharge being unstable;
+   * * a stretch along the blade only, so the energy looks like it is being
+   *   *pushed* out of the emitter rather than uniformly scaled.
+   *
+   * The halo runs the same terms in **anti-phase** and larger, so the bloom
+   * swells as the core dims. That counter-motion is most of what sells it as
+   * radiated light rather than a glowing decal.
+   */
+  private animateEnergy(dt: number): void {
+    const node = this.nodes.get('meleeEnergy');
+    if (!node || !node.container.visible) return;
+    this.energyPhase += dt;
+    const t = this.energyPhase;
+
+    // 6.1 and 23.7 rad/s share no simple ratio, so the beat is long and the
+    // pulse never lands on an obvious loop.
+    const swell = Math.sin(t * 6.1);
+    const flicker = Math.sin(t * 23.7) * Math.sin(t * 9.3);
+
+    node.sprite.setAlpha(0.86 + 0.10 * swell + 0.06 * flicker);
+    // Length surges more than width: a beam grows out of its emitter.
+    node.sprite.setScale(
+      PART_SCALE * (1 + 0.045 * swell + 0.02 * flicker),
+      PART_SCALE * (1 + 0.018 * swell),
+    );
+
+    const halo = this.energyHalo;
+    if (!halo) return;
+    halo.setAlpha(0.30 - 0.10 * swell - 0.05 * flicker);
+    halo.setScale(
+      PART_SCALE * (1.16 - 0.05 * swell),
+      PART_SCALE * (1.22 - 0.06 * swell),
+    );
+  }
+
   setPartVisible(name: string, visible: boolean): void {
     const node = this.nodes.get(name);
     if (node) node.container.setVisible(visible);

@@ -40,6 +40,13 @@ PARTS = [
     "leftThruster", "rightThruster", "drone",
 ]
 
+# Parts only some chassis carry. A missing one is not an error.
+#
+# `meleeEnergy` is the projected blade, split out of `meleeWeapon` so it can skip
+# the Freestyle contour and be animated on its own. NOCTURNE's claw, TERRAMOTH's
+# pile driver and OBELISK's shield project nothing and have none.
+OPTIONAL_PARTS = ["meleeEnergy"]
+
 
 def pack_mech(mech_id):
     """Shelf-packs one mech's parts. Returns (frames, width, height) or None."""
@@ -49,6 +56,10 @@ def pack_mech(mech_id):
         if not os.path.exists(path):
             return None
         images[part] = Image.open(path).convert("RGBA")
+    for part in OPTIONAL_PARTS:
+        path = os.path.join(SPRITES, f"{mech_id}_{part}.png")
+        if os.path.exists(path):
+            images[part] = Image.open(path).convert("RGBA")
 
     # Tallest first, so shelves pack densely instead of leaving ragged gaps.
     order = sorted(images.items(), key=lambda kv: -kv[1].size[1])
@@ -107,7 +118,7 @@ def main():
     total_before = 0
     total_after = 0
     for mech_id in ids:
-        for part in PARTS:
+        for part in PARTS + OPTIONAL_PARTS:
             p = os.path.join(SPRITES, f"{mech_id}_{part}.png")
             if os.path.exists(p):
                 total_before += os.path.getsize(p)
@@ -120,7 +131,15 @@ def main():
         total_after += size
         print(f"{mech_id}: {len(frames)} frames -> {w}x{h}, {size // 1024} KB")
 
-    print(f"\n{len(ids) * len(PARTS)} files ({total_before // 1024} KB) "
+    # Counted rather than multiplied: optional parts mean chassis no longer all
+    # carry the same number of files.
+    n_files = sum(
+        1
+        for mid in ids
+        for part in PARTS + OPTIONAL_PARTS
+        if os.path.exists(os.path.join(SPRITES, f"{mid}_{part}.png"))
+    )
+    print(f"\n{n_files} files ({total_before // 1024} KB) "
           f"-> {len(ids)} atlases ({total_after // 1024} KB)")
 
 

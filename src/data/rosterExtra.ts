@@ -53,6 +53,13 @@ function makeRig(o: {
   rightArm: [number, number];
   mainWeapon: [number, number];
   meleeWeapon: [number, number];
+  /**
+   * True when the weapon projects an energy blade, which is rendered as its own
+   * part so it can skip the Freestyle contour and be animated on its own.
+   * CLAW, PILE and RAMSHIELD project nothing and must not declare it — the
+   * texture would be missing.
+   */
+  energy?: boolean;
   leftThruster: [number, number];
   rightThruster: [number, number];
 }): MechRigDef {
@@ -82,6 +89,9 @@ function makeRig(o: {
       p('rightArm', 'core', o.rightArm, 'turret'),
       p('mainWeapon', 'rightArm', o.mainWeapon, 'turret'),
       p('meleeWeapon', 'rightArm', o.meleeWeapon, 'turret'),
+      // Same pivot as the weapon it belongs to: both were joined at the same
+      // point in Blender, so they composite exactly when drawn at one offset.
+      ...(o.energy ? [p('meleeEnergy', 'rightArm', o.meleeWeapon, 'turret')] : []),
       p('leftThruster', 'core', o.leftThruster, 'thruster'),
       p('rightThruster', 'core', o.rightThruster, 'thruster'),
     ],
@@ -99,6 +109,9 @@ function makeRig(o: {
       'rightArm',
       'mainWeapon',
       'meleeWeapon',
+      // Above the hardware: a projected blade is emitted from the weapon, so it
+      // must not be occluded by it.
+      ...(o.energy ? ['meleeEnergy'] : []),
     ],
   };
 }
@@ -304,6 +317,7 @@ export const VESPER: MechDef = {
     rightArm: [15, 5],
     mainWeapon: [46, 8],
     meleeWeapon: [26, 6],
+    energy: true,
     leftThruster: [-38, 0],
     rightThruster: [-34, 12],
   }),
@@ -1032,6 +1046,7 @@ export const CIRRUS: MechDef = {
     rightArm: [14, 4],
     mainWeapon: [32, 7],
     meleeWeapon: [24, 5],
+    energy: true,
     leftThruster: [-32, -2],
     rightThruster: [-28, 9],
   }),
@@ -1527,6 +1542,7 @@ export const PYRE: MechDef = {
     rightArm: [17, 7],
     mainWeapon: [34, 8],
     meleeWeapon: [27, 5],
+    energy: true,
     leftThruster: [-37, 2],
     rightThruster: [-33, 13],
   }),
@@ -1772,6 +1788,7 @@ export const NULLTIDE: MechDef = {
     rightArm: [15, 3],
     mainWeapon: [35, 9],
     meleeWeapon: [25, 6],
+    energy: true,
     leftThruster: [-34, -1],
     rightThruster: [-30, 11],
   }),

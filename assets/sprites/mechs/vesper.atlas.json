@@ -279,6 +279,26 @@
     "w": 320,
     "h": 320
    }
+  },
+  "meleeEnergy": {
+   "frame": {
+    "x": 640,
+    "y": 1344,
+    "w": 320,
+    "h": 320
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 320,
+    "h": 320
+   },
+   "sourceSize": {
+    "w": 320,
+    "h": 320
+   }
   }
  },
  "meta": {

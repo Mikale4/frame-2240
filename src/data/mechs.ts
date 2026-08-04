@@ -46,6 +46,11 @@ const HALCYON_RIG: MechRigDef = {
     { name: 'mainWeapon', parent: 'rightArm', x: 38, y: 8, rotation: 0, follow: 'turret' },
     // Beam saber: hidden until a melee sequence, when the rifle is stowed.
     { name: 'meleeWeapon', parent: 'rightArm', x: 28, y: 6, rotation: 0, follow: 'turret' },
+    // The projected blade, as its own part on the same pivot. Split out so it
+    // can skip the Freestyle contour — energy carries no outline — and so it can
+    // be animated independently of the metal hilt. NOCTURNE has no equivalent:
+    // its claw projects nothing.
+    { name: 'meleeEnergy', parent: 'rightArm', x: 28, y: 6, rotation: 0, follow: 'turret' },
     { name: 'leftThruster', parent: 'core', x: -36, y: 0, rotation: 0, follow: 'thruster' },
     { name: 'rightThruster', parent: 'core', x: -32, y: 12, rotation: 0, follow: 'thruster' },
   ],
@@ -63,6 +68,8 @@ const HALCYON_RIG: MechRigDef = {
     'rightArm',
     'mainWeapon',
     'meleeWeapon',
+    // Above the hilt: the blade is emitted from it.
+    'meleeEnergy',
   ],
 };
 

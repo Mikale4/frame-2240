@@ -2052,6 +2052,11 @@ export class BattleScene extends Phaser.Scene {
       const bloom = this.blades[i];
       const drawn = c.alive && c.bladeTimer > 0;
       r.setPartVisible('meleeWeapon', drawn);
+      // The projected blade is a separate part on the same pivot, so it shows
+      // and hides with the hardware it is emitted from. Chassis without one —
+      // NOCTURNE's claw, TERRAMOTH's pile, OBELISK's shield — have no such node
+      // and `setPartVisible` is a no-op for them.
+      r.setPartVisible('meleeEnergy', drawn);
       r.setPartVisible('mainWeapon', !drawn);
 
       if (drawn) {
