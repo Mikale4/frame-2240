@@ -293,20 +293,33 @@ Notes that matter:
 
 ### 3.3 Sky
 
-Drawn procedurally in-engine as a vertical gradient, **not an image**. Five bands,
-top to bottom:
+Drawn procedurally in-engine as a vertical gradient plus a star field, **not an
+image**. Nothing needs to be authored for it.
 
-| Stop | Hex | Position |
-| --- | --- | --- |
-| Cold void | `#0A0D18` | 0.00 |
-| | `#121A2E` | 0.34 |
-| | `#1D2440` | 0.58 |
-| | `#2C2A44` | 0.78 |
-| Warm dock haze | `#3A2C3C` | 1.00 |
+| Stop | Hex | Luminance | Position |
+| --- | --- | --- | --- |
+| Void overhead | `#0C1224` | 22 | 0.00 |
+| | `#1B2742` | 42 | 0.22 |
+| | `#2C3C5E` | 66 | 0.45 |
+| | `#3A4C6C` | 78 | 0.70 |
+| Storm glow below | `#47516A` | 82 | 1.00 |
 
-**This gradient is the palette anchor for the whole stage.** Cold near-black
-blue at the top of the frame, warming to a dusty mauve at the bottom. Art that
-fights this will look wrong no matter how good it is in isolation.
+**This gradient is the palette anchor for the whole stage, and it is pitched to
+sit *under* the art rather than behind it.** Its first version ran luminance
+15–54 against layers that measure 72–98 once tinted — up to six times brighter
+than their own sky — so the parallax floated on a void instead of receding into
+one. New art should land in the same blue-dominant family; anything warm or
+red-dominant fights it, which is what the old bottom band `#3A2C3C` did.
+
+The stage is **night**, and that is not a free choice: every delivered layer has
+its sodium lamps lit, and lamps burning in daylight read as an error.
+
+110 stars sit above the strips, concentrated in the upper 62 % of frame with a
+slow shallow twinkle and a 0.02 parallax. They are canon — the Archive has the
+air above the storm layer as "clear, cold and thin". There is deliberately **no
+traffic**: no ships, no distant machines. CATHEDRAL YARD's whole character is
+that nobody holds it and nobody comes back, and a moving object in the sky would
+contradict that as well as competing with the fight for the eye.
 
 A drifting dust field of 44 additive motes, tinted `#9FC4FF`, floats over the
 backdrop at varying depths.

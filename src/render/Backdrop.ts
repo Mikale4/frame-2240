@@ -55,12 +55,26 @@ export class Backdrop {
    * overtaking is the entire depth cue it provides.
    */
   private readonly fore: Phaser.GameObjects.TileSprite;
+  /**
+   * The night sky itself.
+   *
+   * Canon supports it: the Archive has the air above the storm layer as "clear,
+   * cold and thin", which at this altitude means no atmosphere overhead to wash
+   * anything out. Deliberately **no traffic** — no ships, no distant machines.
+   * CATHEDRAL YARD's entire character is that nobody holds it and nobody comes
+   * back, and a moving object in the sky would both contradict that and compete
+   * with the fight for the eye.
+   */
+  private readonly stars: Phaser.GameObjects.Container;
+  private readonly starField: Phaser.GameObjects.Image[] = [];
   private readonly dust: Phaser.GameObjects.Container;
   private readonly motes: Phaser.GameObjects.Image[] = [];
+  /** Seconds elapsed, for the twinkle. */
+  private starTime = 0;
 
   /** All backdrop objects, so the scene can assign them to the right camera. */
   get objects(): Phaser.GameObjects.GameObject[] {
-    return [this.sky, this.far, this.haze, this.mid, this.near, this.fore, this.dust];
+    return [this.sky, this.stars, this.far, this.haze, this.mid, this.near, this.fore, this.dust];
   }
 
   constructor(scene: Phaser.Scene) {
@@ -71,6 +85,30 @@ export class Backdrop {
     this.sky = scene.add.graphics();
     this.sky.setDepth(-100);
     this.paintSky();
+
+    // ---- stars -----------------------------------------------------------
+    // Behind every strip and in front of nothing but the gradient. Concentrated
+    // in the upper half, where the sky is dark enough to hold them: lower down
+    // the storm glow lifts the gradient past the point where a star would read,
+    // so drawing them there would only add noise over the fight.
+    this.stars = scene.add.container(0, 0);
+    this.stars.setDepth(-95);
+    for (let i = 0; i < 110; i++) {
+      const st = scene.add.image(0, 0, 'fx_glow');
+      const sc = 0.018 + Math.random() * 0.032;
+      st.setScale(sc);
+      st.setTint(Math.random() < 0.22 ? 0xbfd4ff : 0xe6eeff);
+      st.setBlendMode(Phaser.BlendModes.ADD);
+      st.setData('bx', Math.random());
+      // Squared, so they crowd the top of the frame and thin out downward.
+      st.setData('by', Math.random() ** 2 * 0.62);
+      st.setData('a', 0.20 + Math.random() * 0.45);
+      // A slow, shallow twinkle. Fast or deep reads as a flickering artefact.
+      st.setData('tw', 0.4 + Math.random() * 1.1);
+      st.setData('ph', Math.random() * Math.PI * 2);
+      this.stars.add(st);
+      this.starField.push(st);
+    }
 
     // ---- parallax strips -------------------------------------------------
     // Each strip is anchored so the arena floor sits near the arena's bottom.
@@ -164,13 +202,30 @@ export class Backdrop {
   private paintSky(): void {
     const g = this.sky;
     g.clear();
-    // Vertical band gradient: cold void above, warm dock haze below.
+    /**
+     * Cold void above, storm-glow below — **lifted to sit under the art rather
+     * than behind it.**
+     *
+     * The first gradient ran luminance 15 at the top to 54 at the bottom, while
+     * the hand-authored far and haze layers measure **72–98 once tinted**. The
+     * art was up to six times brighter than its own sky, so instead of receding
+     * into distance it floated on a void, which a player reported as the sky
+     * looking like darkness against the layers.
+     *
+     * It also fought them in hue: the old bottom band `0x3a2c3c` is warm mauve,
+     * red-dominant, against art that is blue-dominant throughout.
+     *
+     * Now it climbs 22 → 82, passing through the art's own band as it goes, and
+     * stays in the blue family with only a slight warm push at the very bottom
+     * for the haze coming off the storm layer. The far strip reads as brighter
+     * fog against a dark sky; the lower dock silhouettes against the glow.
+     */
     const bands: Array<[number, number]> = [
-      [0x0a0d18, 0.0],
-      [0x121a2e, 0.34],
-      [0x1d2440, 0.58],
-      [0x2c2a44, 0.78],
-      [0x3a2c3c, 1.0],
+      [0x0c1224, 0.0],
+      [0x1b2742, 0.22],
+      [0x2c3c5e, 0.45],
+      [0x3a4c6c, 0.7],
+      [0x47516a, 1.0],
     ];
     const steps = 48;
     for (let i = 0; i < steps; i++) {
@@ -222,6 +277,23 @@ export class Backdrop {
 
     this.sky.setScale(inv);
     this.sky.setPosition(ox, oy);
+
+    // Stars are effectively at infinity, so they take the smallest parallax on
+    // the stack — enough that the sky is not glued to the camera, far too
+    // little to read as motion.
+    this.starTime += dt;
+    const starSpanX = VIEW_W * inv;
+    const starSpanY = VIEW_H * inv;
+    for (const st of this.starField) {
+      const bx = st.getData('bx') as number;
+      const by = st.getData('by') as number;
+      let sx = (bx * starSpanX - camX * 0.02) % starSpanX;
+      if (sx < 0) sx += starSpanX;
+      st.setPosition(ox + sx, oy + by * starSpanY - camY * 0.02 * inv);
+      const tw = st.getData('tw') as number;
+      const ph = st.getData('ph') as number;
+      st.setAlpha((st.getData('a') as number) * (0.78 + 0.22 * Math.sin(this.starTime * tw + ph)));
+    }
 
     const place = (
       obj: Phaser.GameObjects.TileSprite,
