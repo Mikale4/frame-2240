@@ -67,7 +67,11 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   right: 'FLY RIGHT',
   main: 'MAIN GUN',
   heavy: 'HEAVY SHOT',
-  sub: 'DRONE DEPLOY / RECALL',
+  // **Not deploy/recall.** There is no launch button any more — the escort is
+  // always out (see `Supporter`) — and this label outlived that change by long
+  // enough to read as a dead control. The button fires the sub-weapon: missiles,
+  // mines, whatever the chassis carries, and the salvo motion rides it too.
+  sub: 'SUB WEAPON',
   melee: 'SWORD / MELEE',
   boost: 'BOOST / DASH / BRAKE',
   barrier: 'BARRIER / GUARD',
@@ -106,25 +110,32 @@ export const BUTTON_ACTION: Readonly<Record<Btn, ActionId>> = {
   [Btn.Flight]: 'flightToggle',
 };
 
+/**
+ * Arrows to move, ZXC on the action row.
+ *
+ * Replaces a WASD + JKL layout. The two hands no longer share a row, and the
+ * three things pressed most — main, heavy, melee — sit under the fingers in the
+ * order they escalate, with the modifiers on ASD above them.
+ */
 export const DEFAULT_BINDINGS: BindingMap = {
-  up: { keys: ['KeyW', 'ArrowUp'], pads: [12] },
-  down: { keys: ['KeyS', 'ArrowDown'], pads: [13] },
-  left: { keys: ['KeyA', 'ArrowLeft'], pads: [14] },
-  right: { keys: ['KeyD', 'ArrowRight'], pads: [15] },
-  main: { keys: ['KeyJ'], pads: [0] },
-  heavy: { keys: ['KeyK'], pads: [2] },
-  sub: { keys: ['KeyL'], pads: [1] },
-  melee: { keys: ['KeyU'], pads: [3] },
-  boost: { keys: ['ShiftLeft', 'Space'], pads: [5, 7] },
-  barrier: { keys: ['KeyF'], pads: [4, 6] },
-  modeCycle: { keys: ['KeyQ', 'Tab'], pads: [8] },
-  saturation: { keys: ['KeyE'], pads: [10] },
-  flightToggle: { keys: ['KeyC'], pads: [11] },
+  up: { keys: ['ArrowUp'], pads: [12] },
+  down: { keys: ['ArrowDown'], pads: [13] },
+  left: { keys: ['ArrowLeft'], pads: [14] },
+  right: { keys: ['ArrowRight'], pads: [15] },
+  main: { keys: ['KeyZ'], pads: [0] },
+  heavy: { keys: ['KeyX'], pads: [2] },
+  sub: { keys: ['KeyS'], pads: [1] },
+  melee: { keys: ['KeyC'], pads: [3] },
+  boost: { keys: ['Space'], pads: [5, 7] },
+  barrier: { keys: ['KeyD'], pads: [4, 6] },
+  modeCycle: { keys: ['ShiftLeft'], pads: [8] },
+  saturation: { keys: ['KeyQ'], pads: [10] },
+  flightToggle: { keys: ['KeyA'], pads: [11] },
   // No pad button: every index in the standard mapping is already spoken for,
   // and this is cosmetic — it should not take a face button off something that
   // fights. Keyboard-only is the same call `debugText` and `debugHitboxes` make.
-  weaponDraw: { keys: ['KeyR'], pads: [] },
-  pause: { keys: ['Escape', 'KeyP'], pads: [9] },
+  weaponDraw: { keys: ['KeyV'], pads: [] },
+  pause: { keys: ['Escape', 'Enter'], pads: [9] },
   debugText: { keys: ['F1'], pads: [] },
   debugHitboxes: { keys: ['F2'], pads: [] },
 };

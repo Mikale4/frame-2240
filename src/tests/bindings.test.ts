@@ -53,6 +53,15 @@ beforeEach(() => {
   });
 });
 
+/** A physical key no action currently uses, for use as a test sentinel. */
+function unboundKey(b: ReturnType<typeof defaultBindings>): string | null {
+  const used = new Set(ACTION_ORDER.flatMap((a) => b[a].keys));
+  for (const k of ['KeyM', 'KeyN', 'KeyB', 'KeyG', 'KeyH', 'KeyY', 'KeyT']) {
+    if (!used.has(k)) return k;
+  }
+  return null;
+}
+
 describe('default bindings', () => {
   it('covers every action', () => {
     const b = defaultBindings();
@@ -85,11 +94,15 @@ describe('default bindings', () => {
   });
 
   it('clone does not alias nested arrays', () => {
+    // Sentinels must be keys the layout does not use, or this passes for the
+    // wrong reason the day the defaults move onto them — which is how it broke.
     const a = defaultBindings();
     const b = cloneBindings(a);
-    b.main.keys.push('KeyZ');
+    expect(unboundKey(a)).toBeTruthy();
+    const spare = unboundKey(a)!;
+    b.main.keys.push(spare);
     b.main.pads.push(9);
-    expect(a.main.keys).not.toContain('KeyZ');
+    expect(a.main.keys).not.toContain(spare);
     expect(a.main.pads).not.toContain(9);
   });
 });
@@ -141,20 +154,25 @@ describe('assignment', () => {
   });
 
   it('steals a key from whichever action held it', () => {
-    // 'KeyF' is barrier by default.
-    const b = assignKey(defaultBindings(), 'main', 'KeyF');
-    expect(b.main.keys).toContain('KeyF');
-    expect(b.barrier.keys).not.toContain('KeyF');
+    const d = defaultBindings();
+    const stolen = d.barrier.keys[0];
+    const b = assignKey(d, 'main', stolen);
+    expect(b.main.keys).toContain(stolen);
+    expect(b.barrier.keys).not.toContain(stolen);
   });
 
   it('evicts the oldest key past the slot limit', () => {
+    // Driven off whichever action is actually full, rather than assuming one is.
     let b = defaultBindings();
-    expect(b.up.keys.length).toBe(MAX_KEYS_PER_ACTION);
-    const first = b.up.keys[0];
-    b = assignKey(b, 'up', 'KeyI');
-    expect(b.up.keys.length).toBe(MAX_KEYS_PER_ACTION);
-    expect(b.up.keys).not.toContain(first);
-    expect(b.up.keys).toContain('KeyI');
+    const full = ACTION_ORDER.find((a) => b[a].keys.length >= MAX_KEYS_PER_ACTION);
+    expect(full, 'no action has a full key list to evict from').toBeTruthy();
+    const action = full!;
+    const first = b[action].keys[0];
+    const spare = unboundKey(b)!;
+    b = assignKey(b, action, spare);
+    expect(b[action].keys.length).toBe(MAX_KEYS_PER_ACTION);
+    expect(b[action].keys).not.toContain(first);
+    expect(b[action].keys).toContain(spare);
   });
 
   it('does not duplicate a key already on the same action', () => {
