@@ -346,6 +346,14 @@ export interface AiProfile {
    */
   droneIq: boolean;
   /**
+   * Decides *what* to shoot: the pilot, or the escort flying for it.
+   *
+   * EXTREME only, alongside the other reads that need a model of the fight
+   * rather than of the moment. Below that a rival simply holds the pilot, which
+   * is what every tier did before the lock became a choice.
+   */
+  targetIq: boolean;
+  /**
    * Aims where the target is going rather than where it is.
    *
    * Nothing but a drone's own shots home, so a projectile aimed at a moving
@@ -380,6 +388,27 @@ export interface AiProfile {
   evadeDashChance: number;
 }
 
+/**
+ * Why a rival would rather kill the escort than the pilot.
+ *
+ * Separately switchable so each can be ablated on its own. The project's record
+ * on this is unambiguous: every AI change reasoned about rather than measured
+ * has been wrong here, and the one that finally diagnosed `satPreference` did it
+ * by turning levers off one at a time rather than by arguing about them.
+ */
+export const TARGET_LEVERS = {
+  /** It is repairing its owner, so the damage you are doing is being undone. */
+  healer: false,
+  /** It is throwing the projections that keep stealing your lock. */
+  decoy: false,
+  /** It is the thing shoving you out of every melee you commit to. */
+  breaker: false,
+  /** It is nearly dead, so removing it is cheap. */
+  finish: false,
+  /** It is sitting on the firing line and eating the shots anyway. */
+  blocking: false,
+};
+
 export const AI_PROFILES: Record<Difficulty, AiProfile> = {
   [Difficulty.Easy]: {
     skill: 0.1,
@@ -397,6 +426,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     planIq: false,
     resourceIq: false,
     droneIq: false,
+    targetIq: false,
     leadShots: false,
     aggression: 0.26,
     dashChance: 0.03,
@@ -419,6 +449,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     planIq: false,
     resourceIq: false,
     droneIq: false,
+    targetIq: false,
     leadShots: false,
     aggression: 0.5,
     dashChance: 0.1,
@@ -450,6 +481,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     planIq: false,
     resourceIq: false,
     droneIq: false,
+    targetIq: false,
     leadShots: true,
     aggression: 0.68,
     dashChance: 0.16,
@@ -476,6 +508,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     planIq: true,
     resourceIq: true,
     droneIq: true,
+    targetIq: true,
     leadShots: true,
     // Not the highest aggression on the roster, deliberately. Firing anchors
     // movement, so "attack at every opportunity" measured worse than HARD.
@@ -496,6 +529,10 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
 export class RivalAI {
   tactic: AiTactic = AiTactic.Approach;
   private tacticTicks = 0;
+  /** Throttle on re-deciding which enemy to hold. See wantsEscort. */
+  private targetTicks = 0;
+  /** Latched result of `wantsEscort`, so the commitment holds between decisions. */
+  private escortCommit = false;
   /** The committed intent, if any. Outranks the tactic while it holds. */
   plan: AiPlan = AiPlan.None;
   /** Ticks the current plan has left before it must re-justify itself. */
@@ -768,6 +805,46 @@ export class RivalAI {
     return Math.max(self.def.rig.hurtRadius * 3, Math.min(want, 900));
   }
 
+  /**
+   * Is the escort worth more than the pilot right now?
+   *
+   * Each reason is a lever in `TARGET_LEVERS` so it can be measured alone. The
+   * two refusals come first and are not levers: a rival that walks away from a
+   * finishable pilot to swat a drone has lost the plot, and an escort that is
+   * already out of the fight is not a target.
+   */
+  private wantsEscort(self: Combatant, foe: Combatant): boolean {
+    const esc = foe.supporter;
+    if (!esc.hittable) return false;
+    // Never trade a kill for a drone.
+    if (foe.life / foe.def.gauges.maxLife <= 0.22) return false;
+
+    const L = TARGET_LEVERS;
+    const role = foe.def.supporter.role;
+    const escFrac = esc.life / foe.def.supporter.maxLife;
+
+    if (L.finish && escFrac <= 0.4) return true;
+    // Only worth killing while it has something to undo.
+    if (L.healer && role === 'tether' && foe.life < foe.def.gauges.maxLife * 0.92) return true;
+    if (L.decoy && role === 'decoy') return true;
+    // And only while it is actually denying the close.
+    if (L.breaker && role === 'interceptor' && this.preferredRangeFor(self, foe) < 340) return true;
+    if (L.blocking) {
+      // Near the segment between the two machines, i.e. eating the shots anyway.
+      const dx = foe.x - self.x;
+      const dy = foe.y - self.y;
+      const len2 = dx * dx + dy * dy;
+      if (len2 > 1) {
+        let t = ((esc.x - self.x) * dx + (esc.y - self.y) * dy) / len2;
+        t = Math.max(0, Math.min(1, t));
+        const px = self.x + dx * t;
+        const py = self.y + dy * t;
+        if (t > 0.1 && t < 0.9 && Math.hypot(esc.x - px, esc.y - py) < 70) return true;
+      }
+    }
+    return false;
+  }
+
   think(
     self: Combatant,
     foe: Combatant,
@@ -804,6 +881,25 @@ export class RivalAI {
     }
     this.wasInMelee = inMelee;
     if (this.disengage > 0) this.disengage--;
+
+    // ---- Target selection ---------------------------------------------------
+    // Throttled like the tactic: flipping the lock every tick would mean the
+    // mounts never actually arrive anywhere, since the turret slews rather than
+    // snapping.
+    // **Every lever is off, so this holds the pilot** — behaviour identical to
+    // the state the lock rework was measured in. See TARGET_LEVERS for what was
+    // tried and what each was worth; nothing here is switched on by default
+    // because nothing measured better than leaving it off.
+    if (this.p.targetIq) {
+      this.targetTicks--;
+      if (this.targetTicks <= 0) {
+        this.targetTicks = 18 + this.rng.int(24);
+        this.escortCommit = this.wantsEscort(self, foe);
+      }
+      self.lockPref = this.escortCommit && foe.supporter.hittable ? 'drone' : 'mech';
+    } else {
+      self.lockPref = 'mech';
+    }
 
     // ---- Plan ---------------------------------------------------------------
     // Runs every tick, unlike the tactic. A plan's *entry* is a rare event and
