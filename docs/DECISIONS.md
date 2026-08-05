@@ -6420,3 +6420,153 @@ Composed result, from `tools/probe/swingcurve.ts`:
 232° of arm sweep inside 17 % of the swing, the weapon rotating 98° against it,
 and `reach` finishing **negative** — the scythe drawing back through the target,
 which is the whole point of `reap`.
+
+## D136 — The other four blades are drawn, and Blender stops modelling energy
+
+HALCYON's saber, VESPER's bayonet, CIRRUS's daggers and NULLTIDE's glaive still
+carried the modelled energy D132 removed from the scythe: three concentric
+emissive layers, `M_BEAM` at emission 2.4 over `M_CORE` at 3.0. Spread across
+any real width that clips all three channels, and **all four rendered as the
+same flat white cone** — four machines whose identity colour was simply absent
+from their signature weapon. `build_mechs.py` had already written this diagnosis
+down for PYRE and it was equally true of the rest.
+
+All five are now drawn by `tools/energy_blade.py`. Each blade is data — a
+centreline, a width profile, two colours — plus a **`LOOKS` entry**, which is
+the part that is not obvious: four of the five glow colours sit in the same
+blue-cyan corner of the palette, because four of these machines do, so hue
+cannot carry the separation and behaviour has to.
+
+| look | mech | what it is |
+| --- | --- | --- |
+| `beam` | HALCYON | long, parallel, almost no wobble. Contained, not burning |
+| `spike` | VESPER | tightest and hardest on the roster. A point, not an edge |
+| `shard` | CIRRUS | two strands, heavy shedding. Eight hits is a flurry |
+| `cleaver` | NULLTIDE | broad and bellied, so a five-hit sweep has a face |
+| `scythe` | PYRE | unchanged |
+
+Counts scale with blade **length, not area**: a narrow blade wants the same
+filaments per unit length as a wide one, and that concentration is exactly what
+makes a sabre read as a coherent hot line rather than a sparkler. It is also why
+`field_norm` and `heat_norm` climb as blades get thinner — the same overlap
+through a quarter of the width is four times the density, and leaving the
+normalisers alone bleaches the blade white. D133 again, from the other side.
+
+### The camera is not axis-aligned, and CIRRUS is where that stops being cosmetic
+
+The generator mapped Blender X straight to image x and Z to image y. That is only
+true at azimuth 0 / elevation 0; the real rig is **15° / 9°**. On PYRE it cost
+about 8 px of seating on its own emitter mouth — tolerable inside a 34 px flare,
+which is why it survived D133.
+
+It is not tolerable for CIRRUS. Its two daggers are separated by **nothing but
+their Y offset**, and Y reaches the screen only through the camera's azimuth.
+Unprojected they draw exactly on top of each other and the weapon stops being
+twin. `_project` is now derived from `setup_camera` rather than sampled.
+
+The pair also widened from ±0.10 to ±0.15 in `build_mechs.py`, matched by
+`strands` in the generator: at ±0.10 they project 6 px apart and merge into one
+fuzzy shard at gameplay scale.
+
+### Measure the tile, do not reason about it
+
+`_probe_tile` is an analytic upper bound — every station charged the widest
+filament excursion its local half-width allows — and bounds of that shape are
+loose, because the excursions never co-occur. Measured against what the renderer
+actually puts down it ran **a full 64 px step over on three of the five**, which
+on PYRE is four frames of atlas height and pushed that atlas from exactly 4096 to
+4352. The machine here reports `MAX_TEXTURE_SIZE` 16384 so nothing broke, but
+4096 is a common floor and the previous value sitting exactly on it is not a
+coincidence worth spending.
+
+`_fit` now draws on the loose bound and **crops to what landed**, which is exact
+rather than an approximation of re-rendering: the blade is drawn in absolute
+pivot-relative coordinates, so an equal bite off all four sides leaves every
+pixel where it was and the pivot dead centre. It reproduces the previous tile
+sizes exactly — 576 / 448 / 320 / 320 / 448 — and every atlas came back at or
+below its old size.
+
+### One source
+
+`build_mechs.py` builds no energy geometry at all now. The manifest tile used to
+come from Blender while the pixels came from the generator, which SESSION_HANDOFF
+§8 carried as an open defect; the generator owns the PNG, the canvas and the
+`meleeEnergy` manifest row outright. `split_melee` and `_is_energy_material` stay
+— they are the contract that makes a separate energy object possible, and both
+reasons for it (Freestyle cannot be filtered inside one mesh; flicker needs its
+own sprite) are still true if energy is ever modelled again.
+
+The five weapons carry emitter hardware only, in PYRE's snath vocabulary:
+knurled grip and hex collar on HALCYON, a conduit tapped off VESPER's railgun
+rail, a feed spine tying CIRRUS's pair into one weapon, knurled runs and conduit
+slots on NULLTIDE's haft. `M_GLOW` and `M_ACC` are still used and still keep
+their contour — they are the plumbing that gives the drawn blade somewhere to
+have come from.
+
+Verified in play at EXTREME rather than in the sprite sheet: PYRE vs CIRRUS
+frozen on a real live blade with both weapons lit, and each of the other three
+framed in a running match.
+
+## D137 — The training rig, and a weapon-draw toggle that cannot touch the sim
+
+Training's pause menu swaps the two volume rows for the switches the mode exists
+for — `DRONES`, `SAT MODE`, `HEALTH`, `COMMAND LIST`. The audio sliders are still
+on the title screen; what a player opens the pause menu for in a drill is the
+drill, and burying four switches under two rows they can already reach gets that
+backwards. Every row applies to the live match immediately.
+
+The health steps are **not a slider**: they are the thresholds the machine's own
+behaviour changes at. Desperation opens below a third of a bar, so 25 % is inside
+it and 50 % just outside, which is the comparison worth being able to make on
+demand.
+
+Three implementation notes worth keeping:
+
+* **Drones off calls `Supporter.stow()`, not a skipped step.** A drone frozen
+  where it stood would still be a solid, shootable object in the arena. `Stowed`
+  is the one mode that is genuinely absent — invisible, untouchable, no passive —
+  and unlike `Destroyed` it is reversible. It also needs no renderer change,
+  because `visible` is the same predicate the hit test uses.
+* **`satFree` is named for `energyFree` and `boostFree`** and defaults false, set
+  only under `mode === 'training'`. The ordinary step is byte-for-byte what it
+  was, so `match.test.ts`'s bit-identical replay is untouched.
+* **The command list is derived from `MOTIONS`.** The failure mode of a written
+  reference is that it goes on describing an input nobody implements any more.
+  Motions are shared by the roster; the attacks they fire are not, so both
+  training slots get a block — PYRE's is EMBER FAN / PLASMA LANCE / FIRESTORM
+  where HALCYON's is SCATTER / LANCE / SALVO. Button names come from the
+  player's own bindings.
+
+**The weapon-draw toggle is a `UiEdges` field, not a `Btn`, and that is the whole
+point.** `Btn` values enter `InputFrame` and therefore the simulation. Routing a
+cosmetic control through the UI path makes it *structurally* unable to change a
+fight rather than merely intended not to. Melee still runs entirely off
+`bladeTimer`; the main gun is stowed for a swing only, so firing with the blade
+out does not come from an empty hand, and the streak bloom stays on the swing so
+a held blade does not read as a permanent flare.
+
+Getting there moved the live bindings singleton from `InputManager` to
+`Bindings`. It was only in the former by history, and the cost was real: naming a
+bound key dragged Phaser in, which cannot load under Node and took the whole
+consumer out of unit-test range. `Bindings.ts` already promised no Phaser
+dependency.
+
+## D138 — Auto-pause on focus loss belongs to `vsCpu` alone
+
+Clicking another application stopped the match dead and put a menu over it. The
+pause exists to stop a human being shot while they are not looking at the screen,
+which makes it right for `vsCpu` and pure obstruction everywhere else: `aiVsAi`
+has nobody to protect, and in `training` the rival is a dummy that never acts, so
+there is nothing to be protected from.
+
+The accumulator reset stays unconditional and is the part that always mattered —
+without it the first frame back tries to pay off every tick owed since focus was
+lost, in one burst.
+
+**This does not cover minimising or switching tabs**, and nothing in the game
+can. That makes the document genuinely hidden, at which point Phaser pauses its
+own loop and the browser throttles `requestAnimationFrame` to about 1 fps
+whatever the game asks for. It is also the same mechanism behind the Browser
+pane freezing mid-verification (TESTING_PROTOCOL §4) — where the workaround is
+to drive `game.loop.step()` by hand, which makes input edges readable again
+without waiting on a frame that will never come.
