@@ -6859,3 +6859,94 @@ also the three with the *lowest* nominal dps on the roster (330, 270, 283 agains
 357–396 for the rest). Real dps is `arrive × nominal`, and CIRRUS's is **70.7**
 against VESPER's 43.2 and the field's 22.5–34.6. **The roster's damage numbers
 are authored as if nominal were the currency, and it is not.**
+
+## D145 — TERRAMOTH's repeater gets faster, and the last flagged outlier clears
+
+**TERRAMOTH `main.projSpeed` 11 → 17. Nothing else.** Spread **0.266 → 0.192**
+at EXTREME — the best figure ever measured on this roster, past D127's 0.198 —
+and at HARD **0.306 → 0.195**, which clears **the only flagged outlier the
+project has ever produced**.
+
+This is D127's shape deliberately: fix the machine at the bottom, one dial,
+sweep it, choose on the roster's number rather than the machine's.
+
+### The diagnosis came from the instrument, and only after it was fixed
+
+D144's shots-table fix is what made this visible. Range in this game is
+`projSpeed * projLife` (`RivalAI.ts:207`), and TERRAMOTH's repeater was
+**11 × 62 = 682 px** while the machine fought at **664–745 px**. Its rounds were
+dying almost exactly where the opponent stood:
+
+| weapon | expired in open air | mean flight |
+| --- | --- | --- |
+| TERRAMOTH main — *before* | **60 %** | 845 px |
+| TERRAMOTH spread | 59 % | 811 px |
+| HALCYON main | 18 % | 1150 px |
+| CIRRUS main | 24 % | 1078 px |
+
+**Nobody else on the roster wastes rounds that way.** It also read on the select
+screen as a contradiction: TERRAMOTH is rated `statRange: 3` and carried the
+sixth-longest main gun of eight, below CIRRUS which is rated the same and above
+only the two machines rated 2.
+
+### The sweep
+
+EXTREME, 12 seeds, both slot orders, real 180 s cap, 84 samples per mech.
+
+| main projSpeed | reach | TERRAMOTH | roster spread | win SD |
+| --- | --- | --- | --- | --- |
+| 11 — baseline | 682 px | 40 % / −0.132 | 0.266 | 10.5 pts |
+| 13 | 806 px | 41 % / −0.116 | 0.243 | 9.2 pts |
+| 15 | 930 px | 43 % / −0.088 | 0.213 | 9.7 pts |
+| **17 — landed** | **1054 px** | **48 % / −0.039** | **0.192** | **8.9 pts** |
+| 19 | 1178 px | 58 % / +0.031 | 0.192 | 9.9 pts |
+
+The baseline re-measured **exactly** — 0.266, CIRRUS 71 %, TERRAMOTH 40 % — as
+did the landed value across two independent runs.
+
+**17 and 19 tie on spread, and the tie is broken on win rate.** This is the
+standing rule earning its keep: read on lead alone the two are indistinguishable,
+and read on win rate 19 is plainly worse — it does not shrink the problem, it
+*moves* it. TERRAMOTH goes to 58 % and third of eight while NULLTIDE drops to
+38 % and becomes the new bottom. Win SD says the same thing numerically, 8.9
+against 9.9. At 17 TERRAMOTH sits at 48 %, just under an even record, which is
+where a machine whose identity is bulk belongs.
+
+### Why speed, confirmed on the instrument rather than assumed
+
+`telemetry.ts`, same duels, same seeds, EXTREME:
+
+| | before | after |
+| --- | --- | --- |
+| bar/min dealt | 74.8 | **79.6** |
+| bar/min taken | 85.9 | **81.8** |
+| net exchange | −11.1 | **−2.3** |
+| nominal damage thrown | 357.1 | **353.3** |
+| of it, arriving | 6.3 % | **6.8 %** |
+| main rounds expiring in air | 60 % | **41 %** |
+| main mean flight | 845 px | **1124 px** |
+
+Same signature as D127: it throws **slightly less** and lands more. TERRAMOTH was
+never short of output — it was short of reach, and 353 nominal dps was going into
+the floor.
+
+**One claim was checked and withdrawn before it was written down.** TERRAMOTH
+now fights 45 px further out (664 → 709), and the obvious explanation is that
+the rival re-read the longer gun and stood further back. It did not.
+`preferredRangeFor` reads only `reach.max`, and TERRAMOTH's `max` is set by the
+breach lance at 1680 px — **unchanged by this edit**. The distance shift is
+emergent, not a policy change, and is left unexplained rather than explained
+wrongly.
+
+### What moved elsewhere
+
+* **Fairness 13/28 → 15/28** inside ±0.10. TERRAMOTH's own row is now inside
+  ±0.10 against **six of seven** opponents.
+* **VESPER over TERRAMOTH, the one bad pairing, +0.66 → +0.55.** Still the only
+  cell beyond ±0.30 and still out of scope by D120 — but it is now the *only*
+  thing wrong with that machine, which is the state D120 assumed and §5 of
+  `TIER_LIST.md` recorded had decayed.
+* **CIRRUS came down without being touched**, 71 % → 68 %, +0.134 → +0.121, and
+  TERRAMOTH now takes the pairing +0.10. Its z on win rate is unchanged at
+  +1.97 because the field tightened around it.
+* No compensating change was bundled. 638 tests green, ladder included.

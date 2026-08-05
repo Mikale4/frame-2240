@@ -775,7 +775,7 @@ export const TERRAMOTH: MechDef = {
     satGain: 10,
     recoil: 1.8,
     kind: ProjKind.Bullet,
-    projSpeed: 11,
+    projSpeed: 17,
     projLife: 62,
     projRadius: 9,
     muzzleForward: 40,
