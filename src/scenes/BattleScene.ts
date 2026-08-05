@@ -456,15 +456,32 @@ export class BattleScene extends Phaser.Scene {
     this.hud.banner('READY', 60);
     sfx.matchReady();
 
-    // Leaving the tab should not bank up a huge catch-up burst.
+    // Losing focus should not bank up a huge catch-up burst. See `onBlur` for
+    // why only one mode also pauses.
     this.game.events.on(Phaser.Core.Events.BLUR, this.onBlur, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.game.events.off(Phaser.Core.Events.BLUR, this.onBlur, this);
     });
   }
 
+  /**
+   * The window lost focus — clicking another application, or another tab.
+   *
+   * **Only `vsCpu` auto-pauses.** The pause exists to stop a human being shot
+   * while they are not looking at the screen, and that is the only mode where a
+   * human is holding a stick: `aiVsAi` has nobody to protect, and in `training`
+   * the rival is a dummy that never acts, so there is nothing to be protected
+   * *from*. Pausing those two was pure obstruction — a match left running to be
+   * watched, or a rig left running while its pilot does something else, stopped
+   * dead and put a menu over itself the moment the window went to the back.
+   *
+   * The accumulator reset is unconditional and is the part that always mattered:
+   * without it the first frame back tries to pay off every tick owed since the
+   * window went away, in one burst.
+   */
   private onBlur(): void {
     this.accumulator = 0;
+    if (session.mode !== 'vsCpu') return;
     if (!this.paused && !this.finished) this.openPause();
   }
 
