@@ -549,11 +549,29 @@ def _fit(frames):
     return [im.crop((o, o, o + size, o + size)) for im in frames], size, half
 
 
-def _manifest_row(mech, size, half):
+def _root_px(spec, size):
+    """
+    Where the blade leaves its emitter, in render px from the tile centre.
+
+    The renderer needs this to breathe the blade *from its root*. A sprite scales
+    about its own centre, and these blades are not centred on their roots — on
+    PYRE the root sits 183 px out, so a 5 % scale slides it ~9 px off the emitter
+    mouth and the energy visibly detaches from the staff. Short sabres hide the
+    same error because their roots are only ~29 px out.
+    """
+    pts = _centreline(spec, _strands(spec)[0], size)
+    rx, ry, _w = pts[0]
+    return (round(rx - size / 2, 1), round(ry - size / 2, 1))
+
+
+def _manifest_row(mech, spec, size, half):
     """The `meleeEnergy` row this generator now owns outright."""
     span = round(2.0 * half / PX_PER_BU, 4)
     dims = (span, 0.0, span)
+    rx, ry = _root_px(spec, size)
     return {
+        "root_px": [rx, ry],
+        "root_logical_px": [round(rx * 0.5, 2), round(ry * 0.5, 2)],
         "file": f"{mech}_meleeEnergy.png",
         "tile": size,
         "dims_bu": list(dims),
@@ -595,7 +613,7 @@ def main():
         for i, img in enumerate(frames):
             name = f"{mech}_meleeEnergy.png" if i == 0 else f"{mech}_meleeEnergy_{i}.png"
             img.save(os.path.join(SPRITES, name))
-        rows[mech] = _manifest_row(mech, size, half)
+        rows[mech] = _manifest_row(mech, spec, size, half)
     print(f"manifest: {_update_manifest(rows)}")
     print(f"{len(BLADES)} blade(s) x {FRAMES} frames")
 

@@ -11,11 +11,10 @@ import {
   type RigPose,
 } from './RigRotation';
 import { partTexture } from './PartTexture';
+import { breathLevel, flickerLevel } from './EnergyFlicker';
 
 /** Blender renders parts at 2x the logical size; display them at half scale. */
 export const PART_SCALE = 0.5;
-
-import { flickerLevel } from './EnergyFlicker';
 
 interface PartNode {
   def: RigPart;
@@ -100,7 +99,7 @@ export class MechRenderer {
   private readonly def: MechDef;
   private flashTimer = 0;
   private hitFlash = 0;
-  /** Larger, fainter copy of the projected blade, pulsed out of phase with it. */
+  /** Additive copy of the projected blade, exactly on it, carrying the flicker. */
   private energyHalo: Phaser.GameObjects.Image | null = null;
   /** Free-running clock for the blade's surge, in seconds. */
   private energyPhase = 0;
@@ -157,9 +156,10 @@ export class MechRenderer {
     this.setPartVisible('meleeEnergy', false);
 
     // Projected energy is drawn additively so it reads as light rather than as
-    // a painted solid, and it gets a second, larger, fainter copy behind it:
-    // that halo is what makes the blade look radiated instead of cut out. The
-    // two are pulsed out of phase in `apply`.
+    // a painted solid, and it gets a second, fainter copy behind it: that halo
+    // is what makes the blade look radiated instead of cut out. It sits exactly
+    // on the core at the same scale and on the same frame — see `animateEnergy`
+    // for why any offset at all turns a curved blade into two blades.
     const energy = this.nodes.get('meleeEnergy');
     if (energy) {
       // **The core blends normally; only the halo is additive.** The sprite is
@@ -441,22 +441,36 @@ export class MechRenderer {
     this.energyPhase += dt;
     const t = this.energyPhase;
 
-    // The slow swell stays a sine: it is a breath, not a flicker, and it drives
-    // the *scale* rather than the brightness.
-    const swell = Math.sin(t * 6.1);
-    // Brightness is stepped instead. See FLICKER_STEPS.
-    const lvl = flickerLevel(Math.floor(t * 60));
+    // Both dials are stepped tables now, on coprime cycles. Nothing here is a
+    // sine: see FLICKER_STEPS and BREATH_STEPS.
+    const frame = Math.floor(t * 60);
+    const lvl = flickerLevel(frame);
 
-    // **The core blends normally, so it cannot take the reference's full swing.**
-    // At 100/256 an additive layer thins; a normally-blended blade at 0.39 simply
-    // is not there. It gets the shape of the flicker over a shallower range and
-    // the additive halo carries the depth.
-    node.sprite.setAlpha(0.66 + 0.34 * lvl);
-    // Length surges more than width: a beam grows out of its emitter.
-    node.sprite.setScale(
-      PART_SCALE * (1 + 0.045 * swell + 0.02 * lvl),
-      PART_SCALE * (1 + 0.018 * swell),
-    );
+    // **The blade itself has to flicker, not just its bloom.**
+    // This first ran 0.66-1.00, reasoning that a normally-blended blade cannot
+    // take the reference's full swing down to 100/256. True at the bottom, but
+    // 0.77-1.00 is a 23 % swing on an already-bright sprite, against 2.35x on
+    // the additive halo — so all the visible flicker came from the halo and the
+    // blade read as static. 0.57 at the floor still plainly *is* a blade; it is
+    // the ratio that reads, and this one does.
+    node.sprite.setAlpha(0.38 + 0.62 * lvl);
+
+    // **The breath, anchored at the root.** Length surges more than width — a
+    // flame grows *out of* its source — and it is stepped rather than sinusoidal
+    // for the same reason the brightness is: a lighter's flame sits, jumps and
+    // sits again, at uneven spacing. See `breathLevel`.
+    //
+    // A sprite scales about its own centre, and none of these blades is centred
+    // on its root: PYRE's leaves the emitter 91.6 logical px out. Scaling alone
+    // therefore slides the root off the mouth and the energy comes away from the
+    // staff. `anchor` is that root, and translating by `a * (1 - k)` pins it
+    // while everything beyond it stretches.
+    const breath = breathLevel(frame);
+    const kx = breath;
+    const ky = 1 + (breath - 1) * 0.35;
+    node.sprite.setScale(PART_SCALE * kx, PART_SCALE * ky);
+    const a = node.def.anchor;
+    if (a) node.sprite.setPosition(a[0] * (1 - kx), a[1] * (1 - ky));
 
     // Churn: advance the turbulence frame on its own clock. 14 Hz is fast enough
     // to read as unstable and slow enough that each shape registers; tying it to
@@ -468,9 +482,13 @@ export class MechRenderer {
       const name = this.energyFrames[idx];
       if (node.sprite.frame.name !== name) {
         node.sprite.setFrame(name);
-        // The halo trails by one frame, so the bloom is always the shape the
-        // blade *was* — a cheap way to suggest energy shedding outward.
-        this.energyHalo?.setFrame(this.energyFrames[(idx + nf - 1) % nf]);
+        // **The same frame, not the previous one.** The halo used to trail by
+        // one, so the bloom was the shape the blade *had been* — which is a nice
+        // idea and, on a blade with a curve, a second reason the thing appeared
+        // doubled: the two layers were different shapes as well as different
+        // sizes. The turbulence variants differ most exactly where the blade is
+        // widest, which is where the mismatch shows.
+        this.energyHalo?.setFrame(name);
       }
     }
 
@@ -481,11 +499,17 @@ export class MechRenderer {
     // most of the flicker out — the two layers were taking turns rather than
     // pulsing. This is the additive layer, so it is the one that can take the
     // reference's real depth.
-    halo.setAlpha(0.08 + 0.40 * lvl);
-    halo.setScale(
-      PART_SCALE * (1.16 - 0.05 * swell),
-      PART_SCALE * (1.22 - 0.06 * swell),
-    );
+    halo.setAlpha(0.08 + 0.4 * lvl);
+    // **Exactly on the core, at the core's scale.** It used to be drawn 16-22 %
+    // larger to suggest light spreading outward. That works on a short straight
+    // sabre, where the offset is a couple of pixels of rim; on PYRE's 219 px
+    // crescent the same percentage displaces the whole arc, and the blade reads
+    // as *two* blades — a bright one and a pale duplicate outside it. The
+    // sprite already carries a blurred bloom baked in by `energy_blade.py`, so
+    // the halo's job is brightness, not spread. It breathes with the core, from
+    // the same anchor, or it would separate again the moment the blade stretched.
+    halo.setScale(PART_SCALE * kx, PART_SCALE * ky);
+    if (a) halo.setPosition(a[0] * (1 - kx), a[1] * (1 - ky));
   }
 
   setPartVisible(name: string, visible: boolean): void {

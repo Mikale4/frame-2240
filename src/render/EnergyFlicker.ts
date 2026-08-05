@@ -54,3 +54,45 @@ export function flickerLevel(frame: number): number {
   }
   return 1;
 }
+
+/**
+ * How long the blade is right now, as a multiplier — **the breath.**
+ *
+ * A lighter's flame does not swell on a sine. It sits, jumps, sits again, and
+ * the jumps do not come at even spacing. This was a sine and read as a mechanical
+ * pump, so it is a table for the same reason the brightness is.
+ *
+ * Its cycle is **37 frames against the flicker's 31**, and the two are coprime,
+ * so brightness and length never lock into a compound rhythm — they drift
+ * against each other for 1147 frames, about nineteen seconds, before repeating.
+ *
+ * The blade is scaled about its **root**, not its sprite centre; see
+ * `MechRenderer.animateEnergy`. Breathing about the centre is what made PYRE's
+ * scythe pull away from its own staff.
+ */
+const BREATH_STEPS: readonly (readonly [level: number, frames: number])[] = [
+  [1.0, 4],
+  [1.06, 3],
+  [0.97, 2],
+  [1.1, 4],
+  [1.02, 3],
+  [0.93, 2],
+  [1.08, 3],
+  [1.0, 5],
+  [1.12, 2],
+  [0.96, 4],
+  [1.04, 3],
+  [0.99, 2],
+];
+
+const BREATH_FRAMES = BREATH_STEPS.reduce((n, s) => n + s[1], 0);
+
+/** Length multiplier for a 60 Hz frame index. */
+export function breathLevel(frame: number): number {
+  let f = ((frame % BREATH_FRAMES) + BREATH_FRAMES) % BREATH_FRAMES;
+  for (const [level, frames] of BREATH_STEPS) {
+    if (f < frames) return level;
+    f -= frames;
+  }
+  return 1;
+}

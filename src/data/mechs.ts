@@ -50,7 +50,13 @@ const HALCYON_RIG: MechRigDef = {
     // can skip the Freestyle contour — energy carries no outline — and so it can
     // be animated independently of the metal hilt. NOCTURNE has no equivalent:
     // its claw projects nothing.
-    { name: 'meleeEnergy', parent: 'rightArm', x: 28, y: 6, rotation: 0, follow: 'turret' },
+    // `anchor` is where the blade leaves the emitter, in logical px from the
+    // sprite centre: the blade breathes, and a sprite scales about its own
+    // centre, so without this the energy pulls away from the hilt.
+    {
+      name: 'meleeEnergy', parent: 'rightArm', x: 28, y: 6, rotation: 0,
+      follow: 'turret', anchor: [14.5, 0.6],
+    },
     { name: 'leftThruster', parent: 'core', x: -36, y: 0, rotation: 0, follow: 'thruster' },
     { name: 'rightThruster', parent: 'core', x: -32, y: 12, rotation: 0, follow: 'thruster' },
   ],

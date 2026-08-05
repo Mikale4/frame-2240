@@ -386,7 +386,26 @@ describe.skipIf(!fs.existsSync(MANIFEST))('projected blades are declared consist
     });
   }
 
-  it('has exactly the five machines the roster says project energy', () => {
+  it('anchors every projected blade at the root the generator measured', () => {
+    // The blade breathes, and a sprite scales about its centre — so a wrong or
+    // missing anchor makes the energy pull away from the weapon it pours out of.
+    // PYRE's root is 91.6 logical px from the sprite centre; at 10 % breath that
+    // is 9 px of drift. Short sabres hide the same error at ~14 px out, which is
+    // exactly why this is checked for all of them rather than the one that shows.
+    for (const def of ROSTER) {
+      const part = def.rig.parts.find((p) => p.name === 'meleeEnergy');
+      if (!part) continue;
+      const row = meta.parts[def.id]?.meleeEnergy as { root_logical_px?: number[] } | undefined;
+      expect([def.id, part.anchor !== undefined]).toEqual([def.id, true]);
+      expect([def.id, part.anchor?.[0], part.anchor?.[1]]).toEqual([
+        def.id,
+        row?.root_logical_px?.[0],
+        row?.root_logical_px?.[1],
+      ]);
+    }
+  });
+
+  it('has exactly the machines the roster says project energy', () => {
     const projecting = ROSTER.filter((d) => d.rig.parts.some((p) => p.name === 'meleeEnergy'))
       .map((d) => d.id)
       .sort();

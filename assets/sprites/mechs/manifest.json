@@ -702,6 +702,14 @@
         ]
       },
       "meleeEnergy": {
+        "root_px": [
+          29.0,
+          1.2
+        ],
+        "root_logical_px": [
+          14.5,
+          0.6
+        ],
         "file": "halcyon_meleeEnergy.png",
         "tile": 448,
         "dims_bu": [
@@ -1113,6 +1121,14 @@
         ]
       },
       "meleeEnergy": {
+        "root_px": [
+          33.6,
+          3.8
+        ],
+        "root_logical_px": [
+          16.8,
+          1.9
+        ],
         "file": "vesper_meleeEnergy.png",
         "tile": 320,
         "dims_bu": [
@@ -1524,6 +1540,14 @@
         ]
       },
       "meleeEnergy": {
+        "root_px": [
+          29.0,
+          -4.1
+        ],
+        "root_logical_px": [
+          14.5,
+          -2.05
+        ],
         "file": "cirrus_meleeEnergy.png",
         "tile": 320,
         "dims_bu": [
@@ -1935,6 +1959,14 @@
         ]
       },
       "meleeEnergy": {
+        "root_px": [
+          183.1,
+          5.3
+        ],
+        "root_logical_px": [
+          91.55,
+          2.65
+        ],
         "file": "pyre_meleeEnergy.png",
         "tile": 576,
         "dims_bu": [
@@ -2148,6 +2180,14 @@
         ]
       },
       "meleeEnergy": {
+        "root_px": [
+          133.3,
+          9.1
+        ],
+        "root_logical_px": [
+          66.65,
+          4.55
+        ],
         "file": "nulltide_meleeEnergy.png",
         "tile": 448,
         "dims_bu": [
