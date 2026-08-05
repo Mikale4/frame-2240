@@ -6784,3 +6784,78 @@ which reached 0.198 by fixing the machine at the bottom rather than trimming the
 top. CIRRUS is where to look, and `TIER_LIST.md` §1 records why its *damage* is
 the wrong lever: it throws less than three machines that lose to it and lands
 three times the share.
+
+## D144 — CIRRUS's accuracy is not its melee, and the probe that said otherwise
+
+The hypothesis under test: CIRRUS lands 22.6 % where the field lands 6.5–9.1 %
+*because it melees about half the time*, and a melee hit is a short-range hitbox
+on a committed lock. `tools/probe/telemetry.ts` can answer this without new
+instrumentation — the `hit` event already carries `kind: ProjKind` — so the
+`landed` total was split by kind and the two arrival rates reported separately.
+
+**Two faults in the instrument had to be fixed first, and the first one was
+manufacturing exactly the effect being looked for.**
+
+`nominal` was accumulated by wrapping `Combatant.fire`. **A committed melee lock
+never calls `fire`.** `stepMeleeLock` pushes its chain hits straight onto the
+spawn array (`Combatant.ts:2399`), and the drone roles do the same for mines, the
+hazard trail and the decoy's gun (`Supporter.ts:1102/1138/1230`). None of it
+reached the hook, so none of it was in the denominator — while every point of it
+that connected was in `landed`, the numerator. `arrive` is their ratio, so the
+machine that melees most had its accuracy most overstated. Counting at
+`ProjectilePool.spawn` instead closes it: everything that becomes a projectile
+passes there exactly once, and a spawn the pool refuses is correctly not counted
+as thrown.
+
+Second, the shots table opened a round's record when it first *observed* it
+alive, at the end of a tick. A round consumed inside the step it spawned in is
+already inactive by then, so it was never opened and never counted — and being
+consumed immediately is what *hitting* looks like. The table was keeping the
+misses and dropping the successes. `meleelock` read a flat **0 % consumed /
+100 % expired**; opened at the pool instead it reads **92 % consumed**, off
+13× the round count. The same bias understated every weapon in proportion to how
+close it was fired, which is the one variable CIRRUS is unusual in.
+
+**The artifact was real and it was small.** Correcting the denominator moved
+CIRRUS from 22.6 % to 21.4 % — 1.2 points of a 14-point gap. It was not the
+explanation, and the prediction that it would be was wrong.
+
+### The measurement — EXTREME, 12 seeds, both slots
+
+| | swing % | melee % of landed | melee arrive | **ranged arrive** |
+| --- | --- | --- | --- | --- |
+| CIRRUS | **19 %** | 19 % | 82 % | **18.3 %** |
+| VESPER | 2 % | 5 % | 88 % | 15.3 % |
+| NULLTIDE | 10 % | 11 % | 73 % | 14.3 % |
+| HALCYON | 8 % | 13 % | 87 % | 8.0 % |
+| PYRE | 8 % | 21 % | 82 % | 6.2 % |
+| OBELISK | 6 % | 21 % | 83 % | 5.5 % |
+| TERRAMOTH | 5 % | 20 % | 74 % | 5.2 % |
+| NOCTURNE | 6 % | 21 % | 87 % | 5.2 % |
+
+**The hypothesis does not survive, in three separate ways.**
+
+1. **It does not melee half the time.** 19 % of its ticks and 19 % of its landed
+   damage. It is the roster's most committed melee machine by a wide margin — the
+   next is NULLTIDE at 10 % — so the direction was right and the size was not.
+2. **Melee is the one column where CIRRUS is ordinary.** Every machine lands
+   73–88 % of its melee nominal, because a committed lock is a committed lock.
+   CIRRUS's 82 % is fourth of eight. There is no accuracy edge there to find.
+3. **Its *ranged* arrival is where the entire gap lives**: 18.3 % against a field
+   median of 6.2 %, and clear of the next machine. Corroborated at HARD — 20.9 %
+   against a field median of 7.4 %, same ordering.
+
+So the eight-hit chain is not the lever, and neither is melee reach. Two further
+notes for whoever picks this up:
+
+* **Distance alone does not explain it either.** VESPER is second on ranged
+  arrival at **790 px**, the *furthest* on the roster, against CIRRUS's 533. Any
+  account resting on "it fights close" has to explain VESPER as well.
+* **The record's stun claim is off by one place.** CIRRUS takes 14 % stun,
+  second-lowest; VESPER takes 13 %.
+
+The three machines with the top ranged arrivals — CIRRUS, VESPER, NULLTIDE — are
+also the three with the *lowest* nominal dps on the roster (330, 270, 283 against
+357–396 for the rest). Real dps is `arrive × nominal`, and CIRRUS's is **70.7**
+against VESPER's 43.2 and the field's 22.5–34.6. **The roster's damage numbers
+are authored as if nominal were the currency, and it is not.**

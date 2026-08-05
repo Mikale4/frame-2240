@@ -27,7 +27,7 @@ import { MatchSim } from '../../src/combat/MatchSim';
 import { RivalAI } from '../../src/ai/RivalAI';
 import { Rng } from '../../src/core/Rng';
 import { Difficulty } from '../../src/core/Session';
-import { ActState, MatchPhase } from '../../src/combat/types';
+import { ActState, MatchPhase, ProjKind } from '../../src/combat/types';
 import { Combatant } from '../../src/combat/Combatant';
 import { ProjectilePool } from '../../src/projectiles/Projectile';
 import { ROSTER } from '../../src/data/mechs';
@@ -45,6 +45,16 @@ interface Tally {
   /** Nominal damage spawned, split by who pulled the trigger. */
   nominalSelf: number;
   nominalDrone: number;
+  /**
+   * The same nominal total, split by `ProjKind.Melee` against everything else.
+   *
+   * These are the denominators of the two arrival rates, and they have to be
+   * kept apart because the two numbers answer different questions: a swing is
+   * a 2-tick hitbox on a committed lock and a round is a thing that has to
+   * cross the gap, so folding them together produces an "accuracy" figure that
+   * mostly reports *how often the machine melees*.
+   */
+  nominalMelee: number;
   /** Fire calls, by attack id. */
   calls: Map<string, number>;
   /**
@@ -58,6 +68,8 @@ interface Tally {
    * the accuracy figure, and accuracy is a property of shots, not of burns.
    */
   landed: number;
+  /** The `ProjKind.Melee` share of `landed`. Numerator of the melee arrival. */
+  landedMelee: number;
   /** Hull actually lost, from life deltas: hits, burns, everything. */
   hullLost: number;
   /**
@@ -122,8 +134,10 @@ function blank(): Tally {
   return {
     nominalSelf: 0,
     nominalDrone: 0,
+    nominalMelee: 0,
     calls: new Map(),
     landed: 0,
+    landedMelee: 0,
     hullLost: 0,
     barDealt: 0,
     barTaken: 0,
@@ -155,8 +169,10 @@ function blank(): Tally {
 function merge(into: Tally, from: Tally): void {
   into.nominalSelf += from.nominalSelf;
   into.nominalDrone += from.nominalDrone;
+  into.nominalMelee += from.nominalMelee;
   for (const [k, v] of from.calls) into.calls.set(k, (into.calls.get(k) ?? 0) + v);
   into.landed += from.landed;
+  into.landedMelee += from.landedMelee;
   into.hullLost += from.hullLost;
   into.barDealt += from.barDealt;
   into.barTaken += from.barTaken;
@@ -202,7 +218,41 @@ function merge(into: Tally, from: Tally): void {
  * `from` is set only by `fireFromSupporter`, which is exactly the escort's own
  * gun, so the split between chassis and drone output is free.
  */
-let hook: ((id: number, attackId: string, nominal: number, drone: boolean) => void) | null = null;
+let hook:
+  | ((id: number, attackId: string, nominal: number, drone: boolean, kind: ProjKind) => void)
+  | null = null;
+
+/**
+ * The counterpart for everything that reaches the pool *without* going through
+ * `Combatant.fire`, which for four years of this probe's life meant it was not
+ * counted at all. See the block comment on the pool patch below.
+ */
+let untagged: ((ownerId: number, damage: number, kind: ProjKind) => void) | null = null;
+
+/**
+ * Called with the pool slot the moment a round is put into it.
+ *
+ * The shots table used to open its record when it first *observed* a round
+ * alive, at the end of a tick. A round consumed inside the same step it spawned
+ * in is already inactive by then, so it was never opened and never counted —
+ * and since being consumed immediately is what *hitting* looks like, the table
+ * was silently dropping the successes and keeping the misses. The melee-lock
+ * row is the extreme case, reading a flat `0% consumed / 100% expired` for a
+ * hitbox that lands four times in five; the same bias understates every weapon
+ * in proportion to how close it is fired, which is the one variable CIRRUS is
+ * unusual in.
+ */
+let born: ((slot: number, p: Watch0) => void) | null = null;
+
+/** The fields the shots watcher needs at the moment of birth. */
+interface Watch0 {
+  __serial?: number;
+  __src?: string;
+  team: number;
+  x: number;
+  y: number;
+  life: number;
+}
 
 /** Marks a spawn, and then the pooled projectile, with the weapon that made it. */
 interface Tagged {
@@ -217,7 +267,7 @@ interface Tagged {
     const spawns = args[2] as Array<{ damage: number } & Tagged>;
     const before = spawns.length;
     orig.apply(this, args);
-    const attackId = (args[0] as { id: string }).id;
+    const def = args[0] as { id: string; kind: ProjKind };
     let nominal = 0;
     for (let i = before; i < spawns.length; i++) {
       nominal += spawns[i].damage;
@@ -225,19 +275,50 @@ interface Tagged {
       // §8b of the handoff is the standing warning that `fire` copies the spawn
       // field by field, so a tag put on the AttackDef would never arrive; this
       // one is attached after the copy, to the object that actually leaves.
-      spawns[i].__src = args[4] !== undefined ? `${attackId}~drone` : attackId;
+      spawns[i].__src = args[4] !== undefined ? `${def.id}~drone` : def.id;
     }
-    if (hook) hook(this.id, attackId, nominal, args[4] !== undefined);
+    if (hook) hook(this.id, def.id, nominal, args[4] !== undefined, def.kind);
   };
 
   let serial = 0;
   const pool = ProjectilePool.prototype as unknown as Record<string, unknown>;
   const origSpawn = pool.spawn as (s: unknown) => (Tagged & { active: boolean }) | null;
-  pool.spawn = function patchedSpawn(this: ProjectilePool, s: Tagged): unknown {
+  /**
+   * **`Combatant.fire` is not the only way a hitbox gets made, and the two
+   * paths that skip it are the two this probe was being asked about.**
+   *
+   * `stepMeleeLock` pushes its chain hits straight onto the spawn array
+   * (`Combatant.ts:2399`) — a committed lock never calls `fire` at all — and
+   * the drone roles do the same for mines, the hazard trail and the decoy's
+   * gun (`Supporter.ts:1102/1138/1230`). None of that was reaching the `fire`
+   * hook, so none of it appeared in `nominal`, while every point of it that
+   * connected still appeared in `landed`.
+   *
+   * That is a numerator with no denominator, and `arrive` is their ratio. The
+   * machine that melees most is the machine whose accuracy is most overstated,
+   * which is precisely the reading this probe was about to be trusted for.
+   *
+   * Counting at the pool instead of at `fire` closes it for good: everything
+   * that becomes a projectile passes through here exactly once, including
+   * anything added later, and a spawn the pool refuses is correctly not
+   * counted as thrown.
+   */
+  pool.spawn = function patchedSpawn(
+    this: ProjectilePool,
+    s: Tagged & { damage: number; kind: ProjKind; ownerId: number },
+  ): unknown {
     const p = origSpawn.call(this, s);
     if (p) {
+      if (s.__src === undefined) {
+        // Melee is the lock chain; anything else untagged is a drone role.
+        s.__src = s.kind === ProjKind.Melee ? 'meleelock' : 'dronerole~drone';
+        if (untagged) untagged(s.ownerId, s.damage, s.kind);
+      }
       p.__src = s.__src;
       p.__serial = ++serial;
+      // Opened here rather than at the first sighting, so a round that dies in
+      // the step it was born in is still on the books.
+      if (born) born(this.items.indexOf(p as unknown as never), p as unknown as Watch0);
     }
     return p;
   };
@@ -250,11 +331,22 @@ function duel(a: MechDef, b: MechDef, seed: number, tier: Difficulty, ticks: num
   const p2 = new RivalAI({ difficulty: tier }, new Rng(seed ^ 0x2222));
   const t: [Tally, Tally] = [blank(), blank()];
 
-  hook = (id, attackId, nominal, drone) => {
+  hook = (id, attackId, nominal, drone, kind) => {
     const x = t[id];
     if (drone) x.nominalDrone += nominal;
     else x.nominalSelf += nominal;
+    if (kind === ProjKind.Melee) x.nominalMelee += nominal;
     x.calls.set(attackId, (x.calls.get(attackId) ?? 0) + 1);
+  };
+  untagged = (ownerId, damage, kind) => {
+    const x = t[ownerId];
+    if (kind === ProjKind.Melee) {
+      x.nominalSelf += damage;
+      x.nominalMelee += damage;
+    } else {
+      // Mines, the hazard trail and the decoy's gun: the drone's own output.
+      x.nominalDrone += damage;
+    }
   };
 
   let n = 0;
@@ -297,6 +389,27 @@ function duel(a: MechDef, b: MechDef, seed: number, tier: Difficulty, ticks: num
     x.shots.set(w.src, c);
   };
 
+  born = (slot, p) => {
+    const prev = watched.get(slot);
+    // The slot was recycled inside a single step: the outgoing round never got
+    // a final sighting, so its last sample stands in, exactly as before.
+    if (prev) closeShot(prev, null);
+    const x = t[p.team];
+    const c = x.shots.get(p.__src!) ?? { spawned: 0, consumed: 0, expired: 0, flewOff: 0, dist: 0 };
+    c.spawned++;
+    x.shots.set(p.__src!, c);
+    watched.set(slot, {
+      serial: p.__serial!,
+      src: p.__src!,
+      team: p.team,
+      x0: p.x,
+      y0: p.y,
+      life: p.life,
+      x: p.x,
+      y: p.y,
+    });
+  };
+
   for (; n < ticks && s.phase !== MatchPhase.Over; n++) {
     s.step(
       p1.think(s.player, s.enemy, s.activeProjectiles(), ARENA_W, ARENA_H),
@@ -307,6 +420,7 @@ function duel(a: MechDef, b: MechDef, seed: number, tier: Difficulty, ticks: num
         case 'hit':
           // `victimId` is a combatant; drone damage arrives as `droneHit`.
           t[e.ownerId].landed += e.damage;
+          if (e.kind === ProjKind.Melee) t[e.ownerId].landedMelee += e.damage;
           break;
         case 'droneHit':
           t[e.ownerId].intoDrone += e.damage;
@@ -351,27 +465,14 @@ function duel(a: MechDef, b: MechDef, seed: number, tier: Difficulty, ticks: num
         closeShot(prev, p.__serial === prev.serial ? p : null);
         watched.delete(k);
       }
+      // Records are opened by `born`, at the pool, so this is update-only: a
+      // round that never survived to be sighted is already on the books.
       if (p.active && p.__src !== undefined) {
         const w = watched.get(k);
         if (w && w.serial === p.__serial) {
           w.life = p.life;
           w.x = p.x;
           w.y = p.y;
-        } else {
-          const x = t[p.team];
-          const c = x.shots.get(p.__src) ?? { spawned: 0, consumed: 0, expired: 0, flewOff: 0, dist: 0 };
-          c.spawned++;
-          x.shots.set(p.__src, c);
-          watched.set(k, {
-            serial: p.__serial!,
-            src: p.__src,
-            team: p.team,
-            x0: p.x,
-            y0: p.y,
-            life: p.life,
-            x: p.x,
-            y: p.y,
-          });
         }
       }
     }
@@ -396,7 +497,19 @@ function duel(a: MechDef, b: MechDef, seed: number, tier: Difficulty, ticks: num
       prevLife[c.id] = c.life;
     }
   }
+  // Rounds still in flight at the bell, so the three outcome shares sum to the
+  // round count rather than leaving a silent remainder.
+  {
+    const items = s.projectiles.items as unknown as Array<Tagged & { life: number; x: number; y: number }>;
+    for (const [k, w] of watched) {
+      const p = items[k];
+      closeShot(w, p && p.__serial === w.serial ? p : null);
+    }
+    watched.clear();
+  }
   hook = null;
+  untagged = null;
+  born = null;
   // Cross-fill: what I dealt is what my opponent took, and the bar it came off
   // is the *opponent's*, which is the whole reason this is kept separately.
   t[0].taken = t[1].hullLost;
@@ -451,6 +564,15 @@ function line(id: string, x: Tally): string {
   const pct = (v: number): string => ((v / Math.max(1, x.ticks)) * 100).toFixed(0).padStart(3);
   const nominal = x.nominalSelf + x.nominalDrone;
   const eff = nominal > 0 ? (x.landed / nominal) * 100 : 0;
+  // The two arrivals, each against its own denominator. `mel` is the melee
+  // share of what *landed*, which is the mix question; `arr m/r` are the two
+  // accuracies, which is the accuracy question. They are not the same question
+  // and the single `arrive` figure above answers neither on its own.
+  const nomRanged = Math.max(0, nominal - x.nominalMelee);
+  const landedRanged = Math.max(0, x.landed - x.landedMelee);
+  const meleeArr = x.nominalMelee > 0 ? (x.landedMelee / x.nominalMelee) * 100 : 0;
+  const rangedArr = nomRanged > 0 ? (landedRanged / nomRanged) * 100 : 0;
+  const meleeShare = x.landed > 0 ? (x.landedMelee / x.landed) * 100 : 0;
   // Bars per minute, dealt and taken. `net` is the number `lead` is made of.
   const bpm = (v: number): string => ((v / secs) * 60 * 100).toFixed(1).padStart(5);
   const net = ((x.barDealt - x.barTaken) / secs) * 60 * 100;
@@ -461,7 +583,14 @@ function line(id: string, x: Tally): string {
     `  dps ${dps(x.hullLost)} (nom ${dps(nominal)}` +
     `, drone ${((x.nominalDrone / Math.max(1, nominal)) * 100).toFixed(0).padStart(2)}%)` +
     ` arrive ${eff.toFixed(1).padStart(4)}%` +
+    ` [m ${meleeArr.toFixed(0).padStart(3)}% r ${rangedArr.toFixed(1).padStart(4)}%` +
+    ` mix ${meleeShare.toFixed(0).padStart(3)}%]` +
     `  atk ${pct(x.act[ActState.Attack])}%` +
+    // Collected since this probe was written and never printed. `swinging` is
+    // set by *whichever* melee path drove the arc, lock included, so it is the
+    // share of the match spent meleeing — the direct answer to "it melees about
+    // half the time", which no other column here can give.
+    ` swing ${pct(x.ticksSwinging)}%` +
     ` grd ${pct(x.ticksGuarding)}%` +
     ` stun ${pct(x.act[ActState.Hitstun])}%` +
     ` dry ${pct(x.ticksNoEnergy)}%` +
