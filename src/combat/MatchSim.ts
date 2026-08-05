@@ -104,13 +104,17 @@ const DESIGNATOR_PAINT_TICKS = 45;
  * damage makes killing it mandatory rather than rewarding. Overruled by design:
  * WARDEN is a repair unit and should look like one.
  *
- * Deliberately tiny. At 0.05 a tick this is 3 hull a second — 0.17 % of
- * NOCTURNE's pool — so it is a trickle that rewards holding the drone alive
- * across a whole match, not a heal that wins an exchange. It cannot outpace any
- * weapon in the game, which is the property that keeps "kill the escort" a good
- * play rather than a forced one.
+ * Deliberately small. At 0.08 a tick this is 4.8 hull a second — 0.27 % of
+ * NOCTURNE's pool — so it is still a trickle that rewards holding the drone
+ * alive across a whole match, not a heal that wins an exchange. It cannot
+ * outpace any weapon in the game, which is the property that keeps "kill the
+ * escort" a good play rather than a forced one.
+ *
+ * Raised from 0.05 by request: at 3 hull a second the repair beam was doing so
+ * little over a 46-second average fight — about 140 hull, 8 % of the pool — that
+ * WARDEN did not read as a repair unit at all.
  */
-export const TETHER_LIFE_RATE = 0.05;
+export const TETHER_LIFE_RATE = 0.08;
 
 /** Does the segment a-b pass within `r` of the point c? Used by the arc tether. */
 export function segmentHitsCircle(
