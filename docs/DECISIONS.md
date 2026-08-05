@@ -6685,3 +6685,102 @@ swings 0.204 to 0.48, and all four turbulence variants cycle. `flickerLevel`
 lives in its own Phaser-free module so the properties that make it read as
 flicker — the depth, the holds, and the absence of any short sub-period — are
 unit-testable.
+
+## D141 — Melee can reach the escort
+
+Drones could be shot out of the air but never cut. Melee is already a projectile
+and `resolveDroneCollisions` already tests every active one, so nothing was
+filtering the swing out — the swing simply never existed. The hitbox only spawns
+while the connect check passes, and that check measured to the locked pilot
+alone.
+
+Reaching the escort was not enough on its own, because the swing is *aimed*: with
+the pilot out of reach the blade went at the pilot anyway and sailed past the
+drone in your face. The escort is considered strictly **after** the lock attempt,
+and that ordering is the design — the first cut swung at whichever was nearer,
+which converted ordinary melee into a single swing at a drone at any range where
+the chain was available, because the escort usually flies *between* the two
+machines. It also hijacked the Desperate Speed close, since the reach check used
+`effectiveMeleeRange`, which balloons under desperation by design.
+
+A single swing rather than a chain: `meleeLock` circles and repositions around a
+`Combatant`, and a drone is not one.
+
+Swept: spread 0.198 → 0.182, the lowest measured on this roster, no outliers.
+
+## D142 — The lock becomes a choice, and what that cost
+
+The escort is permanently deployed, and the soft-lock took whichever of pilot and
+escort was nearer. In play the drone repeatedly dragged the guns off the pilot at
+the moment the pilot was worth shooting, and neither side had any say in it.
+
+`Combatant.lockPref` decides now, defaulting to the pilot and falling back to it
+whenever the escort is gone. One resolver feeds every consumer that read the
+auto-lock — turret aim, melee acquisition, the escort swing, guided rounds —
+because a lock the guns and the sword disagree about is not a lock.
+`Btn.TargetCycle` switches it: **a simulation button, not a UI edge**, because it
+changes what a missile steers to and has to travel in `InputFrame` or the
+bit-identical replay stops covering a real input. Handled at the top of `step`,
+above the stun and attack gates — a test caught that, because the drone under
+test was shooting the machine trying to press the button.
+
+**Decoys are deliberately excluded from homing.** A projection stealing the
+turret is the whole point of the ability; letting it steal guided rounds meant
+every missile bent onto a hologram and deleted it, measured at 253 ticks of lost
+decoy uptime in a 900-tick run.
+
+**The cost: spread 0.181 → 0.250 in one step.** The old rule was the only thing
+making rivals shoot escorts at all. See D143.
+
+## D143 — Target selection cannot pay back D142, and the ablation that shows it
+
+`targetIq` is a profile trait, EXTREME only. Five separately switchable reasons a
+rival might prefer the escort, so each could be ablated alone —
+`tools/probe/targetablate.ts`, measuring roster spread *and* the EXTREME-vs-HARD
+ladder margin, because a lever that flattens the roster by making the top tier
+worse than the one below it has not helped anything.
+
+| configuration | spread | ladder |
+| --- | --- | --- |
+| none (hold the pilot) | 0.292 | +0.022 |
+| only healer | 0.260 | +0.018 |
+| only decoy | 0.263 | +0.004 |
+| only breaker | 0.335 | **−0.012** |
+| only finish | 0.216 | +0.033 |
+| only blocking | 0.201 | +0.028 |
+| finish + blocking | 0.225 | +0.003 |
+| finish + blocking + healer | 0.217 | +0.004 |
+| all on | 0.260 | **−0.039** |
+
+Four findings, none of which reasoning would have produced.
+
+**`breaker` is the worst configuration on the table** — worse than doing nothing
+and it breaks the ladder alone. Sending a rival to kill the interceptor that
+keeps shoving it out of melee is the most intuitive of the five and the most
+harmful. `all on` breaking the ladder is essentially `breaker` breaking it.
+
+**The good levers do not add.** `finish + blocking` is worse than either alone on
+spread and nearly collapses the ladder, because both pull the lock off the pilot
+and two reasons to stop shooting the pilot is one reason too many.
+
+**The shortlist did not survive the real instrument.** On `balance.ts` at 12
+seeds: `finish` 0.255, `blocking` 0.237, against 0.250 for doing nothing — and
+`blocking` produced a flagged outlier. The 6-seed harness's separation was mostly
+noise. **Absolute numbers from `targetablate.ts` are not comparable to
+`balance.ts`**; only within-table comparisons are valid.
+
+**And restoring the old rule as an AI policy was worse:** 0.320 throttled, 0.221
+re-evaluated per tick, CIRRUS flagged in both. Working out why is the durable
+part: it was never a targeting policy. It swung the aim onto whatever drifted in
+front, constantly and incidentally, so escorts soaked stray damage all match.
+**Deliberate choice cannot reproduce an incidental damage sink.**
+
+Every lever ships **off**. Kept by design decision: 0.266 with the field as one
+population, over 0.221 with a flagged outlier. The machinery and the evidence
+stay so the next attempt starts from the table.
+
+**The next move is a roster pass, not a targeting one**, in the shape of D127 —
+which reached 0.198 by fixing the machine at the bottom rather than trimming the
+top. CIRRUS is where to look, and `TIER_LIST.md` §1 records why its *damage* is
+the wrong lever: it throws less than three machines that lose to it and lands
+three times the share.
