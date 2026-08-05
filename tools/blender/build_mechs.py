@@ -1322,6 +1322,13 @@ def split_melee(parts, objs, pivot, coll, pn):
 
     Writes `parts['meleeWeapon']` always, and `parts['meleeEnergy']` only when
     the weapon actually projects a blade — CLAW and RAMSHIELD do not.
+
+    **No weapon currently builds energy geometry**, so in practice this only ever
+    writes the hardware row: `tools/energy_blade.py` draws all five projected
+    blades and owns their PNG, canvas size and manifest row outright. The split
+    is kept rather than deleted because it is the contract that makes that
+    possible — if energy is ever modelled again it must come out as its own
+    object for both reasons above, and this is where that happens.
     """
     energy, hardware = [], []
     for x in objs:
@@ -2448,18 +2455,23 @@ def build_mech(mech_id, palette_key=None):
                          (0, math.radians(18), 0), coll=coll, mat=M_ACC))
     parts["subWeapon"] = join_as(pn("subWeapon"), o, piv, coll)
 
-    # ---- melee weapon: beam saber ------------------------------------------
-    # A real model, not a VFX streak: machined hilt, emitter shroud, then the
-    # blade built as three concentric layers - a white-hot core, a saturated
-    # inner sheath and a soft outer bloom - which is what reads as a beam blade
-    # in Gundam-style art rather than a glowing stick.
+    # ---- melee weapon: hardware only ---------------------------------------
+    # **No projected energy is modelled here any more.** Every blade the five
+    # energy weapons throw is drawn by `tools/energy_blade.py`; what Blender
+    # builds is the machine that throws it — grip, conduit, emitter, mouth.
+    #
+    # The modelled blades were three concentric emissive layers, and at emission
+    # 2.4/3.0 spread over any real width that clips all three channels: HALCYON's
+    # azure, VESPER's aqua, CIRRUS's ice and NULLTIDE's cyan every one rendered
+    # as the same flat white cone. The scythe hit this first (D132) and the
+    # diagnosis there — a mesh has a silhouette, projected energy does not — is
+    # equally true of the other four.
+    #
+    # `M_GLOW` and `M_ACC` are deliberately still used below. They are lamps and
+    # vents bolted to the weapon, they keep their Freestyle contour, and they are
+    # what gives the drawn blade somewhere to have come from.
     piv = px(*P["meleeWeapon"])
     o = []
-    M_CORE = make_material(f"{mech_id}_beamcore", (1.0, 1.0, 1.0),
-                           emission=3.0, roughness=0.1, metallic=0.0, detail=False)
-    M_BEAM = make_material(f"{mech_id}_beam", pal["glow"],
-                           emission=2.4, roughness=0.15, metallic=0.0, detail=False)
-    blade_len = 1.28
     if spec["blade"] == "claw":
         # A hydraulic breaching claw: three powered tines on a wrist block, with
         # rams behind them. Mechanical throughout - no emissive blade, because
@@ -2482,35 +2494,57 @@ def build_mech(mech_id, palette_key=None):
                          (math.radians(90), 0, 0), 12, coll=coll, mat=M_ACC))
         split_melee(parts, o, piv, coll, pn)
     elif spec["blade"] == "bayonet":
-        # VESPER: a short straight beam spike clamped under the railgun. A
-        # thrusting weapon - no cutting edge, no sweep, just a point.
+        # VESPER: a spike emitter clamped under the railgun. A thrusting weapon -
+        # no cutting edge, no sweep, just a point. The hardware is subordinate to
+        # the gun and should look bolted on rather than designed in.
+        AX = (0, math.radians(90), 0)
         o.append(add_box("m_clamp", (0.20, 0.12, 0.14), piv, coll=coll, mat=M_FRAME))
         o.append(add_box("m_rail", (0.34, 0.06, 0.06), piv + Vector((0.20, 0, 0.05)),
                          coll=coll, mat=M_SUB))
+        # Conduit tapped off the rail: this weapon runs on the railgun's supply.
+        o.append(add_box("m_conduit", (0.14, 0.040, 0.024),
+                         piv + Vector((0.18, 0, 0.086)), coll=coll, mat=M_GLOW))
+        o.append(add_cyl("m_collar", 0.058, 0.045, piv + Vector((0.14, 0, -0.02)),
+                         AX, 6, coll=coll, mat=M_SUB))
         o.append(add_wedge("m_emitter", (0.13, 0.11, 0.12), 1.6, piv + Vector((0.24, 0, -0.02)),
-                           (0, math.radians(90), 0), coll=coll, mat=M_HULL))
-        spike = 0.64
-        o.append(add_cyl("m_bloom", 0.042, spike, piv + Vector((0.30 + spike / 2, 0, -0.02)),
-                         (0, math.radians(90), 0), 14, coll=coll, cone_r2=0.006, mat=M_BEAM))
-        o.append(add_cyl("m_core", 0.015, spike * 0.98,
-                         piv + Vector((0.30 + spike / 2, 0, -0.02)),
-                         (0, math.radians(90), 0), 12, coll=coll, cone_r2=0.003, mat=M_CORE))
+                           AX, coll=coll, mat=M_HULL))
+        # Mouth under the drawn spike's root at x=0.29.
+        o.append(add_box("m_mouth", (0.035, 0.050, 0.050), piv + Vector((0.285, 0, -0.02)),
+                         coll=coll, mat=M_GLOW))
+        for i, dy in enumerate((0.052, -0.052)):
+            o.append(add_box(f"m_prong{i}", (0.10, 0.022, 0.028),
+                             piv + Vector((0.33, dy, -0.02)), coll=coll, mat=M_ACC))
+        o.append(add_cyl("m_vent", 0.034, 0.070, piv + Vector((0.22, 0, -0.10)),
+                         (math.radians(90), 0, 0), 10, coll=coll, mat=M_ACC))
         split_melee(parts, o, piv, coll, pn)
     elif spec["blade"] == "twindagger":
-        # CIRRUS: two short blades on a shared mount, which is what an eight-hit
+        # CIRRUS: two emitters on a shared mount, which is what an eight-hit
         # alternating flurry actually looks like.
-        o.append(add_box("m_mount", (0.16, 0.22, 0.12), piv, coll=coll, mat=M_FRAME))
-        for i, dy in enumerate((0.10, -0.10)):
+        #
+        # **The pair sits at +/-0.15, widened from +/-0.10.** The two blades are
+        # separated on screen by nothing but this offset, and the camera's 15 deg
+        # azimuth turns 0.10 of Y into 6 px of screen — at gameplay scale the two
+        # merged into one fuzzy shard and the weapon stopped reading as twin.
+        # `energy_blade.py`'s `strands` must carry the same number.
+        AX = (0, math.radians(90), 0)
+        SEP = 0.15
+        o.append(add_box("m_mount", (0.16, 0.30, 0.12), piv, coll=coll, mat=M_FRAME))
+        # Spine across the mount, tying the two emitters into one weapon.
+        o.append(add_box("m_spine", (0.07, 0.34, 0.05), piv + Vector((0.07, 0, 0.045)),
+                         coll=coll, mat=M_SUB))
+        o.append(add_box("m_feed", (0.05, 0.26, 0.022), piv + Vector((0.07, 0, 0.078)),
+                         coll=coll, mat=M_GLOW))
+        for i, dy in enumerate((SEP, -SEP)):
             o.append(add_box(f"m_hilt{i}", (0.14, 0.07, 0.08),
                              piv + Vector((0.10, dy, 0.02)), coll=coll, mat=M_HULL))
-            o.append(add_cyl(f"m_lens{i}", 0.036, 0.025, piv + Vector((0.19, dy, 0.02)),
-                             (0, math.radians(90), 0), 12, coll=coll, mat=M_CORE))
-            dl = 0.56
-            o.append(add_cyl(f"m_bloom{i}", 0.045, dl, piv + Vector((0.22 + dl / 2, dy, 0.02)),
-                             (0, math.radians(90), 0), 14, coll=coll, cone_r2=0.010, mat=M_BEAM))
-            o.append(add_cyl(f"m_core{i}", 0.014, dl * 0.98,
-                             piv + Vector((0.22 + dl / 2, dy, 0.02)),
-                             (0, math.radians(90), 0), 10, coll=coll, cone_r2=0.003, mat=M_CORE))
+            o.append(add_cyl(f"m_collar{i}", 0.048, 0.030, piv + Vector((0.15, dy, 0.02)),
+                             AX, 6, coll=coll, mat=M_SUB))
+            # Mouth under the drawn shard's root at x=0.21.
+            o.append(add_cyl(f"m_mouth{i}", 0.034, 0.030, piv + Vector((0.205, dy, 0.02)),
+                             AX, 12, coll=coll, mat=M_GLOW))
+            for j, dz in enumerate((0.048, -0.048)):
+                o.append(add_box(f"m_prong{i}{j}", (0.08, 0.020, 0.022),
+                                 piv + Vector((0.24, dy, 0.02 + dz)), coll=coll, mat=M_ACC))
         split_melee(parts, o, piv, coll, pn)
     elif spec["blade"] == "scythe":
         # PYRE: a reaping scythe, replacing the cleaver it carried until D130.
@@ -2585,92 +2619,57 @@ def build_mech(mech_id, palette_key=None):
                          coll=coll, mat=M_GLOW))
         o.append(add_cyl("m_vent", 0.048, 0.10, piv + Vector((1.52, 0, -0.16)),
                          (math.radians(90), 0, 0), 10, coll=coll, mat=M_ACC))
-        # **Dedicated crescent materials, at much lower emission than the saber's.**
-        # `M_BEAM` runs the glow colour at emission 2.4 and `M_CORE` is pure white
-        # at 3.0. On a thin sabre blade that is correct — a hot line reads as
-        # white-hot. Spread across a wide crescent it clips both the red and green
-        # channels and the whole blade renders as a white slab, losing PYRE's
-        # amber entirely. At 0.95 the glow survives as (242, 184, 69).
-        # **Hard concentric bands, not a shaded surface.** The reference draws
-        # energy as three or four flat colour steps — pale core, saturated mid,
-        # deep rim — with no gradient and no outline. A smoothly lit surface, however
-        # well tuned, reads as a glowing solid; flat bands read as light.
-        BANDS = [
-            # (name, inner frac, outer frac, rgb, emission)
-            ("rim",  0.00, 1.00, (1.00, 0.26, 0.05), 0.42),
-            ("mid",  0.00, 0.62, (1.00, 0.52, 0.10), 0.70),
-            ("core", 0.00, 0.26, (1.00, 0.86, 0.46), 1.15),
-        ]
-        # **The blade leaves the haft at a right angle.** This is the thing the
-        # first two passes got wrong: the arc was anchored with its tangent
-        # *parallel* to the shaft, so the blade continued forward like a spear
-        # point. A scythe — and the supplied Deathscythe reference — mounts the
-        # blade across the end of the snath and hooks it back toward the wielder.
+        # **The crescent itself is drawn, not modelled** — see the note at the top
+        # of this section and `tools/energy_blade.py`. What used to live here was
+        # three concentric swept bands on dedicated low-emission materials, tuned
+        # down and down to stop the amber clipping to white, which is the shape of
+        # a losing argument: a mesh has a silhouette and projected energy does not.
         #
+        # The one number the two sides still have to agree on is where the blade
+        # roots. **The mouth is at x=1.58 and the generator's arc starts there.**
         # An arc's tangent is perpendicular to its radius, so putting the centre
-        # directly *behind* the emitter on the haft axis makes the blade leave
-        # the head at ninety degrees and curve back. That one placement is the
-        # whole difference between a scythe and a spear.
-        # **Long and extended, not a tight hook.** At r=1.25 over 108 degrees the
-        # blade curled into a sickle barely longer than the shaft. The reference
-        # sweeps a similar angle over a far larger radius, so it *reaches*: r=2.2
-        # gives a 219 logical px blade against a 132 px staff, 1.66x, which is
-        # the proportion the reference holds.
-        arc_r, segs = 2.20, 34
-        span = math.radians(95.0)
-        start_a = 0.0
-        cx = 1.58 - arc_r          # straight back along the haft
-        cz = 0.02
-        # Where the blade is at its widest, as a fraction of its length. A scythe
-        # swells fast out of the emitter and tapers slowly — the long taper is
-        # most of what makes it read as a beam rather than a leaf.
-        PEAK_AT = 0.18
-        for bname, f_in, f_out, rgb, emis in BANDS:
-            mat = make_material(f"{mech_id}_scythe_{bname}", rgb, emission=emis,
-                                roughness=0.22, metallic=0.0, detail=False)
-            st = []
-            for i in range(segs):
-                f = i / (segs - 1)
-                a = start_a - f * span
-                ca, sa = math.cos(a), math.sin(a)
-                if f < PEAK_AT:
-                    prof = f / PEAK_AT
-                else:
-                    prof = ((1.0 - f) / (1.0 - PEAK_AT)) ** 1.25
-                wide = 0.34 * prof + 0.010
-                # Bands grow **outward** from the arc, so the arc itself is the
-                # concave cutting edge and the spine sits behind it. A scythe is
-                # sharpened on the inside of its curve; measuring inward put the
-                # hot edge on the blunt side.
-                ri = arc_r + wide * f_in
-                ro = arc_r + wide * f_out
-                st.append((piv.x + cx + ri * ca, piv.z + cz + ri * sa,
-                           piv.x + cx + ro * ca, piv.z + cz + ro * sa))
-            # Each band sits a hair proud of the one beneath so they do not
-            # z-fight; the outermost is thickest.
-            th = 0.052 - 0.010 * BANDS.index((bname, f_in, f_out, rgb, emis))
-            b = add_swept_blade(pn(f"m_crescent_{bname}"), st, th, coll=coll, mat=mat)
-            b.location.y += piv.y
-            o.append(b)
+        # directly *behind* the emitter on the haft axis (cx = 1.58 - r) makes the
+        # blade leave the head at ninety degrees and hook back toward the wielder.
+        # That one placement is the whole difference between a scythe and a spear,
+        # and it is now stated in `BLADES["pyre"]["arc"]`.
         split_melee(parts, o, piv, coll, pn)
     elif spec["blade"] == "glaive":
         # NULLTIDE: a polearm. Long haft, discharge head at the far end, so its
-        # wide sweeps have somewhere to come from.
+        # wide sweeps have somewhere to come from. The other polearm on the
+        # roster is PYRE's snath, so this is built to the same vocabulary —
+        # knurled runs between collars, conduit slots, a layered head — while
+        # staying an EW machine's tool: thinner, colder, more instrument.
+        AX = (0, math.radians(90), 0)
         o.append(add_box("m_butt", (0.12, 0.09, 0.09), piv + Vector((-0.10, 0, 0)),
                          coll=coll, mat=M_HULL))
         o.append(add_cyl("m_haft", 0.048, 1.02, piv + Vector((0.42, 0, 0)),
-                         (0, math.radians(90), 0), 12, coll=coll, mat=M_FRAME))
+                         AX, 12, coll=coll, mat=M_FRAME))
+        # Knurled runs, so the haft is gripped rather than a smooth rod.
+        for i in range(2):
+            a, b = (0.00, 0.30) if i == 0 else (0.62, 0.92)
+            k = int((b - a) / 0.055)
+            for j in range(k):
+                o.append(add_cyl(f"m_knurl{i}_{j}", 0.055, 0.013,
+                                 piv + Vector((a + 0.02 + j * (b - a - 0.04) / max(1, k - 1), 0, 0)),
+                                 AX, 10, coll=coll, mat=M_FRAME))
         for i in range(3):
-            o.append(add_cyl(f"m_band{i}", 0.062, 0.045, piv + Vector((0.16 + i * 0.30, 0, 0)),
-                             (0, math.radians(90), 0), 12, coll=coll, mat=M_ACC))
-        o.append(add_box("m_head", (0.20, 0.10, 0.20), piv + Vector((1.02, 0, 0.02)),
-                         coll=coll, mat=M_SUB))
-        blade = 0.62
-        o.append(add_cyl("m_bloom", 0.052, blade, piv + Vector((1.14 + blade / 2, 0, 0.06)),
-                         (0, math.radians(74), 0), 14, coll=coll, cone_r2=0.010, mat=M_BEAM))
-        o.append(add_cyl("m_core", 0.016, blade * 0.98,
-                         piv + Vector((1.14 + blade / 2, 0, 0.06)),
-                         (0, math.radians(74), 0), 10, coll=coll, cone_r2=0.003, mat=M_CORE))
+            x = 0.16 + i * 0.30
+            o.append(add_cyl(f"m_band{i}", 0.064, 0.048, piv + Vector((x, 0, 0)),
+                             AX, 6, coll=coll, mat=M_ACC))
+            o.append(add_box(f"m_conduit{i}", (0.026, 0.052, 0.026),
+                             piv + Vector((x, 0, 0.048)), coll=coll, mat=M_GLOW))
+        # Layered discharge head rather than one block.
+        o.append(add_box("m_neck", (0.10, 0.08, 0.10), piv + Vector((0.98, 0, 0.01)),
+                         coll=coll, mat=M_FRAME))
+        o.append(add_box("m_headA", (0.20, 0.10, 0.20), piv + Vector((1.06, 0, 0.02)),
+                         (0, math.radians(-6), 0), coll=coll, mat=M_SUB))
+        o.append(add_box("m_headB", (0.13, 0.11, 0.10), piv + Vector((1.09, 0, -0.09)),
+                         (0, math.radians(5), 0), coll=coll, mat=M_HULL))
+        # Mouth under the drawn cleaver's root at (1.15, -0.03).
+        o.append(add_box("m_mouth", (0.045, 0.062, 0.070), piv + Vector((1.14, 0, -0.02)),
+                         coll=coll, mat=M_GLOW))
+        o.append(add_cyl("m_vent", 0.042, 0.085, piv + Vector((1.03, 0, -0.13)),
+                         (math.radians(90), 0, 0), 10, coll=coll, mat=M_ACC))
         # Discharge prongs flanking the head.
         for i, dz in enumerate((0.12, -0.12)):
             o.append(add_box(f"m_prong{i}", (0.16, 0.035, 0.035),
@@ -2716,30 +2715,39 @@ def build_mech(mech_id, palette_key=None):
                          (0, math.radians(90), 0), 12, coll=coll, mat=M_GLOW))
         split_melee(parts, o, piv, coll, pn)
     else:
-        # Hilt: gripped, ribbed, with a pommel.
+        # HALCYON: a Concord beam saber. The most *machined* weapon on the
+        # roster — this is issued equipment from the faction that builds to a
+        # standard, so it reads as turned and collared rather than forged.
+        AX = (0, math.radians(90), 0)
+        # Hilt: knurled grip run between a pommel and a hex collar.
         o.append(add_box("m_grip", (0.19, 0.10, 0.10), piv, coll=coll, mat=M_FRAME))
-        for i in range(3):
-            o.append(add_cyl(f"m_rib{i}", 0.056, 0.018, piv + Vector((-0.05 + i * 0.05, 0, 0)),
-                             (0, math.radians(90), 0), 10, coll=coll, mat=M_SUB))
+        for i in range(5):
+            o.append(add_cyl(f"m_knurl{i}", 0.058, 0.014,
+                             piv + Vector((-0.07 + i * 0.035, 0, 0)),
+                             AX, 10, coll=coll, mat=M_FRAME))
         o.append(add_box("m_pommel", (0.06, 0.09, 0.09), piv + Vector((-0.13, 0, 0)),
                          coll=coll, mat=M_HULL))
-        # Emitter: a flared shroud the blade springs from.
-        o.append(add_wedge("m_emitter", (0.15, 0.14, 0.16), 1.5, piv + Vector((0.15, 0, 0)),
-                           (0, math.radians(90), 0), coll=coll, mat=M_HULL))
-        o.append(add_cyl("m_lens", 0.052, 0.03, piv + Vector((0.23, 0, 0)),
-                         (0, math.radians(90), 0), 14, coll=coll, mat=M_CORE))
-        for i, dz in enumerate((0.075, -0.075)):
-            o.append(add_box(f"m_prong{i}", (0.10, 0.035, 0.035),
-                             piv + Vector((0.26, 0, dz)), coll=coll, mat=M_ACC))
-        # Blade: three concentric layers, tapering to a point.
-        o.append(add_cyl("m_bloom", 0.062, blade_len, piv + Vector((0.26 + blade_len / 2, 0, 0)),
-                         (0, math.radians(90), 0), 16, coll=coll, cone_r2=0.012, mat=M_BEAM))
-        o.append(add_cyl("m_sheath", 0.038, blade_len * 0.99,
-                         piv + Vector((0.26 + blade_len / 2, 0, 0)),
-                         (0, math.radians(90), 0), 16, coll=coll, cone_r2=0.008, mat=M_BEAM))
-        o.append(add_cyl("m_core", 0.017, blade_len * 0.985,
-                         piv + Vector((0.26 + blade_len / 2, 0, 0)),
-                         (0, math.radians(90), 0), 12, coll=coll, cone_r2=0.004, mat=M_CORE))
+        o.append(add_cyl("m_collar", 0.070, 0.055, piv + Vector((0.09, 0, 0)),
+                         AX, 6, coll=coll, mat=M_SUB))
+        # **The conduit.** A run of plasma visibly entering the emitter, so the
+        # blade has plumbing behind it rather than starting at a bare lens.
+        o.append(add_box("m_conduit", (0.10, 0.052, 0.026),
+                         piv + Vector((0.09, 0, 0.050)), coll=coll, mat=M_GLOW))
+        # Emitter: two offset plates and a shroud, not one block.
+        o.append(add_wedge("m_emitter", (0.13, 0.13, 0.15), 1.5, piv + Vector((0.15, 0, 0)),
+                           AX, coll=coll, mat=M_HULL))
+        o.append(add_box("m_headA", (0.09, 0.11, 0.13), piv + Vector((0.20, 0, 0.01)),
+                         (0, math.radians(-5), 0), coll=coll, mat=M_SUB))
+        # The mouth: brightest fitting on the weapon, sitting under the drawn
+        # blade's root at x=0.25.
+        o.append(add_box("m_mouth", (0.04, 0.062, 0.062), piv + Vector((0.245, 0, 0)),
+                         coll=coll, mat=M_GLOW))
+        o.append(add_cyl("m_vent", 0.040, 0.085, piv + Vector((0.14, 0, -0.11)),
+                         (math.radians(90), 0, 0), 10, coll=coll, mat=M_ACC))
+        for i, dz in enumerate((0.078, -0.078)):
+            o.append(add_box(f"m_prong{i}", (0.13, 0.032, 0.034),
+                             piv + Vector((0.28, 0, dz)),
+                             (0, math.radians(-4 + i * 8), 0), coll=coll, mat=M_ACC))
         split_melee(parts, o, piv, coll, pn)
 
     # ---- thrusters: rear-facing bells -------------------------------------

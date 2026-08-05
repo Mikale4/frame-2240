@@ -32,6 +32,16 @@ Three systems, per the art direction:
 
 Output: assets/sprites/mechs/<mech>_meleeEnergy.png       (frame 0)
         assets/sprites/mechs/<mech>_meleeEnergy_<n>.png   (frames 1..N-1)
+
+THIS FILE IS THE ONLY SOURCE OF A PROJECTED BLADE
+-------------------------------------------------
+`build_mechs.py` used to model the energy as well, which left the manifest tile
+coming from Blender while the pixels came from here (D131 left that coupled on
+purpose, as the smaller step). It no longer builds any: the five weapons that
+project a blade carry emitter hardware only, and this script owns the PNG, the
+canvas size and the `meleeEnergy` manifest row. Rebuild order is therefore
+Blender first, then merge the manifest, then this — running Blender afterwards
+no longer clobbers anything, because it has nothing to say about the blade.
 """
 
 import json
@@ -44,35 +54,126 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPRITES = os.path.join(ROOT, "assets", "sprites", "mechs")
 
-# Must match build_mechs.py, or the blade will not sit on its emitter.
+# All three must match build_mechs.py, or the blade will not sit on its emitter.
 PX_PER_BU = 120.0
+LOGICAL_PER_BU = 60.0
+CAM_AZIMUTH = math.radians(15.0)
+CAM_ELEVATION = math.radians(9.0)
+
+TILE_STEP = 64
+TILE_MIN = 320
+TILE_MAX = 1024
 
 # Turbulence variants per blade. Four is enough to read as churning and cheap
 # enough to keep in the atlas.
 FRAMES = 4
 
 
-def _centreline(spec, size):
+def _project(x, y, z):
+    """
+    Blender point -> (screen right, screen up), in Blender units.
+
+    **The camera is not axis-aligned** and this was drawn as though it were: the
+    first cut mapped Blender X straight to image x and Z to image y, which is
+    only true at azimuth 0 / elevation 0. The real rig sits at 15 deg / 9 deg,
+    which cost PYRE about 8 px of seating on its own emitter mouth — tolerable
+    on one blade inside a 34 px flare, and *not* tolerable for CIRRUS, whose two
+    daggers are separated by nothing but their Y offset. Unprojected they draw
+    exactly on top of each other and the weapon stops being twin.
+
+    Derived from `setup_camera` rather than sampled: the basis of a camera
+    tracking the origin from (D sin az cos el, -D cos az cos el, D sin el).
+    """
+    ca, sa = math.cos(CAM_AZIMUTH), math.sin(CAM_AZIMUTH)
+    ce, se = math.cos(CAM_ELEVATION), math.sin(CAM_ELEVATION)
+    return (x * ca + y * sa,
+            -x * sa * se + y * ca * se + z * ce)
+
+
+def _path_xz(spec, n):
+    """
+    Centreline stations in the weapon's own XZ plane, as (f, x, z).
+
+    Two forms, because one cannot express both shapes honestly:
+
+    * `arc` — centre, radius and swept angle. PYRE's scythe is a 95 deg sweep;
+      putting the centre behind the emitter is what makes the blade leave the
+      haft at a right angle, so those numbers have to stay stated as an arc.
+    * `chord` — root, tip and a `bow` (perpendicular sag at the midpoint). This
+      is the natural way to state a sabre or a spike, where what is known is
+      where the blade starts and stops, and the curvature is a small correction.
+      `bow` 0 gives a dead straight blade with no special case.
+    """
+    if "arc" in spec:
+        a = spec["arc"]
+        r, cx, cz = a["r"], a["cx"], a["cz"]
+        span, start = math.radians(a["span_deg"]), math.radians(a["start_deg"])
+        for i in range(n):
+            f = i / (n - 1)
+            ang = start - f * span
+            yield f, cx + r * math.cos(ang), cz + r * math.sin(ang)
+    else:
+        c = spec["chord"]
+        (x0, z0), (x1, z1) = c["root"], c["tip"]
+        bow = c.get("bow", 0.0)
+        dx, dz = x1 - x0, z1 - z0
+        ln = math.hypot(dx, dz) or 1.0
+        nx, nz = -dz / ln, dx / ln          # left normal, in the XZ plane
+        for i in range(n):
+            f = i / (n - 1)
+            b = bow * 4.0 * f * (1.0 - f)   # zero at both ends, max at the middle
+            yield f, x0 + dx * f + nx * b, z0 + dz * f + nz * b
+
+
+def _strands(spec):
+    """Y offsets of this weapon's blades. One, unless it is CIRRUS."""
+    return spec.get("strands", [0.0])
+
+
+def _centreline(spec, strand_y, size):
     """Blade centreline and half-width, in image pixels."""
-    arc_r = spec["arc_r"] * PX_PER_BU
-    cx = spec["cx"] * PX_PER_BU
-    cz = spec["cz"] * PX_PER_BU
-    span = math.radians(spec["span_deg"])
-    start = math.radians(spec["start_deg"])
     peak = spec["peak_at"]
+    taper = spec.get("taper", 1.25)
     wide = spec["width"] * PX_PER_BU
     c = size / 2
 
     pts = []
-    n = 220
-    for i in range(n):
-        f = i / (n - 1)
-        a = start - f * span
-        x = c + cx + arc_r * math.cos(a)
-        y = c - (cz + arc_r * math.sin(a))     # Blender +Z up; image +y down
-        prof = (f / peak) if f < peak else ((1.0 - f) / (1.0 - peak)) ** 1.25
-        pts.append((x, y, max(1.5, wide * prof)))
+    for f, x, z in _path_xz(spec, 220):
+        sx, su = _project(x, strand_y, z)
+        prof = (f / peak) if f < peak else ((1.0 - f) / (1.0 - peak)) ** taper
+        # Blender +Z is up; image +y is down.
+        pts.append((c + sx * PX_PER_BU, c - su * PX_PER_BU, max(1.5, wide * prof)))
     return pts
+
+
+def _probe_tile(spec):
+    """
+    A canvas certain to be large enough to draw on. **Not the final tile.**
+
+    This is an analytic upper bound — every station charged the widest filament
+    excursion its local half-width allows — and bounds of that shape are loose,
+    because the excursions it adds up never actually co-occur. Measured against
+    what the renderer puts down it runs one 64 px step over on three of the five
+    blades, which on PYRE is 4 frames x 256 px of atlas height. `_fit` then crops
+    to what landed. Reason for the canvas; measure for the tile.
+    """
+    look = LOOKS[spec["look"]]
+    # Filaments and sparks are offset by a fraction of the **local** half-width,
+    # so the excursion has to be measured per station. Charging every station the
+    # widest point's excursion cost PYRE a whole 768 px tile for a blade that
+    # fits in 576 — and the atlas is only 1024 wide, so that is a real price.
+    reach = max(look["tongues"]["spread"], look["spray"]["spread"],
+                look["body"]["spread"])
+    half = 0.0
+    for y in _strands(spec):
+        # size 0 puts the centre at the origin, i.e. pivot-relative pixels.
+        for x, iy, w in _centreline(spec, y, 0):
+            half = max(half, abs(x) + w * reach, abs(iy) + w * reach)
+    # Emitter bloom, plus headroom for the glow blur, which is not clipped to the
+    # shape that cast it.
+    need = 2.0 * (half + spec["flare"] + 3.0 * look["glow_blur"])
+    steps = math.ceil(need / TILE_STEP)
+    return max(TILE_MIN, min(TILE_MAX, steps * TILE_STEP))
 
 
 def _normals(pts):
@@ -182,37 +283,130 @@ def _emitter_flare(size, pts, rnd, radius, bright):
     return img.filter(ImageFilter.GaussianBlur(2.2))
 
 
+# How each weapon burns. **Shape alone does not separate five blades** — four of
+# the five glow colours sit in the same blue-cyan corner of the palette, because
+# that is what those machines are, so the way the energy *behaves* has to carry
+# most of the difference at gameplay scale.
+#
+# Counts are per strand and scale with blade length, not area: a narrow blade
+# wants the same filaments per unit length as a wide one, which is exactly what
+# concentrates a sabre into a coherent hot line instead of a sparkler. That
+# concentration is why `field_norm` and `heat_norm` climb as blades get thinner —
+# the same overlap through a quarter of the width is four times the density, and
+# leaving the normalisers alone bleaches the whole blade white (D133).
+LOOKS = {
+    # PYRE. A wide, unstable, burning crescent. The reference look.
+    "scythe": dict(
+        body=dict(count=230, spread=0.92, span_lo=0.30, span_hi=0.80,
+                  bright=42, wobble=0.15, widths=[1, 1, 2, 2]),
+        mass=dict(count=120, spread=0.52, span_lo=0.40, span_hi=0.90,
+                  bright=46, wobble=0.10, widths=[2, 2, 3]),
+        core=dict(count=52, spread=0.15, span_lo=0.45, span_hi=0.95,
+                  bright=72, wobble=0.05, widths=[1, 2, 2]),
+        tongues=dict(count=90, spread=1.55, span_lo=0.05, span_hi=0.24,
+                     bright=26, wobble=0.42, widths=[1]),
+        spray=dict(count=220, spread=1.7, bright=55),
+        field_norm=340.0, heat_norm=300.0, glow_blur=7.0,
+    ),
+    # HALCYON. A Concord beam saber: the most *disciplined* blade in the game.
+    # Long parallel filaments, almost no wobble, little shedding — it should
+    # read as contained rather than burning.
+    "beam": dict(
+        body=dict(count=96, spread=0.86, span_lo=0.45, span_hi=0.95,
+                  bright=40, wobble=0.06, widths=[1, 1, 2]),
+        mass=dict(count=54, spread=0.46, span_lo=0.55, span_hi=1.00,
+                  bright=44, wobble=0.04, widths=[2, 2, 3]),
+        core=dict(count=30, spread=0.13, span_lo=0.60, span_hi=1.00,
+                  bright=70, wobble=0.02, widths=[1, 2, 2]),
+        tongues=dict(count=22, spread=1.25, span_lo=0.04, span_hi=0.16,
+                     bright=20, wobble=0.26, widths=[1]),
+        spray=dict(count=46, spread=1.35, bright=42),
+        field_norm=520.0, heat_norm=460.0, glow_blur=6.0,
+    ),
+    # VESPER. A bayonet is a point, not an edge: the tightest, hardest, least
+    # decorated blade on the roster, with the breakup pulled almost to nothing.
+    "spike": dict(
+        body=dict(count=54, spread=0.78, span_lo=0.55, span_hi=1.00,
+                  bright=42, wobble=0.05, widths=[1, 1, 2]),
+        mass=dict(count=32, spread=0.42, span_lo=0.65, span_hi=1.00,
+                  bright=46, wobble=0.03, widths=[2, 2]),
+        core=dict(count=20, spread=0.12, span_lo=0.70, span_hi=1.00,
+                  bright=74, wobble=0.02, widths=[1, 2]),
+        tongues=dict(count=12, spread=1.10, span_lo=0.04, span_hi=0.14,
+                     bright=18, wobble=0.22, widths=[1]),
+        spray=dict(count=26, spread=1.20, bright=38),
+        field_norm=470.0, heat_norm=430.0, glow_blur=5.0,
+    ),
+    # CIRRUS. Eight alternating hits: the flurry is the identity, so these two
+    # shards are the least stable things on the roster — heavy shedding, high
+    # wobble, filaments that detach and stream.
+    "shard": dict(
+        body=dict(count=64, spread=0.95, span_lo=0.35, span_hi=0.85,
+                  bright=38, wobble=0.22, widths=[1, 1, 2]),
+        mass=dict(count=34, spread=0.50, span_lo=0.45, span_hi=0.95,
+                  bright=44, wobble=0.16, widths=[2, 2]),
+        core=dict(count=18, spread=0.14, span_lo=0.55, span_hi=1.00,
+                  bright=72, wobble=0.06, widths=[1, 2]),
+        tongues=dict(count=40, spread=1.70, span_lo=0.05, span_hi=0.20,
+                     bright=24, wobble=0.55, widths=[1]),
+        spray=dict(count=76, spread=1.75, bright=48),
+        field_norm=540.0, heat_norm=470.0, glow_blur=5.5,
+    ),
+    # NULLTIDE. A polearm cleaver — broad enough that a five-hit sweep has a
+    # shape to sweep. Between the scythe and the saber: real mass, moderate fray.
+    "cleaver": dict(
+        body=dict(count=132, spread=0.90, span_lo=0.35, span_hi=0.85,
+                  bright=40, wobble=0.12, widths=[1, 1, 2, 2]),
+        mass=dict(count=72, spread=0.50, span_lo=0.45, span_hi=0.92,
+                  bright=45, wobble=0.09, widths=[2, 2, 3]),
+        core=dict(count=32, spread=0.14, span_lo=0.50, span_hi=0.96,
+                  bright=72, wobble=0.04, widths=[1, 2, 2]),
+        tongues=dict(count=48, spread=1.45, span_lo=0.05, span_hi=0.22,
+                     bright=24, wobble=0.38, widths=[1]),
+        spray=dict(count=110, spread=1.6, bright=50),
+        field_norm=400.0, heat_norm=350.0, glow_blur=6.5,
+    ),
+}
+
+
 def render_blade(spec, seed, size=512):
     """One frame of a projected blade, RGBA."""
     rnd = random.Random(seed)
-    pts = _centreline(spec, size)
-    nrm = _normals(pts)
+    look = LOOKS[spec["look"]]
+    zero = Image.new("L", (size, size), 0)
+    body = mass = core = tongues = spray = flare = zero
 
-    # --- primary blade: dense, long, near-parallel. Carries the silhouette.
-    body = _filaments(size, pts, nrm, rnd, count=230, spread=0.92,
-                      span_lo=0.30, span_hi=0.80, bright=42, wobble=0.15,
-                      widths=[1, 1, 2, 2])
-    # A denser inner band. Without it the accumulation is evenly sparse and the
-    # blade reads as a sparkler; the reference has real mass down the middle and
-    # frays only at the boundary.
-    mass = _filaments(size, pts, nrm, rnd, count=120, spread=0.52,
-                      span_lo=0.40, span_hi=0.90, bright=46, wobble=0.10,
-                      widths=[2, 2, 3])
-    # A tight bright bundle down the middle: the white-hot core.
-    core = _filaments(size, pts, nrm, rnd, count=52, spread=0.15,
-                      span_lo=0.45, span_hi=0.95, bright=72, wobble=0.05,
-                      widths=[1, 2, 2])
+    # Each strand is a whole blade in its own right and accumulates into the same
+    # field, so CIRRUS's pair overlap and bloom into each other where they cross
+    # rather than being composited as two cut-outs.
+    for si, sy in enumerate(_strands(spec)):
+        pts = _centreline(spec, sy, size)
+        nrm = _normals(pts)
+        # A different stream per strand, or twin daggers churn in lockstep.
+        srnd = random.Random(seed * 31 + si * 7717)
 
-    # --- secondary breakup: short, wide-ranging, faint. Tongues and spray.
-    tongues = _filaments(size, pts, nrm, rnd, count=90, spread=1.55,
-                         span_lo=0.05, span_hi=0.24, bright=26, wobble=0.42,
-                         widths=[1])
-    spray = _particles(size, pts, nrm, rnd, 220, 1.7, 55)
-    # Bloom at the emitter mouth, spilling back over the metal so the blade has
-    # a visible source instead of beginning at a hard boundary.
-    flare = _emitter_flare(size, pts, rnd, radius=spec.get("flare", 30.0), bright=150)
+        def fil(key):
+            return _filaments(size, pts, nrm, srnd, **look[key])
 
-    glow = ImageChops.add(body, mass).filter(ImageFilter.GaussianBlur(7.0))
+        # --- primary blade: dense, long, near-parallel. Carries the silhouette.
+        body = ImageChops.add(body, fil("body"))
+        # A denser inner band. Without it the accumulation is evenly sparse and
+        # the blade reads as a sparkler; the reference has real mass down the
+        # middle and frays only at the boundary.
+        mass = ImageChops.add(mass, fil("mass"))
+        # A tight bright bundle down the middle: the white-hot core.
+        core = ImageChops.add(core, fil("core"))
+        # --- secondary breakup: short, wide-ranging, faint. Tongues and spray.
+        tongues = ImageChops.add(tongues, fil("tongues"))
+        sp = look["spray"]
+        spray = ImageChops.add(
+            spray, _particles(size, pts, nrm, srnd, sp["count"], sp["spread"], sp["bright"]))
+        # Bloom at the emitter mouth, spilling back over the metal so the blade
+        # has a visible source instead of beginning at a hard boundary.
+        flare = ImageChops.add(
+            flare, _emitter_flare(size, pts, srnd, radius=spec.get("flare", 30.0), bright=150))
+
+    glow = ImageChops.add(body, mass).filter(ImageFilter.GaussianBlur(look["glow_blur"]))
     field = ImageChops.add(ImageChops.add(body, mass), tongues)
     field = ImageChops.add(field, spray)
     field = ImageChops.add(field, flare)
@@ -221,6 +415,8 @@ def render_blade(spec, seed, size=512):
     hot = ImageChops.add(core, core.filter(ImageFilter.GaussianBlur(3.0)))
     hot = ImageChops.add(hot, flare.point(lambda v: int(v * 0.75)))
 
+    field_norm = look["field_norm"]
+    heat_norm = look["heat_norm"]
     dim_rgb = spec.get("dim", spec["body"])
     body_rgb = spec["body"]
     core_rgb = spec["core"]
@@ -238,8 +434,8 @@ def render_blade(spec, seed, size=512):
             # white. Raising the filament count without raising these drove
             # nearly the whole blade past the core threshold and bleached the
             # yellow out of it.
-            inten = min(1.0, f / 340.0)
-            heat = min(1.0, h / 300.0)
+            inten = min(1.0, f / field_norm)
+            heat = min(1.0, h / heat_norm)
             # Colour climbs dim -> body -> white with accumulated density, so the
             # blade is hottest exactly where the most filaments overlap.
             if inten < 0.55:
@@ -258,47 +454,149 @@ def render_blade(spec, seed, size=512):
     return img
 
 
-# Blade shapes, in Blender units relative to the part pivot. `cx`/`cz` put the
-# arc centre **behind the emitter on the haft axis**, which is what makes the
-# blade leave the shaft at a right angle instead of continuing along it.
+# Blade shapes, in Blender units relative to the part pivot, **measured off each
+# mech's emitter hardware in mechs.blend**. Root sits on the emitter mouth; tip
+# holds the modelled reach the weapon already had, so converting a blade changes
+# how it reads and not how far it appears to go.
+#
+# Colour is that mech's palette `glow` opened into three steps: `dim` a deeper,
+# more saturated version of it, `body` the identity itself, `core` near-white
+# with the hue still in it. Four of the five sit in the blue-cyan corner because
+# four of these machines do; `LOOKS` carries the separation.
 BLADES = {
     "pyre": dict(
-        # Must mirror the scythe branch in build_mechs.py — the modelled emitter
-        # sits at the arc's root, and a mismatch detaches the blade from it.
-        arc_r=2.20, cx=1.58 - 2.20, cz=0.02, span_deg=95.0, start_deg=0.0,
-        width=0.34, peak_at=0.16, flare=34.0,
+        # The modelled emitter sits at the arc's root — a mismatch detaches the
+        # blade from it. Mouth at x=1.58, prongs reaching to 1.93.
+        arc=dict(r=2.20, cx=1.58 - 2.20, cz=0.02, span_deg=95.0, start_deg=0.0),
+        width=0.34, peak_at=0.16, taper=1.25, flare=34.0, look="scythe",
         dim=(214, 96, 12), body=(255, 186, 34), core=(255, 253, 232),
+    ),
+    # HALCYON: lens at x=0.23, prongs at 0.26. Modelled blade ran 0.26 -> 1.54.
+    "halcyon": dict(
+        chord=dict(root=(0.25, 0.0), tip=(1.54, 0.0), bow=0.018),
+        width=0.085, peak_at=0.09, taper=0.40, flare=26.0, look="beam",
+        dim=(14, 84, 214), body=(96, 200, 255), core=(234, 250, 255),
+    ),
+    # VESPER: emitter wedge at x=0.24, spike ran 0.30 -> 0.94 at z=-0.02. Dead
+    # straight — a thrusting weapon has no belly.
+    "vesper": dict(
+        chord=dict(root=(0.29, -0.02), tip=(0.94, -0.02), bow=0.0),
+        width=0.055, peak_at=0.12, taper=1.00, flare=20.0, look="spike",
+        dim=(14, 150, 142), body=(120, 240, 214), core=(234, 255, 251),
+    ),
+    # CIRRUS: paired lenses at x=0.19, y=+/-0.10; blades ran 0.22 -> 0.78 at
+    # z=0.02. The Y offset is the *only* thing separating the two on screen,
+    # which is what makes `_project` load-bearing here rather than cosmetic.
+    "cirrus": dict(
+        chord=dict(root=(0.21, 0.02), tip=(0.78, 0.02), bow=0.02),
+        # Widened from the modelled +/-0.10 to +/-0.15, matched in build_mechs.py.
+        # At 0.10 the pair projected 6 px apart and merged into one fuzzy shard
+        # at gameplay scale, which loses the entire point of a twin weapon.
+        strands=[0.15, -0.15],
+        width=0.058, peak_at=0.14, taper=0.80, flare=18.0, look="shard",
+        dim=(48, 130, 205), body=(150, 216, 255), core=(242, 251, 255),
+    ),
+    # NULLTIDE: head at x=1.02..1.12, prongs at 1.10. The modelled rod ran from
+    # (1.15,-0.03) to (1.75,0.15) — 16 deg above the haft. Same root and tip, but
+    # broad and bellied instead of a rod: a five-hit sweep needs a blade with a
+    # face to sweep with.
+    "nulltide": dict(
+        chord=dict(root=(1.15, -0.03), tip=(1.75, 0.145), bow=0.05),
+        width=0.125, peak_at=0.34, taper=0.85, flare=26.0, look="cleaver",
+        dim=(10, 116, 200), body=(60, 224, 255), core=(230, 252, 255),
     ),
 }
 
 
-def _tile_for(mech):
-    """
-    Canvas size, taken from the manifest rather than hardcoded.
+# Kept between the drawn edge and the tile edge. The bound below is measured at
+# alpha > 2, i.e. at the point the blade stops being visible at all, so this only
+# has to cover the faintest fringe rather than guess at one.
+FIT_PAD_PX = 10.0
 
-    Blender still builds the scythe's energy geometry and records its tile; this
-    generator then overwrites the PNG. Deriving the canvas from that recorded
-    tile is what keeps the two from silently disagreeing — they matched at 512
-    by coincidence once, and a longer blade would have broken it.
+
+def _content_half(frames):
+    """Furthest any frame's visible pixels reach from the shared pivot."""
+    probe = frames[0].size[0]
+    c = probe / 2.0
+    half = 0.0
+    for im in frames:
+        bb = im.getchannel("A").point(lambda v: 255 if v > 2 else 0).getbbox()
+        if bb is None:
+            continue
+        half = max(half, abs(bb[0] - c), abs(bb[2] - c), abs(bb[1] - c), abs(bb[3] - c))
+    return half
+
+
+def _fit(frames):
+    """
+    Crop the probe canvas down to the smallest tile that holds every frame.
+
+    Cropping is exact rather than an approximation of re-rendering: the blade is
+    drawn in absolute pivot-relative coordinates, so taking an equal bite off all
+    four sides leaves every pixel where it was and the pivot still dead centre.
+    Both sizes are multiples of `TILE_STEP`, so the bite is always whole pixels.
+
+    The union across turbulence frames is what matters — they are the same blade
+    churning, so fitting one and clipping another would flicker at the tip.
+    """
+    probe = frames[0].size[0]
+    half = _content_half(frames)
+    steps = math.ceil(2.0 * (half + FIT_PAD_PX) / TILE_STEP)
+    size = max(TILE_MIN, min(probe, steps * TILE_STEP))
+    if size == probe:
+        return frames, size, half
+    o = (probe - size) // 2
+    return [im.crop((o, o, o + size, o + size)) for im in frames], size, half
+
+
+def _manifest_row(mech, size, half):
+    """The `meleeEnergy` row this generator now owns outright."""
+    span = round(2.0 * half / PX_PER_BU, 4)
+    dims = (span, 0.0, span)
+    return {
+        "file": f"{mech}_meleeEnergy.png",
+        "tile": size,
+        "dims_bu": list(dims),
+        "dims_logical_px": [round(v * LOGICAL_PER_BU, 1) for v in dims],
+        # Loud, because a reader who finds no such object in mechs.blend should
+        # not conclude the manifest is stale.
+        "source": "tools/energy_blade.py — drawn, not modelled; no Blender object",
+    }
+
+
+def _update_manifest(rows):
+    """
+    Writes the generated rows into `manifest.json`.
+
+    `build_all(only=[...])` writes a *partial* parts map, so the caller must
+    merge a pre-build base back in before this runs — this only touches the
+    `meleeEnergy` rows and cannot repair anything else.
     """
     path = os.path.join(SPRITES, "manifest.json")
-    try:
-        with open(path, encoding="utf-8") as fh:
-            m = json.load(fh)
-        return int(m["parts"][mech]["meleeEnergy"]["tile"])
-    except (OSError, KeyError, ValueError, TypeError):
-        return 512
+    with open(path, encoding="utf-8") as fh:
+        meta = json.load(fh)
+    parts = meta.setdefault("parts", {})
+    for mech, row in rows.items():
+        parts.setdefault(mech, {})["meleeEnergy"] = row
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(meta, fh, indent=2)
+    return path
 
 
 def main():
+    rows = {}
     for mech, spec in BLADES.items():
-        size = _tile_for(mech)
-        print(f"{mech}: canvas {size} (from manifest)")
-        for i in range(FRAMES):
-            img = render_blade(spec, seed=1000 + i * 37, size=size)
+        probe = _probe_tile(spec)
+        frames = [render_blade(spec, seed=1000 + i * 37, size=probe)
+                  for i in range(FRAMES)]
+        frames, size, half = _fit(frames)
+        print(f"{mech}: {spec['look']}, {len(_strands(spec))} strand(s), "
+              f"probe {probe} -> tile {size} (content half {half:.0f} px)")
+        for i, img in enumerate(frames):
             name = f"{mech}_meleeEnergy.png" if i == 0 else f"{mech}_meleeEnergy_{i}.png"
             img.save(os.path.join(SPRITES, name))
-            print(f"  {name}  {img.size}")
+        rows[mech] = _manifest_row(mech, size, half)
+    print(f"manifest: {_update_manifest(rows)}")
     print(f"{len(BLADES)} blade(s) x {FRAMES} frames")
 
 
