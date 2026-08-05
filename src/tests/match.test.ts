@@ -205,6 +205,58 @@ describe('training dummy', () => {
     expect(s.outcome).toBe('none');
   });
 
+  it('gets the pilot back up too', () => {
+    // The second slot can be handed to a real CPU now, so the drill is as able
+    // to kill you as you are to kill it. A training room that throws you out to
+    // a results screen for losing is not a training room.
+    const s = new MatchSim({
+      playerDef: HALCYON, enemyDef: NOCTURNE, introTicks: 1, dummy: true,
+    });
+    s.step(emptyInput(), emptyInput());
+    // HALCYON's last stand clamps life to 1 the first time it would hit zero,
+    // so spend it before asking what happens when the pilot actually dies.
+    s.player.lastStandUsed = true;
+    s.player.life = 0;
+    s.step(emptyInput(), emptyInput());
+
+    expect(s.playerDowns).toBe(1);
+    expect(s.player.alive).toBe(true);
+    expect(s.player.life).toBe(HALCYON.gauges.maxLife);
+    expect(s.outcome).toBe('none');
+    expect(s.phase).toBe(MatchPhase.Fight);
+  });
+
+  it('gets both back up when a trade downs them on the same tick', () => {
+    // Reviving only the first would end the session on the second.
+    const s = new MatchSim({
+      playerDef: HALCYON, enemyDef: NOCTURNE, introTicks: 1, dummy: true,
+    });
+    s.step(emptyInput(), emptyInput());
+    s.player.lastStandUsed = true;
+    s.player.life = 0;
+    s.enemy.life = 0;
+    s.step(emptyInput(), emptyInput());
+
+    expect([s.playerDowns, s.dummyDowns]).toEqual([1, 1]);
+    expect([s.player.alive, s.enemy.alive]).toEqual([true, true]);
+    expect(s.outcome).toBe('none');
+    expect(s.phase).toBe(MatchPhase.Fight);
+  });
+
+  it('puts the revived pilot at a readable distance from the dummy', () => {
+    const s = new MatchSim({
+      playerDef: HALCYON, enemyDef: NOCTURNE, introTicks: 1, dummy: true,
+    });
+    s.step(emptyInput(), emptyInput());
+    s.enemy.x = 200;
+    s.player.lastStandUsed = true;
+    s.player.life = 0;
+    s.step(emptyInput(), emptyInput());
+    expect(Math.abs(s.player.x - s.enemy.x)).toBeGreaterThan(200);
+    expect(s.player.x).toBeGreaterThanOrEqual(s.player.def.rig.hurtRadius);
+    expect(s.player.x).toBeLessThanOrEqual(2400 - s.player.def.rig.hurtRadius);
+  });
+
   it('still lets a normal match end', () => {
     const s = new MatchSim({ playerDef: HALCYON, enemyDef: NOCTURNE, introTicks: 1 });
     s.step(emptyInput(), emptyInput());

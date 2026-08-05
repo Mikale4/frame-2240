@@ -793,7 +793,16 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const wasPhase = s.phase;
+    const wasDowns = s.playerDowns;
     s.step(playerInput, enemyInput);
+
+    // A revive hands back a full bar, which would quietly undo a rig set to 25 %
+    // — and 25 % is chosen precisely to sit inside desperation, so silently
+    // restoring it turns the drill into a different one. Re-assert it on the way
+    // back up, not every tick: doing it continuously would erase every hit taken.
+    if (session.mode === 'training' && s.playerDowns > wasDowns) {
+      this.setTrainingHealth(session.training.health);
+    }
 
     if (wasPhase === MatchPhase.Intro && s.phase === MatchPhase.Fight) {
       this.hud.banner('FIGHT', 70);
