@@ -2268,7 +2268,19 @@ export class Combatant implements FlightState {
     if (!ml.hitDone && ml.hitTimer >= activeStart && ml.hitTimer <= activeEnd) {
       // Generous connect check: the sequence has already committed, so a swing
       // that visually reaches should land.
-      if (dist < p.range + 54) {
+      //
+      // **The escort counts as something a swing can reach.** This was measured
+      // to the locked pilot alone, so a blade passing straight through a drone
+      // produced no hitbox at all — the escort could be shot out of the air but
+      // never cut, which is not a rule anyone would guess from watching it. The
+      // drone only decides whether the swing *exists*; what it connects with is
+      // still `resolveCollisions` and `resolveDroneCollisions`, in that order,
+      // so a swing that lands on the pilot cannot also clip the escort behind.
+      const esc = target.supporter;
+      const escDist = esc.hittable
+        ? Math.hypot(esc.x - this.x, esc.y - this.y)
+        : Infinity;
+      if (dist < p.range + 54 || escDist < p.range + 54) {
         ml.hitDone = true;
         const last = ml.hitIndex >= this.meleeLockHits - 1;
         const base = this.def.melee[Math.min(ml.hitIndex, this.def.melee.length - 1)];
