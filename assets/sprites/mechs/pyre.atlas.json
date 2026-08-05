@@ -4,246 +4,246 @@
    "frame": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeEnergy_1": {
    "frame": {
-    "x": 576,
+    "x": 640,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeEnergy_2": {
    "frame": {
-    "x": 1152,
+    "x": 1280,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeEnergy_3": {
    "frame": {
     "x": 0,
-    "y": 576,
-    "w": 576,
-    "h": 576
+    "y": 640,
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeEnergy_4": {
    "frame": {
-    "x": 576,
-    "y": 576,
-    "w": 576,
-    "h": 576
+    "x": 640,
+    "y": 640,
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeEnergy_5": {
    "frame": {
-    "x": 1152,
-    "y": 576,
-    "w": 576,
-    "h": 576
+    "x": 1280,
+    "y": 640,
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeEnergy_6": {
    "frame": {
     "x": 0,
-    "y": 1152,
-    "w": 576,
-    "h": 576
+    "y": 1280,
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeEnergy_7": {
    "frame": {
-    "x": 576,
-    "y": 1152,
-    "w": 576,
-    "h": 576
+    "x": 640,
+    "y": 1280,
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeEnergy_8": {
    "frame": {
-    "x": 1152,
-    "y": 1152,
-    "w": 576,
-    "h": 576
+    "x": 1280,
+    "y": 1280,
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeEnergy_9": {
    "frame": {
     "x": 0,
-    "y": 1728,
-    "w": 576,
-    "h": 576
+    "y": 1920,
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeEnergy_10": {
    "frame": {
-    "x": 576,
-    "y": 1728,
-    "w": 576,
-    "h": 576
+    "x": 640,
+    "y": 1920,
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeEnergy_11": {
    "frame": {
-    "x": 1152,
-    "y": 1728,
-    "w": 576,
-    "h": 576
+    "x": 1280,
+    "y": 1920,
+    "w": 640,
+    "h": 640
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    },
    "sourceSize": {
-    "w": 576,
-    "h": 576
+    "w": 640,
+    "h": 640
    }
   },
   "meleeWeapon": {
    "frame": {
     "x": 0,
-    "y": 2304,
+    "y": 2560,
     "w": 512,
     "h": 512
    },
@@ -263,7 +263,7 @@
   "core": {
    "frame": {
     "x": 512,
-    "y": 2304,
+    "y": 2560,
     "w": 320,
     "h": 320
    },
@@ -283,7 +283,7 @@
   "head": {
    "frame": {
     "x": 832,
-    "y": 2304,
+    "y": 2560,
     "w": 320,
     "h": 320
    },
@@ -303,7 +303,7 @@
   "backpack": {
    "frame": {
     "x": 1152,
-    "y": 2304,
+    "y": 2560,
     "w": 320,
     "h": 320
    },
@@ -323,7 +323,7 @@
   "lowerBody": {
    "frame": {
     "x": 1472,
-    "y": 2304,
+    "y": 2560,
     "w": 320,
     "h": 320
    },
@@ -343,7 +343,7 @@
   "legFar": {
    "frame": {
     "x": 0,
-    "y": 2816,
+    "y": 3072,
     "w": 320,
     "h": 320
    },
@@ -363,7 +363,7 @@
   "legNear": {
    "frame": {
     "x": 320,
-    "y": 2816,
+    "y": 3072,
     "w": 320,
     "h": 320
    },
@@ -383,7 +383,7 @@
   "leftArm": {
    "frame": {
     "x": 640,
-    "y": 2816,
+    "y": 3072,
     "w": 320,
     "h": 320
    },
@@ -403,7 +403,7 @@
   "subWeapon": {
    "frame": {
     "x": 960,
-    "y": 2816,
+    "y": 3072,
     "w": 320,
     "h": 320
    },
@@ -423,7 +423,7 @@
   "rightArm": {
    "frame": {
     "x": 1280,
-    "y": 2816,
+    "y": 3072,
     "w": 320,
     "h": 320
    },
@@ -443,7 +443,7 @@
   "mainWeapon": {
    "frame": {
     "x": 1600,
-    "y": 2816,
+    "y": 3072,
     "w": 320,
     "h": 320
    },
@@ -463,7 +463,7 @@
   "leftThruster": {
    "frame": {
     "x": 0,
-    "y": 3136,
+    "y": 3392,
     "w": 320,
     "h": 320
    },
@@ -483,7 +483,7 @@
   "rightThruster": {
    "frame": {
     "x": 320,
-    "y": 3136,
+    "y": 3392,
     "w": 320,
     "h": 320
    },
@@ -503,7 +503,7 @@
   "drone": {
    "frame": {
     "x": 640,
-    "y": 3136,
+    "y": 3392,
     "w": 320,
     "h": 320
    },
@@ -527,7 +527,7 @@
   "format": "RGBA8888",
   "size": {
    "w": 2048,
-   "h": 3456
+   "h": 3712
   },
   "scale": "1",
   "note": "Untrimmed: each frame is square with its pivot at the centre."

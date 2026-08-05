@@ -713,14 +713,14 @@
         "file": "halcyon_meleeEnergy.png",
         "tile": 448,
         "dims_bu": [
-          3.1333,
+          3.15,
           0.0,
-          3.1333
+          3.15
         ],
         "dims_logical_px": [
-          188.0,
+          189.0,
           0.0,
-          188.0
+          189.0
         ],
         "source": "tools/energy_blade.py \u2014 drawn, not modelled; no Blender object"
       }
@@ -1968,16 +1968,16 @@
           2.65
         ],
         "file": "pyre_meleeEnergy.png",
-        "tile": 576,
+        "tile": 640,
         "dims_bu": [
-          4.55,
+          4.65,
           0.0,
-          4.55
+          4.65
         ],
         "dims_logical_px": [
-          273.0,
+          279.0,
           0.0,
-          273.0
+          279.0
         ],
         "source": "tools/energy_blade.py \u2014 drawn, not modelled; no Blender object"
       }
@@ -2191,14 +2191,14 @@
         "file": "nulltide_meleeEnergy.png",
         "tile": 448,
         "dims_bu": [
-          3.55,
+          3.5667,
           0.0,
-          3.55
+          3.5667
         ],
         "dims_logical_px": [
-          213.0,
+          214.0,
           0.0,
-          213.0
+          214.0
         ],
         "source": "tools/energy_blade.py \u2014 drawn, not modelled; no Blender object"
       }

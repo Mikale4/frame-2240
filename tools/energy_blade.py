@@ -137,16 +137,29 @@ def _strands(spec):
 
 
 def _centreline(spec, strand_y, size):
-    """Blade centreline and half-width, in image pixels."""
+    """
+    Blade centreline and half-width, in image pixels.
+
+    `tip` is the width the profile is allowed to fall to at the far end, as a
+    fraction of the widest point. **It is never zero.** A taper that runs to
+    nothing produces a needle, which is what a ground edge looks like; this is
+    plasma, and plasma does not come to a point — it thins until it stops
+    holding together and frays out. Ending on real width, and letting the
+    tongues and spray dissolve it from there, is what reads as dissipation.
+    """
     peak = spec["peak_at"]
     taper = spec.get("taper", 1.25)
+    tip = spec.get("tip", 0.14)
     wide = spec["width"] * PX_PER_BU
     c = size / 2
 
     pts = []
     for f, x, z in _path_xz(spec, 220):
         sx, su = _project(x, strand_y, z)
-        prof = (f / peak) if f < peak else ((1.0 - f) / (1.0 - peak)) ** taper
+        if f < peak:
+            prof = f / peak
+        else:
+            prof = tip + (1.0 - tip) * ((1.0 - f) / (1.0 - peak)) ** taper
         # Blender +Z is up; image +y is down.
         pts.append((c + sx * PX_PER_BU, c - su * PX_PER_BU, max(1.5, wide * prof)))
     return pts
@@ -489,20 +502,20 @@ BLADES = {
         # The modelled emitter sits at the arc's root — a mismatch detaches the
         # blade from it. Mouth at x=1.58, prongs reaching to 1.93.
         arc=dict(r=2.20, cx=1.58 - 2.20, cz=0.02, span_deg=95.0, start_deg=0.0),
-        width=0.34, peak_at=0.16, taper=1.25, flare=34.0, look="scythe",
+        width=0.34, peak_at=0.16, taper=1.25, tip=0.17, flare=34.0, look="scythe",
         dim=(214, 96, 12), body=(255, 186, 34), core=(255, 253, 232),
     ),
     # HALCYON: lens at x=0.23, prongs at 0.26. Modelled blade ran 0.26 -> 1.54.
     "halcyon": dict(
         chord=dict(root=(0.25, 0.0), tip=(1.54, 0.0), bow=0.018),
-        width=0.085, peak_at=0.09, taper=0.40, flare=26.0, look="beam",
+        width=0.085, peak_at=0.09, taper=0.40, tip=0.11, flare=26.0, look="beam",
         dim=(14, 84, 214), body=(96, 200, 255), core=(234, 250, 255),
     ),
     # VESPER: emitter wedge at x=0.24, spike ran 0.30 -> 0.94 at z=-0.02. Dead
     # straight — a thrusting weapon has no belly.
     "vesper": dict(
         chord=dict(root=(0.29, -0.02), tip=(0.94, -0.02), bow=0.0),
-        width=0.055, peak_at=0.12, taper=1.00, flare=20.0, look="spike",
+        width=0.055, peak_at=0.12, taper=1.00, tip=0.08, flare=20.0, look="spike",
         dim=(14, 150, 142), body=(120, 240, 214), core=(234, 255, 251),
     ),
     # CIRRUS: paired lenses at x=0.19, y=+/-0.10; blades ran 0.22 -> 0.78 at
@@ -514,7 +527,7 @@ BLADES = {
         # At 0.10 the pair projected 6 px apart and merged into one fuzzy shard
         # at gameplay scale, which loses the entire point of a twin weapon.
         strands=[0.15, -0.15],
-        width=0.058, peak_at=0.14, taper=0.80, flare=18.0, look="shard",
+        width=0.058, peak_at=0.14, taper=0.80, tip=0.13, flare=18.0, look="shard",
         dim=(48, 130, 205), body=(150, 216, 255), core=(242, 251, 255),
     ),
     # NULLTIDE: head at x=1.02..1.12, prongs at 1.10. The modelled rod ran from
@@ -523,7 +536,7 @@ BLADES = {
     # face to sweep with.
     "nulltide": dict(
         chord=dict(root=(1.15, -0.03), tip=(1.75, 0.145), bow=0.05),
-        width=0.125, peak_at=0.34, taper=0.85, flare=26.0, look="cleaver",
+        width=0.125, peak_at=0.34, taper=0.85, tip=0.16, flare=26.0, look="cleaver",
         dim=(10, 116, 200), body=(60, 224, 255), core=(230, 252, 255),
     ),
 }

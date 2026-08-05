@@ -62,36 +62,59 @@ export function flickerLevel(frame: number): number {
  * the jumps do not come at even spacing. This was a sine and read as a mechanical
  * pump, so it is a table for the same reason the brightness is.
  *
- * Its cycle is **37 frames against the flicker's 31**, and the two are coprime,
+ * Its cycle is **38 frames against the flicker's 31**, and the two are coprime,
  * so brightness and length never lock into a compound rhythm — they drift
- * against each other for 1147 frames, about nineteen seconds, before repeating.
+ * against each other for 1178 frames, about twenty seconds, before repeating.
  *
  * The blade is scaled about its **root**, not its sprite centre; see
  * `MechRenderer.animateEnergy`. Breathing about the centre is what made PYRE's
  * scythe pull away from its own staff.
  */
 const BREATH_STEPS: readonly (readonly [level: number, frames: number])[] = [
+  // Each delta is budgeted against its hold: smoothstep's slope peaks at 1.5x
+  // linear, so a key may move at most ~0.0067 per frame of hold or the blade
+  // jumps again. Long moves therefore get long holds, which is also what makes
+  // the rhythm feel like breathing rather than a wobble.
   [1.0, 4],
-  [1.06, 3],
-  [0.97, 2],
-  [1.1, 4],
-  [1.02, 3],
-  [0.93, 2],
-  [1.08, 3],
-  [1.0, 5],
-  [1.12, 2],
-  [0.96, 4],
-  [1.04, 3],
-  [0.99, 2],
+  [1.025, 3],
+  [1.008, 2],
+  [0.996, 5],
+  [1.028, 3],
+  [1.01, 2],
+  [0.999, 4],
+  [0.975, 3],
+  [0.992, 2],
+  [1.003, 5],
+  [1.03, 2],
+  [1.018, 3],
 ];
 
 const BREATH_FRAMES = BREATH_STEPS.reduce((n, s) => n + s[1], 0);
 
-/** Length multiplier for a 60 Hz frame index. */
+/**
+ * Length multiplier for a 60 Hz frame index.
+ *
+ * **These are keyframes, and the value rides between them.** Brightness is
+ * quantised on purpose — a lamp either is or is not lit, and the jump is the
+ * effect. Length is not: PYRE's blade is 219 px, so a step from 0.97 to 1.05
+ * moves its tip 17 px in a single frame and it reads as the blade *changing
+ * size* rather than breathing. Held as steps, the first cut ran 0.93-1.12 and
+ * popped visibly at the tip.
+ *
+ * The timing stays uneven — which is the irregularity that was wanted — while
+ * smoothstep eases each arrival, so the blade swells and settles instead of
+ * snapping between two lengths. The range is also tightened to ~±4 %, because
+ * amplitude on a long blade is measured at the tip, not as a percentage.
+ */
 export function breathLevel(frame: number): number {
   let f = ((frame % BREATH_FRAMES) + BREATH_FRAMES) % BREATH_FRAMES;
-  for (const [level, frames] of BREATH_STEPS) {
-    if (f < frames) return level;
+  for (let i = 0; i < BREATH_STEPS.length; i++) {
+    const [level, frames] = BREATH_STEPS[i];
+    if (f < frames) {
+      const next = BREATH_STEPS[(i + 1) % BREATH_STEPS.length][0];
+      const t = f / frames;
+      return level + (next - level) * (t * t * (3 - 2 * t));
+    }
     f -= frames;
   }
   return 1;

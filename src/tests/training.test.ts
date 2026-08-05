@@ -5,7 +5,7 @@ import { DroneMode } from '../combat/Supporter';
 import { Btn, emptyInput, isHeld, isPressed } from '../combat/types';
 import { DUMMY_CYCLE, dummyInput } from '../combat/TrainingDummy';
 import { CommandBuffer } from '../combat/CommandBuffer';
-import { flickerLevel } from '../render/EnergyFlicker';
+import { breathLevel, flickerLevel } from '../render/EnergyFlicker';
 import { HEALTH_STEPS, cycleHealth, defaultTrainingSettings, healthLabel } from '../core/TrainingSettings';
 import { commandHeading, commandRows, motionNotation } from '../ui/TrainingOptions';
 import { MOTIONS } from '../combat/CommandBuffer';
@@ -237,6 +237,34 @@ describe('energy flicker', () => {
     // Both, and neither dominant: all holds is a constant, all jumps is noise.
     expect(holds).toBeGreaterThan(4);
     expect(jumps).toBeGreaterThan(8);
+  });
+
+  it('breathes continuously — the blade must never jump length', () => {
+    // Brightness is quantised on purpose; length must not be. PYRE's blade is
+    // 219 logical px, so a step of 0.08 moves its tip 17 px in one frame and
+    // reads as the blade changing size rather than breathing.
+    const B = 38;
+    let worst = 0;
+    for (let f = 0; f < B * 2; f++) {
+      worst = Math.max(worst, Math.abs(breathLevel(f + 1) - breathLevel(f)));
+    }
+    // 0.01 on a 219 px blade is ~2 px of tip travel per frame.
+    expect(worst).toBeLessThan(0.01);
+  });
+
+  it('keeps the breath shallow enough to read as a breath', () => {
+    const B = 38;
+    const levels = Array.from({ length: B }, (_, f) => breathLevel(f));
+    expect(Math.max(...levels)).toBeLessThanOrEqual(1.06);
+    expect(Math.min(...levels)).toBeGreaterThanOrEqual(0.96);
+  });
+
+  it('breathes on a cycle coprime with the flicker', () => {
+    // 37 against 31: the two drift for ~19 s before repeating together, so
+    // brightness and length never lock into one compound rhythm.
+    for (let f = 0; f < 20; f++) {
+      expect([f, breathLevel(f)]).toEqual([f, breathLevel(f + 38)]);
+    }
   });
 
   it('is not periodic on any short sub-cycle', () => {
