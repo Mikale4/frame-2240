@@ -207,6 +207,38 @@ describe('melee reaches the escort', () => {
     expect(d.life).toBeLessThan(before);
   });
 
+  it('switches the lock on the button, and refuses when there is no escort', () => {
+    const s = settled();
+    const p = s.player;
+    const d = s.enemy.supporter;
+    expect(p.lockPref).toBe('mech');
+
+    s.step(press(Btn.TargetCycle), emptyInput());
+    expect(p.lockPref).toBe('drone');
+    s.step(press(Btn.TargetCycle), emptyInput());
+    expect(p.lockPref).toBe('mech');
+
+    // With the escort gone the button must not strand the mounts on nothing.
+    d.takeHit(10_000);
+    d.takeHit(10_000);
+    expect(d.hittable).toBe(false);
+    s.step(press(Btn.TargetCycle), emptyInput());
+    expect(p.lockPref).toBe('mech');
+  });
+
+  it('falls back to the pilot if the chosen escort dies', () => {
+    const s = settled();
+    const p = s.player;
+    p.lockPref = 'drone';
+    const before = p.lockPoint(s.enemy);
+    expect(before).toBeTruthy();
+    s.enemy.supporter.takeHit(10_000);
+    s.enemy.supporter.takeHit(10_000);
+    const after = p.lockPoint(s.enemy)!;
+    // Resolves to the pilot rather than to a dead escort or to null.
+    expect([after.x, after.y]).toEqual([s.enemy.x, s.enemy.y]);
+  });
+
   it('still prefers the pilot when the pilot is the nearer target', () => {
     // The escort must not steal swings that belong to the machine flying it.
     const s = settled();

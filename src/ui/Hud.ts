@@ -39,6 +39,8 @@ export class Hud {
    */
   private readonly satModeTexts: Phaser.GameObjects.Text[] = [];
   private readonly flightTexts: Phaser.GameObjects.Text[] = [];
+  /** Which enemy the mounts are holding. A lock you cannot see is not a lock. */
+  private readonly targetTexts: Phaser.GameObjects.Text[] = [];
   /**
    * Which of this pilot's weapons are offline, and for how long.
    *
@@ -119,8 +121,17 @@ export class Hud {
         })
         .setOrigin(right ? 1 : 0, 0)
         .setStroke('#0a0e18', 4);
-      const disarm = scene.add
+      const targetText = scene.add
         .text(x, 170, '', {
+          fontFamily: FONT,
+          fontSize: '12px',
+          color: '#ffd166',
+        })
+        .setOrigin(right ? 1 : 0, 0)
+        .setStroke('#0a0e18', 4);
+      this.targetTexts.push(targetText);
+      const disarm = scene.add
+        .text(x, 186, '', {
           fontFamily: FONT,
           fontSize: '12px',
           color: '#ff8a5c',
@@ -342,6 +353,19 @@ export class Hud {
           c.flying ? 'FLIGHT: ON' : c.grounded ? 'FLIGHT: OFF (LANDED)' : 'FLIGHT: OFF',
         );
         this.flightTexts[side].setColor(c.flying ? '#9fe0ff' : '#8effc0');
+      }
+
+      // Only worth a line while there is actually a choice to have made: with no
+      // escort in the air the lock has nowhere else to go, and a permanent
+      // "TARGET: PILOT" is noise.
+      const foe = side === 0 ? e : p;
+      const escort = foe?.supporter;
+      if (escort?.hittable) {
+        const onDrone = c.lockPref === 'drone';
+        this.targetTexts[side].setText(onDrone ? `TARGET: ${foe.def.supporter.name}` : 'TARGET: PILOT');
+        this.targetTexts[side].setColor(onDrone ? '#ffd166' : '#7f8ea6');
+      } else {
+        this.targetTexts[side].setText('');
       }
     }
 

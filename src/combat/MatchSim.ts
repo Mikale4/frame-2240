@@ -698,9 +698,16 @@ export class MatchSim {
           ? DESIGNATOR_HOMING
           : 0;
       const guide = p.homing + guided;
-      if (guide > 0 && target.alive) {
-        tx = target.x;
-        ty = target.y;
+      if (guide > 0) {
+        // **Homing follows the shooter's lock, not "the enemy mech".** A missile
+        // that steers to the pilot while its launcher is holding the escort in
+        // the reticle is the guns and the lock disagreeing, which is exactly the
+        // confusion the chosen target exists to remove.
+        const at = shooter.homingPoint(target);
+        if (at) {
+          tx = at.x;
+          ty = at.y;
+        }
       }
       p.step(tx, ty, guide);
 

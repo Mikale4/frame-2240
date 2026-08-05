@@ -140,17 +140,6 @@ const SHIELD_TAKEN = {
 export const DESPERATION_LIFE = 1 / 3;
 
 /**
- * How much closer the enemy drone must be than its owner before the weapon
- * mounts prefer it.
- *
- * A margin rather than a plain "nearest", because the escort spends much of its
- * time drifting forward of its pilot. Without this it would steal the lock
- * whenever it happened to lead, and there would be stretches of a match where
- * shooting the pilot was simply not possible.
- */
-const DRONE_LOCK_EDGE = 90;
-
-/**
  * Desperation multipliers. Deliberately large — these are last stands, and a
  * subtle last stand is not worth the mechanic.
  */
@@ -839,6 +828,19 @@ export class Combatant implements FlightState {
    */
   readonly lockEnabled = true;
   /**
+   * Which of the two enemy targets the mounts hold.
+   *
+   * **This replaces "whichever is nearer".** The escort is permanently deployed,
+   * so under the old rule it took the lock every time it drifted 90 px forward
+   * of its pilot — which in play meant the drone repeatedly dragged the guns off
+   * the pilot at the exact moment the pilot was worth shooting, and neither side
+   * had any say in it. Distance is a bad proxy for what someone wants to kill.
+   *
+   * `mech` is the default and the fallback: a preference for a drone that is
+   * gone, stowed or never existed resolves to the pilot rather than to nothing.
+   */
+  lockPref: 'mech' | 'drone' = 'mech';
+  /**
    * FlyingMode. The reference kept this as `var(20)` with a player toggle and an
    * automatic switch-on during a Level 2 shot. Default on: this is an aerial
    * fighter first, and the floor is a place you choose to visit.
@@ -1381,6 +1383,28 @@ export class Combatant implements FlightState {
   ): void {
     this.firedThisTick = null;
 
+    /**
+     * Target switch, handled before anything can swallow it.
+     *
+     * It belongs here rather than in `tryStartAction`, which only runs when the
+     * machine is free to *act*: no attack in progress, not stunned, not
+     * mid-saturation. Switching target commits nothing, costs nothing and starts
+     * nothing — it is a decision about where to point, and being unable to make
+     * it while an escort is beating on you is exactly backwards. It was in the
+     * action block first, and a test caught it, because the drone under test was
+     * shooting the machine trying to press the button.
+     *
+     * Above the hitstop return too: hitstop is a presentation freeze on impact,
+     * and queuing a decision through one is fine.
+     */
+    if (isPressed(input, Btn.TargetCycle) && this.alive) {
+      const was = this.lockPref;
+      this.cycleLockTarget(target);
+      if (this.lockPref !== was) {
+        events.push({ t: 'targetCycle', id: this.id, onDrone: this.lockPref === 'drone' });
+      }
+    }
+
     // Hitstop freezes everything except the countdown itself.
     if (this.hitstop > 0) {
       this.hitstop--;
@@ -1774,14 +1798,13 @@ export class Combatant implements FlightState {
    * being broken. There is no range at which "aim at nothing" is the better
    * answer, so there is no longer a range check.
    *
-   * **The enemy drone is a valid target.** It is permanently deployed now, so it
-   * is a real thing in the fight rather than an occasional visitor. The mech
-   * stays the default and the drone is only taken when it is `DRONE_LOCK_EDGE`
-   * closer — without that margin the escort would steal the lock every time it
-   * drifted forward, and you could never shoot the pilot behind it.
+   * **The enemy drone is a valid target, and which one is held is a choice.**
+   * See `lockPref`. It used to be decided by distance, which meant the escort
+   * stole the lock whenever it drifted forward and there was no way to say
+   * otherwise.
    *
-   * This changes nothing about the projectiles: they still fly straight from the
-   * muzzle. Only the drone's own shots home.
+   * This changes nothing about where projectiles fly: they still leave the
+   * muzzle along the aim. It changes what the mounts point at.
    */
   private lockTarget(target: Combatant | null): { x: number; y: number } | null {
     if (!this.lockEnabled) return null;
@@ -1815,13 +1838,59 @@ export class Combatant implements FlightState {
     }
 
     if (!mech) return drone ? { x: drone.x, y: drone.y } : null;
-    if (!drone) return { x: mech.x, y: mech.y };
+    if (drone && this.lockPref === 'drone') return { x: drone.x, y: drone.y };
+    return { x: mech.x, y: mech.y };
+  }
 
-    const toMech = Math.hypot(mech.x - this.x, mech.y - this.y);
-    const toDrone = Math.hypot(drone.x - this.x, drone.y - this.y);
-    return toDrone < toMech - DRONE_LOCK_EDGE
-      ? { x: drone.x, y: drone.y }
-      : { x: mech.x, y: mech.y };
+  /**
+   * The thing this machine is currently trying to hit, as a point.
+   *
+   * One resolver for every consumer — turret aim, melee acquisition, the escort
+   * swing and projectile homing — because a lock that the guns and the sword
+   * disagree about is not a lock. Returns null only when there is nothing alive
+   * to shoot at.
+   */
+  lockPoint(target: Combatant | null): { x: number; y: number } | null {
+    return this.lockTarget(target);
+  }
+
+  /**
+   * Where a guided round should steer, which is **not** always where the mounts
+   * point.
+   *
+   * The difference is decoys. A projection stealing the turret is the whole
+   * point of the ability — it attacks your information — but letting it steal
+   * *homing* as well would mean every missile in the air bends onto a hologram
+   * and pops it. Measured: decoy uptime fell by 253 ticks in a 900-tick run,
+   * because the projections were being deleted by the very rounds they were
+   * supposed to be misdirecting. That is a real design question about how strong
+   * the decoy should be, and it is not this change's to answer.
+   */
+  homingPoint(target: Combatant | null): { x: number; y: number } | null {
+    const mech = target && target.alive ? target : null;
+    const drone = target && target.supporter.hittable ? target.supporter : null;
+    if (!mech) return drone ? { x: drone.x, y: drone.y } : null;
+    if (drone && this.lockPref === 'drone') return { x: drone.x, y: drone.y };
+    return { x: mech.x, y: mech.y };
+  }
+
+  /** True when `lockPref` currently resolves to a live escort. */
+  lockedOnDrone(target: Combatant | null): boolean {
+    return this.lockPref === 'drone' && !!target?.supporter.hittable;
+  }
+
+  /**
+   * Switches the mounts between the pilot and its escort.
+   *
+   * A no-op when there is no escort to switch to, so the button cannot leave the
+   * mech pointing at something that is not there.
+   */
+  cycleLockTarget(target: Combatant | null): void {
+    if (this.lockPref === 'drone') {
+      this.lockPref = 'mech';
+      return;
+    }
+    if (target?.supporter.hittable) this.lockPref = 'drone';
   }
 
 
@@ -2010,7 +2079,19 @@ export class Combatant implements FlightState {
       this.meleeLockout <= 0 &&
       !this.weaponDisabled(WeaponSlot.Melee)
     ) {
-      // Lock on to the pilot first, exactly as before. Only when no lock is
+      // **A chosen escort takes the swing outright.** Holding the escort in the
+      // reticle and getting a chain on the pilot instead is the same complaint
+      // the lock rework exists to answer, one layer down.
+      const chosen = target?.supporter;
+      if (this.lockedOnDrone(target) && chosen) {
+        const dSel = Math.hypot(chosen.x - this.x, chosen.y - this.y);
+        if (dSel <= this.def.meleeRange + 54) {
+          this.beginMelee(events, target, { x: chosen.x, y: chosen.y });
+          return;
+        }
+      }
+
+      // Otherwise lock on to the pilot, exactly as before. Only when no lock is
       // available at all does anything else get a look in.
       if (this.startMeleeLock(target, events)) return;
 

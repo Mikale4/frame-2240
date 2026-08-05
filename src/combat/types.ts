@@ -26,8 +26,17 @@ export const enum Btn {
    * player commit to a swing deliberately rather than having one happen.
    */
   Melee = 8,
+  /**
+   * Switches the lock between the enemy pilot and its escort.
+   *
+   * **A simulation button, not a UI edge**, unlike the cosmetic weapon-draw
+   * toggle. It changes what the mounts point at, what a missile steers to and
+   * what a swing acquires, so it has to travel in `InputFrame` — otherwise the
+   * bit-identical replay in `match.test.ts` stops covering a real input.
+   */
+  TargetCycle = 9,
 }
-export const BTN_COUNT = 9;
+export const BTN_COUNT = 10;
 
 /** One tick of player intent. `dx`/`dy` are in [-1, 1] (already 8-way snapped). */
 export interface InputFrame {
@@ -273,6 +282,7 @@ export type SimEvent =
    */
   | { t: 'satBurnout'; x: number; y: number; id: number; overheat?: boolean }
   | { t: 'modeCycle'; id: number; mode: SatMode }
+  | { t: 'targetCycle'; id: number; onDrone: boolean }
   /** OVERDRIVE opened: all three modes at once. */
   | { t: 'overdrive'; x: number; y: number; id: number }
   /** OVERDRIVE burned out: thrusters and guns gone, sword left. */

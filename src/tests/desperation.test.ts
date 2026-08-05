@@ -535,17 +535,17 @@ describe('weapons stay locked on', () => {
     expect(Math.abs(Math.atan2(Math.sin(p.aim - toMech), Math.cos(p.aim - toMech)))).toBeLessThan(0.12);
   });
 
-  it('takes the escort when it is well out in front', () => {
+  it('holds the pilot even with the escort well out in front', () => {
+    // **This asserted the opposite until the lock became a choice.** Distance
+    // used to decide it, so an escort drifting 1100 px ahead of its pilot took
+    // the mounts whether or not that was what anyone wanted to shoot — which in
+    // play meant the drone repeatedly dragged the guns off the pilot at the
+    // moment the pilot was worth shooting. `lockPref` decides now, and it
+    // defaults to the pilot.
     const s = sim({ arenaW: 4000 });
     toFight(s);
     const p = s.player;
     const e = s.enemy;
-    p.x = 300;
-    p.y = 600;
-    e.x = 2000;
-    e.y = 600;
-    e.supporter.x = 900;
-    e.supporter.y = 900;
     for (let i = 0; i < 90; i++) {
       p.x = 300;
       p.y = 600;
@@ -555,7 +555,37 @@ describe('weapons stay locked on', () => {
       e.supporter.y = 900;
       s.step(emptyInput(), emptyInput());
     }
+    const toMech = Math.atan2(e.y - p.y, e.x - p.x);
+    expect(Math.abs(Math.atan2(Math.sin(p.aim - toMech), Math.cos(p.aim - toMech)))).toBeLessThan(0.12);
+  });
+
+  it('swings onto the escort once it is chosen, and back again', () => {
+    const s = sim({ arenaW: 4000 });
+    toFight(s);
+    const p = s.player;
+    const e = s.enemy;
+    const hold = () => {
+      p.x = 300;
+      p.y = 600;
+      e.x = 2000;
+      e.y = 600;
+      e.supporter.x = 900;
+      e.supporter.y = 900;
+    };
+    p.lockPref = 'drone';
+    for (let i = 0; i < 90; i++) {
+      hold();
+      s.step(emptyInput(), emptyInput());
+    }
     const toDrone = Math.atan2(e.supporter.y - p.y, e.supporter.x - p.x);
     expect(Math.abs(Math.atan2(Math.sin(p.aim - toDrone), Math.cos(p.aim - toDrone)))).toBeLessThan(0.12);
+
+    p.lockPref = 'mech';
+    for (let i = 0; i < 90; i++) {
+      hold();
+      s.step(emptyInput(), emptyInput());
+    }
+    const toMech = Math.atan2(e.y - p.y, e.x - p.x);
+    expect(Math.abs(Math.atan2(Math.sin(p.aim - toMech), Math.cos(p.aim - toMech)))).toBeLessThan(0.12);
   });
 });

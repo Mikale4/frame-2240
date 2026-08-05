@@ -26,6 +26,7 @@ export type ActionId =
   | 'modeCycle'
   | 'saturation'
   | 'flightToggle'
+  | 'cycleTarget'
   | 'weaponDraw'
   | 'pause'
   | 'debugText'
@@ -54,6 +55,7 @@ export const ACTION_ORDER: readonly ActionId[] = [
   'modeCycle',
   'saturation',
   'flightToggle',
+  'cycleTarget',
   'weaponDraw',
   'pause',
   'debugText',
@@ -78,6 +80,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   modeCycle: 'CYCLE SAT MODE',
   saturation: 'ACTIVATE SATURATION',
   flightToggle: 'FLIGHT MODE ON/OFF',
+  cycleTarget: 'SWITCH TARGET',
   weaponDraw: 'HOLD WEAPON DRAWN',
   pause: 'PAUSE',
   debugText: 'DEBUG READOUT',
@@ -108,6 +111,7 @@ export const BUTTON_ACTION: Readonly<Record<Btn, ActionId>> = {
   [Btn.ModeCycle]: 'modeCycle',
   [Btn.Saturation]: 'saturation',
   [Btn.Flight]: 'flightToggle',
+  [Btn.TargetCycle]: 'cycleTarget',
 };
 
 /**
@@ -131,6 +135,8 @@ export const DEFAULT_BINDINGS: BindingMap = {
   modeCycle: { keys: ['ShiftLeft'], pads: [8] },
   saturation: { keys: ['KeyQ'], pads: [10] },
   flightToggle: { keys: ['KeyA'], pads: [11] },
+  // Next to the action row, on the hand that is not flying.
+  cycleTarget: { keys: ['KeyE'], pads: [] },
   // No pad button: every index in the standard mapping is already spoken for,
   // and this is cosmetic — it should not take a face button off something that
   // fights. Keyboard-only is the same call `debugText` and `debugHitboxes` make.
