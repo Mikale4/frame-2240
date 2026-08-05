@@ -140,16 +140,26 @@ def _centreline(spec, strand_y, size):
     """
     Blade centreline and half-width, in image pixels.
 
-    `tip` is the width the profile is allowed to fall to at the far end, as a
-    fraction of the widest point. **It is never zero.** A taper that runs to
-    nothing produces a needle, which is what a ground edge looks like; this is
-    plasma, and plasma does not come to a point — it thins until it stops
-    holding together and frays out. Ending on real width, and letting the
-    tongues and spray dissolve it from there, is what reads as dissipation.
+    Two numbers shape the far end, and they are doing different jobs.
+
+    `tip` is the width the taper is allowed to fall to — never zero. A taper run
+    to nothing produces a needle, which is what a *ground edge* looks like; this
+    is plasma, and it should thin until it stops holding together rather than
+    converge to a point.
+
+    `cap` then rounds that end over, across the last fraction of the length. A
+    width floor on its own leaves the blade stopping flat, which reads as cut
+    off. The cap falls as `sqrt(1 - u^2)` — a quarter circle — so the silhouette
+    arrives at the end with a *vertical tangent* instead of a straight one. That
+    is the whole difference between rounded and pointed: a cone and a hemisphere
+    both finish at zero width, and only one of them looks sharp. The filaments
+    converge into the dome as the half-width shrinks, so it fills with plasma
+    rather than becoming an empty outline.
     """
     peak = spec["peak_at"]
     taper = spec.get("taper", 1.25)
     tip = spec.get("tip", 0.14)
+    cap = spec.get("cap", 0.07)
     wide = spec["width"] * PX_PER_BU
     c = size / 2
 
@@ -160,6 +170,9 @@ def _centreline(spec, strand_y, size):
             prof = f / peak
         else:
             prof = tip + (1.0 - tip) * ((1.0 - f) / (1.0 - peak)) ** taper
+        if f > 1.0 - cap:
+            u = (f - (1.0 - cap)) / cap
+            prof *= math.sqrt(max(0.0, 1.0 - u * u))
         # Blender +Z is up; image +y is down.
         pts.append((c + sx * PX_PER_BU, c - su * PX_PER_BU, max(1.5, wide * prof)))
     return pts

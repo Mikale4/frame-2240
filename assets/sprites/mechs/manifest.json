@@ -713,14 +713,14 @@
         "file": "halcyon_meleeEnergy.png",
         "tile": 448,
         "dims_bu": [
-          3.15,
+          3.1333,
           0.0,
-          3.15
+          3.1333
         ],
         "dims_logical_px": [
-          189.0,
+          188.0,
           0.0,
-          189.0
+          188.0
         ],
         "source": "tools/energy_blade.py \u2014 drawn, not modelled; no Blender object"
       }
