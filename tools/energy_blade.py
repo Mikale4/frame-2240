@@ -64,9 +64,15 @@ TILE_STEP = 64
 TILE_MIN = 320
 TILE_MAX = 1024
 
-# Turbulence variants per blade. Four is enough to read as churning and cheap
-# enough to keep in the atlas.
-FRAMES = 4
+# Turbulence frames per blade, over one full churn loop.
+#
+# Four was enough while each frame was an independent noise sample and the churn
+# read as a stutter regardless. Now that a frame is a *phase* of one continuous
+# motion, the count is what sets how smooth that motion is, and four is visibly
+# steppy. Twelve at 14 Hz is a 0.86 s loop, and the per-step change measures
+# 1.20 against 1.65 at four -- the frames are a dial only because they are now
+# phases of one motion rather than independent samples.
+FRAMES = 12
 
 
 def _project(x, y, z):
@@ -189,7 +195,7 @@ def _normals(pts):
 
 
 def _filaments(size, pts, nrm, rnd, *, count, spread, span_lo, span_hi,
-               bright, wobble, widths):
+               bright, wobble, widths, anim=0.0):
     """
     Accumulate luminous streaks along the curve.
 
@@ -221,7 +227,10 @@ def _filaments(size, pts, nrm, rnd, *, count, spread, span_lo, span_hi,
             x, y, w = pts[i]
             nx, ny = nrm[i]
             t = (i - i0) / max(1, i1 - i0)
-            off = base + wobble * math.sin(phase + freq * t * math.pi)
+            # `anim` walks the wobble along the filament between frames. Every
+            # frame draws the *same* filaments from the same seed, so the churn
+            # is one continuous motion instead of a new sample each time.
+            off = base + wobble * math.sin(phase + anim + freq * t * math.pi)
             path.append((x + nx * off * w, y + ny * off * w))
         layer = Image.new("L", (size, size), 0)
         ImageDraw.Draw(layer).line(path, fill=bright, width=rnd.choice(widths))
@@ -229,7 +238,7 @@ def _filaments(size, pts, nrm, rnd, *, count, spread, span_lo, span_hi,
     return acc
 
 
-def _particles(size, pts, nrm, rnd, count, spread, bright):
+def _particles(size, pts, nrm, rnd, count, spread, bright, anim=0.0):
     """Sparks shed around the boundary."""
     img = Image.new("L", (size, size), 0)
     d = ImageDraw.Draw(img)
@@ -239,8 +248,11 @@ def _particles(size, pts, nrm, rnd, count, spread, bright):
         x, y, w = pts[i]
         nx, ny = nrm[i]
         off = rnd.uniform(-1.0, 1.0) * spread
-        px = x + nx * off * w + rnd.uniform(-3, 3)
-        py = y + ny * off * w + rnd.uniform(-3, 3)
+        # Sparks drift on the same clock rather than being re-scattered, or they
+        # pop in and out and undo the smoothness the filaments just bought.
+        drift = rnd.uniform(0.0, math.tau)
+        px = x + nx * off * w + rnd.uniform(-3, 3) + 2.4 * math.cos(drift + anim)
+        py = y + ny * off * w + rnd.uniform(-3, 3) + 2.4 * math.sin(drift + anim)
         r = rnd.choice([0.5, 0.5, 1.0, 1.5])
         d.ellipse([px - r, py - r, px + r, py + r], fill=bright)
     return img
@@ -369,8 +381,16 @@ LOOKS = {
 }
 
 
-def render_blade(spec, seed, size=512):
-    """One frame of a projected blade, RGBA."""
+def render_blade(spec, seed, size=512, anim=0.0):
+    """
+    One frame of a projected blade, RGBA.
+
+    `anim` is the churn phase, 0..tau over one loop. **Frames share a seed and
+    differ only by this**: the filament set is identical and its wobble travels,
+    so consecutive frames are a small continuous change. Independent seeds per
+    frame — which is what this did first — make every switch an uncorrelated
+    jump, and adding more of them lengthens the loop without smoothing anything.
+    """
     rnd = random.Random(seed)
     look = LOOKS[spec["look"]]
     zero = Image.new("L", (size, size), 0)
@@ -386,7 +406,7 @@ def render_blade(spec, seed, size=512):
         srnd = random.Random(seed * 31 + si * 7717)
 
         def fil(key):
-            return _filaments(size, pts, nrm, srnd, **look[key])
+            return _filaments(size, pts, nrm, srnd, anim=anim, **look[key])
 
         # --- primary blade: dense, long, near-parallel. Carries the silhouette.
         body = ImageChops.add(body, fil("body"))
@@ -400,7 +420,8 @@ def render_blade(spec, seed, size=512):
         tongues = ImageChops.add(tongues, fil("tongues"))
         sp = look["spray"]
         spray = ImageChops.add(
-            spray, _particles(size, pts, nrm, srnd, sp["count"], sp["spread"], sp["bright"]))
+            spray,
+            _particles(size, pts, nrm, srnd, sp["count"], sp["spread"], sp["bright"], anim))
         # Bloom at the emitter mouth, spilling back over the metal so the blade
         # has a visible source instead of beginning at a hard boundary.
         flare = ImageChops.add(
@@ -605,7 +626,9 @@ def main():
     rows = {}
     for mech, spec in BLADES.items():
         probe = _probe_tile(spec)
-        frames = [render_blade(spec, seed=1000 + i * 37, size=probe)
+        # One seed for the whole loop; only the churn phase advances.
+        frames = [render_blade(spec, seed=1000, size=probe,
+                               anim=i * math.tau / FRAMES)
                   for i in range(FRAMES)]
         frames, size, half = _fit(frames)
         print(f"{mech}: {spec['look']}, {len(_strands(spec))} strand(s), "

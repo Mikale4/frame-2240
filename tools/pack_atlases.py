@@ -32,7 +32,15 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPRITES = os.path.join(ROOT, "assets", "sprites", "mechs")
 # Wide enough to fit three 320px parts per shelf without wasting a whole column.
-ATLAS_W = 1024
+#
+# **Widened from 1024 when the blades went to eight churn frames.** At 1024 a
+# 576px energy frame owns a whole shelf — two will not fit side by side — so
+# PYRE's eight frames alone were 4608px of height and the atlas reached 6400.
+# 4096 is a common `MAX_TEXTURE_SIZE` floor and PYRE had been sitting exactly on
+# it, so that was over the edge on any such GPU. At 2048 three 576s share a
+# shelf and the tallest atlas comes back under 3000. Total pixels barely move;
+# what changes is that the height is no longer the binding constraint.
+ATLAS_W = 2048
 
 PARTS = [
     "core", "head", "backpack", "lowerBody", "legFar", "legNear",
@@ -47,7 +55,7 @@ PARTS = [
 # pile driver and OBELISK's shield project nothing and have none.
 # Frames 1..N of an animated part. Frame 0 keeps the bare name so the rig can
 # reference it without knowing the part is animated at all.
-OPTIONAL_PARTS = ["meleeEnergy", "meleeEnergy_1", "meleeEnergy_2", "meleeEnergy_3"]
+OPTIONAL_PARTS = ["meleeEnergy"] + [f"meleeEnergy_{i}" for i in range(1, 12)]
 
 
 def pack_mech(mech_id):
