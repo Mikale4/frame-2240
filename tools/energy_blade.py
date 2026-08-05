@@ -231,7 +231,14 @@ def _filaments(size, pts, nrm, rnd, *, count, spread, span_lo, span_hi,
     """
     acc = Image.new("L", (size, size), 0)
     n = len(pts)
-    for _ in range(count):
+    # Antithetic pairs: every second filament reuses the previous one's churn
+    # phase shifted by pi, at the same rate. sin(p) + sin(p + pi) is zero at
+    # *every* anim, so the population's mean displacement is exactly nil and the
+    # silhouette cannot breathe no matter how the phase advances. Randomising the
+    # rates alone only cancels on average, which at ~230 filaments still left a
+    # coherent 5 px swell.
+    prev = None
+    for fi in range(count):
         # Biased toward the root so the blade visibly springs from the
         # emitter rather than fading in along its length.
         # Power-biased from zero, then nudged negative — raising a *negative*
@@ -248,6 +255,17 @@ def _filaments(size, pts, nrm, rnd, *, count, spread, span_lo, span_hi,
         base = rnd.uniform(-1.0, 1.0) * spread
         phase = rnd.uniform(0.0, math.tau)
         freq = rnd.uniform(1.6, 4.4)
+        # **Each filament travels at its own rate, and half travel opposed.**
+        # A single shared `anim` moved every filament the same way at the same
+        # time, so the whole blade swelled and shrank as one body — measured at
+        # 13 px of width swing across the loop, which reads as the blade changing
+        # size. The interior should move; the silhouette should not.
+        if prev is None:
+            spin = rnd.choice((-1.0, 1.0)) * rnd.uniform(0.55, 1.45)
+            prev = (phase, spin)
+        else:
+            phase, spin = prev[0] + math.pi, prev[1]
+            prev = None
         path = []
         for i in range(i0, i1):
             x, y, w = pts[i]
@@ -256,7 +274,7 @@ def _filaments(size, pts, nrm, rnd, *, count, spread, span_lo, span_hi,
             # `anim` walks the wobble along the filament between frames. Every
             # frame draws the *same* filaments from the same seed, so the churn
             # is one continuous motion instead of a new sample each time.
-            off = base + wobble * math.sin(phase + anim + freq * t * math.pi)
+            off = base + wobble * math.sin(phase + anim * spin + freq * t * math.pi)
             path.append((x + nx * off * w, y + ny * off * w))
         layer = Image.new("L", (size, size), 0)
         ImageDraw.Draw(layer).line(path, fill=bright, width=rnd.choice(widths))
@@ -269,6 +287,11 @@ def _particles(size, pts, nrm, rnd, count, spread, bright, anim=0.0):
     img = Image.new("L", (size, size), 0)
     d = ImageDraw.Draw(img)
     n = len(pts)
+    # Paired the same way as the filaments, and for the same reason: on PYRE the
+    # spray is 220 sparks at the widest spread on the blade, so orbiting them in
+    # anything short of exact opposition still pushed the boundary in and out by
+    # 13 px across the loop while the filaments themselves held perfectly still.
+    prev = None
     for _ in range(count):
         i = rnd.randrange(int(n * 0.05), n - 1)
         x, y, w = pts[i]
@@ -276,9 +299,15 @@ def _particles(size, pts, nrm, rnd, count, spread, bright, anim=0.0):
         off = rnd.uniform(-1.0, 1.0) * spread
         # Sparks drift on the same clock rather than being re-scattered, or they
         # pop in and out and undo the smoothness the filaments just bought.
-        drift = rnd.uniform(0.0, math.tau)
-        px = x + nx * off * w + rnd.uniform(-3, 3) + 2.4 * math.cos(drift + anim)
-        py = y + ny * off * w + rnd.uniform(-3, 3) + 2.4 * math.sin(drift + anim)
+        if prev is None:
+            drift = rnd.uniform(0.0, math.tau)
+            rate = rnd.choice((-1.0, 1.0)) * rnd.uniform(0.6, 1.4)
+            prev = (drift, rate)
+        else:
+            drift, rate = prev[0] + math.pi, prev[1]
+            prev = None
+        px = x + nx * off * w + rnd.uniform(-3, 3) + 2.4 * math.cos(drift + anim * rate)
+        py = y + ny * off * w + rnd.uniform(-3, 3) + 2.4 * math.sin(drift + anim * rate)
         r = rnd.choice([0.5, 0.5, 1.0, 1.5])
         d.ellipse([px - r, py - r, px + r, py + r], fill=bright)
     return img
@@ -432,7 +461,17 @@ def render_blade(spec, seed, size=512, anim=0.0):
         srnd = random.Random(seed * 31 + si * 7717)
 
         def fil(key):
-            return _filaments(size, pts, nrm, srnd, anim=anim, **look[key])
+            # **The tongues do not travel.** Ablated against the full render,
+            # they were the single biggest thing moving the blade's outline —
+            # 9 px of the 17 px swing at the emitter end, against 5 for the body
+            # and 3 for the mass. They carry by far the largest wobble (0.42)
+            # and they are short and clustered near the root, so their swing
+            # lands exactly where the blade should be pinned to its mouth. They
+            # still fray, because the fraying is in their fixed phase; they just
+            # do it in place, and the churn is carried by the layers that make
+            # up the body.
+            a = 0.0 if key == "tongues" else anim
+            return _filaments(size, pts, nrm, srnd, anim=a, **look[key])
 
         # --- primary blade: dense, long, near-parallel. Carries the silhouette.
         body = ImageChops.add(body, fil("body"))

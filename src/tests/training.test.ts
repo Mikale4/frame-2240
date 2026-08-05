@@ -255,8 +255,10 @@ describe('energy flicker', () => {
   it('keeps the breath shallow enough to read as a breath', () => {
     const B = 38;
     const levels = Array.from({ length: B }, (_, f) => breathLevel(f));
-    expect(Math.max(...levels)).toBeLessThanOrEqual(1.06);
-    expect(Math.min(...levels)).toBeGreaterThanOrEqual(0.96);
+    // PYRE spans ~372 render px root to tip, so the whole range must stay
+    // inside ~0.016 or the tip travels more than 3 logical px and reads as the
+    // blade resizing rather than breathing.
+    expect(Math.max(...levels) - Math.min(...levels)).toBeLessThan(0.016);
   });
 
   it('breathes on a cycle coprime with the flicker', () => {

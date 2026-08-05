@@ -168,12 +168,37 @@ export class MechRenderer {
       // NULLTIDE's cyan both vanish. The halo can be additive because it is
       // faint: that is where the bloom comes from.
       const halo = scene.add.image(0, 0, energy.sprite.texture.key, energy.sprite.frame.name);
-      halo.setOrigin(0.5, 0.5);
       halo.setScale(PART_SCALE);
       halo.setBlendMode(Phaser.BlendModes.ADD);
       halo.setAlpha(0.35);
       energy.container.addAt(halo, 0);
       this.energyHalo = halo;
+
+      // **Put the origin on the blade's root, once.**
+      //
+      // The blade breathes, and it has to breathe *from* the emitter. Doing that
+      // by scaling about the sprite centre and translating back works out to the
+      // same picture in exact arithmetic — but the translation is only ever a
+      // fraction of a pixel, and `roundPixels` is on, so it snapped between 0
+      // and 1 px every frame and the whole blade shivered.
+      //
+      // Moving the origin to the root removes the per-frame translation
+      // entirely: scale can then do whatever it likes and the root cannot move,
+      // because it *is* the pivot. The one position this needs is constant, so
+      // rounding it is harmless.
+      const a = energy.def.anchor;
+      if (a) {
+        const fw = energy.sprite.frame.width || 1;
+        const fh = energy.sprite.frame.height || 1;
+        const ox = 0.5 + a[0] / PART_SCALE / fw;
+        const oy = 0.5 + a[1] / PART_SCALE / fh;
+        for (const img of [energy.sprite, halo]) {
+          img.setOrigin(ox, oy);
+          img.setPosition(a[0], a[1]);
+        }
+      } else {
+        halo.setOrigin(0.5, 0.5);
+      }
 
       // Collect whatever turbulence frames the atlas actually carries. Frame 0
       // keeps the bare part name, so a blade with no variants still works and
@@ -468,9 +493,10 @@ export class MechRenderer {
     const breath = breathLevel(frame);
     const kx = breath;
     const ky = 1 + (breath - 1) * 0.35;
+    // No translation: the sprite's origin *is* the root, set once in the
+    // constructor. See there for why compensating per frame instead made the
+    // blade shiver.
     node.sprite.setScale(PART_SCALE * kx, PART_SCALE * ky);
-    const a = node.def.anchor;
-    if (a) node.sprite.setPosition(a[0] * (1 - kx), a[1] * (1 - ky));
 
     // Churn: advance the turbulence frame on its own clock. 14 Hz is fast enough
     // to read as unstable and slow enough that each shape registers; tying it to
@@ -509,7 +535,6 @@ export class MechRenderer {
     // the halo's job is brightness, not spread. It breathes with the core, from
     // the same anchor, or it would separate again the moment the blade stretched.
     halo.setScale(PART_SCALE * kx, PART_SCALE * ky);
-    if (a) halo.setPosition(a[0] * (1 - kx), a[1] * (1 - ky));
   }
 
   setPartVisible(name: string, visible: boolean): void {

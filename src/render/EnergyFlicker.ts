@@ -71,22 +71,24 @@ export function flickerLevel(frame: number): number {
  * scythe pull away from its own staff.
  */
 const BREATH_STEPS: readonly (readonly [level: number, frames: number])[] = [
-  // Each delta is budgeted against its hold: smoothstep's slope peaks at 1.5x
-  // linear, so a key may move at most ~0.0067 per frame of hold or the blade
-  // jumps again. Long moves therefore get long holds, which is also what makes
-  // the rhythm feel like breathing rather than a wobble.
+  // **Amplitude is measured at the tip, in pixels — not as a percentage.**
+  // PYRE's blade spans ~372 render px from root to tip, so a +/-3 % breath moved
+  // its end 10 logical px and read as the blade growing and shrinking, which is
+  // the same complaint the stepped version drew. These keys span 0.0137, i.e.
+  // about 2.5 logical px of travel at the tip: enough to be alive, not enough to
+  // look like it is changing size.
   [1.0, 4],
-  [1.025, 3],
-  [1.008, 2],
-  [0.996, 5],
-  [1.028, 3],
-  [1.01, 2],
-  [0.999, 4],
-  [0.975, 3],
-  [0.992, 2],
-  [1.003, 5],
-  [1.03, 2],
-  [1.018, 3],
+  [1.0063, 3],
+  [1.002, 2],
+  [0.999, 5],
+  [1.007, 3],
+  [1.0025, 2],
+  [0.9998, 4],
+  [0.9938, 3],
+  [0.998, 2],
+  [1.0008, 5],
+  [1.0075, 2],
+  [1.0045, 3],
 ];
 
 const BREATH_FRAMES = BREATH_STEPS.reduce((n, s) => n + s[1], 0);
@@ -103,8 +105,7 @@ const BREATH_FRAMES = BREATH_STEPS.reduce((n, s) => n + s[1], 0);
  *
  * The timing stays uneven — which is the irregularity that was wanted — while
  * smoothstep eases each arrival, so the blade swells and settles instead of
- * snapping between two lengths. The range is also tightened to ~±4 %, because
- * amplitude on a long blade is measured at the tip, not as a percentage.
+ * snapping between two lengths.
  */
 export function breathLevel(frame: number): number {
   let f = ((frame % BREATH_FRAMES) + BREATH_FRAMES) % BREATH_FRAMES;
