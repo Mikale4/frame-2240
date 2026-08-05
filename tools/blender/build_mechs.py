@@ -2227,8 +2227,41 @@ def build_mech(mech_id, palette_key=None):
         # Forearm reaches forward far enough to visibly meet the rifle receiver.
         o.append(add_box(f"a_fore_{key}", (0.32, 0.14, 0.14), piv + Vector((0.30, 0, -0.18)),
                          (0, math.radians(-26), 0), coll=coll, mat=shell))
-        o.append(add_box(f"a_grip_{key}", (0.11, 0.11, 0.13), piv + Vector((0.47, 0, -0.26)),
-                         coll=coll, mat=M_FRAME))
+        # ---- the hand ------------------------------------------------------
+        # There was a 0.11 BU block here called `a_grip` and nothing else, so
+        # every machine on the roster held its rifle and its blade with a stump.
+        #
+        # **A mitt, not five fingers.** The hand is ~8 logical px on a 104 px
+        # chassis; a finger would be under two, which is below what the sprite
+        # can resolve and would come out as noise. So: a collar, a palm, one
+        # curled finger *mass* crossing the haft with two grooves for knuckles,
+        # and a thumb — separated, on the near side, because the thumb is the
+        # single element that says "gripping" rather than "ending".
+        #
+        # **In shell, not frame.** The first pass built it all in the dark frame
+        # material, sitting against a dark forearm and holding a dark weapon, and
+        # it read as a bracket rather than a hand. The palm and fingers carry the
+        # machine's own hull colour so the shape separates from both.
+        HAND = piv + Vector((0.47, 0, -0.26))
+        AXF = (0, math.radians(-26), 0)          # along the forearm
+        o.append(add_cyl(f"a_wristcol_{key}", 0.075, 0.10,
+                         HAND + Vector((-0.075, 0, 0.035)),
+                         (0, math.radians(64), 0), 12, coll=coll, mat=M_FRAME))
+        o.append(add_box(f"a_palm_{key}", (0.155, 0.13, 0.165), HAND,
+                         AXF, coll=coll, mat=shell))
+        # Finger mass, curled across the haft rather than along it.
+        o.append(add_box(f"a_fings_{key}", (0.095, 0.125, 0.175),
+                         HAND + Vector((0.095, 0, -0.005)),
+                         (0, math.radians(-70), 0), coll=coll, mat=shell))
+        for k in range(2):
+            o.append(add_box(f"a_knuck_{key}{k}", (0.10, 0.135, 0.017),
+                             HAND + Vector((0.095, 0, 0.035 - k * 0.055)),
+                             (0, math.radians(-70), 0), coll=coll, mat=M_FRAME))
+        # Thumb, on the near side, closing the other way.
+        o.append(add_box(f"a_thumb_{key}", (0.10, 0.045, 0.055),
+                         HAND + Vector((0.055, sgn * -0.075, 0.055)),
+                         (0, math.radians(-16), math.radians(sgn * 16)),
+                         coll=coll, mat=M_SUB))
         # Melee hardpoint, visible on the far arm: a folded beam edge on the
         # interceptor, a hydraulic breaching claw on the assault frame.
         if not near:
@@ -2473,25 +2506,77 @@ def build_mech(mech_id, palette_key=None):
     piv = px(*P["meleeWeapon"])
     o = []
     if spec["blade"] == "claw":
-        # A hydraulic breaching claw: three powered tines on a wrist block, with
-        # rams behind them. Mechanical throughout - no emissive blade, because
-        # the point of this weapon is that it is not energy.
-        o.append(add_box("m_wrist", (0.22, 0.16, 0.20), piv, coll=coll, mat=M_FRAME))
-        o.append(add_box("m_block", (0.26, 0.20, 0.26), piv + Vector((0.20, 0, 0)),
+        # NOCTURNE: a forearm gauntlet throwing three long blades, built to the
+        # supplied concept sheet. Mechanical throughout — no emissive blade,
+        # because the point of this weapon is that it is *not* energy. What glows
+        # is plumbing between the blade roots, not the blades.
+        #
+        # The reference's read comes from three things, in order of how much each
+        # carries: blades far longer and finer than the housing that throws them;
+        # a housing built as *stacked plates* rather than one block; and a banded
+        # cuff at the wrist that makes the whole thing look socketed onto an arm.
+        AX = (0, math.radians(90), 0)
+
+        # ---- cuff: stacked rings at the back, where it meets the forearm ----
+        for i in range(3):
+            o.append(add_cyl(f"m_cuff{i}", 0.145 - i * 0.008, 0.055,
+                             piv + Vector((-0.14 + i * 0.065, 0, 0)),
+                             AX, 12, coll=coll, mat=M_FRAME))
+        o.append(add_cyl("m_cuffband", 0.152, 0.022, piv + Vector((-0.10, 0, 0)),
+                         AX, 12, coll=coll, mat=M_SUB))
+
+        # ---- housing: layered plates, not one block -------------------------
+        o.append(add_box("m_core", (0.34, 0.19, 0.24), piv + Vector((0.14, 0, 0)),
+                         coll=coll, mat=M_FRAME))
+        # Upper and lower armour plates, each a little shorter than the last, so
+        # the silhouette steps down toward the blades instead of ending square.
+        for i, (dx, dz, ln) in enumerate(((0.10, 0.135, 0.30), (0.16, -0.125, 0.26))):
+            o.append(add_box(f"m_plate{i}", (ln, 0.165, 0.055),
+                             piv + Vector((dx, 0, dz)),
+                             (0, math.radians(-3 + i * 6), 0), coll=coll, mat=M_HULL))
+        o.append(add_box("m_plateside", (0.28, 0.045, 0.19),
+                         piv + Vector((0.13, 0.105, 0.01)), coll=coll, mat=M_SUB))
+        o.append(add_box("m_shoulderplate", (0.16, 0.055, 0.21),
+                         piv + Vector((-0.02, -0.10, 0.02)),
+                         (0, math.radians(6), 0), coll=coll, mat=M_HULL))
+        # The side disc the sheet puts on every view.
+        o.append(add_cyl("m_disc", 0.072, 0.05, piv + Vector((0.20, 0.115, -0.03)),
+                         (math.radians(90), 0, 0), 16, coll=coll, mat=M_SUB))
+        o.append(add_cyl("m_discpin", 0.028, 0.07, piv + Vector((0.20, 0.13, -0.03)),
+                         (math.radians(90), 0, 0), 10, coll=coll, mat=M_ACC))
+        o += bolt_row("m_gbolt", 3, piv + Vector((0.02, 0.11, 0.10)),
+                      Vector((0.08, 0, 0)), 0.014, coll, M_FRAME)
+
+        # ---- knuckle block the blades are socketed into ---------------------
+        o.append(add_box("m_knuckle", (0.14, 0.20, 0.26), piv + Vector((0.36, 0, -0.01)),
                          coll=coll, mat=M_HULL))
-        for i, dz in enumerate((0.14, 0.0, -0.14)):
-            spread = math.radians(-12 + i * 12)
-            o.append(add_box(f"m_tine{i}", (0.46, 0.06, 0.08),
-                             piv + Vector((0.56, 0, dz)), (0, spread, 0),
+
+        # ---- three blades ---------------------------------------------------
+        # Long, slim and finely tapered: on the sheet they run about as long as
+        # the housing again, which is what makes the weapon read as claws rather
+        # than as a spiked fist.
+        for i, dz in enumerate((0.115, 0.0, -0.115)):
+            spread = math.radians(-9 + i * 9)
+            # Root shroud, the short bright collar each blade emerges from.
+            o.append(add_box(f"m_root{i}", (0.13, 0.05, 0.075),
+                             piv + Vector((0.44, 0, dz)), (0, spread, 0),
                              coll=coll, mat=M_SUB))
-            o.append(add_wedge(f"m_point{i}", (0.20, 0.05, 0.07), 1.8,
-                               piv + Vector((0.86, 0, dz * 1.25)), (0, spread, 0),
-                               coll=coll, mat=M_ACC))
-            o.append(add_cyl(f"m_ram{i}", 0.035, 0.24,
-                             piv + Vector((0.30, 0.09, dz * 0.8)),
-                             (0, math.radians(90), 0), 10, coll=coll, mat=M_TRIM))
-        o.append(add_cyl("m_pivotpin", 0.06, 0.30, piv + Vector((0.34, 0, 0)),
-                         (math.radians(90), 0, 0), 12, coll=coll, mat=M_ACC))
+            # **The conduit.** Glow belongs between the blades, not on them.
+            o.append(add_box(f"m_vein{i}", (0.10, 0.028, 0.026),
+                             piv + Vector((0.44, 0, dz + 0.052)), (0, spread, 0),
+                             coll=coll, mat=M_GLOW))
+            o.append(add_box(f"m_blade{i}", (0.62, 0.032, 0.062),
+                             piv + Vector((0.82, 0, dz * 1.18)), (0, spread, 0),
+                             coll=coll, mat=M_TRIM))
+            o.append(add_wedge(f"m_point{i}", (0.30, 0.026, 0.055), 2.4,
+                               piv + Vector((1.28, 0, dz * 1.34)), (0, spread, 0),
+                               coll=coll, mat=M_TRIM))
+        # Outboard fins, shorter and swept, flanking the three.
+        for i, dz in enumerate((0.20, -0.20)):
+            o.append(add_wedge(f"m_fin{i}", (0.38, 0.022, 0.07), 2.0,
+                               piv + Vector((0.68, 0.03, dz)),
+                               (0, math.radians(-14 + i * 28), 0),
+                               coll=coll, mat=M_SUB))
         split_melee(parts, o, piv, coll, pn)
     elif spec["blade"] == "bayonet":
         # VESPER: a spike emitter clamped under the railgun. A thrusting weapon -
