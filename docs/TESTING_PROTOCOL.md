@@ -159,6 +159,35 @@ window.__tap = (code, ms) => new Promise(res => {
 });
 ```
 
+9. **Pump the loop by hand when the pane is throttled.** This is the practical
+   answer to the freeze below, and it is much cheaper than fighting it:
+
+   ```js
+   const pump = (n = 6) => { for (let i = 0; i < n; i++) game.loop.step(performance.now() + i * 16); };
+   window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowDown', bubbles: true }));
+   pump(4);
+   window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowDown', bubbles: true }));
+   pump(4);
+   ```
+
+   `update()` never runs while rAF is throttled, so no input edge is ever read
+   and menu navigation silently does nothing — the cursor just sits there. With
+   the pump, the whole title → menu → mech select → battle path is drivable.
+   Note `loop.running` keeps reporting `true` throughout; check whether
+   `loop.frame` is *advancing* instead.
+
+10. **`await import('/src/core/Session.ts')` may hand back a module the game is
+    not using**, and after `Session.ts` itself has been edited it reliably does.
+    Mutating it looks like it worked — the returned object really does change —
+    while the match starts with the old mechs and the old mode. The tell is
+    reading state back off the scene: `sim.combatants.map(c => c.def.id)` and
+    `sim.dummy` disagree with what you just set.
+
+    There is no way to reach the game's own copy from the console. **Drive the
+    real menus** (with the pump above), or verify through something the scene
+    exposes directly. D137's training rows were confirmed the second way and the
+    switches the first.
+
 **The Browser pane silently stops compositing** when the window loses foreground:
 `requestAnimationFrame` drops below 1 fps, the Phaser loop freezes, screenshots
 time out. **`document.hidden` still reports `false`** — do not trust it. Measure
