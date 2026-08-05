@@ -26,6 +26,7 @@ export type ActionId =
   | 'modeCycle'
   | 'saturation'
   | 'flightToggle'
+  | 'weaponDraw'
   | 'pause'
   | 'debugText'
   | 'debugHitboxes';
@@ -53,6 +54,7 @@ export const ACTION_ORDER: readonly ActionId[] = [
   'modeCycle',
   'saturation',
   'flightToggle',
+  'weaponDraw',
   'pause',
   'debugText',
   'debugHitboxes',
@@ -72,6 +74,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   modeCycle: 'CYCLE SAT MODE',
   saturation: 'ACTIVATE SATURATION',
   flightToggle: 'FLIGHT MODE ON/OFF',
+  weaponDraw: 'HOLD WEAPON DRAWN',
   pause: 'PAUSE',
   debugText: 'DEBUG READOUT',
   debugHitboxes: 'HITBOX VIEW',
@@ -117,6 +120,10 @@ export const DEFAULT_BINDINGS: BindingMap = {
   modeCycle: { keys: ['KeyQ', 'Tab'], pads: [8] },
   saturation: { keys: ['KeyE'], pads: [10] },
   flightToggle: { keys: ['KeyC'], pads: [11] },
+  // No pad button: every index in the standard mapping is already spoken for,
+  // and this is cosmetic — it should not take a face button off something that
+  // fights. Keyboard-only is the same call `debugText` and `debugHitboxes` make.
+  weaponDraw: { keys: ['KeyR'], pads: [] },
   pause: { keys: ['Escape', 'KeyP'], pads: [9] },
   debugText: { keys: ['F1'], pads: [] },
   debugHitboxes: { keys: ['F2'], pads: [] },
@@ -180,6 +187,22 @@ function storage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The live map every scene reads. Global to the app, and deliberately here
+ * rather than in `InputManager`: naming a bound key is something the UI wants to
+ * do in modules that must not drag Phaser in behind them.
+ */
+let live: BindingMap | null = null;
+
+export function getBindings(): BindingMap {
+  live ??= loadBindings();
+  return live;
+}
+
+export function setBindings(next: BindingMap): void {
+  live = next;
 }
 
 export function loadBindings(): BindingMap {

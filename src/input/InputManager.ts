@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Btn, emptyInput, type InputFrame } from '../combat/types';
 import { keyState } from './KeyState';
-import { BUTTON_ACTION, loadBindings, type ActionId, type BindingMap } from './Bindings';
+import { BUTTON_ACTION, getBindings, type ActionId } from './Bindings';
 
 /**
  * Turns keyboard and gamepad state into the simulation's `InputFrame`.
@@ -25,6 +25,16 @@ export interface UiEdges {
   cancel: boolean;
   toggleDebug: boolean;
   toggleHitboxes: boolean;
+  /**
+   * Hold the melee weapon drawn.
+   *
+   * A UI edge rather than a `Btn`, and that is the whole point: `Btn` values go
+   * into `InputFrame` and therefore into the simulation, which `match.test.ts`
+   * asserts is bit-identical for a given seed and input stream. Routing a purely
+   * cosmetic toggle through this path makes it *structurally* incapable of
+   * changing a fight, instead of merely intended not to.
+   */
+  weaponDraw: boolean;
   up: boolean;
   down: boolean;
   /** Horizontal menu movement, for grid layouts such as the roster select. */
@@ -34,16 +44,16 @@ export interface UiEdges {
 
 const AXIS_DEADZONE = 0.35;
 
-/** Bindings are global to the app; scenes share one live copy. */
-let bindings: BindingMap = loadBindings();
-
-export function getBindings(): BindingMap {
-  return bindings;
-}
-
-export function setBindings(next: BindingMap): void {
-  bindings = next;
-}
+/**
+ * The live bindings singleton moved to `Bindings.ts`.
+ *
+ * It had no reason to be here beyond history, and the cost was real: anything
+ * that wanted to name a key — the command list, for one — had to import this
+ * module and therefore Phaser, which cannot load under Node and took the whole
+ * consumer out of unit test range. `Bindings.ts` is the module that already
+ * promises no Phaser dependency.
+ */
+export { getBindings, setBindings } from './Bindings';
 
 export class InputManager {
   private prevHeld = 0;
@@ -53,6 +63,7 @@ export class InputManager {
     cancel: false,
     toggleDebug: false,
     toggleHitboxes: false,
+    weaponDraw: false,
     up: false,
     down: false,
     left: false,
@@ -107,7 +118,7 @@ export class InputManager {
 
   /** True when any input bound to `action` is currently active. */
   private active(action: ActionId, pad: Phaser.Input.Gamepad.Gamepad | null): boolean {
-    const b = bindings[action];
+    const b = getBindings()[action];
     if (!b) return false;
     if (keyState.anyDown(b.keys)) return true;
     for (const p of b.pads) {
@@ -176,6 +187,7 @@ export class InputManager {
       cancel: keyState.isDown('Escape') || this.padButton(pad, 1),
       toggleDebug: this.active('debugText', pad),
       toggleHitboxes: this.active('debugHitboxes', pad),
+      weaponDraw: this.active('weaponDraw', pad),
       up: this.active('up', pad),
       down: this.active('down', pad),
       left: this.active('left', pad),

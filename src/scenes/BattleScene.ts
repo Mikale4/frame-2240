@@ -19,8 +19,9 @@ import { BanterBox } from '../ui/BanterBox';
 import { SatCutscene } from '../ui/SatCutscene';
 import { pickConversation } from '../data/matchups';
 import { pickBanter, type BanterTrigger } from '../data/banter';
-import { Menu, makeScrim, bigTitle, smallText } from '../ui/Menu';
+import { Menu, makeScrim, bigTitle, smallText, type MenuItem } from '../ui/Menu';
 import { audioMenuItems } from '../ui/AudioOptions';
+import { commandHeading, commandRows, trainingMenuItems } from '../ui/TrainingOptions';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
@@ -94,6 +95,14 @@ export class BattleScene extends Phaser.Scene {
   private projLayer!: ProjectileLayer;
   /** One beam-sword sprite per combatant, shown only while swinging. */
   private blades: Phaser.GameObjects.Image[] = [];
+  /**
+   * Per side: hold the melee weapon drawn, on purpose, indefinitely.
+   *
+   * Presentation only, and deliberately kept here rather than on `Combatant` —
+   * a field the simulation cannot see is a field the simulation cannot be
+   * changed by. Index 0 is the player; nothing toggles index 1 today.
+   */
+  private weaponHeld: boolean[] = [false, false];
   /** One supporter drone sprite per combatant, plus its readiness ring. */
   private drones: Phaser.GameObjects.Image[] = [];
   private droneRings: Phaser.GameObjects.Graphics[] = [];
@@ -198,6 +207,8 @@ export class BattleScene extends Phaser.Scene {
   private accumulator = 0;
   private paused = false;
   private pauseUi?: { scrim: Phaser.GameObjects.Rectangle; menu: Menu; extra: Phaser.GameObjects.GameObject[] };
+  /** Command-reference overlay, up only while the pause menu is also up. */
+  private commandsUi?: Phaser.GameObjects.GameObject[];
   private shake = 0;
   private finished = false;
   private uiCam!: Phaser.Cameras.Scene2D.Camera;
@@ -217,6 +228,7 @@ export class BattleScene extends Phaser.Scene {
     // explicitly or a rematch would keep the previous match's destroyed
     // GameObjects alive in these collections.
     this.pauseUi = undefined;
+    this.commandsUi = undefined;
     this.banter = [];
     this.banterQueue = [];
     this.banterDelay = 0;
@@ -235,6 +247,7 @@ export class BattleScene extends Phaser.Scene {
     this.decoyAnim = {};
     this.worldObjects = [];
     this.renderers = [];
+    this.weaponHeld = [false, false];
 
     const playerDef = MECHS[session.playerMech];
     const enemyDef = MECHS[session.enemyMech];
@@ -247,6 +260,12 @@ export class BattleScene extends Phaser.Scene {
       roundTicks: session.mode === 'training' ? 99 * 60 * 10 : undefined,
       dummy: session.mode === 'training',
     });
+
+    // Training's switches survive a restart, so a rig set up once stays set up
+    // across rematches. Health is re-asserted here rather than only on selection
+    // because a fresh match starts everyone at full.
+    this.applyTraining();
+    if (session.mode === 'training') this.setTrainingHealth(session.training.health);
 
     // Each side runs its own tier. In `aiVsAi` that is the whole point of the
     // mode — an EXTREME rival taking apart an EASY one is a different thing to
@@ -454,35 +473,140 @@ export class BattleScene extends Phaser.Scene {
   private openPause(): void {
     if (this.paused) return;
     this.paused = true;
+    const training = session.mode === 'training';
     const scrim = makeScrim(this);
-    const title = bigTitle(this, 'PAUSED', 140, 40, '#eaf2ff');
+    const title = bigTitle(this, training ? 'TRAINING' : 'PAUSED', 140, 40, '#eaf2ff');
     const hint = smallText(
       this,
-      'ESC resumes · LEFT / RIGHT adjust volume · F1 / F2 debug overlays',
+      training
+        ? 'ESC resumes · LEFT / RIGHT change a setting · F1 / F2 debug overlays'
+        : 'ESC resumes · LEFT / RIGHT adjust volume · F1 / F2 debug overlays',
       VIEW_W / 2,
       VIEW_H - 40,
       12,
       '#63748c',
     );
-    const menu = new Menu(
-      this,
-      [
-        { label: 'RESUME', onSelect: () => this.closePause() },
-        ...audioMenuItems(),
-        { label: 'RESTART MATCH', onSelect: () => this.restart() },
-        { label: 'MECH SELECT', onSelect: () => this.toMechSelect() },
-        { label: 'QUIT TO TITLE', onSelect: () => this.toTitle() },
-      ],
-      VIEW_W / 2,
-      230,
-      { size: 22, gap: 36 },
-    );
+    // Training swaps the volume rows for the rig switches. The audio sliders are
+    // still reachable from the title screen; what a player opens *this* menu for
+    // in training is the drill, not the mix.
+    const options = training ? this.trainingRows() : audioMenuItems();
+    const rows: MenuItem[] = [
+      { label: 'RESUME', onSelect: () => this.closePause() },
+      ...options,
+      { label: 'RESTART MATCH', onSelect: () => this.restart() },
+      { label: 'MECH SELECT', onSelect: () => this.toMechSelect() },
+      { label: 'QUIT TO TITLE', onSelect: () => this.toTitle() },
+    ];
+    // Training runs two rows longer than the ordinary menu, which walked the
+    // last entry into the footer hint. Tighten and lift rather than scroll: at
+    // eight rows a scrolling window would hide options behind an arrow.
+    const tall = rows.length > 7;
+    const menu = new Menu(this, rows, VIEW_W / 2, tall ? 205 : 230, {
+      size: 22,
+      gap: tall ? 32 : 36,
+    });
     // Pause chrome is UI: keep it off the zoomed world camera.
     this.cameras.main.ignore([scrim, title, hint, menu.container]);
     this.pauseUi = { scrim, menu, extra: [title, hint] };
   }
 
+  // ---------------------------------------------------------------- training
+
+  /**
+   * Pushes every training switch at the live simulation.
+   *
+   * Called once on `create` and again whenever a row changes, so the menu never
+   * has to remember which of its settings are already applied. Health is the
+   * exception and is applied only on selection — re-asserting it here would undo
+   * every hit the player had taken since, which is the opposite of a drill.
+   */
+  private applyTraining(): void {
+    if (session.mode !== 'training') return;
+    this.sim.dronesEnabled = session.training.drones;
+    for (const c of this.sim.combatants) c.satFree = session.training.infiniteSat;
+  }
+
+  private setTrainingHealth(frac: number): void {
+    const c = this.sim.combatants[0];
+    if (!c) return;
+    c.life = Math.max(1, Math.round(c.def.gauges.maxLife * frac));
+  }
+
+  private trainingRows(): MenuItem[] {
+    return trainingMenuItems({
+      applyDrones: () => this.applyTraining(),
+      applySat: () => this.applyTraining(),
+      applyHealth: (frac) => this.setTrainingHealth(frac),
+      openCommands: () => this.openCommands(),
+    });
+  }
+
+  /**
+   * The command reference, drawn over the paused match.
+   *
+   * Replaces the menu rather than layering on it: the pause overlay already owns
+   * up/down/confirm, and two things reading the same edges is how a menu ends up
+   * moving two rows per press. The menu is hidden, not destroyed, so returning
+   * lands on the row the player left.
+   */
+  private openCommands(): void {
+    if (!this.pauseUi || this.commandsUi) return;
+    // The heading and the footer hint go with the menu. Hiding only the rows
+    // left 'TRAINING' printed straight through 'COMMAND LIST' and two different
+    // hints stacked at the bottom.
+    this.setPauseChromeVisible(false);
+    const objs: Phaser.GameObjects.GameObject[] = [];
+    const heading = bigTitle(this, 'COMMAND LIST', 96, 30, '#eaf2ff');
+    objs.push(heading);
+
+    // Both training slots: the dummy's list is what you are practising against.
+    const ids = [session.playerMech, session.enemyMech];
+    let y = 150;
+    for (const id of ids) {
+      objs.push(smallText(this, commandHeading(id), VIEW_W / 2, y, 15, '#ffd166'));
+      y += 26;
+      const rows = commandRows(id);
+      if (!rows.length) {
+        objs.push(smallText(this, 'no command motions', VIEW_W / 2, y, 12, '#63748c'));
+        y += 24;
+      }
+      for (const r of rows) {
+        objs.push(smallText(this, r.motion, VIEW_W / 2 - 120, y, 13, '#cfe0f5', [1, 0.5]));
+        objs.push(smallText(this, r.attack, VIEW_W / 2 - 96, y, 13, '#8fa3bd', [0, 0.5]));
+        y += 22;
+      }
+      y += 14;
+    }
+    objs.push(
+      smallText(
+        this,
+        'Directions are relative to the way you are facing.  ESC returns.',
+        VIEW_W / 2,
+        VIEW_H - 62,
+        12,
+        '#63748c',
+      ),
+    );
+    this.cameras.main.ignore(objs);
+    this.commandsUi = objs;
+  }
+
+  private closeCommands(): void {
+    if (!this.commandsUi) return;
+    for (const o of this.commandsUi) o.destroy();
+    this.commandsUi = undefined;
+    this.setPauseChromeVisible(true);
+  }
+
+  /** The pause menu and its heading and hint, shown or hidden as one thing. */
+  private setPauseChromeVisible(v: boolean): void {
+    if (!this.pauseUi) return;
+    this.pauseUi.menu.setVisible(v);
+    for (const e of this.pauseUi.extra) (e as Phaser.GameObjects.Text).setVisible(v);
+  }
+
   private closePause(): void {
+    this.closeCommands();
     this.paused = false;
     if (this.pauseUi) {
       this.pauseUi.scrim.destroy();
@@ -536,8 +660,18 @@ export class BattleScene extends Phaser.Scene {
 
     if (ui.toggleDebug) this.debug.toggleText();
     if (ui.toggleHitboxes) this.debug.toggleHitboxes();
+    // Player slot only. Sits with the debug toggles because it is the same class
+    // of thing — a view state read from a UI edge, never from `InputFrame`.
+    if (ui.weaponDraw) this.weaponHeld[0] = !this.weaponHeld[0];
 
     if (this.paused) {
+      // The command list owns the overlay while it is up: it consumes pause and
+      // confirm to step back to the menu, so neither reaches the rows beneath
+      // and Escape does not skip straight out of the pause screen.
+      if (this.commandsUi) {
+        if (ui.pause || ui.cancel || ui.confirm) this.closeCommands();
+        return;
+      }
       if (ui.up) this.pauseUi?.menu.move(-1);
       if (ui.down) this.pauseUi?.menu.move(1);
       if (ui.left) this.pauseUi?.menu.adjust(-1);
@@ -2057,16 +2191,27 @@ export class BattleScene extends Phaser.Scene {
       // The saber is a real part; the additive sprite is only a bloom layered
       // over the modelled blade so it glows rather than being the blade itself.
       const bloom = this.blades[i];
-      const drawn = c.alive && c.bladeTimer > 0;
+      const swinging = c.alive && c.bladeTimer > 0;
+      // **`weaponHeld` is cosmetic and nothing else.** It lets a pilot keep the
+      // blade out while flying and shooting normally; it is a scene field fed by
+      // a UI edge, so it never reaches `InputFrame`, `Combatant` or `MatchSim`
+      // and cannot alter a fight. Melee still runs entirely off `bladeTimer`.
+      const drawn = c.alive && (swinging || this.weaponHeld[i]);
       r.setPartVisible('meleeWeapon', drawn);
       // The projected blade is a separate part on the same pivot, so it shows
       // and hides with the hardware it is emitted from. Chassis without one —
       // NOCTURNE's claw, TERRAMOTH's pile, OBELISK's shield — have no such node
       // and `setPartVisible` is a no-op for them.
       r.setPartVisible('meleeEnergy', drawn);
-      r.setPartVisible('mainWeapon', !drawn);
+      // The gun is stowed for a *swing* only. Holding the blade out on purpose
+      // must not take the rifle off the mech, or firing it would come from an
+      // empty hand — the pilot is carrying both, which is the point.
+      r.setPartVisible('mainWeapon', !swinging);
 
-      if (drawn) {
+      // Bloom on the *swing* only. The projected blade carries its own halo and
+      // pulse, so a held blade already glows; adding the streak on top of a
+      // stationary weapon reads as a permanent flare rather than a strike.
+      if (swinging) {
         // Anchor the bloom to the modelled weapon's own transform, not to the
         // aim vector: the part carries bank and any authored offset too, and
         // reading it back means the glow cannot drift off the blade again.

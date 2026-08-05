@@ -812,6 +812,22 @@ export class Supporter {
     this.stateTicks = 0;
   }
 
+  /**
+   * Docks the drone and drops whatever it was doing.
+   *
+   * For training's escorts-off switch. `Stowed` is the one mode that is
+   * genuinely absent from the fight — invisible, untouchable, no passive — so
+   * this is switching the escort off rather than merely telling it to stop
+   * shooting. A `Destroyed` drone would do the same job and is not reversible.
+   */
+  stow(): void {
+    if (this.mode !== DroneMode.Stowed) {
+      this.mode = DroneMode.Stowed;
+      this.modeTicks = 0;
+    }
+    this.cancel();
+  }
+
   // ---------------------------------------------------------------- stepping
 
   /**

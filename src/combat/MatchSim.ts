@@ -171,6 +171,14 @@ export class MatchSim {
   private readonly roundTicks: number;
   /** True when the rival is a training dummy. */
   readonly dummy: boolean;
+  /**
+   * Training only: escorts switched off entirely.
+   *
+   * Mutable rather than a constructor option, because the switch is on the pause
+   * menu and has to take effect mid-match. Default true, so nothing outside
+   * training ever takes a different path.
+   */
+  dronesEnabled = true;
   /** Counts dummy recoveries, so training can show how many you have downed. */
   dummyDowns = 0;
 
@@ -282,6 +290,14 @@ export class MatchSim {
    * this tick becomes a live projectile on the same tick as any other.
    */
   private stepSupporters(): void {
+    // Switched off in training: park each escort at its dock and take no other
+    // action. Stowing rather than merely skipping the step matters — a drone
+    // frozen wherever it happened to be would still be a solid, shootable thing
+    // sitting in the arena.
+    if (!this.dronesEnabled) {
+      for (const c of this.combatants) c.supporter.stow();
+      return;
+    }
     for (const c of this.combatants) {
       const target = this.opponentOf(c);
       const before = c.supporter.state;

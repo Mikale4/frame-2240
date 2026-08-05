@@ -682,6 +682,15 @@ export class Combatant implements FlightState {
   satActive = false;
   satMode: SatMode = SatMode.Shield;
   satTicks = 0;
+  /**
+   * Training only: the burst never drains and the meter is always charged.
+   *
+   * Off by default and set from `BattleScene` under `mode === 'training'`, so
+   * the ordinary step is byte-for-byte what it was and `match.test.ts`'s
+   * bit-identical replay is unaffected. Named for `energyFree` / `boostFree`,
+   * which express the same "this resource is not being charged for" idea.
+   */
+  satFree = false;
   /** True when this burst opened at or below `DESPERATION_LIFE`. */
   satDesperate = false;
   /** Ticks of helplessness left after a burst ended. See SAT_BURNOUT_TICKS. */
@@ -1574,7 +1583,12 @@ export class Combatant implements FlightState {
       this.sniperCooldown--;
     }
 
-    if (this.satActive) {
+    if (this.satActive && this.satFree) {
+      // Training: hold the burst open. `satTicks` is left where it is rather
+      // than topped up, so the mode ends the moment the switch goes off instead
+      // of running on for a stale duration.
+      this.sat = g.maxSaturation;
+    } else if (this.satActive) {
       // Shield mode burns the meter faster, as the reference did for its
       // barrier-type concentration. It also now buys the most: a free permanent
       // guard on top of the projectile-erasing bubble, so it pays in duration.
@@ -1590,6 +1604,12 @@ export class Combatant implements FlightState {
         this.sat = 0;
         this.burnOut(events);
       }
+    } else if (this.satFree) {
+      // Training: always ready, and never burnt out, so a burst can be opened
+      // again the instant the last one is closed.
+      this.sat = g.maxSaturation;
+      this.satTicks = g.satDuration;
+      this.satBurnout = 0;
     } else if (this.sat < g.maxSaturation) {
       const gain = g.satPassive * (this.dronePassive?.satGainMul ?? 1);
       this.sat = Math.min(g.maxSaturation, this.sat + gain);

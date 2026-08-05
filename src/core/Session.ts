@@ -1,5 +1,6 @@
 import type { MatchOutcome } from '../combat/MatchSim';
 import { defaultAudioSettings } from '../audio/AudioSettings';
+import { defaultTrainingSettings } from './TrainingSettings';
 
 export type MatchMode = 'vsCpu' | 'aiVsAi' | 'training';
 
@@ -77,6 +78,15 @@ export const session = {
    * a balance you have to set again every launch is not a setting.
    */
   audio: defaultAudioSettings(),
+
+  /**
+   * Training-room switches. Read only while `mode === 'training'`.
+   *
+   * Not persisted to storage, unlike `audio`: a mix is a preference, but a rig
+   * left on 25 % life with infinite saturation is a thing you set up for one
+   * session and would not expect to find waiting for you next launch.
+   */
+  training: defaultTrainingSettings(),
 
   seed(): number {
     return (
