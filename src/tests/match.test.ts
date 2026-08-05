@@ -162,6 +162,63 @@ describe('match simulation', () => {
   });
 });
 
+describe('melee reaches the escort', () => {
+  const press = (...b: Btn[]): InputFrame => {
+    let m = 0;
+    for (const x of b) m |= 1 << x;
+    return { ...emptyInput(), held: m, pressed: m };
+  };
+
+  /** Settles a match with the rival parked, so its escort is on station. */
+  function settled(): MatchSim {
+    const s = new MatchSim({ playerDef: NOCTURNE, enemyDef: HALCYON, seed: 7, introTicks: 2 });
+    for (let i = 0; i < 60; i++) s.step(emptyInput(), emptyInput());
+    for (let i = 0; i < 90; i++) {
+      s.enemy.x = 1400;
+      s.enemy.y = 500;
+      s.step(emptyInput(), emptyInput());
+    }
+    return s;
+  }
+
+  it('cuts a drone that is the nearest thing to swing at', () => {
+    // Drones could be shot but never cut, which is not a rule anyone would guess
+    // from watching it. The swing is *aimed*, so reaching the escort was not
+    // enough on its own — with the pilot elsewhere the blade went the other way.
+    const s = settled();
+    const p = s.player;
+    const d = s.enemy.supporter;
+    const before = d.life;
+    for (let i = 0; i < 120; i++) {
+      s.enemy.x = 1400;
+      s.enemy.y = 500;
+      // Stand beyond the escort, on the far side from its owner.
+      const ux = d.x - s.enemy.x;
+      const uy = d.y - s.enemy.y;
+      const L = Math.hypot(ux, uy) || 1;
+      p.x = d.x + (ux / L) * 60;
+      p.y = d.y + (uy / L) * 60;
+      p.vx = 0;
+      p.vy = 0;
+      p.hitstun = 0;
+      s.step(i % 14 === 0 ? press(Btn.Melee) : emptyInput(), emptyInput());
+      if (d.life < before) break;
+    }
+    expect(d.life).toBeLessThan(before);
+  });
+
+  it('still prefers the pilot when the pilot is the nearer target', () => {
+    // The escort must not steal swings that belong to the machine flying it.
+    const s = settled();
+    const p = s.player;
+    p.x = s.enemy.x - 90;
+    p.y = s.enemy.y;
+    p.hitstun = 0;
+    s.step(press(Btn.Melee), emptyInput());
+    expect(p.meleeLock).toBeTruthy();
+  });
+});
+
 describe('training dummy', () => {
   it('gets back up instead of ending the session', () => {
     const s = new MatchSim({

@@ -2010,9 +2010,37 @@ export class Combatant implements FlightState {
       this.meleeLockout <= 0 &&
       !this.weaponDisabled(WeaponSlot.Melee)
     ) {
+      // Lock on to the pilot first, exactly as before. Only when no lock is
+      // available at all does anything else get a look in.
       if (this.startMeleeLock(target, events)) return;
-      // No lock available (no target, out of range, or not enough energy):
-      // still throw a single swing so the button is never dead.
+
+      // **Then the escort.** Drones could be shot but never cut, which is not a
+      // rule anyone would guess from watching it. Reaching the escort with an
+      // already-committed swing was not enough on its own, because the swing is
+      // *aimed*: with the pilot out of reach the blade went at the pilot anyway
+      // and sailed past the drone in your face.
+      //
+      // Strictly after the lock attempt, and that ordering is the whole design.
+      // The escort usually flies *between* the two machines, so "swing at
+      // whichever is nearer" — which is what this did first — quietly converted
+      // ordinary melee into a single swing at a drone at any range where the
+      // chain was available. It now only ever claims a press that would
+      // otherwise have been the dead-button fallback.
+      //
+      // A single swing rather than a chain: `meleeLock` circles and repositions
+      // around a `Combatant`, and a drone is not one — no barrier, no guard, no
+      // hitstun. One swing per press is the honest version of "you can cut it".
+      const esc = target?.supporter;
+      if (esc?.hittable) {
+        const dEsc = Math.hypot(esc.x - this.x, esc.y - this.y);
+        if (dEsc <= this.def.meleeRange + 54) {
+          this.beginMelee(events, target, { x: esc.x, y: esc.y });
+          return;
+        }
+      }
+
+      // No lock, no escort in reach: still throw a single swing so the button is
+      // never dead.
       this.beginMelee(events, target);
       return;
     }
@@ -2349,14 +2377,21 @@ export class Combatant implements FlightState {
     return true;
   }
 
-  private beginMelee(events: SimEvent[], target?: Combatant | null): void {
+  private beginMelee(
+    events: SimEvent[],
+    target?: Combatant | null,
+    aimAt?: { x: number; y: number },
+  ): void {
     // Lock on: snap the aim to the target as the swing commits. The turret only
     // slews ~13deg/tick, so a swing started while the mounts are still coming
     // around would otherwise lunge along a stale angle - away from the enemy -
     // and the in-flight tracking cannot correct that inside the startup window.
-    if (target && target.alive) {
-      this.aim = Math.atan2(target.y - this.y, target.x - this.x);
-      this.facing = target.x >= this.x ? 1 : -1;
+    //
+    // `aimAt` overrides the pilot, which is how a swing is pointed at an escort.
+    const at = aimAt ?? (target && target.alive ? { x: target.x, y: target.y } : null);
+    if (at) {
+      this.aim = Math.atan2(at.y - this.y, at.x - this.x);
+      this.facing = at.x >= this.x ? 1 : -1;
     }
     const stages = this.def.melee;
     const maxHits = this.maxMeleeHits;
