@@ -15,6 +15,8 @@ import { partTexture } from './PartTexture';
 /** Blender renders parts at 2x the logical size; display them at half scale. */
 export const PART_SCALE = 0.5;
 
+import { flickerLevel } from './EnergyFlicker';
+
 interface PartNode {
   def: RigPart;
   container: Phaser.GameObjects.Container;
@@ -439,15 +441,20 @@ export class MechRenderer {
     this.energyPhase += dt;
     const t = this.energyPhase;
 
-    // 6.1 and 23.7 rad/s share no simple ratio, so the beat is long and the
-    // pulse never lands on an obvious loop.
+    // The slow swell stays a sine: it is a breath, not a flicker, and it drives
+    // the *scale* rather than the brightness.
     const swell = Math.sin(t * 6.1);
-    const flicker = Math.sin(t * 23.7) * Math.sin(t * 9.3);
+    // Brightness is stepped instead. See FLICKER_STEPS.
+    const lvl = flickerLevel(Math.floor(t * 60));
 
-    node.sprite.setAlpha(0.86 + 0.10 * swell + 0.06 * flicker);
+    // **The core blends normally, so it cannot take the reference's full swing.**
+    // At 100/256 an additive layer thins; a normally-blended blade at 0.39 simply
+    // is not there. It gets the shape of the flicker over a shallower range and
+    // the additive halo carries the depth.
+    node.sprite.setAlpha(0.66 + 0.34 * lvl);
     // Length surges more than width: a beam grows out of its emitter.
     node.sprite.setScale(
-      PART_SCALE * (1 + 0.045 * swell + 0.02 * flicker),
+      PART_SCALE * (1 + 0.045 * swell + 0.02 * lvl),
       PART_SCALE * (1 + 0.018 * swell),
     );
 
@@ -469,7 +476,12 @@ export class MechRenderer {
 
     const halo = this.energyHalo;
     if (!halo) return;
-    halo.setAlpha(0.30 - 0.10 * swell - 0.05 * flicker);
+    // **In phase with the core, not against it.** The halo used to swing the
+    // opposite way, which held total brightness roughly constant and cancelled
+    // most of the flicker out — the two layers were taking turns rather than
+    // pulsing. This is the additive layer, so it is the one that can take the
+    // reference's real depth.
+    halo.setAlpha(0.08 + 0.40 * lvl);
     halo.setScale(
       PART_SCALE * (1.16 - 0.05 * swell),
       PART_SCALE * (1.22 - 0.06 * swell),

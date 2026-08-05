@@ -6632,3 +6632,56 @@ unit test — and guarded 90 of 120 ticks under `FORCE BUTTON: GUARD` with its
 barrier draining 100 to 48. Handed to a CPU at EXTREME it moved 399 px on its
 own, used `main` and `spread` rather than the forced script, and killed the
 player.
+
+## D140 — The blade flickers in steps, off the 2005 reference's own tables
+
+The projected blades pulsed on two multiplied sines over a 0.70–1.02 alpha
+range. That does not read as flicker, and the user asked for the reference's
+look by name.
+
+`Babel Sword 2005/chars/rs/sff/0.air` is a **plain-text MUGEN animation file**,
+which makes this one of the few places the reference can be read exactly rather
+than inferred from screenshots. Actions 160–163 author the weapon glow as an
+additive layer whose alpha jumps around a discrete ladder — 20, 30, 40, 50, 60,
+80, 90, 100, 120, 140, 150, 180, 200, 210 out of 256 — held for uneven spans.
+Counted across the whole file, the additive frames hold for **2147 frames of 1
+tick, 845 of 2, 142 of 3**: mostly single frames, with occasional longer rests.
+
+Action 160's loop is the clearest statement of it:
+
+```
+loopstart
+130,1,0,0,3,,A          ; 3 ticks, full
+130,1,0,0,2,,AS200D256
+130,1,0,0,1,,AS150D256
+130,1,0,0,1,,AS100D256  ; 1 tick, 39 %
+130,1,0,0,1,,AS150D256
+130,1,0,0,2,,AS200D256
+```
+
+**The unevenness is the whole effect.** A sine of any frequency reads as a
+pulse — smooth, periodic, mechanical — where this reads as something struggling
+to stay lit. Brightness is now a table (`render/EnergyFlicker.ts`), stepped on a
+60 Hz frame index, with three loops of different lengths (10, 12, 9)
+concatenated so the cycle is 31 frames and does not settle into a rhythm the eye
+can predict. The slow swell stays a sine and drives *scale* only: a breath is
+not a flicker, and they are separate dials.
+
+Two adjustments the reference does not have to make, because MUGEN drew its
+glow additively and we do not:
+
+* **The core takes a shallower swing than the halo.** At 100/256 an additive
+  layer thins; a normally-blended blade at 0.39 is simply not there. The core
+  runs 0.66–1.00 and the additive halo runs 0.08–0.48, so the halo carries the
+  depth. Blending the core additively is not an option — D131 established it
+  bleaches the colour out.
+* **The halo now moves *in phase* with the core.** It used to swing the opposite
+  way, which held total brightness roughly constant and cancelled most of the
+  flicker out: the two layers were taking turns rather than pulsing.
+
+Measured live rather than assumed: over 62 frames the core steps across **11
+distinct levels** between 0.765 and 1.0 holding 1–2 frames apiece, the halo
+swings 0.204 to 0.48, and all four turbulence variants cycle. `flickerLevel`
+lives in its own Phaser-free module so the properties that make it read as
+flicker — the depth, the holds, and the absence of any short sub-period — are
+unit-testable.

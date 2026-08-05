@@ -5,6 +5,7 @@ import { DroneMode } from '../combat/Supporter';
 import { Btn, emptyInput, isHeld, isPressed } from '../combat/types';
 import { DUMMY_CYCLE, dummyInput } from '../combat/TrainingDummy';
 import { CommandBuffer } from '../combat/CommandBuffer';
+import { flickerLevel } from '../render/EnergyFlicker';
 import { HEALTH_STEPS, cycleHealth, defaultTrainingSettings, healthLabel } from '../core/TrainingSettings';
 import { commandHeading, commandRows, motionNotation } from '../ui/TrainingOptions';
 import { MOTIONS } from '../combat/CommandBuffer';
@@ -197,6 +198,55 @@ describe('the forced dummy script', () => {
     expect(dummyInput(script, 0, 1).dy).toBe(1); // down, the motion's first step
     // ...and the held direction resumes once the motion is done.
     expect(dummyInput(script, DUMMY_CYCLE - 1, 1).dx).toBe(1);
+  });
+});
+
+/**
+ * The blade's brightness comes from a transcribed table, not a sine, so the
+ * properties worth guarding are the ones that make it read as flicker at all.
+ */
+describe('energy flicker', () => {
+  const cycle = 31;
+
+  it('repeats on a 31-frame cycle', () => {
+    for (let f = 0; f < 40; f++) {
+      expect([f, flickerLevel(f)]).toEqual([f, flickerLevel(f + cycle)]);
+    }
+  });
+
+  it('survives a negative frame index', () => {
+    expect(flickerLevel(-1)).toBe(flickerLevel(cycle - 1));
+  });
+
+  it('reaches full brightness and dips deep', () => {
+    const levels = Array.from({ length: cycle }, (_, f) => flickerLevel(f));
+    expect(Math.max(...levels)).toBe(1);
+    // The reference's own floor is 100/256 on the deep loop; anything shallower
+    // than roughly a third reads as a pulse rather than a struggle to stay lit.
+    expect(Math.min(...levels)).toBeLessThanOrEqual(0.4);
+  });
+
+  it('steps rather than sweeping — it holds, then jumps', () => {
+    const levels = Array.from({ length: cycle }, (_, f) => flickerLevel(f));
+    let holds = 0;
+    let jumps = 0;
+    for (let f = 1; f < cycle; f++) {
+      if (levels[f] === levels[f - 1]) holds++;
+      else jumps++;
+    }
+    // Both, and neither dominant: all holds is a constant, all jumps is noise.
+    expect(holds).toBeGreaterThan(4);
+    expect(jumps).toBeGreaterThan(8);
+  });
+
+  it('is not periodic on any short sub-cycle', () => {
+    // A sine or a single repeated loop would match itself at some small period;
+    // three concatenated loops of different lengths should not.
+    const levels = Array.from({ length: cycle }, (_, f) => flickerLevel(f));
+    for (const period of [2, 3, 4, 5, 6, 8, 10, 12]) {
+      const same = levels.every((v, i) => v === levels[(i + period) % cycle]);
+      expect([period, same]).toEqual([period, false]);
+    }
   });
 });
 
