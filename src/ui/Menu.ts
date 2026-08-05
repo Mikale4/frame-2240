@@ -24,10 +24,21 @@ export interface MenuItem {
    * a promise instead of a surprise. It still takes a cursor stop — skipping it
    * would make the highlight jump two rows for no visible reason — but confirm
    * refuses it audibly.
+   *
+   * **A predicate, not just a flag**, because a row can be disabled by the state
+   * of another row: training's P2 SKILL is dead while a dummy holds the slot and
+   * live the moment a CPU does. A boolean captured when the menu was built stays
+   * captured, which reads as the toggle above it having done nothing.
    */
-  disabled?: boolean;
+  disabled?: boolean | (() => boolean);
   /** Replaces the value column while `disabled`, e.g. 'COMING SOON'. */
   disabledNote?: string;
+}
+
+/** Resolves `disabled`, which may be a flag or a predicate. */
+function isDisabled(item: MenuItem | undefined): boolean {
+  if (!item) return false;
+  return typeof item.disabled === 'function' ? item.disabled() : !!item.disabled;
 }
 
 /**
@@ -128,7 +139,8 @@ export class Menu {
         return;
       }
       const sel = i === this.index;
-      const value = item.disabled
+      const off = isDisabled(item);
+      const value = off
         ? `   ${item.disabledNote ?? 'LOCKED'}`
         : item.value
           ? `   ${item.value()}`
@@ -136,8 +148,8 @@ export class Menu {
       t.setText(`${sel ? '▸ ' : '  '}${item.label}${value}`);
       // A disabled row stays dim even under the cursor, so the highlight never
       // reads as "press enter here".
-      t.setColor(item.disabled ? '#4d5a6e' : sel ? '#ffd166' : '#8fa3bd');
-      t.setScale(sel && !item.disabled ? 1.06 : 1);
+      t.setColor(off ? '#4d5a6e' : sel ? '#ffd166' : '#8fa3bd');
+      t.setScale(sel && !off ? 1.06 : 1);
     });
     this.upArrow?.setVisible(this.top > 0);
     this.downArrow?.setVisible(this.top + this.windowSize < this.items.length);
@@ -159,7 +171,7 @@ export class Menu {
   adjust(dir: number): boolean {
     if (this.destroyed) return false;
     const item = this.items[this.index];
-    if (!item?.onAdjust || item.disabled) return false;
+    if (!item?.onAdjust || isDisabled(item)) return false;
     item.onAdjust(dir);
     sfx.uiMove();
     this.refresh();
@@ -174,7 +186,7 @@ export class Menu {
   confirm(): void {
     if (this.destroyed) return;
     const item = this.items[this.index];
-    if (item?.disabled) {
+    if (isDisabled(item)) {
       // Refused, and audibly so: a dead row that makes no sound is
       // indistinguishable from a dropped input.
       sfx.assistDenied();

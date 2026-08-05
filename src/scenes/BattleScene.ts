@@ -22,11 +22,12 @@ import { pickBanter, type BanterTrigger } from '../data/banter';
 import { Menu, makeScrim, bigTitle, smallText, type MenuItem } from '../ui/Menu';
 import { audioMenuItems } from '../ui/AudioOptions';
 import { commandHeading, commandRows, trainingMenuItems } from '../ui/TrainingOptions';
+import { dummyInput } from '../combat/TrainingDummy';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
 import { DANGER_LIFE_FRACTION, pickBattleCue } from '../audio/MusicBank';
-import { MatchPhase, ProjKind, SAT_MODE_NAMES, SatMode, emptyInput, type InputFrame } from '../combat/types';
+import { MatchPhase, ProjKind, SAT_MODE_NAMES, SatMode, type InputFrame } from '../combat/types';
 import { ELEMENTS, type Element } from '../combat/Status';
 import { DOME_MAX, DroneMode, DECOY_COUNT } from '../combat/Supporter';
 import type { Combatant } from '../combat/Combatant';
@@ -273,7 +274,12 @@ export class BattleScene extends Phaser.Scene {
     // irrelevant and simply takes the floor.
     const aiSeed = session.seed() ^ 0x9e3779b9;
     this.ai = new RivalAI(
-      { difficulty: session.mode === 'training' ? Difficulty.Easy : session.enemyDifficulty },
+      {
+        difficulty:
+          session.mode === 'training'
+            ? (session.training.p2Difficulty as Difficulty)
+            : session.enemyDifficulty,
+      },
       new Rng(aiSeed),
     );
     if (session.mode === 'aiVsAi') {
@@ -514,13 +520,14 @@ export class BattleScene extends Phaser.Scene {
       { label: 'MECH SELECT', onSelect: () => this.toMechSelect() },
       { label: 'QUIT TO TITLE', onSelect: () => this.toTitle() },
     ];
-    // Training runs two rows longer than the ordinary menu, which walked the
-    // last entry into the footer hint. Tighten and lift rather than scroll: at
-    // eight rows a scrolling window would hide options behind an arrow.
+    // Training runs much longer than the ordinary menu, which walked the last
+    // entry into the footer hint. Tighten and lift first; past what fits, let
+    // the menu scroll — it already draws arrows when there is more either way.
     const tall = rows.length > 7;
-    const menu = new Menu(this, rows, VIEW_W / 2, tall ? 205 : 230, {
+    const menu = new Menu(this, rows, VIEW_W / 2, tall ? 190 : 230, {
       size: 22,
-      gap: tall ? 32 : 36,
+      gap: tall ? 30 : 36,
+      maxVisible: 9,
     });
     // Pause chrome is UI: keep it off the zoomed world camera.
     this.cameras.main.ignore([scrim, title, hint, menu.container]);
@@ -543,6 +550,22 @@ export class BattleScene extends Phaser.Scene {
     for (const c of this.sim.combatants) c.satFree = session.training.infiniteSat;
   }
 
+  /**
+   * Rebuilds the rival brain after PLAYER 2's tier changed.
+   *
+   * `RivalAI` takes its profile at construction — the tier gates whole traits
+   * rather than scaling a dial, so there is nothing to mutate. Rebuilding also
+   * discards whatever plan the old brain was committed to, which is the right
+   * behaviour: an EXTREME plan half-executed by a NORMAL rival is neither.
+   */
+  private applyP2(): void {
+    if (session.mode !== 'training') return;
+    this.ai = new RivalAI(
+      { difficulty: session.training.p2Difficulty as Difficulty },
+      new Rng((session.seed() ^ 0x9e3779b9) + session.training.p2Difficulty),
+    );
+  }
+
   private setTrainingHealth(frac: number): void {
     const c = this.sim.combatants[0];
     if (!c) return;
@@ -554,6 +577,7 @@ export class BattleScene extends Phaser.Scene {
       applyDrones: () => this.applyTraining(),
       applySat: () => this.applyTraining(),
       applyHealth: (frac) => this.setTrainingHealth(frac),
+      applyP2: () => this.applyP2(),
       openCommands: () => this.openCommands(),
     });
   }
@@ -755,12 +779,18 @@ export class BattleScene extends Phaser.Scene {
       playerInput = this.input$.read();
     }
 
-    // In training the rival is a dummy: it never acts, no matter what you do to
-    // it. Previously it woke up on the first hit, which is not a training mode.
-    const enemyInput =
-      session.mode === 'training'
-        ? emptyInput()
-        : this.ai.think(s.enemy, s.player, s.activeProjectiles(), ARENA_W, ARENA_H);
+    // In training the rival never acts on its own — it woke up on the first hit
+    // once, which is not a training mode. It is a dummy running whatever script
+    // the pause menu set, unless the slot has been handed to a real CPU.
+    let enemyInput: InputFrame;
+    if (session.mode === 'training') {
+      enemyInput =
+        session.training.p2 === 'cpu'
+          ? this.ai.think(s.enemy, s.player, s.activeProjectiles(), ARENA_W, ARENA_H)
+          : dummyInput(session.training, s.tick, s.enemy.facing);
+    } else {
+      enemyInput = this.ai.think(s.enemy, s.player, s.activeProjectiles(), ARENA_W, ARENA_H);
+    }
 
     const wasPhase = s.phase;
     s.step(playerInput, enemyInput);
@@ -2220,10 +2250,13 @@ export class BattleScene extends Phaser.Scene {
       // NOCTURNE's claw, TERRAMOTH's pile, OBELISK's shield — have no such node
       // and `setPartVisible` is a no-op for them.
       r.setPartVisible('meleeEnergy', drawn);
-      // The gun is stowed for a *swing* only. Holding the blade out on purpose
-      // must not take the rifle off the mech, or firing it would come from an
-      // empty hand — the pilot is carrying both, which is the point.
-      r.setPartVisible('mainWeapon', !swinging);
+      // **One weapon in the hand at a time.** This first stowed the gun for a
+      // swing only, so that firing while the blade was held out did not come
+      // from an empty hand. Looked at on screen that trade is the wrong way
+      // round: `mainWeapon` and `meleeWeapon` hang off the same arm a few pixels
+      // apart, so carrying both reads as one clashing object rather than as a
+      // pilot holding two things. The gun goes away whenever the blade is out.
+      r.setPartVisible('mainWeapon', !drawn);
 
       // Bloom on the *swing* only. The projected blade carries its own halo and
       // pulse, so a held blade already glows; adding the streak on top of a

@@ -1,6 +1,15 @@
 import type { MenuItem } from './Menu';
-import { session } from '../core/Session';
-import { cycleHealth, healthLabel } from '../core/TrainingSettings';
+import { DIFFICULTY_COUNT, DIFFICULTY_NAMES, session } from '../core/Session';
+import {
+  FORCE_COMMANDS,
+  FORCE_MOVES,
+  commandLabel,
+  cycle,
+  cycleHealth,
+  healthLabel,
+  moveLabel,
+} from '../core/TrainingSettings';
+import { FORCE_BUTTONS, forceButtonLabel } from '../combat/TrainingDummy';
 import { MOTIONS, Sym, type Motion } from '../combat/CommandBuffer';
 import { BUTTON_ACTION, getBindings, keyLabel } from '../input/Bindings';
 import type { Btn } from '../combat/types';
@@ -25,6 +34,8 @@ export interface TrainingHooks {
   applyDrones: (on: boolean) => void;
   /** Saturation free or charged normally, now. */
   applySat: (on: boolean) => void;
+  /** Rebuild the rival brain after its tier changed. */
+  applyP2: () => void;
   /** Swap the menu for the command reference. */
   openCommands: () => void;
 }
@@ -43,7 +54,75 @@ export function trainingMenuItems(hooks: TrainingHooks): MenuItem[] {
     t.health = cycleHealth(t.health, dir);
     hooks.applyHealth(t.health);
   };
+  const toggleP2 = (): void => {
+    t.p2 = t.p2 === 'dummy' ? 'cpu' : 'dummy';
+    hooks.applyP2();
+  };
+  const bumpSkill = (dir: number): void => {
+    t.p2Difficulty = (t.p2Difficulty + (dir >= 0 ? 1 : DIFFICULTY_COUNT - 1)) % DIFFICULTY_COUNT;
+    hooks.applyP2();
+  };
+  // The forced-input rows belong to the dummy. They stay on the menu while a CPU
+  // holds the slot rather than vanishing, because a row that disappears takes
+  // the cursor with it and the player loses their place; `disabled` keeps the
+  // list a fixed shape and says why it is unavailable.
+  //
+  // Read live, never captured. These rows switch each other on and off, and a
+  // value captured when the menu was built freezes at whatever P2 was then —
+  // which on screen reads exactly like the toggle above having done nothing.
+  const dummy = (): boolean => t.p2 === 'dummy';
+  const cpuNote = 'CPU';
   return [
+    {
+      label: 'PLAYER 2',
+      value: () => (dummy() ? 'DUMMY' : 'CPU'),
+      onSelect: toggleP2,
+      onAdjust: toggleP2,
+    },
+    {
+      label: 'P2 SKILL',
+      value: () => DIFFICULTY_NAMES[t.p2Difficulty] ?? 'NORMAL',
+      onSelect: () => bumpSkill(1),
+      onAdjust: bumpSkill,
+      disabled: dummy,
+      disabledNote: 'DUMMY',
+    },
+    {
+      label: 'FORCE BUTTON',
+      value: () => forceButtonLabel(t.forceButton),
+      onSelect: () => {
+        t.forceButton = cycle(FORCE_BUTTONS, t.forceButton, 1);
+      },
+      onAdjust: (dir) => {
+        t.forceButton = cycle(FORCE_BUTTONS, t.forceButton, dir);
+      },
+      disabled: () => !dummy(),
+      disabledNote: cpuNote,
+    },
+    {
+      label: 'FORCE COMMAND',
+      value: () => commandLabel(t.forceCommand),
+      onSelect: () => {
+        t.forceCommand = cycle(FORCE_COMMANDS, t.forceCommand, 1);
+      },
+      onAdjust: (dir) => {
+        t.forceCommand = cycle(FORCE_COMMANDS, t.forceCommand, dir);
+      },
+      disabled: () => !dummy(),
+      disabledNote: cpuNote,
+    },
+    {
+      label: 'FORCE MOVE',
+      value: () => moveLabel(t.forceMove),
+      onSelect: () => {
+        t.forceMove = cycle(FORCE_MOVES, t.forceMove, 1);
+      },
+      onAdjust: (dir) => {
+        t.forceMove = cycle(FORCE_MOVES, t.forceMove, dir);
+      },
+      disabled: () => !dummy(),
+      disabledNote: cpuNote,
+    },
     {
       label: 'DRONES',
       value: () => (t.drones ? 'ACTIVE' : 'OFF'),

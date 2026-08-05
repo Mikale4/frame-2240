@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { MatchSim } from '../combat/MatchSim';
 import { HALCYON, NOCTURNE } from '../data/mechs';
 import { DroneMode } from '../combat/Supporter';
-import { emptyInput } from '../combat/types';
+import { Btn, emptyInput, isHeld, isPressed } from '../combat/types';
+import { DUMMY_CYCLE, dummyInput } from '../combat/TrainingDummy';
+import { CommandBuffer } from '../combat/CommandBuffer';
 import { HEALTH_STEPS, cycleHealth, defaultTrainingSettings, healthLabel } from '../core/TrainingSettings';
 import { commandHeading, commandRows, motionNotation } from '../ui/TrainingOptions';
 import { MOTIONS } from '../combat/CommandBuffer';
@@ -25,7 +27,16 @@ describe('training settings', () => {
   it('defaults to a normal match', () => {
     // The switches exist to *depart* from a normal fight, so the untouched rig
     // has to be one — otherwise training silently teaches the wrong game.
-    expect(defaultTrainingSettings()).toEqual({ drones: true, infiniteSat: false, health: 1 });
+    expect(defaultTrainingSettings()).toEqual({
+      drones: true,
+      infiniteSat: false,
+      health: 1,
+      p2: 'dummy',
+      p2Difficulty: 1,
+      forceButton: null,
+      forceCommand: 'none',
+      forceMove: 'none',
+    });
   });
 
   it('cycles health through every step in both directions', () => {
@@ -103,6 +114,89 @@ describe('training switches drive the simulation', () => {
     c.satTicks = 30;
     run(s, 60);
     expect(c.satActive).toBe(false);
+  });
+});
+
+describe('the forced dummy script', () => {
+  const base = { forceButton: null, forceCommand: 'none' as const, forceMove: 'none' as const };
+
+  it('does nothing when nothing is forced', () => {
+    const f = dummyInput(base, 0, 1);
+    expect([f.dx, f.dy, f.held, f.pressed]).toEqual([0, 0, 0, 0]);
+  });
+
+  it('mirrors a held direction with facing', () => {
+    // TOWARD has to mean toward, from either side of the arena — the two
+    // machines swap sides constantly, so an absolute direction is not a drill.
+    expect(dummyInput({ ...base, forceMove: 'fwd' }, 0, 1).dx).toBe(1);
+    expect(dummyInput({ ...base, forceMove: 'fwd' }, 0, -1).dx).toBe(-1);
+    // Vertical does not mirror.
+    expect(dummyInput({ ...base, forceMove: 'up' }, 0, -1).dy).toBe(-1);
+  });
+
+  it('holds a forced button but only presses it once a cycle', () => {
+    const script = { ...base, forceButton: Btn.Barrier };
+    let presses = 0;
+    for (let t = 0; t < DUMMY_CYCLE * 3; t++) {
+      const f = dummyInput(script, t, 1);
+      // Held every tick, so a guard stays up.
+      expect(isHeld(f, Btn.Barrier)).toBe(true);
+      if (isPressed(f, Btn.Barrier)) presses++;
+    }
+    // Edge-triggered moves repeat at a readable rate instead of jamming.
+    expect(presses).toBe(3);
+  });
+
+  it('throws a forced command the recogniser actually accepts', () => {
+    // The real check: feed the frames to a real CommandBuffer and ask it.
+    for (const name of ['spread', 'lance', 'salvo'] as const) {
+      const cmd = new CommandBuffer();
+      const script = { ...base, forceCommand: name };
+      let matched = false;
+      for (let t = 0; t < DUMMY_CYCLE; t++) {
+        const f = dummyInput(script, t, 1);
+        cmd.push(f, 1);
+        if (cmd.matches(MOTIONS[name])) matched = true;
+      }
+      expect([name, matched]).toEqual([name, true]);
+    }
+  });
+
+  it('throws it from the other side too', () => {
+    const cmd = new CommandBuffer();
+    const script = { ...base, forceCommand: 'lance' as const };
+    let matched = false;
+    for (let t = 0; t < DUMMY_CYCLE; t++) {
+      const f = dummyInput(script, t, -1);
+      cmd.push(f, -1);
+      if (cmd.matches(MOTIONS.lance)) matched = true;
+    }
+    expect(matched).toBe(true);
+  });
+
+  it('repeats the command every cycle', () => {
+    const cmd = new CommandBuffer();
+    const script = { ...base, forceCommand: 'spread' as const };
+    let hits = 0;
+    let armed = true;
+    for (let t = 0; t < DUMMY_CYCLE * 3; t++) {
+      cmd.push(dummyInput(script, t, 1), 1);
+      const m = cmd.matches(MOTIONS.spread);
+      if (m && armed) {
+        hits++;
+        armed = false;
+      }
+      if (!m) armed = true;
+    }
+    expect(hits).toBe(3);
+  });
+
+  it('lets the command take the stick from a held direction', () => {
+    // A motion is a direction sequence; it cannot share the stick.
+    const script = { ...base, forceCommand: 'lance' as const, forceMove: 'fwd' as const };
+    expect(dummyInput(script, 0, 1).dy).toBe(1); // down, the motion's first step
+    // ...and the held direction resumes once the motion is done.
+    expect(dummyInput(script, DUMMY_CYCLE - 1, 1).dx).toBe(1);
   });
 });
 

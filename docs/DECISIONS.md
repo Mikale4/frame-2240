@@ -6570,3 +6570,65 @@ whatever the game asks for. It is also the same mechanism behind the Browser
 pane freezing mid-verification (TESTING_PROTOCOL §4) — where the workaround is
 to drive `game.loop.step()` by hand, which makes input edges readable again
 without waiting on a frame that will never come.
+
+## D139 — Player 2 becomes scriptable, and one weapon in the hand at a time
+
+Training's second slot is now either a dummy running a script or a real CPU at a
+chosen tier.
+
+| row | values |
+| --- | --- |
+| `PLAYER 2` | DUMMY / CPU |
+| `P2 SKILL` | the four tiers, live only under CPU |
+| `FORCE BUTTON` | NONE / MAIN GUN / HEAVY SHOT / SUB WEAPON / MELEE / BOOST / GUARD / SATURATION |
+| `FORCE COMMAND` | NONE / SPREAD / LANCE / SALVO |
+| `FORCE MOVE` | NONE, and eight directions |
+
+`tools`-free and Phaser-free: `combat/TrainingDummy.ts` takes the script, the
+tick and the dummy's facing and returns an `InputFrame`. That purity is the
+point — "the dummy is doing the move I asked for" is exactly the sort of claim
+that is easy to believe and hard to see, so the test feeds the generated frames
+to a **real `CommandBuffer`** and asks the recogniser whether it accepts them,
+rather than asserting on the frames themselves.
+
+Three things the shape had to get right:
+
+* **Directions are forward-relative and mirrored by facing.** The two machines
+  swap sides constantly in free flight, so an absolute "hold left" would mean
+  advancing half the time and retreating the other half, which is not a drill
+  anyone can set up. `CommandBuffer.push` already reads directions this way, so
+  a motion written as "down, forward + main" is thrown correctly from either
+  side; there is a test for exactly that.
+* **A forced button is held every tick but pressed once a cycle.** Guard is a
+  hold and has to stay up; an attack is edge-triggered and would jam its own
+  start-up if re-pressed every frame. One `pressed` per 48-tick cycle repeats at
+  a rate you can actually watch.
+* **A command takes the stick while it runs.** A motion *is* a direction
+  sequence, so it cannot share the stick with a held direction; `FORCE MOVE`
+  resumes for the rest of the cycle.
+
+### `MenuItem.disabled` had to become a predicate
+
+`P2 SKILL` is dead under a dummy and live under a CPU, and the three FORCE rows
+are the reverse. Written as a boolean captured when the menu was built, that
+state freezes — and on screen a frozen row reads exactly like the toggle above
+it having done nothing, which is how it was found. `disabled` now accepts a
+function, resolved in `refresh`, `adjust` and `confirm`.
+
+The rows stay on the menu when they do not apply rather than vanishing: a row
+that disappears takes the cursor with it, and the player loses their place.
+
+### One weapon in the hand at a time
+
+D137 stowed the main gun for a *swing* only, so that firing while the blade was
+held out did not appear to come from an empty hand. Looked at on screen that
+trade is the wrong way round. `mainWeapon` and `meleeWeapon` hang off the same
+arm a few pixels apart, so carrying both reads as one clashing object rather
+than as a pilot holding two things. The gun goes away whenever the blade is out.
+
+Verified by playing training: the dummy closed 198 px on `FORCE MOVE: TOWARD`
+and threw `lance` under `FORCE COMMAND: LANCE` — the live recogniser, not the
+unit test — and guarded 90 of 120 ticks under `FORCE BUTTON: GUARD` with its
+barrier draining 100 to 48. Handed to a CPU at EXTREME it moved 399 px on its
+own, used `main` and `spread` rather than the forced script, and killed the
+player.
