@@ -357,6 +357,44 @@ function worldPivot(def: (typeof ROSTER)[number], partName: string): [number, nu
   return [x, y];
 }
 
+/**
+ * A rig part and its sprite have to agree about whether a machine projects a
+ * blade, in both directions: a declared part with no sprite renders a missing
+ * texture, and a sprite with no part is art nothing draws.
+ *
+ * This also guards the thing that made OBELISK show a sword through its shield.
+ * `setPartVisible` is a no-op for a part a chassis lacks, which is what lets the
+ * melee code treat all eight the same — but effects drawn *alongside* the rig
+ * have no node to be quietly skipped, so `MechRenderer.hasPart('meleeEnergy')`
+ * is the predicate they ask, and it is only trustworthy while this holds.
+ *
+ * It is a live risk rather than a theoretical one: NOCTURNE is spread from
+ * HALCYON (SESSION_HANDOFF 8j), and HALCYON does project a blade.
+ */
+describe.skipIf(!fs.existsSync(MANIFEST))('projected blades are declared consistently', () => {
+  const meta = JSON.parse(fs.readFileSync(MANIFEST, 'utf-8')) as {
+    parts: Record<string, Record<string, unknown>>;
+  };
+
+  for (const def of ROSTER) {
+    it(`${def.id} agrees on whether it projects a blade`, () => {
+      const inRig = def.rig.parts.some((p) => p.name === 'meleeEnergy');
+      const inSprites = 'meleeEnergy' in (meta.parts[def.id] ?? {});
+      expect([def.id, inRig]).toEqual([def.id, inSprites]);
+      // Anything in the rig must also be drawn, or it is invisible by accident.
+      if (inRig) expect(def.rig.drawOrder).toContain('meleeEnergy');
+    });
+  }
+
+  it('has exactly the five machines the roster says project energy', () => {
+    const projecting = ROSTER.filter((d) => d.rig.parts.some((p) => p.name === 'meleeEnergy'))
+      .map((d) => d.id)
+      .sort();
+    // The claw, the pile driver and the ram shield project nothing.
+    expect(projecting).toEqual(['cirrus', 'halcyon', 'nulltide', 'pyre', 'vesper']);
+  });
+});
+
 describe.skipIf(!fs.existsSync(MANIFEST))('rig pivots match the Blender exporter', () => {
   const meta = JSON.parse(fs.readFileSync(MANIFEST, 'utf-8')) as {
     pivots_px: Record<string, Record<string, [number, number]>>;

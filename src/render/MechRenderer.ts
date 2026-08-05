@@ -482,6 +482,19 @@ export class MechRenderer {
   }
 
   /**
+   * Whether this machine's rig actually carries a part.
+   *
+   * `setPartVisible` is deliberately a no-op for a part a chassis does not have,
+   * which is what lets the melee code treat all eight the same. That silence is
+   * wrong for anything drawn *alongside* the rig rather than in it: the effect
+   * has no node to be quietly skipped, so it renders on a machine that has
+   * nothing to justify it. Ask first.
+   */
+  hasPart(name: string): boolean {
+    return this.nodes.has(name);
+  }
+
+  /**
    * World-space transform of a part, for spawning muzzle/thruster effects and
    * for laying glow over a modelled weapon.
    *

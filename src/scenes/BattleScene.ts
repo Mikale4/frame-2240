@@ -2228,7 +2228,15 @@ export class BattleScene extends Phaser.Scene {
       // Bloom on the *swing* only. The projected blade carries its own halo and
       // pulse, so a held blade already glows; adding the streak on top of a
       // stationary weapon reads as a permanent flare rather than a strike.
-      if (swinging) {
+      //
+      // **And only for machines that project a blade at all.** This is beam
+      // geometry — an 88 logical px streak laid 53 px out along the weapon axis,
+      // measured off HALCYON's saber — and it was being drawn for all eight.
+      // On OBELISK that put a glowing sword through the face of a tower shield;
+      // NOCTURNE's claw and TERRAMOTH's pile driver had the same thing. Those
+      // three carry no `meleeEnergy` part precisely because they project
+      // nothing, so that is the question to ask.
+      if (swinging && r.hasPart('meleeEnergy')) {
         // Anchor the bloom to the modelled weapon's own transform, not to the
         // aim vector: the part carries bank and any authored offset too, and
         // reading it back means the glow cannot drift off the blade again.
