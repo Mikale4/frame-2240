@@ -250,29 +250,51 @@ export class MechRenderer {
       }
     }
 
-    // Apply the authored draw order by re-sorting siblings within each parent.
+    // Apply the authored draw order.
     //
-    // **A part's own sprite is a sibling of its children**, and that is the
-    // subtlety this used to miss. Every child container is added to the parent
-    // *after* the parent's sprite, so a bare `bringToTop` per part could only
-    // ever push children further above their parent's art — the chassis was
-    // permanently the bottom-most thing in its own container, and no ordering
-    // written in `drawOrder` could put a leg behind it.
+    // **A part's own sprite is a sibling of its children**, and that is what
+    // this used to miss. Every child container is added to its parent *after*
+    // the parent's sprite, so raising children could only ever push them
+    // further above the parent's art — the chassis was permanently the
+    // bottom-most thing in its own container, and no ordering written in
+    // `drawOrder` could put a leg behind it.
     //
-    // Naming a part whose children are being ordered around it therefore has to
-    // move the *sprite*, not the container. `core` is the only one that needs
-    // it today: the far leg goes under the chassis and the near leg over it,
-    // which is the entire depth read of a walking rig.
+    // So the sort runs **per container, over the sprite and the child
+    // containers together**, keyed on each one's position in `drawOrder`. That
+    // is what lets `core` sit between `legFar` and `legNear`, and it
+    // generalises: any part can be ordered among its own children.
+    //
+    // Doing it as "raise the sprite when the part has children" instead was
+    // wrong and briefly shipped — `leftArm` and `rightArm` have children too,
+    // so both arms stopped being raised within the torso and fell behind it.
     const order = def.rig.drawOrder;
+    const rank = new Map<string, number>();
+    order.forEach((n, i) => rank.set(n, i));
+    // Unlisted parts sort below everything listed, which is where an
+    // unmentioned part belongs — behind the parts someone thought about.
+    const rankOf = (n: string): number => rank.get(n) ?? -1;
+
+    for (const part of def.rig.parts) {
+      const node = this.nodes.get(part.name);
+      if (!node) continue;
+      const items: { obj: Phaser.GameObjects.GameObject; idx: number }[] = [
+        { obj: node.sprite, idx: rankOf(part.name) },
+      ];
+      for (const child of def.rig.parts) {
+        if (child.parent !== part.name) continue;
+        const c = this.nodes.get(child.name);
+        if (c) items.push({ obj: c.container, idx: rankOf(child.name) });
+      }
+      if (items.length < 2) continue;
+      items.sort((a, b) => a.idx - b.idx);
+      for (const it of items) node.container.bringToTop(it.obj);
+    }
+
+    // Then the roots, which have no shared parent to be sorted inside.
     for (const name of order) {
       const node = this.nodes.get(name);
-      if (!node) continue;
-      const parent = node.container.parentContainer;
-      if (parent && node.sprite.parentContainer === node.container && this.hasChildParts(def, name)) {
-        node.container.bringToTop(node.sprite);
-        continue;
-      }
-      if (parent) parent.bringToTop(node.container);
+      if (!node || node.def.parent) continue;
+      this.bank.bringToTop(node.container);
     }
   }
 
@@ -663,16 +685,6 @@ export class MechRenderer {
    * `scale` folds in the facing mirror and the pseudo-3D depth scale, so
    * callers can size effects to match what is on screen.
    */
-  /**
-   * Does any other part hang off this one?
-   *
-   * Decides whether naming a part in `drawOrder` should move its sprite (so its
-   * children can be ordered on both sides of it) or its container.
-   */
-  private hasChildParts(def: MechDef, name: string): boolean {
-    return def.rig.parts.some((q) => q.parent === name);
-  }
-
   partWorld(name: string): { x: number; y: number; angle: number; scale: number } | null {
     const node = this.nodes.get(name);
     if (!node) return null;

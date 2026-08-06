@@ -106,8 +106,11 @@ const NOCTURNE_RIG: MechRigDef = {
     { name: 'head', parent: 'core', x: 23, y: -2, rotation: 0, follow: 'turret' },
     { name: 'backpack', parent: 'core', x: -30, y: -14, rotation: 0, follow: 'chassis' },
     { name: 'lowerBody', parent: 'core', x: -10, y: 24, rotation: 0, follow: 'chassis' },
-    { name: 'legFar', parent: 'lowerBody', x: 0, y: 1, rotation: 0, follow: 'legFar' },
-    { name: 'legNear', parent: 'lowerBody', x: 0, y: 1, rotation: 0, follow: 'legNear' },
+    // Parented to `core`, not `lowerBody`, so the chassis can come between
+    // them. See the note on HALCYON's legs — and note that this rig is its own
+    // constant, so it does **not** inherit that change by spread (§8j).
+    { name: 'legFar', parent: 'core', x: -10, y: 25, rotation: 0, follow: 'legFar' },
+    { name: 'legNear', parent: 'core', x: -10, y: 25, rotation: 0, follow: 'legNear' },
     { name: 'leftArm', parent: 'core', x: -4, y: 0, rotation: 0, follow: 'turret' },
     { name: 'subWeapon', parent: 'leftArm', x: -6, y: -26, rotation: 0, follow: 'turret' },
     { name: 'rightArm', parent: 'core', x: 18, y: 10, rotation: 0, follow: 'turret' },
@@ -123,8 +126,8 @@ const NOCTURNE_RIG: MechRigDef = {
     'subWeapon',
     'legFar',
     'lowerBody',
-    'legNear',
     'core',
+    'legNear',
     'head',
     'rightThruster',
     'rightArm',
