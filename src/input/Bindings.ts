@@ -69,11 +69,14 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   right: 'FLY RIGHT',
   main: 'MAIN GUN',
   heavy: 'HEAVY SHOT',
-  // **Not deploy/recall.** There is no launch button any more — the escort is
-  // always out (see `Supporter`) — and this label outlived that change by long
-  // enough to read as a dead control. The button fires the sub-weapon: missiles,
-  // mines, whatever the chassis carries, and the salvo motion rides it too.
-  sub: 'SUB WEAPON',
+  // **Not the drone, and not a weapon.** This button has now meant three things:
+  // deploy/recall (removed when the escort became permanent), then a sub-weapon
+  // volley — which never worked, because the escort spends the same charge rack
+  // every tick and the press lost that race on every chassis in every match.
+  //
+  // It calls a second pilot in. The drone keeps its rack and its volleys; the
+  // salvo motion still rides them. See `src/data/assists.ts`.
+  sub: 'TAG/ASSIST',
   melee: 'SWORD / MELEE',
   boost: 'BOOST / DASH / BRAKE',
   barrier: 'BARRIER / GUARD',

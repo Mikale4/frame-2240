@@ -19,157 +19,161 @@
  *   with the tolerances gone. Same bones, wider spread, uneven timing, and it
  *   sputters. NOCTURNE should look like a good engine somebody fixed in a shed.
  * * **IRONWAKE COLLIERY** — excavation walkers with guns bolted on, filed under
- *   equipment operation. Heavy industrial exhaust: fat, slow, long-lived,
- *   billowing rather than streaming. It has mass.
+ *   equipment operation. Heavy industrial exhaust: fewer, fatter, shorter
+ *   columns rather than quills. It has mass.
  * * **FREE LATITUDE** — "assembled from salvage, copied patterns and recovered
  *   systems. **Individual machines differ substantially.**" That line is the
- *   profile: fast, thin, long ribbons, and *irregular by nature*. The jitter is
- *   high precisely so no two frames of it look alike — which is how one shared
- *   profile still honours a faction defined by nothing matching.
+ *   profile: the longest, thinnest fan on the roster and *irregular by nature*.
+ *   The jitter is high precisely so no two frames of it look alike — which is
+ *   how one shared profile still honours a faction defined by nothing matching.
  * * **ASHFALL IRREGULARS** — a contract force that prices hull loss as a line
  *   item, flying scavenged kit. It burns: short, hot, chaotic, throwing embers.
  */
 
+/**
+ * ---------------------------------------------------------------------------
+ * What a rocket booster looks like, and the two wrong turns before this one.
+ * ---------------------------------------------------------------------------
+ *
+ * Mecha exhaust — Gundam and everything downstream of it — is a **coherent
+ * tapering cone**: widest where it leaves the engine bell, narrowing to a point
+ * behind, with a shorter white-hot core inside it and a round bloom at the
+ * mouth. It flickers in *length and brightness*; the silhouette stays stable.
+ * That coherence is the whole read. Anything that changes shape every frame
+ * stops being a flame.
+ *
+ * Two earlier passes got this wrong in different directions:
+ *
+ * 1. **A particle spray.** One to four soft blobs per nozzle, flying off with
+ *    velocity and drag, shrinking to nothing. That is smoke, not thrust.
+ * 2. **A fan of rays.** Read off the parallel streaks in the 2005 screenshots —
+ *    but those streaks are the *speed-line trail* running beside the machine,
+ *    not the flame. Built as the exhaust itself, with per-ray random angle,
+ *    length and alpha, it composited into visual noise rather than a plume.
+ *
+ * So these fields describe **layered cones**: an outer flame in the machine's
+ * colour, a hot core inside it, a bloom at the mouth. Per-faction character is
+ * proportion and flicker — how long, how wide, how steady — not randomness.
+ */
 export interface ThrusterFx {
-  /** Jets in the cone at rest, and at full burn. */
-  jetsLow: number;
-  jetsHigh: number;
-  /** Cone half-angle in radians at rest, and the extra added at full burn. */
-  spread: number;
-  spreadHot: number;
-  /** Exhaust velocity, base and the part that only arrives under load. */
-  speed: number;
-  speedHot: number;
-  /** Streak length: base, linear term, and the late-ramping term. */
-  len: number;
-  lenPower: number;
-  lenHot: number;
-  /** Streak narrowness. Lower is thinner, and thin reads as fast. */
-  thin: number;
-  /** Particle lifetime, base and per unit of power. */
-  life: number;
-  lifePower: number;
-  /** Opacity, base and the two ramps. */
+  /** Outer flame length, as a scale on the 160px plume sprite: base and burn. */
+  flameLen: number;
+  flameLenHot: number;
+  /** Outer flame width, relative to its own length. Fatter reads heavier. */
+  flameWide: number;
+  /**
+   * Hot core, as a fraction of the outer flame.
+   *
+   * Always shorter and narrower — it is the luminous centre sitting *inside*
+   * the flame, and a core that reaches the tail erases the taper it lives in.
+   */
+  coreLen: number;
+  coreWide: number;
+  /** Bloom size at the engine mouth, relative to flame width. */
+  bloom: number;
+  /** Opacity of the outer flame, base and burn ramp. */
   alpha: number;
-  alphaPower: number;
   alphaHot: number;
-  /** Air resistance. High drag billows; low drag streams. */
-  drag: number;
-  /** 0..1 randomness on angle, speed and size, per particle. */
-  jitter: number;
+  /**
+   * Frame-to-frame length wobble, 0..1.
+   *
+   * **The only randomness that survives.** A flame pulses; it does not change
+   * shape. This scales length and brightness a little each frame and touches
+   * nothing else, which is what keeps the silhouette readable.
+   */
+  flicker: number;
+  /**
+   * Trailing wisps shed behind the plume at high burn. 0 for none.
+   *
+   * The speed lines the 2005 screenshots actually show — kept, but as what they
+   * are: a trail *behind* a flame, not the flame.
+   */
+  wisps: number;
   /** Embers thrown per emission at full burn. 0 for none. */
   embers: number;
-  /** Power above which a white-hot core appears. 1 disables it. */
+  /** Power above which the core burns white rather than tinted. 1 disables it. */
   whiteAt: number;
 }
 
 const CONCORD: ThrusterFx = {
-  jetsLow: 1,
-  jetsHigh: 2,
-  spread: 0.10,
-  spreadHot: 0.14,
-  speed: 3.8,
-  speedHot: 5.0,
-  len: 0.18,
-  lenPower: 0.20,
-  lenHot: 0.42,
-  thin: 0.24,
-  life: 8,
-  lifePower: 7,
-  alpha: 0.15,
-  alphaPower: 0.13,
-  alphaHot: 0.32,
-  drag: 0.95,
-  jitter: 0.05,
+  // Standardised and even. The tidiest burn on the roster: a clean bell, a
+  // steady core, almost no wobble.
+  flameLen: 0.348,
+  flameLenHot: 0.59,
+  flameWide: 0.405,
+  coreLen: 0.52,
+  coreWide: 0.44,
+  bloom: 0.961,
+  alpha: 0.52,
+  alphaHot: 0.34,
+  flicker: 0.08,
+  wisps: 2,
   embers: 0,
-  whiteAt: 0.72,
+  whiteAt: 0.341,
 };
 
 const EMBERLINE: ThrusterFx = {
   ...CONCORD,
-  // The same engine with the tolerances gone.
-  jetsHigh: 3,
-  spread: 0.20,
-  spreadHot: 0.30,
-  speed: 3.4,
-  speedHot: 4.2,
-  life: 9,
-  lifePower: 8,
-  drag: 0.93,
-  jitter: 0.34,
+  // The same engine with the tolerances gone: it surges, and it spits.
+  flameLen: 0.325,
+  flameLenHot: 0.55,
+  flameWide: 0.475,
+  flicker: 0.26,
+  wisps: 2,
   embers: 2,
-  whiteAt: 0.80,
+  whiteAt: 0.384,
 };
 
 const IRONWAKE: ThrusterFx = {
-  jetsLow: 2,
-  jetsHigh: 4,
-  spread: 0.26,
-  spreadHot: 0.34,
-  // Slow and heavy: plant, not aircraft.
-  speed: 2.4,
-  speedHot: 3.0,
-  len: 0.24,
-  lenPower: 0.22,
-  lenHot: 0.40,
-  thin: 0.52,
-  life: 13,
-  lifePower: 11,
-  alpha: 0.13,
-  alphaPower: 0.11,
-  alphaHot: 0.26,
-  // High drag: it billows and hangs rather than streaming away.
-  drag: 0.88,
-  jitter: 0.18,
+  // Excavation plant. A short, fat, heavy bell — it has mass, and mass does
+  // not throw a needle.
+  flameLen: 0.269,
+  flameLenHot: 0.438,
+  flameWide: 0.634,
+  coreLen: 0.46,
+  coreWide: 0.56,
+  bloom: 1.209,
+  alpha: 0.48,
+  alphaHot: 0.30,
+  flicker: 0.12,
+  wisps: 1,
   embers: 1,
-  whiteAt: 0.86,
+  whiteAt: 0.434,
 };
 
 const LATITUDE: ThrusterFx = {
-  jetsLow: 1,
-  jetsHigh: 3,
-  spread: 0.08,
-  spreadHot: 0.20,
-  // Long, thin and quick. Thin is most of why it reads as fast.
-  speed: 5.4,
-  speedHot: 7.0,
-  len: 0.22,
-  lenPower: 0.26,
-  lenHot: 0.52,
-  thin: 0.17,
-  life: 7,
-  lifePower: 6,
-  alpha: 0.15,
-  alphaPower: 0.14,
-  alphaHot: 0.34,
-  drag: 0.965,
-  // Deliberately the highest on the roster: nothing this faction flies matches.
-  jitter: 0.42,
+  // Salvage, and "individual machines differ substantially". The longest and
+  // narrowest plume, and the least steady — the flicker is the highest here so
+  // no two seconds of it burn quite alike.
+  flameLen: 0.415,
+  flameLenHot: 0.742,
+  flameWide: 0.299,
+  coreLen: 0.58,
+  coreWide: 0.40,
+  bloom: 0.806,
+  alpha: 0.54,
+  alphaHot: 0.36,
+  flicker: 0.30,
+  wisps: 3,
   embers: 0,
-  whiteAt: 0.70,
+  whiteAt: 0.31,
 };
 
 const ASHFALL: ThrusterFx = {
-  jetsLow: 2,
-  jetsHigh: 5,
-  spread: 0.30,
-  spreadHot: 0.44,
-  speed: 3.0,
-  speedHot: 5.2,
-  len: 0.20,
-  lenPower: 0.18,
-  lenHot: 0.46,
-  thin: 0.44,
-  life: 8,
-  lifePower: 9,
-  alpha: 0.16,
-  alphaPower: 0.14,
-  alphaHot: 0.34,
-  drag: 0.90,
-  jitter: 0.40,
-  // It throws sparks. It is the only one that does so at any power.
+  // Scavenged kit, priced for replacement. Short, wide, hot and unstable, and
+  // the only profile that throws sparks at any power.
+  flameLen: 0.303,
+  flameLenHot: 0.517,
+  flameWide: 0.563,
+  coreLen: 0.50,
+  coreWide: 0.52,
+  bloom: 1.116,
+  alpha: 0.52,
+  alphaHot: 0.36,
+  flicker: 0.34,
+  wisps: 2,
   embers: 4,
-  whiteAt: 0.66,
+  whiteAt: 0.285,
 };
 
 const BY_FACTION: Record<string, ThrusterFx> = {

@@ -263,6 +263,16 @@ export type SimEvent =
   | { t: 'assist'; x: number; y: number; angle: number; ownerId: number; auto?: boolean }
   /** The assist was requested but unavailable — no charge, or drone busy. */
   | { t: 'assistDenied'; x: number; y: number; ownerId: number }
+  /**
+   * TAG/ASSIST was called and accepted. **Raised at the press, not the
+   * arrival**, because `late` is what the scene needs in order to speak the
+   * "I am going to be slow" line while there is still time to act on it.
+   */
+  | { t: 'tagCall'; x: number; y: number; ownerId: number; late: boolean }
+  /** The partner is on stage. `roll` picks which written exchange plays. */
+  | { t: 'tagArrive'; x: number; y: number; ownerId: number; roll: number }
+  /** Their four seconds are up. */
+  | { t: 'tagLeave'; x: number; y: number; ownerId: number }
   /** The drone was launched out of the chassis. */
   | { t: 'droneDeploy'; x: number; y: number; ownerId: number }
   /** The drone was ordered back into the chassis. */

@@ -40,6 +40,16 @@ export type BanterTrigger =
   | 'guardBroken'
   /** They refused a killing blow. LAST STAND. */
   | 'lastStand'
+  /**
+   * TAG/ASSIST was called and the partner is going to be late.
+   *
+   * Spoken by the *partner*, over the radio, from wherever they are — see
+   * `BanterBox.say`'s `as` parameter, which lends the owner's box to whoever is
+   * actually talking.
+   */
+  | 'tagLate'
+  /** The partner has arrived. Two lines: theirs, then their caller's reply. */
+  | 'tagArrive'
   /** Their reactor dumped into all three modes at once. OVERDRIVE. */
   | 'overdrive'
   /** OVERDRIVE burned out: thrusters and guns gone, sword left. */
@@ -65,6 +75,19 @@ export const BANTER_PRIORITY: Record<BanterTrigger, number> = {
   guardBroken: 4,
   droneLost: 4,
   burnout: 4,
+  /**
+   * Above every ordinary in-fight line and below LAST STAND.
+   *
+   * A partner arriving is a scripted, twice-a-match event with writing behind
+   * it that the player chose at select. A combo line stomping the one moment
+   * Rook and Senna speak to each other would be the wrong trade — and the
+   * arrival is *two* lines that have to land in order, so the first must be able
+   * to hold the box against the chatter its own gunfire is generating.
+   */
+  tagArrive: 6,
+  // Slightly lower: it is information, not a moment, and it must never stomp an
+  // arrival still finishing from the previous call.
+  tagLate: 5,
   // Above every in-fight line and below only the KO. Refusing to die is the
   // loudest thing that can happen without the match ending, and a combo line
   // stomping it would be absurd.

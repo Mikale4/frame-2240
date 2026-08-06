@@ -3,6 +3,9 @@ import { ARENA_H, ARENA_W, TICK_MS, VIEW_H, VIEW_W } from '../core/GameConfig';
 import { Difficulty, session } from '../core/Session';
 import { ARC_TETHER_WIDTH, MatchSim, segmentHitsCircle } from '../combat/MatchSim';
 import { MECHS } from '../data/mechs';
+import { TAG_PAIRS, pickTagArrival, pickTagLate } from '../data/tags';
+import { TAG_OPEN_HOLD, TAG_REPLY_GAP, TAG_REPLY_HOLD, TagState } from '../combat/TagPartner';
+import type { MechDef } from '../mechs/MechDef';
 import { RivalAI } from '../ai/RivalAI';
 import { Rng } from '../core/Rng';
 import { InputManager } from '../input/InputManager';
@@ -16,7 +19,7 @@ import { TEX } from '../render/Textures';
 import { ProjectileLayer } from '../render/ProjectileLayer';
 import { createProjectileTextures } from '../render/ProjTextures';
 import { Hud } from '../ui/Hud';
-import { BanterBox } from '../ui/BanterBox';
+import { BanterBox, type Speaker } from '../ui/BanterBox';
 import { SatCutscene } from '../ui/SatCutscene';
 import { pickConversation } from '../data/matchups';
 import { pickBanter, type BanterTrigger } from '../data/banter';
@@ -95,6 +98,15 @@ export class BattleScene extends Phaser.Scene {
   private backdrop!: Backdrop;
   private ground!: GroundPlane;
   private renderers: MechRenderer[] = [];
+  /**
+   * Rigs for the two TAG/ASSIST partners, or null where a side has none.
+   *
+   * Indexed by the *owning pilot*, not by position in `sim.combatants` — that
+   * array grows and shrinks as partners come and go, and a renderer looked up by
+   * index would follow the wrong body the moment one side's partner left while
+   * the other's was still out.
+   */
+  private tagRenderers: (MechRenderer | null)[] = [null, null];
   private projLayer!: ProjectileLayer;
   /** One beam-sword sprite per combatant, shown only while swinging. */
   private blades: Phaser.GameObjects.Image[] = [];
@@ -188,7 +200,14 @@ export class BattleScene extends Phaser.Scene {
    * once is not a conversation, it is two people talking over each other. The
    * queue releases one line at a time and waits for it to be readable.
    */
-  private banterQueue: { id: number; line: string; trigger: BanterTrigger }[] = [];
+  private banterQueue: { id: number; line: string; trigger: BanterTrigger; as?: Speaker }[] = [];
+  /**
+   * The answering half of each side's TAG/ASSIST arrival, waiting its beat.
+   *
+   * Deliberately not `banterQueue`: see `queueTagArrival`. An arrival is on a
+   * four-second clock and cannot share the intro's leisurely drain.
+   */
+  private tagReplies: { line: string; as?: Speaker; ticks: number }[][] = [[], []];
   private banterDelay = 0;
   private cutscene!: SatCutscene;
 
@@ -255,9 +274,36 @@ export class BattleScene extends Phaser.Scene {
     const playerDef = MECHS[session.playerMech];
     const enemyDef = MECHS[session.enemyMech];
 
+    /**
+     * TAG/ASSIST partners.
+     *
+     * Validated against `TAG_PAIRS` rather than trusted, so a stale session
+     * value — a partner left over from a chassis the player has since changed —
+     * cannot put an unwritten pairing into a match and leave the arrival silent.
+     * An illegal or missing choice falls back to that chassis's first partner.
+     *
+     * **Training has none.** The dummy does not act, and a partner arriving to
+     * shoot at a practice rig is neither useful nor what the room is for.
+     */
+    const partnerFor = (mechId: string, chosen: string): MechDef | null => {
+      // Switched off on the main menu, or training. Either way no def reaches
+      // `MatchSim`, which is what actually disables the mechanic — the clock
+      // never runs and no body is ever built.
+      if (!session.assists || session.mode === 'training') return null;
+      const pair = TAG_PAIRS[mechId];
+      if (!pair) return null;
+      return MECHS[pair.includes(chosen) ? chosen : pair[0]] ?? null;
+    };
+    const playerTagDef = partnerFor(session.playerMech, session.playerTag);
+    const enemyTagDef = partnerFor(session.enemyMech, session.enemyTag);
+
     this.sim = new MatchSim({
       playerDef,
       enemyDef,
+      playerTagDef,
+      enemyTagDef,
+      playerTagSkill: session.playerDifficulty,
+      enemyTagSkill: session.enemyDifficulty,
       seed: session.seed(),
       introTicks: 96,
       roundTicks: session.mode === 'training' ? 99 * 60 * 10 : undefined,
@@ -332,6 +378,28 @@ export class BattleScene extends Phaser.Scene {
     ];
     this.renderers[0].setDepth(20);
     this.renderers[1].setDepth(21);
+
+    /**
+     * A rig for each TAG/ASSIST partner, built now and hidden until they arrive.
+     *
+     * **Built up front rather than on arrival.** `MechRenderer` loads part
+     * textures, and doing that on the frame a partner enters would stall the
+     * one moment the mechanic is trying to sell. They cost two hidden rigs for
+     * the whole match instead, which is the same thing the two pilots already
+     * cost.
+     *
+     * Drawn *behind* both pilots (depth 19): the partner is the guest, and it
+     * must never be the thing obscuring the machine you are steering.
+     */
+    this.tagRenderers = [null, null];
+    for (let i = 0; i < 2; i++) {
+      const def = i === 0 ? playerTagDef : enemyTagDef;
+      if (!def) continue;
+      const r = new MechRenderer(this, def, def.id);
+      r.setDepth(19);
+      r.root.setVisible(false);
+      this.tagRenderers[i] = r;
+    }
 
     // Projectiles. Three additive layers per shot — see ProjectileLayer.
     createProjectileTextures(this);
@@ -436,6 +504,9 @@ export class BattleScene extends Phaser.Scene {
       ...this.backdrop.objects,
       ...this.ground.objects,
       ...this.renderers.map((r) => r.root),
+      // Partners are world-space rigs like any other. Left out of this list the
+      // UI camera draws a second copy of each in screen space — §8c.
+      ...this.tagRenderers.flatMap((r) => (r ? [r.root] : [])),
       ...this.projLayer.objects,
       ...this.blades,
       ...this.droneTethers,
@@ -823,6 +894,7 @@ export class BattleScene extends Phaser.Scene {
     this.consumeEvents();
     this.checkBanterState();
     this.drainBanterQueue();
+    this.tickTagReplies();
 
     if (s.phase === MatchPhase.Over && !this.finished) {
       this.finished = true;
@@ -882,6 +954,135 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  /** The face, name and accent for a chassis, for a borrowed banter plate. */
+  private speakerFor(mechId: string): Speaker | undefined {
+    const def = MECHS[mechId];
+    if (!def) return undefined;
+    return { thumbKey: `pilot_${def.id}_thumb`, pilot: def.pilot, tint: def.tint.accent };
+  }
+
+  /** Which chassis is actually flying in for this side, or null if none. */
+  private partnerIdFor(ownerId: number): string | null {
+    return this.sim.tags[ownerId]?.def?.id ?? null;
+  }
+
+  /**
+   * The call card: who is coming, and roughly when.
+   *
+   * **Reuses `SatCutscene` rather than growing a second one.** That card is
+   * already the one place in the game with room for a portrait and a line, and
+   * LAST STAND and OVERDRIVE both borrow it for exactly this reason — a new
+   * panel would be the same layout again with different words.
+   *
+   * It shows the **partner**, not the caller. The caller is already on screen
+   * and under the player's hands; the information being delivered is which of
+   * the two you picked is on their way, and a face is the fastest way to say it.
+   *
+   * Like every other use of this card it freezes the simulation for about a
+   * second and a quarter. That is affordable at twice a match, and it is the
+   * beat that makes a call feel like a decision rather than a cooldown.
+   */
+  private playTagCutscene(ownerId: number, late: boolean): void {
+    const owner = this.byId(ownerId);
+    const partnerId = this.partnerIdFor(ownerId);
+    const partner = partnerId ? MECHS[partnerId] : null;
+    if (!owner || !partner) return;
+    this.cutscene.play({
+      portraitKey: `pilot_${partner.id}_thumb`,
+      pilot: partner.pilot,
+      mode: SatMode.Speed,
+      // The written late line doubles as the card's line; a punctual call has
+      // nothing to say yet, and its words are saved for the arrival.
+      line: late ? pickTagLate(owner.def.id, partner.id, this.banterRng.next()) : null,
+      tint: partner.tint.accent,
+      // Entering from the caller's side, so the card points the way help is
+      // coming from — the same rule the saturation card follows.
+      screenFrac: owner.x / ARENA_W,
+      label: partner.name,
+      sub: late ? 'DELAYED — HOLD ON' : 'INBOUND',
+    });
+  }
+
+  /**
+   * The partner announcing they will be slow.
+   *
+   * **Spoken immediately rather than queued.** The whole value of the late roll
+   * is that the player learns about it while there is still time to change what
+   * they are doing; a line that waits its turn behind the drain delay could
+   * arrive after the partner does. It carries a high enough priority to take the
+   * box off ordinary chatter and low enough to lose to LAST STAND.
+   */
+  private speakTagLate(ownerId: number): void {
+    const owner = this.byId(ownerId);
+    const partner = this.partnerIdFor(ownerId);
+    const box = this.banter[ownerId];
+    if (!owner || !partner || !box) return;
+    const line = pickTagLate(owner.def.id, partner, this.banterRng.next());
+    if (line) box.say(line, 'tagLate', 150, this.speakerFor(partner));
+  }
+
+  /**
+   * The arrival exchange: the partner speaks, their caller answers.
+   *
+   * Queued rather than spoken, for the reason `openConversation` is — two lines
+   * released at once is not a conversation, it is people talking over each
+   * other. Both go in the *caller's* box, because which side of the screen a
+   * voice comes from is what says whose side they are on; the plate wears the
+   * partner's face for their half and is handed back for the reply.
+   *
+   * `roll` comes off the simulation rather than the scene's own generator, so
+   * the exchange a replay shows is the one the original match chose.
+   */
+  private queueTagArrival(ownerId: number, roll: number): void {
+    const owner = this.byId(ownerId);
+    const partner = this.partnerIdFor(ownerId);
+    const box = this.banter[ownerId];
+    if (!owner || !partner || !box) return;
+    const convo = pickTagArrival(owner.def.id, partner, roll);
+    if (!convo) return;
+
+    const speakerOf = (who: string): Speaker | undefined =>
+      // The caller speaks as themselves; anyone else is the partner.
+      who === owner.def.id ? undefined : this.speakerFor(who);
+
+    // First line now, rest on their own short clock. **Not through
+    // `banterQueue`** — that drains one line per 190 ticks, which is right for
+    // the pre-round intro and completely wrong here: a partner stays 240 ticks,
+    // so a two-line exchange behind the shared gap would finish long after they
+    // had gone, and with two partners arriving at once the last line landed
+    // three visits late. Measured in play before it was fixed.
+    box.say(convo[0].line, 'tagArrive', TAG_OPEN_HOLD, speakerOf(convo[0].who));
+    this.tagReplies[ownerId] = convo.slice(1).map((ex, i) => ({
+      line: ex.line,
+      as: speakerOf(ex.who),
+      // Staggered from the arrival, comfortably inside the four seconds.
+      ticks: TAG_REPLY_GAP * (i + 1),
+    }));
+  }
+
+  /**
+   * Releases the second half of each arrival exchange on its own clock.
+   *
+   * One pending list per side, because both partners can be on stage at once
+   * and each speaks into its own corner — they are not competing for a box and
+   * must not be serialised as though they were.
+   */
+  private tickTagReplies(): void {
+    for (let i = 0; i < this.tagReplies.length; i++) {
+      const pending = this.tagReplies[i];
+      if (!pending.length) continue;
+      const box = this.banter[i];
+      for (const r of pending) r.ticks--;
+      const due = pending.filter((r) => r.ticks <= 0);
+      this.tagReplies[i] = pending.filter((r) => r.ticks > 0);
+      // Only the last one due this tick reaches the plate; two replies landing
+      // together would stomp each other anyway, and the later line is the one
+      // that finishes the exchange.
+      const last = due[due.length - 1];
+      if (last && box) box.say(last.line, 'tagArrive', TAG_REPLY_HOLD, last.as);
+    }
+  }
+
   /** Queues a pilot's own generic line for a trigger. */
   private queueLine(id: number, trigger: BanterTrigger): void {
     const c = this.byId(id);
@@ -905,7 +1106,7 @@ export class BattleScene extends Phaser.Scene {
     const next = this.banterQueue.shift();
     if (!next) return;
     const box = this.banter[next.id];
-    if (box) box.say(next.line, next.trigger, 165);
+    if (box) box.say(next.line, next.trigger, 165, next.as);
     this.banterDelay = 190;
   }
 
@@ -1245,6 +1446,18 @@ export class BattleScene extends Phaser.Scene {
           // Refusals have to be audible, or a dead button feels like a bug.
           this.effects.guard(ev.x, ev.y, 0x8494ad);
           sfx.assistDenied();
+          break;
+        }
+        case 'tagCall': {
+          // A call always makes a mark, so the two seconds of nothing that
+          // follow read as "help is coming" rather than as a dropped input.
+          this.effects.guard(ev.x, ev.y, 0x9fe8ff);
+          this.playTagCutscene(ev.ownerId, ev.late);
+          if (ev.late) this.speakTagLate(ev.ownerId);
+          break;
+        }
+        case 'tagArrive': {
+          this.queueTagArrival(ev.ownerId, ev.roll);
           break;
         }
         case 'saturation': {
@@ -2161,6 +2374,26 @@ export class BattleScene extends Phaser.Scene {
         if (dec.ticks > 0) pts.push({ x: dec.x, y: dec.y });
       }
     }
+    /**
+     * A TAG/ASSIST partner, but **only while they are fighting**.
+     *
+     * They have to be in frame during the visit for the decoy's reason: a whole
+     * chassis crossing the arena for four seconds, left out of this list, can
+     * spend the entire visit outside the visible band. That was not
+     * hypothetical — the enemy's partner was watched fighting completely
+     * off-screen the first time two were called at once.
+     *
+     * Including them while they are *arriving or leaving* is the opposite
+     * mistake, and it is the one that made them look like they teleported in.
+     * The frame expanded to hold a body the instant it existed, so a partner
+     * who should have been a distant shape closing on the fight was instead
+     * simply *present*, at the edge, from their first frame. Excluded during
+     * the approach, they fly into the shot under their own power — and out of
+     * it again when their time is up, which is the whole point of `Leaving`.
+     */
+    for (const t of s.tags) {
+      if (t.body && t.state === TagState.Present) pts.push({ x: t.body.x, y: t.body.y });
+    }
     const minX = Math.min(...pts.map((q) => q.x));
     const maxX = Math.max(...pts.map((q) => q.x));
     const minY = Math.min(...pts.map((q) => q.y));
@@ -2228,9 +2461,19 @@ export class BattleScene extends Phaser.Scene {
     this.ground.update(s.combatants);
 
     // ---- mechs -----------------------------------------------------------
+    //
+    // Partners are hidden by default and shown only while their body is in the
+    // list, so one that has left is not left standing on the deck.
+    for (let i = 0; i < this.tagRenderers.length; i++) {
+      const r = this.tagRenderers[i];
+      if (r) r.root.setVisible(s.tags[i].body !== null);
+    }
     for (let i = 0; i < s.combatants.length; i++) {
       const c = s.combatants[i];
-      const r = this.renderers[i];
+      // The first two entries are always the pilots; anything after them is a
+      // partner, and belongs to whichever side's slot is holding it.
+      const r = i < 2 ? this.renderers[i] : this.tagRenderers[s.tags[0].body === c ? 0 : 1];
+      if (!r) continue;
       r.sync(c, c.x, c.y, dt);
 
       // Thruster plumes trail behind the chassis, opposite the travel direction.
@@ -2248,6 +2491,22 @@ export class BattleScene extends Phaser.Scene {
           );
         }
       }
+
+      /**
+       * Everything past this point is a *pilot's* furniture.
+       *
+       * The blade bloom, the escort, the paint mark, the sniper reticle, the
+       * LAST STAND and OVERDRIVE auras and the repair motes are all held in
+       * arrays with one entry per side, built once in `create`. A TAG/ASSIST
+       * partner is a third body in `combatants` and indexes past the end of
+       * every one of them — which is exactly how this crashed the first time it
+       * was run, on `drones[2]` being undefined.
+       *
+       * A partner has none of these things anyway: no escort, no stance, no
+       * saturation, and no death to make a stand against. They get a chassis,
+       * thrusters and their weapons, which is what four seconds needs.
+       */
+      if (i >= 2) continue;
 
       // ---- beam sword -----------------------------------------------
       // Melee is a sword, not the rifle. Stow the gun for the swing and extend

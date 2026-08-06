@@ -82,6 +82,21 @@ export class MenuScene extends Phaser.Scene {
         { label: MODE_LABELS.vsCpu, onSelect: () => this.pick('vsCpu') },
         { label: MODE_LABELS.aiVsAi, onSelect: () => this.pick('aiVsAi') },
         { label: MODE_LABELS.training, onSelect: () => this.pick('training') },
+        /**
+         * A match rule, so it sits with the modes rather than under SETTINGS.
+         *
+         * Turning it off does not tune anything — it removes a mechanic and
+         * the two partner stages from mech select, and a straight 1v1 is a
+         * reasonable thing to ask for. Placed after the modes because it
+         * qualifies them: you choose what kind of fight, then whether anyone
+         * else is allowed in it.
+         */
+        {
+          label: 'TAG/ASSIST',
+          value: () => (session.assists ? 'ON' : 'OFF'),
+          onSelect: () => this.toggleAssists(),
+          onAdjust: () => this.toggleAssists(),
+        },
         // The story lives here rather than behind CAMPAIGN, so it is readable
         // before the campaign that will use it exists.
         { label: 'ARCHIVE', onSelect: () => this.openArchive() },
@@ -174,6 +189,12 @@ export class MenuScene extends Phaser.Scene {
     } catch {
       return null;
     }
+  }
+
+  /** Flips the match rule. Confirm and left/right both do it, so it cannot be missed. */
+  private toggleAssists(): void {
+    session.assists = !session.assists;
+    sfx.uiMove();
   }
 
   /** Choosing a mode goes straight to the roster, as a fighting game would. */

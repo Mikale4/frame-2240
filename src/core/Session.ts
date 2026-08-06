@@ -57,6 +57,32 @@ export const session = {
   playerMech: 'halcyon',
   enemyMech: 'nocturne',
   /**
+   * The pilot each side can call in. **A property of the machine, not of the
+   * player** — a CPU-held slot picks one exactly as a human-held slot does, so
+   * an assist is part of what a chassis brings to a fight rather than a
+   * privilege of the near side.
+   *
+   * Must always be one of that chassis's two in `TAG_PAIRS`; these defaults
+   * are `halcyon[0]` and `nocturne[0]`, matching the default mechs above.
+   * `MechSelectScene` re-derives them whenever a machine is chosen, so an
+   * illegal pair cannot survive a trip through the menus.
+   */
+  playerTag: 'vesper',
+  enemyTag: 'nulltide',
+  /**
+   * Whether TAG/ASSIST is in play at all.
+   *
+   * A match rule rather than a preference, which is why it sits beside `mode`
+   * on the main menu instead of under SETTINGS: turning it off does not adjust
+   * the game, it removes a mechanic and two whole stages from mech select, and
+   * a pure 1v1 is a legitimate thing to want. **Off means off everywhere** —
+   * no partner defs reach `MatchSim`, so the clock never runs, no body is ever
+   * built, and the HUD row stays blank.
+   *
+   * Training ignores it either way; the dummy calls nobody.
+   */
+  assists: true,
+  /**
    * The arena being fought over.
    *
    * There is exactly one, hard-coded in `render/Backdrop.ts` — three fixed

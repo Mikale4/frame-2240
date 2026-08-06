@@ -2,9 +2,10 @@ import Phaser from 'phaser';
 import type { Combatant } from '../combat/Combatant';
 import type { MatchSim } from '../combat/MatchSim';
 import { SAT_MODE_NAMES, SatMode, WEAPON_SLOT_COUNT, WEAPON_SLOT_NAMES } from '../combat/types';
-import { VIEW_W } from '../core/GameConfig';
+import { TICK_HZ, VIEW_W } from '../core/GameConfig';
 import { clamp01 } from '../core/MathUtil';
 import { session } from '../core/Session';
+import { TAG_USES, TagState } from '../combat/TagPartner';
 
 interface Bar {
   bg: Phaser.GameObjects.Rectangle;
@@ -49,6 +50,7 @@ export class Hud {
    * has stopped working will read it as the game dropping inputs.
    */
   private readonly disarmTexts: Phaser.GameObjects.Text[] = [];
+  private readonly tagTexts: Phaser.GameObjects.Text[] = [];
   private readonly comboText: Phaser.GameObjects.Text;
   private readonly bannerText: Phaser.GameObjects.Text;
   private readonly subPips: Phaser.GameObjects.Rectangle[][] = [[], []];
@@ -138,11 +140,33 @@ export class Hud {
         })
         .setOrigin(right ? 1 : 0, 0)
         .setStroke('#0a0e18', 4);
+      /**
+       * TAG/ASSIST: calls left, who answers, and what the clock is doing.
+       *
+       * One line rather than a gauge because the quantity is **two**. A bar
+       * would imply a resource that fills; this is a thing you have twice and
+       * then do not have, and two filled diamonds say that immediately. The
+       * partner's name is on the same line because which of the pair you chose
+       * is the part a player forgets between matches.
+       *
+       * Mirrored per side for the same reason every other row here is: the
+       * rival's second call is information you are entitled to see coming.
+       */
+      const tag = scene.add
+        .text(x, 202, '', {
+          fontFamily: FONT,
+          fontSize: '12px',
+          color: '#9fe8ff',
+        })
+        .setOrigin(right ? 1 : 0, 0)
+        .setStroke('#0a0e18', 4);
       this.satModeTexts.push(sat);
       this.flightTexts.push(flight);
       this.disarmTexts.push(disarm);
+      this.tagTexts.push(tag);
       this.root.add(sat);
       this.root.add(flight);
+      this.root.add(tag);
       // Must join the container: `BattleScene` ignores `hud.container` on the
       // world camera, so a HUD element left outside it is drawn by *both*
       // cameras. Same trap as the sniper overlay, from the other side.
@@ -239,6 +263,56 @@ export class Hud {
       rightAligned: right,
       x,
     });
+  }
+
+  /**
+   * The TAG/ASSIST row, per side.
+   *
+   * Reads straight off `TagSlot` rather than tracking its own copy of the
+   * clock — the slot already owns every number here, and a second counter in
+   * the HUD is a second counter to get out of step.
+   *
+   * Blank when a side has no partner at all, which is training: an empty row is
+   * the honest presentation of a mechanic that is switched off, and a greyed-out
+   * one would suggest it might come back.
+   */
+  private updateTags(s: MatchSim): void {
+    for (let side = 0; side < 2; side++) {
+      const t = s.tags[side];
+      const label = this.tagTexts[side];
+      if (!label) continue;
+      if (!t?.def) {
+        label.setText('');
+        continue;
+      }
+
+      // Filled for a call still in hand, hollow for one spent. Two glyphs, so
+      // "how many left" is counted rather than read.
+      const marks = '◆'.repeat(t.usesLeft) + '◇'.repeat(TAG_USES - t.usesLeft);
+      const name = t.def.name;
+      const secs = (ticks: number) => Math.ceil(ticks / TICK_HZ);
+
+      let state = '';
+      let colour = '#4e6076';
+      if (t.state === TagState.Inbound) {
+        state = `  INBOUND ${secs(t.timer)}s`;
+        colour = '#ffc857';
+      } else if (t.state === TagState.Present) {
+        state = `  ON STATION ${secs(t.timer)}s`;
+        colour = '#63f2c8';
+      } else if (t.usesLeft <= 0) {
+        state = '  SPENT';
+      } else if (t.cooldown > 0) {
+        state = `  ${secs(t.cooldown)}s`;
+      } else {
+        // The only state the player can act on, so it is the only bright one.
+        state = '  READY';
+        colour = '#9fe8ff';
+      }
+
+      label.setText(`TAG ${marks} ${name}${state}`);
+      label.setColor(colour);
+    }
   }
 
   private makePips(side: number, x: number, y: number, right: boolean, count: number): void {
@@ -389,6 +463,8 @@ export class Hud {
         pips[i].setFillStyle(ready ? 0x63f2c8 : gone ? 0x3a1d20 : 0x24303f, 1);
       }
     }
+
+    this.updateTags(s);
 
     // Combo readout, driven by the sim's per-victim counter.
     const enemyCombo = s.combo.get(e.id) ?? 0;

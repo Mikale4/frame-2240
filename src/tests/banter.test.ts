@@ -44,13 +44,37 @@ describe('pilot banter — coverage', () => {
     overdriveSpent: (m) => m.overdrive !== undefined,
   };
 
+  /**
+   * A third kind: triggers whose lines are **not in this table at all**.
+   *
+   * TAG/ASSIST dialogue is written per *pairing* — what Vesk says to Rook is not
+   * what she says to Doyne — so it lives in `src/data/tags.ts` keyed by caller
+   * and partner, and `BattleScene` hands the text to `BanterBox` directly rather
+   * than going through `pickBanter`. These triggers exist here only to carry a
+   * priority, which is what lets an arrival hold the plate against combo
+   * chatter.
+   *
+   * Their coverage is enforced, exhaustively, by `tags.test.ts`. What is
+   * asserted here is the other half: that nobody has quietly added per-pilot
+   * lines for them, which could never play.
+   */
+  const PAIRWISE: readonly BanterTrigger[] = ['tagArrive', 'tagLate'];
+
   it('covers every universal trigger for every pilot', () => {
     for (const m of ROSTER) {
       for (const t of TRIGGERS) {
-        if (CONDITIONAL[t]) continue;
+        if (CONDITIONAL[t] || PAIRWISE.includes(t)) continue;
         const lines = BANTER[m.id][t];
         expect(lines, `${m.id} has nothing for ${t}`).toBeTruthy();
         expect(lines!.length, `${m.id}.${t} is empty`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('keeps pairwise triggers out of the per-pilot table', () => {
+    for (const m of ROSTER) {
+      for (const t of PAIRWISE) {
+        expect(BANTER[m.id][t], `${m.id} carries unreachable ${t} lines`).toBeUndefined();
       }
     }
   });

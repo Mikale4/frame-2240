@@ -129,7 +129,7 @@ export const FORCE_BUTTONS: readonly (number | null)[] = [
 const BUTTON_LABELS: Record<number, string> = {
   [Btn.Main]: 'MAIN GUN',
   [Btn.Heavy]: 'HEAVY SHOT',
-  [Btn.Sub]: 'SUB WEAPON',
+  [Btn.Sub]: 'TAG/ASSIST',
   [Btn.Melee]: 'MELEE',
   [Btn.Boost]: 'BOOST',
   [Btn.Barrier]: 'GUARD',

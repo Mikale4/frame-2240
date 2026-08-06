@@ -7237,3 +7237,134 @@ not do.
 * **The manual loop pump reports near-zero `dt`**, so nothing ages out and a
   particle pool looks saturated at 90/90 when its real peak is 37. Anything
   time-dependent has to be measured on real frames.
+
+
+## D150 — TAG/ASSIST: the sub-weapon button finally does something
+
+`Btn.Sub` had been dead on every chassis in every match. The diagnosis in the
+handoff was right but incomplete — measured, the press was honoured **1.5–4.2 %
+of the time**, behind *three* gates, not one:
+
+1. **Charge starvation.** The escort's `requestVolley` asks every tick and spends
+   the same rack; the rack was affordable on only 14–31 % of fight ticks.
+2. **`supporter.ready`.** VESPER is the control case that proves this one is
+   independent: its `interceptor` is not in `SPENDS_CHARGES`, so its rack sat
+   90.7 % affordable — and the button was still honoured 4.1 %, because the drone
+   was busy shooting things down and ready only 30 % of ticks.
+3. **`tryStartAction` only runs when the chassis is idle**, so 52–58 % of presses
+   raised no event at all.
+
+The user chose a new job for it rather than a fix: **call another pilot in.**
+
+* **Named `tag` in code, not `assist`.** `assist` already means the drone's volley
+  (`orderAssist`, `assistDenied`, the `assist` event) and `Bindings.ts` already
+  records that the name drifted once and was left alone because renaming reaches
+  the audio cue keys. A third meaning would be worse than an unfamiliar one.
+* **Two partners per chassis, drawn from `archive.ts`** — shared service, a shared
+  yard, or a shared event. Five of sixteen pairings are stated outright in the
+  Archive; the rest are consistent with it and marked. Directional: Vesk calling
+  Doyne is not Doyne calling Vesk. ROOK and SENNA are each called by three
+  pilots, because the story leans on them.
+* **The press is read at the top of `Combatant.step`**, beside `Btn.TargetCycle`
+  and above the returns. A radio call is not an action, and gate 3 above would
+  otherwise refuse it exactly when a pinned pilot needs it.
+* **`opponentOf` was identity-based** (`c === this.player`) and silently wrong
+  with more than two bodies — a player-side partner would have spent its four
+  seconds aiming at the pilot who called it. Team-based now.
+* **`deathless` gates the `alive` predicate**, not a floor on each damage site.
+  Life is reduced in seven places; a floor added to six is a floor missing from
+  the seventh.
+* **Optional.** `session.assists` sits with the modes on the main menu, not under
+  SETTINGS: off removes a mechanic and two select stages, and a straight 1v1 is a
+  reasonable thing to want. Off means no partner defs reach `MatchSim` at all.
+
+## D151 — the rival was mashing a button it could not use
+
+A play report — an audible denial cue every few seconds. Measured before
+touching anything: **2376 refused presses against 194 honoured, 12:1**, about one
+denial every three seconds per side, worst on OBELISK at 22 a match.
+
+`wantsTag` fired on life < 60 % and never checked whether the call *could* be
+answered, so below that threshold the rival pressed every 90 ticks for the rest
+of the round and every refusal made a sound. `RivalAI` only sees a `Combatant`,
+so readiness now mirrors onto `Combatant.tagReady`. **2376 → 0**, honoured calls
+unchanged (194 → 191, inside noise).
+
+**The invariant is now a test**: the rival may only press when the press can be
+answered. Nothing else would have caught it — the simulation was behaving exactly
+as written and the writing was wrong.
+
+## D152 — thruster VFX: two wrong turns, then the actual reference
+
+The user rejected the exhaust twice. Both rejections were correct and both causes
+were mine.
+
+1. **A particle spray** — one to four soft blobs flying off with drag, shrinking
+   to nothing. That is smoke, not thrust.
+2. **A fan of rays** — read off the parallel streaks in the 2005 screenshots.
+   Those streaks are the *speed-line trail beside* the machine, not the flame.
+   Built as the exhaust, with per-ray random angle, length and alpha, it
+   composited into visual noise. It also spiked out the *front* of every mech:
+   `TEX.streak` is centre-origin, and at the lengths involved half of it sat
+   ahead of the nozzle.
+
+**Then the user said to run the game, and that settled it.** `winmugen.exe`,
+captured at native 640×480 and zoomed 5×: the thruster is a **tight white-hot
+core with a broad soft halo, reaching about a third of a body length**. The glow
+does the work, not the geometry.
+
+So: a `TEX.plume` cone, wide at the mouth and pointed at the tail, drawn as
+layers — outer flame in the machine's colour, shorter hotter core inside, bloom
+at the bell — with flicker in *length and brightness only*, because a flame
+pulses and does not change shape.
+
+**Retuned against the capture**, not by feel: length −28 % on top of an earlier
+−22 %, bloom ×1.55, `whiteAt` ×0.62. Faction character survives as proportion
+rather than randomness.
+
+Lesson worth keeping: **the reference PNGs in the screenshots folder are higher
+resolution than the game actually renders.** Detail inferred from them can be
+detail that was never there.
+
+## D153 — two stage layers had visible edges
+
+Both reported by the user watching the screen, both confirmed by arithmetic:
+
+* **`arena_mid`** carries its art in rows 50–906 of its 1024 and sat at screenY
+  −40…+90, so the drawn band began at **+10…+140 — inside the frame at every
+  camera height**. Now −240…−110. This is the same fault the foreground had, and
+  the same fix; that one already had a note on it.
+* **`arena_near`** spanned x −400…2800, but at `CAM_ZOOM_MIN` the camera reaches
+  **−1508…3908**. Widened to −1700…4100. Its art fills all 1536 columns so it
+  tiles seamlessly and the extra width is free.
+
+Verified at the worst case — minimum zoom, camera 1348 px past the left wall.
+
+## D154 — the roster measured with and without assists
+
+`balance.ts` gained `--tags` (off by default, forwarded to shards). Four 12-seed
+sweeps. **Reporting win rate first, since lead and win disagree here.**
+
+| | EXTREME off | EXTREME on | HARD off | HARD on |
+| --- | --- | --- | --- | --- |
+| Top win | CIRRUS 71 % | CIRRUS 67 % | — | — |
+| Bottom win | PYRE/NOCTURNE 40 % | **PYRE 32 %** | — | — |
+| Lead spread | 0.210 | 0.222 | 0.194 | **0.163** |
+| Outliers | **CIRRUS +2.07σ** | none | none | none |
+
+Three things follow:
+
+* **The baseline moved on its own.** With assists *off* the spread is 0.210
+  against the recorded 0.192 and CIRRUS crossed the flag — that is the
+  `wantsDroneToggle` removal, which used to press `Btn.Sub` into an occasional
+  drone volley. `TIER_LIST.md`'s numbers are no longer reproducible from current
+  code regardless of this feature.
+* **Assists clear that flag.** CIRRUS 71 → 67 %, +2.07σ → +1.50σ. They compress
+  the top.
+* **PYRE pays for it**, 40 → 32 % at EXTREME — the largest single movement and
+  the lowest win rate in the table. Unexplained; worth `telemetry.ts` rather than
+  a guess.
+
+**0.163 at HARD is the best figure this project has measured.** The two tiers
+disagree in direction on lead, which is exactly the case the protocol keeps a
+second sample for.

@@ -1261,8 +1261,8 @@ export class RivalAI {
       }
     }
 
-    // ---- Drone ------------------------------------------------------------
-    if (this.wantsDroneToggle(self)) {
+    // ---- TAG/ASSIST ---------------------------------------------------------
+    if (this.wantsTag(self)) {
       pressed.v |= 1 << Btn.Sub;
       held.v |= 1 << Btn.Sub;
       this.droneHold = 90;
@@ -2193,29 +2193,47 @@ export class RivalAI {
   }
 
   /**
-   * Whether to press the deploy/recall button this tick.
+   * Whether to call a TAG/ASSIST partner this tick.
    *
-   * The rival wants its drone out — that is where the passive and the free
-   * volleys are — and pulls it in when it is nearly dead, letting it repair
-   * before sending it back. Weak rivals never bother: the recall thresholds
-   * scale with skill, so a rookie flies its drone until someone kills it, and an
-   * ace protects it. That is a legible difficulty difference rather than a
-   * hidden stat change.
+   * **This method used to be `wantsDroneToggle`, and it was dead.** It deployed
+   * and recalled the escort — a design removed two iterations ago, when the
+   * drone became permanently deployed. Its docstring still described that
+   * behaviour, and it went on pressing `Btn.Sub` for a reason that had stopped
+   * existing. `docs/TESTING_PROTOCOL.md` records "a comment is not evidence"
+   * from four faults of exactly this shape; this was a fifth.
+   *
+   * The replacement is deliberately the simplest policy that is not obviously
+   * wrong: **call when you are losing the fight you are in.** Two calls a match
+   * is not a rhythm to optimise, and D148 measured a rival taught to reason
+   * about a new verb as *worse than one that was not*. A cheap policy that
+   * measures flat is the right starting point; anything cleverer has to earn
+   * its place on `balance.ts` first.
+   *
+   * `droneHold` keeps its name and its job — a few ticks of quiet after a press
+   * so the button is not mashed on consecutive frames.
    */
-  private wantsDroneToggle(self: Combatant): boolean {
+  private wantsTag(self: Combatant): boolean {
+    /**
+     * **Never press a button that cannot answer.**
+     *
+     * This gate was missing and the cost was audible rather than statistical: a
+     * refused call raises `assistDenied`, which the scene turns into a sound, so
+     * a rival below the life threshold with nothing left to spend produced a
+     * denial cue every 90 ticks for the rest of the round. Measured across the
+     * roster at **2376 refusals against 194 honoured calls** — a 12:1 ratio, and
+     * roughly one denial every three seconds of play per side.
+     *
+     * A player reported it by ear before any test looked at it, which is the
+     * usual way this class of fault surfaces: the simulation was behaving
+     * exactly as written and the writing was wrong.
+     */
+    if (!self.tagReady) return false;
     if (this.droneHold > 0) {
       this.droneHold--;
       return false;
     }
-    const s = self.supporter;
-    if (s.destroyed) return false;
-
-    // Below ~level 4 the rival simply leaves it deployed.
-    const recallAt = this.skill < 0.5 ? 0 : 0.2 + (this.skill - 0.5) * 0.4;
-    const redeployAt = recallAt + 0.45;
-
-    const wantOut = s.outbound ? s.lifeFraction > recallAt : s.lifeFraction >= redeployAt;
-    return wantOut !== s.outbound;
+    // Under real pressure: hurt, or guard broken and about to be punished.
+    return self.life < self.def.gauges.maxLife * 0.6 || self.guardBreakStun > 0;
   }
 
   /**

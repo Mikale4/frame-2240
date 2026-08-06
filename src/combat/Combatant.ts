@@ -981,8 +981,73 @@ export class Combatant implements FlightState {
     this.fire(a, null, spawns, events, { x, y, angle });
   }
 
+  /**
+   * This machine cannot be killed. Set only on a TAG/ASSIST partner.
+   *
+   * **One flag on `alive` rather than a floor on every damage site.** Life is
+   * reduced in seven separate places — direct hits, chip, burn, acid, the
+   * saturation self-cost — and a floor added to six of them is a floor missing
+   * from the seventh. Gating the *predicate* instead means no death path can
+   * fire regardless of which route the damage took, and hitstun, stagger,
+   * knockback and status all keep working exactly as they do on a real pilot,
+   * because none of them consult `alive`.
+   *
+   * `MatchSim` restores the life value itself each tick, so nothing downstream
+   * ever reads a partner sitting at zero.
+   */
+  deathless = false;
+
+  /**
+   * TAG/ASSIST was pressed this tick. Raised by `step`, consumed by `MatchSim`.
+   *
+   * A one-tick flag rather than a call, because a `Combatant` has no way to
+   * reach the match it is in and should not grow one for this.
+   */
+  tagRequested = false;
+
+  /**
+   * Whether a TAG/ASSIST call would be honoured right now.
+   *
+   * A mirror of `TagSlot.ready`, refreshed by `MatchSim` every tick. It exists
+   * because the slot belongs to the match and `RivalAI` is only ever handed a
+   * `Combatant` — and a rival that cannot see the cooldown presses straight
+   * through it. **Measured at 2376 refused presses against 194 honoured**, one
+   * denial cue every three seconds of play, which is what a player hears rather
+   * than reads.
+   *
+   * Deliberately a plain mirror rather than a back-reference to the match: a
+   * `Combatant` that could reach its `MatchSim` could reach everything in it.
+   */
+  tagReady = false;
+
+  /**
+   * Lets this machine leave the arena. Set only on a departing TAG/ASSIST partner.
+   *
+   * Every other body in the game is held inside the walls unconditionally, and
+   * that is correct — a wreck coasting through the wall was a real bug once. A
+   * partner whose four seconds are up is the one thing that is *supposed* to
+   * leave, and without this they flew into the wall and vanished against it in
+   * full view, which is precisely the "switched off" look the departure exists
+   * to replace.
+   */
+  unbounded = false;
+
   get alive(): boolean {
-    return this.life > 0;
+    return this.deathless || this.life > 0;
+  }
+
+  /**
+   * Holds this machine inside the arena and above the deck.
+   *
+   * **The one place the clamp is applied.** It used to be four identical calls
+   * scattered through `step` — the coast branch, the stun branch, the melee-lock
+   * branch and the ordinary path — which meant the rule existed in four places
+   * and a fifth branch could silently be added without it. Routed through here,
+   * `unbounded` cannot be honoured by three sites and forgotten by the fourth.
+   */
+  private clampSelf(arenaW: number, arenaH: number): void {
+    if (this.unbounded) return;
+    clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH, undefined, this.groundY);
   }
 
   get invulnerable(): boolean {
@@ -1447,6 +1512,23 @@ export class Combatant implements FlightState {
       }
     }
 
+    /**
+     * TAG/ASSIST, raised here for the same reason and a stronger one.
+     *
+     * **It is a radio call, not an action.** Nothing on this machine moves when
+     * you make it; a pilot pinned in a corner asking for help is the situation
+     * the mechanic exists for, and routing it through `tryStartAction` — which
+     * only runs when the chassis is idle — would refuse the press precisely
+     * then. That was measured on the button's previous owner: **52–58 % of
+     * presses never reached the action block at all**, and on a control with two
+     * uses and a thirty-second cooldown, losing half of them is the difference
+     * between a mechanic and a rumour.
+     *
+     * Only the *request* is raised here. `MatchSim` owns the clock and decides
+     * whether it is honoured, because the partner is not this machine's to spawn.
+     */
+    if (isPressed(input, Btn.Sub) && this.alive) this.tagRequested = true;
+
     // Hitstop freezes everything except the countdown itself.
     if (this.hitstop > 0) {
       this.hitstop--;
@@ -1462,7 +1544,7 @@ export class Combatant implements FlightState {
       // A wreck still coasts, and it still has to stay in the arena: this branch
       // used to return without clamping, so a mech killed while carrying speed
       // drifted through the wall and kept going for the whole KO freeze.
-      clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH, undefined, this.groundY);
+      this.clampSelf(arenaW, arenaH);
       return;
     }
 
@@ -1480,7 +1562,7 @@ export class Combatant implements FlightState {
       // here: the stun branch returns before the melee step ever runs.
       if (this.meleeLock) this.endMeleeLock(false);
       this.stepStunned(input, events);
-      clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH, undefined, this.groundY);
+      this.clampSelf(arenaW, arenaH);
       return;
     }
 
@@ -1494,7 +1576,7 @@ export class Combatant implements FlightState {
       if (this.stepMeleeLock(target, spawns, events)) {
         this.x += this.vx;
         this.y += this.vy;
-        clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH, undefined, this.groundY);
+        this.clampSelf(arenaW, arenaH);
         this.updateVisualAngles(input);
         return;
       }
@@ -1531,7 +1613,7 @@ export class Combatant implements FlightState {
         id: this.id,
       });
     }
-    clampToArena(this, this.def.rig.hurtRadius, arenaW, arenaH, undefined, this.groundY);
+    this.clampSelf(arenaW, arenaH);
     this.updateVisualAngles(input);
   }
 
@@ -2068,17 +2150,13 @@ export class Combatant implements FlightState {
       return;
     }
 
-    // Sub weapon: the drone carries it and is now permanently deployed, so the
-    // button no longer launches or recalls anything — it orders a volley.
-    //
-    // That is what this button meant two designs ago, before the drone became a
-    // toggle. The toggle is gone because the drone is always out; leaving the
-    // button dead would have taken the sub-weapon away from every player who has
-    // not discovered the quarter-circle motion that also fires it.
-    if (isPressed(input, Btn.Sub)) {
-      this.orderAssist(d.sub, events);
-      return;
-    }
+    // **`Btn.Sub` is not handled here.** It calls a TAG/ASSIST partner and is
+    // read at the top of `step`, above the returns that would swallow it — see
+    // the note there. It used to order a drone volley from this line, which
+    // could not work: the escort's own `requestVolley` spends the same charge
+    // rack every tick, so the press lost that race on every chassis in every
+    // match and was honoured 1.5–4.2 % of the time. The drone keeps the rack;
+    // the salvo motion above still spends it.
 
     // Shoot saturation: one press, both guns.
     //

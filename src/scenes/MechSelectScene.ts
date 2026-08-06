@@ -10,6 +10,7 @@ import {
 import { InputManager } from '../input/InputManager';
 import { bigTitle, smallText } from '../ui/Menu';
 import { ROSTER } from '../data/mechs';
+import { TAG_PAIRS } from '../data/tags';
 import { ROLE_BRIEF } from '../data/droneRoles';
 import { MechDemo } from '../ui/MechDemo';
 import { sfx } from '../audio/Sfx';
@@ -97,15 +98,27 @@ export class MechSelectScene extends Phaser.Scene {
    *
    * Which stages run depends on the mode:
    *
-   * - `vsCpu`    player → enemy → enemySkill
-   * - `aiVsAi`   player → playerSkill → enemy → enemySkill
-   * - `training` player → enemy            (the dummy never acts)
+   * - `vsCpu`    player → playerTag → enemy → enemyTag → enemySkill
+   * - `aiVsAi`   player → playerTag → playerSkill → enemy → enemyTag → enemySkill
+   * - `training` player → enemy   (the dummy never acts, and calls nobody)
+   *
+   * **A partner is picked immediately after the machine that calls them**, and
+   * before that side's tier, because the choice *depends* on the machine —
+   * `TAG_PAIRS` offers two per chassis and they change entirely when the chassis
+   * does. Committing a mech therefore also re-derives its partner (`resetTag`),
+   * so a stale id from a previous pass can never reach a match.
    *
    * The per-side tier is what `aiVsAi` exists for: one global dial could not
    * express an EXTREME rival dismantling an EASY one, which is the most
    * interesting thing that mode can show you.
    */
-  private picking: 'player' | 'playerSkill' | 'enemy' | 'enemySkill' = 'player';
+  private picking:
+    | 'player'
+    | 'playerTag'
+    | 'playerSkill'
+    | 'enemy'
+    | 'enemyTag'
+    | 'enemySkill' = 'player';
   private armAt = 0;
   private t = 0;
 
@@ -442,15 +455,34 @@ export class MechSelectScene extends Phaser.Scene {
      * boost at double rate and still have no idea it strings a live wire across
      * the arena that deals damage to anything caught on it.
      */
+    /**
+     * On a partner stage this panel describes **the call, not the escort**.
+     *
+     * A partner arrives without their drone, so printing that drone's role and
+     * passive here would be advertising something the match will never deliver
+     * — the exact "documented but not true" fault this project keeps paying
+     * for. What a player needs at this moment is the shape of the mechanic:
+     * how many calls, how long a wait, and how long they stay.
+     */
     this.droneText.setText(
-      [
-        `DRONE  ${def.supporter.name}  ${def.supporter.maxLife} HP`,
-        role.name,
-        role.text,
-        '',
-        `${def.supporter.passive.name} (while deployed)`,
-        def.supporter.passive.text,
-      ].join('\n'),
+      this.onTag
+        ? [
+            `${def.pilot} answers.`,
+            '',
+            'Arrives in 1-3s, sometimes 4-7s.',
+            'Fights for 4s, then leaves.',
+            'Cannot be killed. Brings no drone.',
+            '',
+            'Two calls a match, 30s apart.',
+          ].join('\n')
+        : [
+            `DRONE  ${def.supporter.name}  ${def.supporter.maxLife} HP`,
+            role.name,
+            role.text,
+            '',
+            `${def.supporter.passive.name} (while deployed)`,
+            def.supporter.passive.text,
+          ].join('\n'),
     );
     /**
      * Positioned after the text is set, so the block is measured rather than
@@ -474,7 +506,18 @@ export class MechSelectScene extends Phaser.Scene {
 
     // Dim whichever machine is already committed, so the second pass reads as a
     // different choice rather than a repeat of the first.
+    //
+    // On a partner stage the rule is inverted and much stronger: **only the two
+    // legal machines are lit at all.** Six dimmed cells say "these are not on
+    // offer" far better than a cursor that silently refuses to travel, and the
+    // pair being visibly short is the point — an assist is who this pilot knows,
+    // not who is available.
+    const choices = this.onTag ? this.tagChoices : null;
     this.cells.forEach((cell, i) => {
+      if (choices) {
+        cell.setAlpha(choices.includes(i) ? 1 : 0.18);
+        return;
+      }
       const chosen =
         (this.picking === 'enemy' || this.picking === 'enemySkill') &&
         ROSTER[i].id === session.playerMech;
@@ -489,28 +532,40 @@ export class MechSelectScene extends Phaser.Scene {
         ? duel
           ? 'SELECT CPU 1'
           : 'SELECT YOUR MECH'
-        : this.picking === 'playerSkill'
-          ? 'CPU 1 SKILL'
-          : this.picking === 'enemy'
-            ? duel
-              ? 'SELECT CPU 2'
-              : 'SELECT YOUR RIVAL'
-            : duel
-              ? 'CPU 2 SKILL'
-              : 'RIVAL SKILL',
+        : this.picking === 'playerTag'
+          ? duel
+            ? 'CPU 1 ASSIST'
+            : 'SELECT YOUR ASSIST'
+          : this.picking === 'playerSkill'
+            ? 'CPU 1 SKILL'
+            : this.picking === 'enemy'
+              ? duel
+                ? 'SELECT CPU 2'
+                : 'SELECT YOUR RIVAL'
+              : this.picking === 'enemyTag'
+                ? duel
+                  ? 'CPU 2 ASSIST'
+                  : 'RIVAL ASSIST'
+                : duel
+                  ? 'CPU 2 SKILL'
+                  : 'RIVAL SKILL',
     );
 
     const mine = ROSTER.find((m) => m.id === session.playerMech)?.name ?? '';
     const theirs = ROSTER.find((m) => m.id === session.enemyMech)?.name ?? '';
     const mineTier = DIFFICULTY_NAMES[session.playerDifficulty];
     this.lockedText.setText(
-      this.picking === 'playerSkill'
-        ? `${duel ? 'CPU 1' : 'YOUR MECH'}:  ${mine}`
-        : this.picking === 'enemy'
-          ? `${duel ? `CPU 1:  ${mine}  [${mineTier}]` : `YOUR MECH:  ${mine}`}`
-          : this.picking === 'enemySkill'
-            ? `${mine}${duel ? ` [${mineTier}]` : ''}   vs   ${theirs}      ${MODE_LABELS[session.mode]}`
-            : '',
+      this.picking === 'playerTag'
+        ? `${duel ? 'CPU 1' : 'YOUR MECH'}:  ${mine}   —   WHO ANSWERS THE CALL?`
+        : this.picking === 'enemyTag'
+          ? `${duel ? 'CPU 2' : 'RIVAL'}:  ${theirs}   —   WHO ANSWERS THE CALL?`
+          : this.picking === 'playerSkill'
+            ? `${duel ? 'CPU 1' : 'YOUR MECH'}:  ${mine}`
+            : this.picking === 'enemy'
+              ? `${duel ? `CPU 1:  ${mine}  [${mineTier}]` : `YOUR MECH:  ${mine}`}`
+              : this.picking === 'enemySkill'
+                ? `${mine}${duel ? ` [${mineTier}]` : ''}   vs   ${theirs}      ${MODE_LABELS[session.mode]}`
+                : '',
     );
 
     const onSkill = this.picking === 'playerSkill' || this.picking === 'enemySkill';
@@ -551,6 +606,56 @@ export class MechSelectScene extends Phaser.Scene {
     this.demo.root.setMask(this.demoMask.createGeometryMask());
   }
 
+  /** True while a TAG/ASSIST partner is being chosen for either side. */
+  private get onTag(): boolean {
+    return this.picking === 'playerTag' || this.picking === 'enemyTag';
+  }
+
+  /**
+   * The two roster indices this side may choose between.
+   *
+   * Derived from `TAG_PAIRS` rather than from anything on this screen, so the
+   * menu can only ever offer a pairing that has dialogue written for it.
+   */
+  private get tagChoices(): number[] {
+    const mech = this.picking === 'playerTag' ? session.playerMech : session.enemyMech;
+    return (TAG_PAIRS[mech] ?? []).map((id) => ROSTER.findIndex((m) => m.id === id)).filter((i) => i >= 0);
+  }
+
+  /**
+   * Whether either side picks a partner at all.
+   *
+   * **Not in training.** The dummy never acts, and a partner flying in to shoot
+   * at a practice rig is neither useful nor what the room is for —
+   * `BattleScene` refuses to build one there, so offering the choice would be
+   * offering something the match then ignores.
+   */
+  private get pickTag(): boolean {
+    return session.assists && session.mode !== 'training';
+  }
+
+  /** Whichever partner the side being edited currently holds. */
+  private get chosenTag(): string {
+    return this.picking === 'playerTag' ? session.playerTag : session.enemyTag;
+  }
+
+  /**
+   * Forces a side's partner to be legal for the machine it is flying.
+   *
+   * Called the moment a chassis is committed. Changing your mech has to change
+   * your partner — HALCYON's two are not NOCTURNE's — and leaving a stale id in
+   * the session would put an unwritten pairing one keypress away.
+   */
+  private resetTag(side: 'player' | 'enemy'): void {
+    const mech = side === 'player' ? session.playerMech : session.enemyMech;
+    const pair = TAG_PAIRS[mech];
+    if (!pair) return;
+    const held = side === 'player' ? session.playerTag : session.enemyTag;
+    const next = pair.includes(held) ? held : pair[0];
+    if (side === 'player') session.playerTag = next;
+    else session.enemyTag = next;
+  }
+
   /** The tier the current stage is editing. */
   private get tier(): number {
     return this.picking === 'playerSkill' ? session.playerDifficulty : session.enemyDifficulty;
@@ -583,6 +688,22 @@ export class MechSelectScene extends Phaser.Scene {
       this.refresh();
       return;
     }
+    if (this.onTag) {
+      // Two cells, and they are not adjacent in the grid — so any direction
+      // steps between them rather than moving by row and column. A cursor that
+      // could land on an illegal machine would have to refuse the press, and a
+      // control that refuses is worse than one that only offers what is legal.
+      const choices = this.tagChoices;
+      if (choices.length < 2) return;
+      const step = dx + dy;
+      if (step === 0) return;
+      const at = Math.max(0, choices.indexOf(this.index));
+      this.index = choices[(at + (step > 0 ? 1 : choices.length - 1)) % choices.length];
+      sfx.uiMove();
+      this.refresh();
+      return;
+    }
+
     const next = this.index + dx + dy * COLS;
     if (next < 0 || next >= ROSTER.length) return;
     this.index = next;
@@ -595,8 +716,26 @@ export class MechSelectScene extends Phaser.Scene {
 
     if (this.picking === 'player') {
       session.playerMech = ROSTER[this.index].id;
+      // The partner has to follow the machine, not the other way round.
+      this.resetTag('player');
+      if (this.pickTag) {
+        this.toTag('playerTag');
+        return;
+      }
       if (this.pickPlayerSkill) {
         this.picking = 'playerSkill';
+        this.refresh();
+        return;
+      }
+      this.toEnemy();
+      return;
+    }
+
+    if (this.picking === 'playerTag') {
+      session.playerTag = ROSTER[this.index].id;
+      if (this.pickPlayerSkill) {
+        this.picking = 'playerSkill';
+        this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.playerMech));
         this.refresh();
         return;
       }
@@ -611,6 +750,11 @@ export class MechSelectScene extends Phaser.Scene {
 
     if (this.picking === 'enemy') {
       session.enemyMech = ROSTER[this.index].id;
+      this.resetTag('enemy');
+      if (this.pickTag) {
+        this.toTag('enemyTag');
+        return;
+      }
       if (this.pickEnemySkill) {
         this.picking = 'enemySkill';
         this.refresh();
@@ -620,7 +764,28 @@ export class MechSelectScene extends Phaser.Scene {
       return;
     }
 
+    if (this.picking === 'enemyTag') {
+      session.enemyTag = ROSTER[this.index].id;
+      if (this.pickEnemySkill) {
+        this.picking = 'enemySkill';
+        this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.enemyMech));
+        this.refresh();
+        return;
+      }
+      this.start();
+      return;
+    }
+
     this.start();
+  }
+
+  /** Opens a partner stage with the cursor already on the held choice. */
+  private toTag(stage: 'playerTag' | 'enemyTag'): void {
+    this.picking = stage;
+    const choices = this.tagChoices;
+    const held = ROSTER.findIndex((m) => m.id === this.chosenTag);
+    this.index = choices.includes(held) ? held : (choices[0] ?? 0);
+    this.refresh();
   }
 
   /** Move to the rival's machine, landing the cursor off the one just taken. */
@@ -644,6 +809,18 @@ export class MechSelectScene extends Phaser.Scene {
     sfx.uiBack();
 
     if (this.picking === 'enemySkill') {
+      // Back to whichever stage actually preceded this one.
+      if (this.pickTag) {
+        this.toTag('enemyTag');
+        return;
+      }
+      this.picking = 'enemy';
+      this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.enemyMech));
+      this.refresh();
+      return;
+    }
+
+    if (this.picking === 'enemyTag') {
       this.picking = 'enemy';
       this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.enemyMech));
       this.refresh();
@@ -651,14 +828,34 @@ export class MechSelectScene extends Phaser.Scene {
     }
 
     if (this.picking === 'enemy') {
-      // Back to whichever stage actually preceded this one.
-      this.picking = this.pickPlayerSkill ? 'playerSkill' : 'player';
+      if (this.pickPlayerSkill) {
+        this.picking = 'playerSkill';
+        this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.playerMech));
+        this.refresh();
+        return;
+      }
+      if (this.pickTag) {
+        this.toTag('playerTag');
+        return;
+      }
+      this.picking = 'player';
       this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.playerMech));
       this.refresh();
       return;
     }
 
     if (this.picking === 'playerSkill') {
+      if (this.pickTag) {
+        this.toTag('playerTag');
+        return;
+      }
+      this.picking = 'player';
+      this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.playerMech));
+      this.refresh();
+      return;
+    }
+
+    if (this.picking === 'playerTag') {
       this.picking = 'player';
       this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.playerMech));
       this.refresh();

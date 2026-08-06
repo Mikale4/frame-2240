@@ -898,11 +898,17 @@ describe('supporter — match states', () => {
 
 describe('supporter — input path', () => {
   /**
-   * The toggle must stay reachable through the same remappable action table the
+   * `Btn.Sub` must stay reachable through the same remappable action table the
    * rest of the game reads. A previous bug shipped a melee button the simulation
    * understood and `InputManager` never sent; `bindings.test.ts` now proves every
-   * `Btn` has an action and a default, and this pins the assist's own entry so a
-   * rename cannot quietly detach the drone from its button.
+   * `Btn` has an action and a default, and this pins this button's own entry.
+   *
+   * **The button is TAG/ASSIST now, not the drone.** It ordered a volley until
+   * the escort's own `requestVolley` was measured spending the same charge rack
+   * every tick, which left the press honoured 1.5–4.2 % of the time on every
+   * chassis. The drone kept the rack; the button was given a job it can do. The
+   * edge-only and no-private-path guarantees this block used to prove moved with
+   * it, to `tags.test.ts`.
    *
    * `InputManager` itself imports Phaser and needs a DOM, so it cannot be
    * constructed here — it is exercised in the live browser check instead.
@@ -914,38 +920,21 @@ describe('supporter — input path', () => {
     expect(b.keys.length + b.pads.length).toBeGreaterThan(0);
   });
 
-  it('drives the drone from an ordinary InputFrame, with no private path', () => {
+  /**
+   * The drone's volley economy is its own, and pressing the button must not
+   * touch it. This is the guarantee that replaced the two tests above: the
+   * escort keeps asking and keeps spending, and no press competes with it.
+   */
+  it('leaves the charge rack entirely to the drone', () => {
     const s = sim();
     toFight(s);
-    close(s);
-    s.player.supporter.cancel();
-    s.player.supporter.cooldown = 0;
-    // Exactly what InputManager builds when the bound key goes down.
+    // Out of the escort's reach, so the only thing that could touch the rack on
+    // this tick is the button. `close` would have the drone spending a charge
+    // of its own accord and the press would get the blame for it.
+    separate(s);
+    const before = s.player.subCharges;
     const frame: InputFrame = { ...emptyInput(), held: 1 << Btn.Sub, pressed: 1 << Btn.Sub };
     s.step(frame, emptyInput());
-    // Manual only: the *enemy's* drone auto-fires on the same tick, and counting
-    // that would pass whether or not the button did anything.
-    expect(eventsOfType(s, 'assist').filter((e) => !e.auto && e.ownerId === s.player.id)).toHaveLength(1);
-  });
-
-  it('orders on the pressed edge only, never while the button is held', () => {
-    const s = sim();
-    toFight(s);
-    close(s);
-    s.player.supporter.cancel();
-    s.player.supporter.cooldown = 0;
-    const held: InputFrame = { ...emptyInput(), held: 1 << Btn.Sub, pressed: 0 };
-
-    s.step({ ...held, pressed: 1 << Btn.Sub }, emptyInput());
-    let manual = eventsOfType(s, 'assist').filter((e) => !e.auto).length;
-    expect(manual).toBe(1);
-
-    // Keep holding well past a full windup / recover / cooldown cycle, so a
-    // held button has every opportunity to sneak a second order through.
-    for (let i = 0; i < 400; i++) {
-      s.step(held, emptyInput());
-      manual += eventsOfType(s, 'assist').filter((e) => !e.auto).length;
-    }
-    expect(manual).toBe(1);
+    expect(s.player.subCharges).toBe(before);
   });
 });

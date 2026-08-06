@@ -199,7 +199,20 @@ export class Backdrop {
     // 1024 to match the hand-authored asset. The strip carries a lot of empty
     // sky above its deck line, which is fine — it is transparent, and the deck
     // itself is placed by `NEAR_LIP_ROW` rather than by the strip's top edge.
-    this.near = scene.add.tileSprite(0, 0, ARENA_W + 800, 1024, 'arena_near');
+    /**
+     * Wide enough that the camera cannot reach past either end of the deck.
+     *
+     * `ARENA_W + 800` spanned −400..2800, which sounds generous and is not: at
+     * `CAM_ZOOM_MIN` the view is 960/0.34 ≈ 2824 world px across, so a fight
+     * pinned to either wall put the camera centre near the arena edge and the
+     * view reached roughly −1508..3908 — past the strip at both ends, showing
+     * the girder simply stopping in mid-air. A player reported it as seeing the
+     * edges of the near layer while fighting at the edge of the stage.
+     *
+     * The art's content spans its full 1536 columns, so it tiles seamlessly and
+     * extra width costs nothing but a wider draw.
+     */
+    this.near = scene.add.tileSprite(0, 0, ARENA_W + 3400, 1024, 'arena_near');
     this.near.setOrigin(0, 0).setDepth(depthSortAt(DECK_Y, 11));
     // Muted: at full saturation the hazard diamonds along the lip pulled the eye
     // harder than the machines did.
@@ -386,12 +399,30 @@ export class Backdrop {
     // Between far (0.06) and mid (0.18), and offset up so its structure band
     // lands above the mid gantry rather than behind it.
     place(this.haze, -300 + vFrac * 100, 0.11);
-    place(this.mid, -40 + vFrac * 130, 0.18);
+    /**
+     * High enough that the gantry's own top edge never enters the view.
+     *
+     * **The same fault the foreground had, and the same fix.** `arena_mid.png`
+     * carries its structure in rows 50–906 of its 1024, so the drawn band starts
+     * 50px below the strip's top. At the old `-40 + vFrac * 130` the strip sat
+     * at −40..+90 and the *content* therefore began at +10..+140 — inside the
+     * frame at every camera height, leaving a hard horizontal line with sky
+     * above it and a middle-distance structure that visibly stopped. A player
+     * reported it as seeing the top edge of the stage.
+     *
+     * −240..−110 puts the content's top edge 60–190px *above* the view while
+     * keeping the same 130px of vertical drift. The strip is 1024 tall against a
+     * 540 view, so the bottom stays covered at both extremes: content runs to
+     * 666 at the highest placement, well past the frame.
+     */
+    place(this.mid, -240 + vFrac * 130, 0.18);
     // World-anchored, and offset so the strip's own deck lip — the first fully
     // opaque row of arena_near.png, measured at y=111 — lands exactly on DECK_Y.
     // That is what makes the drawn floor and the simulated floor the same line.
     this.near.setScale(1);
-    this.near.setPosition(-400, DECK_Y - NEAR_LIP_ROW);
+    // Starts far enough left that the widened strip brackets the whole reachable
+    // view: −1700..3900 against a worst case of −1508..3908.
+    this.near.setPosition(-1700, DECK_Y - NEAR_LIP_ROW);
 
     const span = VIEW_W + 40;
     for (const m of this.motes) {

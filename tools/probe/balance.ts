@@ -33,7 +33,8 @@ import { RivalAI } from '../../src/ai/RivalAI';
 import { Rng } from '../../src/core/Rng';
 import { Difficulty } from '../../src/core/Session';
 import { MatchPhase } from '../../src/combat/types';
-import { ROSTER } from '../../src/data/mechs';
+import { MECHS, ROSTER } from '../../src/data/mechs';
+import { TAG_PAIRS } from '../../src/data/tags';
 import type { MechDef } from '../../src/mechs/MechDef';
 
 const TIERS: Record<string, Difficulty> = {
@@ -80,11 +81,11 @@ function parseArgs(argv: string[]): Options {
     jobs: Number(get('--jobs') ?? Math.max(1, Math.min(10, cpus().length - 2))),
     json: argv.includes('--json'),
     matrix: argv.includes('--matrix'),
+    tags: argv.includes('--tags'),
     selftest: argv.includes('--selftest'),
   };
 }
 
-/** One duel. Returns side A's life-bar lead: >0 means A finished ahead. */
 interface Duel {
   /**
    * Side A's life-bar lead — the *margin*, not the result.
@@ -103,10 +104,30 @@ interface Duel {
   ticks: number;
 }
 
-function duel(a: MechDef, b: MechDef, seed: number, tier: Difficulty, ticks: number): Duel {
+/**
+ * One duel. Returns side A's life-bar lead: >0 means A finished ahead.
+ *
+ * `tags` opts the whole roster into TAG/ASSIST, giving each machine the first
+ * partner `TAG_PAIRS` lists for it. **Off by default**, so every figure this
+ * instrument has ever produced remains reproducible — the mechanic is a match
+ * rule the player can switch off, and the recorded table was measured without
+ * it. Comparing the two runs is the point.
+ */
+function duel(
+  a: MechDef,
+  b: MechDef,
+  seed: number,
+  tier: Difficulty,
+  ticks: number,
+  tags = false,
+): Duel {
   const s = new MatchSim({
     playerDef: a,
     enemyDef: b,
+    playerTagDef: tags ? (MECHS[TAG_PAIRS[a.id][0]] ?? null) : null,
+    enemyTagDef: tags ? (MECHS[TAG_PAIRS[b.id][0]] ?? null) : null,
+    playerTagSkill: tier,
+    enemyTagSkill: tier,
     seed,
     introTicks: 1,
     roundTicks: ticks,
@@ -180,8 +201,8 @@ function runShard(opts: Options): Sample[] {
     const b = ROSTER[j];
     // Both slot orders on the same seed, so the harness's left-slot bias
     // cancels inside every single sample rather than only in the average.
-    const fwd = duel(a, b, seed, opts.tier, opts.ticks);
-    const rev = duel(b, a, seed, opts.tier, opts.ticks);
+    const fwd = duel(a, b, seed, opts.tier, opts.ticks, opts.tags);
+    const rev = duel(b, a, seed, opts.tier, opts.ticks, opts.tags);
     out.push({
       i,
       j,
@@ -425,6 +446,8 @@ async function runParallel(opts: Options): Promise<Sample[]> {
     '--json',
   ];
   if (opts.only) args.push('--only', opts.only);
+  // Forwarded, or every shard would quietly measure the other game.
+  if (opts.tags) args.push('--tags');
 
   const children = Array.from({ length: opts.jobs }, (_, k) =>
     new Promise<Sample[]>((resolve, reject) => {

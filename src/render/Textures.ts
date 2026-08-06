@@ -13,6 +13,7 @@ export const TEX = {
   spark: 'fx_spark',
   ring: 'fx_ring',
   streak: 'fx_streak',
+  plume: 'fx_plume',
   slash: 'fx_slash',
   shard: 'fx_shard',
   hex: 'fx_hex',
@@ -83,6 +84,47 @@ export function createEffectTextures(scene: Phaser.Scene): void {
       const thickness = Math.sin(Math.PI * Math.min(1, t * 1.05)) ** 0.7;
       const bh = Math.max(1, thickness * h);
       ctx.fillRect(x, (h - bh) / 2, 1, bh);
+    }
+  });
+
+  /**
+   * Rocket exhaust: a cone, wide at the nozzle and pointed at the tail.
+   *
+   * **This is the shape mecha thruster VFX actually is** — Gundam and every
+   * series that follows it draw a bell of flame that is widest where it leaves
+   * the engine and narrows to a point behind, not a spray and not a fan of
+   * parallel lines. An earlier pass here read the parallel streaks in the 2005
+   * screenshots as the flame; they are the speed-line trail *beside* it, and
+   * building the exhaust out of them produced something that read as noise.
+   *
+   * Drawn wide at x=0 so the sprite's left edge is the nozzle mouth: the caller
+   * rotates it along the exhaust axis and anchors that edge to the engine, so
+   * the taper always runs away from the machine.
+   *
+   * Brightest along the centreline and along the first third of its length,
+   * which is where a real plume's luminous core sits. The alpha is baked into
+   * the texture so a single additive draw already has internal structure —
+   * stacking flat shapes to fake that is what made the old version muddy.
+   */
+  canvasTex(scene, TEX.plume, 160, 96, (ctx, w, h) => {
+    const cy = h / 2;
+    for (let x = 0; x < w; x++) {
+      const t = x / (w - 1);
+      // Bell: full width at the mouth, easing to a point at the tail.
+      const halfH = (1 - t) ** 0.72 * (h / 2);
+      if (halfH <= 0.5) continue;
+      // Hot near the mouth, cooling along the length.
+      const heat = (1 - t) ** 1.35;
+      for (let dy = -Math.ceil(halfH); dy <= Math.ceil(halfH); dy++) {
+        const r = Math.abs(dy) / halfH;
+        if (r > 1) continue;
+        // Soft edges across the width, solid down the spine.
+        const across = Math.cos((r * Math.PI) / 2) ** 1.6;
+        const a = Math.min(1, heat * across * 1.25);
+        if (a <= 0.004) continue;
+        ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
+        ctx.fillRect(x, cy + dy, 1, 1);
+      }
     }
   });
 

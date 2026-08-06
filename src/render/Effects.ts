@@ -2,8 +2,21 @@ import Phaser from 'phaser';
 import { TEX } from './Textures';
 import { ProjKind } from '../combat/types';
 import { thrusterFxFor, type ThrusterFx } from './ThrusterProfiles';
+
 import { depthScaleAt } from '../core/Depth';
 import { PROJ_FAMILIES, type ProjFamilyId } from '../projectiles/families';
+
+/**
+ * Drawn width of `TEX.streak`, in texture pixels.
+ *
+ * Needed by the thruster fan, which has to convert a scale factor back into a
+ * length in order to anchor a centre-origin sprite by its near end. Kept beside
+ * the texture's only geometric consumer rather than exported from `Textures`,
+ * where it would look like a knob someone may turn.
+ */
+const STREAK_PX = 128;
+/** Drawn width of `TEX.plume`, for anchoring its wide edge at the nozzle. */
+const PLUME_PX = 160;
 
 interface Particle {
   img: Phaser.GameObjects.Image;
@@ -746,60 +759,109 @@ export class Effects {
     // boost or a dash look like it costs something.
     const hot = power * power;
     const burn = hot * power;
-    // Per-builder irregularity. Concord frames are near-zero here by design;
-    // Free Latitude salvage is the highest on the roster.
-    const jit = (amt: number): number => 1 + (Math.random() - 0.5) * 2 * fx.jitter * amt;
 
-    // **A cone, not a line.** Jet count opens up under load, so the plume
-    // visibly widens as the reactor does — the cheapest dramatic dial there is,
-    // and it costs no brightness per particle.
-    const jets = Math.max(1, Math.round(fx.jetsLow + (fx.jetsHigh - fx.jetsLow) * hot));
-    const spread = fx.spread + fx.spreadHot * hot;
-    for (let i = 0; i < jets; i++) {
-      const off = jets === 1 ? 0 : (i / (jets - 1) - 0.5) * spread * 2;
-      const a = angle + off * jit(1) + (Math.random() - 0.5) * fx.jitter * 0.25;
-      const ca = Math.cos(a);
-      const sa = Math.sin(a);
-      const lead = (6 + power * 8) * size;
-      const sp = (fx.speed + fx.speedHot * hot) * size * jit(0.6);
+    /**
+     * **One coherent plume, drawn in layers.**
+     *
+     * Outer flame, hot core inside it, bloom at the mouth — the anatomy every
+     * mecha series draws. Each layer is a single `TEX.plume` cone, all sharing
+     * one axis and one anchor, so the silhouette is stable and only its length
+     * and brightness move. That stability is what makes it read as fire instead
+     * of as noise; the previous pass randomised a dozen separate rays per frame
+     * and the eye could not resolve a shape at all.
+     *
+     * `TEX.plume` is drawn wide at its left edge, so anchoring that edge at the
+     * nozzle points the taper away from the machine automatically.
+     */
+    const flick = 1 - fx.flicker * 0.5 + Math.random() * fx.flicker;
+    const depth = depthScaleAt(y);
+    const flameLen = (fx.flameLen + fx.flameLenHot * hot) * size * flick;
+
+    /** Anchors a cone's wide edge at the nozzle and points it down-axis. */
+    const cone = (len: number, wide: number, tint2: number, alpha: number, life: number): void => {
+      const px = PLUME_PX * len * depth;
+      this.emit({
+        key: TEX.plume,
+        // Half the drawn length along the axis: the sprite is centre-origin, so
+        // this puts its wide edge exactly at the engine mouth.
+        x: x + cos * (px / 2),
+        y: y + sin * (px / 2),
+        life,
+        scaleFrom: len,
+        // Holds its shape. A cone that shrinks to a point over its life is a
+        // projectile; this is a flame that is redrawn every frame.
+        scaleTo: len * 0.94,
+        tint: tint2,
+        alpha,
+        rotation: angle,
+        scaleYMul: wide,
+        drag: 1,
+        fadePow: 1.1,
+      });
+    };
+
+    // Outer flame, in the machine's own colour.
+    cone(
+      flameLen,
+      fx.flameWide,
+      tint,
+      (fx.alpha + fx.alphaHot * hot) * (0.85 + 0.15 * flick),
+      3,
+    );
+    // Hot core inside it: shorter, narrower, brighter, and white once the
+    // reactor is really working.
+    cone(
+      flameLen * fx.coreLen,
+      fx.flameWide * fx.coreWide,
+      power >= fx.whiteAt ? 0xffffff : tint,
+      Math.min(1, (fx.alpha + fx.alphaHot * hot) * 1.5),
+      3,
+    );
+
+    // Bloom at the engine mouth — the glow spilling around the bell.
+    this.emit({
+      key: TEX.glow,
+      x: x + cos * 3 * size,
+      y: y + sin * 3 * size,
+      life: 4,
+      scaleFrom: flameLen * fx.bloom * size * 0.5,
+      scaleTo: flameLen * fx.bloom * size * 0.42,
+      tint,
+      alpha: 0.30 + 0.34 * hot,
+      drag: 1,
+      fadePow: 1.2,
+    });
+
+    /**
+     * Trailing wisps: the speed lines the 2005 screenshots show *beside* a
+     * boosting machine. Thin, faint, and behind the plume — a trail, not the
+     * flame. Only at real burn, and only a couple.
+     */
+    const wisps = Math.round(fx.wisps * hot);
+    for (let i = 0; i < wisps; i++) {
+      const off = (Math.random() - 0.5) * 0.26;
+      const a = angle + off;
+      const len = flameLen * (1.3 + Math.random() * 0.6);
+      const px = STREAK_PX * len * depth;
       this.emit({
         key: TEX.streak,
-        x: x + ca * lead,
-        y: y + sa * lead,
-        life: (fx.life + power * fx.lifePower) * jit(0.4),
-        scaleFrom: (fx.len + power * fx.lenPower + hot * fx.lenHot) * size * jit(0.5),
-        scaleTo: 0.02,
+        x: x + Math.cos(a) * (px / 2),
+        y: y + Math.sin(a) * (px / 2),
+        life: 6 + power * 4,
+        scaleFrom: len,
+        scaleTo: len * 0.7,
         tint,
-        alpha: (fx.alpha + power * fx.alphaPower + hot * fx.alphaHot) * jit(0.3),
+        alpha: 0.10 + 0.12 * hot,
         rotation: a,
-        // Thin: the plume is long and narrow, and the narrowness is most of
-        // why it reads as thrust rather than as smoke.
-        scaleYMul: fx.thin,
-        vx: ca * sp,
-        vy: sa * sp,
-        drag: fx.drag,
-        fadePow: 1.5,
-      });
-    }
-
-    // The nozzle's hot core. Every other frame at low load — a hover should
-    // shimmer rather than roar — and every frame once it is working.
-    if (power > 0.5 || ++this.thrusterPhase % 2 === 0) {
-      this.emit({
-        key: TEX.glow,
-        x: x + cos * 2 * size,
-        y: y + sin * 2 * size,
-        life: 5 + power * 5,
-        scaleFrom: (0.09 + power * 0.09 + hot * 0.18) * size * jit(0.3),
-        scaleTo: 0.01,
-        tint,
-        alpha: 0.16 + power * 0.12 + hot * 0.30,
-        vx: cos * (1.2 + power * 2.0) * size,
-        vy: sin * (1.2 + power * 2.0) * size,
-        drag: 0.9,
+        scaleYMul: 0.05,
+        drag: 1,
         fadePow: 1.4,
       });
     }
+
+    // The old separate nozzle glow lived here. It is gone: the plume now draws
+    // its own bloom at the mouth, and two overlapping glows on the same point
+    // only muddied the core they were both trying to describe.
 
     // **White-hot centre, near full burn.** The one element that is not the
     // machine's own colour: at maximum output a flame stops being cyan or amber
@@ -816,7 +878,7 @@ export class Effects {
         tint: 0xffffff,
         alpha: 0.22 + burn * 0.34,
         rotation: angle,
-        scaleYMul: fx.thin * 0.7,
+        scaleYMul: fx.flameWide * fx.coreWide * 0.55,
         vx: cos * (6.0 + burn * 6.0) * size,
         vy: sin * (6.0 + burn * 6.0) * size,
         drag: 0.93,
@@ -828,7 +890,7 @@ export class Effects {
     // working hard, and Concord never does — a certified frame does not spit.
     const embers = Math.round(fx.embers * (0.35 + hot));
     for (let i = 0; i < embers; i++) {
-      const a = angle + (Math.random() - 0.5) * (spread * 3 + 0.5);
+      const a = angle + (Math.random() - 0.5) * (fx.flameWide * 2 + 0.5);
       const sp = (2 + Math.random() * 5) * size;
       this.emit({
         key: TEX.spark,
@@ -847,7 +909,6 @@ export class Effects {
     }
   }
 
-  private thrusterPhase = 0;
 
   /**
    * A dash: the loudest thing the thrusters ever do.

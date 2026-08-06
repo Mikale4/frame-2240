@@ -5,6 +5,14 @@ import { HOLO_FILL, holoLevel, holoRuling, type HoloRuling } from './HoloPanel';
 
 const FONT = 'ui-monospace, Consolas, monospace';
 
+/** A face, a name and an accent — everything the plate shows about who is talking. */
+export interface Speaker {
+  /** Portrait texture key, `pilot_<mechId>_thumb`. */
+  thumbKey: string;
+  pilot: string;
+  tint: number;
+}
+
 /** Logical size of the delivered pilot thumbnails (see docs/PILOT_PORTRAIT_SPEC.md). */
 const THUMB_SRC = 96;
 /** Drawn size. Smaller than the source so the pixel art stays crisp. */
@@ -42,6 +50,17 @@ export class BanterBox {
   private cooldown = 0;
   /** Slide-in progress, 0..1. */
   private slide = 0;
+  /**
+   * Who this box belongs to when nobody has borrowed it.
+   *
+   * A TAG/ASSIST partner speaks from their caller's corner rather than getting a
+   * third box: the side of the screen is what says *whose* side the voice is on,
+   * and that reading is worth more than a dedicated panel. The box is handed
+   * back the moment the borrowed line clears.
+   */
+  private readonly home: Speaker;
+  /** Whoever is currently on the plate. */
+  private current: Speaker;
 
   constructor(
     scene: Phaser.Scene,
@@ -110,10 +129,29 @@ export class BanterBox {
     this.root.add(this.lineText);
 
     this.root.setVisible(false);
+    this.home = { thumbKey, pilot, tint };
+    this.current = this.home;
   }
 
   get objects(): Phaser.GameObjects.GameObject[] {
     return [this.root];
+  }
+
+  /**
+   * Puts a face on the plate.
+   *
+   * Cheap enough to call per line: swapping a texture key and two colours costs
+   * nothing, and doing it lazily on change would mean tracking a fourth piece of
+   * state to save an assignment.
+   */
+  private wear(who: Speaker): void {
+    if (who.thumbKey === this.current.thumbKey && who.pilot === this.current.pilot) return;
+    this.current = who;
+    this.portrait.setTexture(who.thumbKey);
+    this.portrait.setDisplaySize(THUMB, THUMB);
+    this.nameText.setText(who.pilot);
+    this.nameText.setColor('#' + who.tint.toString(16).padStart(6, '0'));
+    this.panel.setStrokeStyle(2, who.tint, 0.9);
   }
 
   /**
@@ -123,13 +161,14 @@ export class BanterBox {
    * important is already on screen. The caller does not need to care; refusing
    * silently is the whole point of a chatter budget.
    */
-  say(text: string, trigger: BanterTrigger, holdTicks = 150): boolean {
+  say(text: string, trigger: BanterTrigger, holdTicks = 150, as?: Speaker): boolean {
     const pri = BANTER_PRIORITY[trigger] ?? 0;
     // An equal priority does not interrupt: a line always finishes against its
     // own kind, so a long combo does not produce a stutter of half-read lines.
     if (this.hold > 0 && pri <= this.priority) return false;
     if (this.hold <= 0 && this.cooldown > 0 && pri < BANTER_PRIORITY.hurt) return false;
 
+    this.wear(as ?? this.home);
     this.lineText.setText(text);
     this.hold = holdTicks;
     this.priority = pri;
@@ -153,6 +192,9 @@ export class BanterBox {
       if (this.slide <= 0) {
         this.priority = -1;
         this.root.setVisible(false);
+        // Handed back only once the borrowed line is fully gone, so the swap
+        // never happens under a plate the player is still reading.
+        this.wear(this.home);
         return;
       }
     }

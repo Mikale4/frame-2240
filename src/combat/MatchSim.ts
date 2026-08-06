@@ -11,17 +11,32 @@ import {
   BarrierResponse,
   MatchPhase,
   ProjKind,
+  Btn,
   Team,
   emptyInput,
   type InputFrame,
   type ProjectileSpawn,
   type SimEvent,
 } from './types';
+import { TAG_LEAVE_TICKS, TagSlot, TagState, type TagCall } from './TagPartner';
+import { RivalAI } from '../ai/RivalAI';
+import { Difficulty } from '../core/Session';
 
 export interface MatchConfig {
   playerDef: MechDef;
   enemyDef: MechDef;
   seed?: number;
+  /**
+   * TAG/ASSIST partners, per side. **Omitting one disables the mechanic for
+   * that side entirely**, which is why every existing caller keeps its current
+   * behaviour without a change: no partner def, no partner, no clock, nothing
+   * added to the combatant list. The probes opt in deliberately.
+   */
+  playerTagDef?: MechDef | null;
+  enemyTagDef?: MechDef | null;
+  /** How well each partner flies. Defaults to the tier its own side is on. */
+  playerTagSkill?: Difficulty;
+  enemyTagSkill?: Difficulty;
   roundTicks?: number;
   arenaW?: number;
   arenaH?: number;
@@ -144,7 +159,19 @@ export function segmentHitsCircle(
 export class MatchSim {
   readonly player: Combatant;
   readonly enemy: Combatant;
+  /**
+   * Everything that can be hit, hit *with*, and pushed apart.
+   *
+   * **Two entries most of the time, three or four while a partner is on
+   * stage.** `stepTags` is the only place this array is edited, and it edits it
+   * between whole phases rather than inside one, so no loop ever sees it change
+   * under itself.
+   */
   readonly combatants: Combatant[];
+  /** TAG/ASSIST clock and body, per side. Index is the owning pilot's id. */
+  readonly tags: [TagSlot, TagSlot];
+  /** Brains for the partners. Separate from the pilots' — they fly themselves. */
+  private readonly tagAi: [RivalAI, RivalAI];
   readonly projectiles = new ProjectilePool(320);
   readonly rng: Rng;
 
@@ -217,6 +244,29 @@ export class MatchSim {
     });
     this.combatants = [this.player, this.enemy];
 
+    /**
+     * Partner ids are 2 and 3, deliberately outside the 0/1 the pilots use.
+     *
+     * A projectile's "already hit this" set is keyed by combatant id, and
+     * `droneHitKey` offsets escorts by 1000 to stay clear of it. Partners need
+     * the same guarantee for the same reason — a piercing beam that clipped the
+     * pilot must still be able to hit the partner standing beside them.
+     */
+    this.tags = [
+      new TagSlot(cfg.playerTagDef ?? null, Team.Player, 2),
+      new TagSlot(cfg.enemyTagDef ?? null, Team.Enemy, 3),
+    ];
+    this.tagAi = [
+      new RivalAI(
+        { difficulty: cfg.playerTagSkill ?? Difficulty.Hard },
+        new Rng((cfg.seed ?? 0x5eed1234) ^ 0x7a61),
+      ),
+      new RivalAI(
+        { difficulty: cfg.enemyTagSkill ?? Difficulty.Hard },
+        new Rng((cfg.seed ?? 0x5eed1234) ^ 0x7a62),
+      ),
+    ];
+
     // Each chassis rests at whatever body height puts its own soles on the deck,
     // so both machines stand on the same drawn line.
     const deck = cfg.groundY ?? DECK_Y;
@@ -230,8 +280,148 @@ export class MatchSim {
     }
   }
 
+  /**
+   * The pilot on the other side.
+   *
+   * **Keyed on team, not on identity.** This used to be `c === this.player`,
+   * which was correct while a match held exactly two bodies and silently wrong
+   * the moment it held four: a partner fighting for the player would be handed
+   * *the player* as its opponent and would spend its four seconds aiming at the
+   * pilot who called it. Behaviour for the two pilots is unchanged.
+   */
   opponentOf(c: Combatant): Combatant {
-    return c === this.player ? this.enemy : this.player;
+    return c.team === Team.Player ? this.enemy : this.player;
+  }
+
+  /** True for a body that is a TAG/ASSIST partner rather than a pilot. */
+  isTagBody(c: Combatant): boolean {
+    return c === this.tags[0].body || c === this.tags[1].body;
+  }
+
+  /**
+   * Answers a press of TAG/ASSIST for one side.
+   *
+   * Returns the call — its delay and whether it rolled late — so the scene can
+   * speak the right line immediately, or null when the press is refused because
+   * the calls are spent, the cooldown is live, or a partner is already out.
+   */
+  callTag(ownerId: number): TagCall | null {
+    if (this.phase !== MatchPhase.Fight) return null;
+    const slot = this.tags[ownerId];
+    if (!slot) return null;
+    const call = slot.call(this.rng);
+    const owner = this.combatants[ownerId];
+    this.events.push(
+      call
+        ? { t: 'tagCall', x: owner.x, y: owner.y, ownerId, late: call.late }
+        : { t: 'assistDenied', x: owner.x, y: owner.y, ownerId },
+    );
+    return call;
+  }
+
+  /**
+   * Advances both partner clocks and edits the combatant list.
+   *
+   * The single place a body enters or leaves play. Runs after both pilots have
+   * stepped, so an arriving partner is placed against this tick's owner
+   * position, and before the spawn queue drains, so a partner that fires on its
+   * arrival tick behaves like anything else that fired this tick.
+   */
+  private stepTags(): void {
+    for (let i = 0; i < this.tags.length; i++) {
+      const slot = this.tags[i];
+      const owner = this.combatants[i];
+
+      // Published before the press is read, so anything deciding whether to
+      // press this tick is looking at this tick's answer.
+      owner.tagReady = slot.ready && this.phase === MatchPhase.Fight;
+
+      // The press, consumed whether or not it is honoured — a refused call must
+      // not sit in the flag waiting to fire itself the moment the cooldown ends.
+      if (owner.tagRequested) {
+        owner.tagRequested = false;
+        this.callTag(i);
+      }
+
+      const was = slot.body;
+      const change = slot.step(owner, this.arenaW, this.rng);
+
+      if (change === 'arrive' && slot.body) {
+        this.combatants.push(slot.body);
+        this.events.push({
+          t: 'tagArrive',
+          x: slot.body.x,
+          y: slot.body.y,
+          ownerId: i,
+          roll: slot.callRoll,
+        });
+      } else if (change === 'leave' && was) {
+        // Still in the fight's body list, still solid, still drawn — they are
+        // flying out, not being deleted. Untouchable on the way, because a
+        // partner juggled through their own exit reads as a bug and they cannot
+        // be killed to resolve it anyway.
+        was.invuln = Math.max(was.invuln, TAG_LEAVE_TICKS);
+        // And let them actually leave. Without this they fly into the arena
+        // wall and disappear against it in full view of the camera.
+        was.unbounded = true;
+        this.events.push({ t: 'tagLeave', x: was.x, y: was.y, ownerId: i });
+      } else if (change === 'gone' && was) {
+        const at = this.combatants.indexOf(was);
+        if (at >= 0) this.combatants.splice(at, 1);
+      }
+    }
+  }
+
+  /**
+   * Steps the partners themselves, and puts their life back.
+   *
+   * They are driven by an ordinary `RivalAI` emitting an ordinary `InputFrame`,
+   * exactly as a rival is — a partner is a pilot who is only here for four
+   * seconds, not a scripted effect.
+   *
+   * Life is restored **after** the step rather than before, so every reaction to
+   * being hit — hitstun, stagger, knockback, status — has already been applied
+   * on this tick's real value before the number goes back. `deathless` is what
+   * keeps them alive; this is only so nothing downstream reads a partner sitting
+   * at zero.
+   */
+  private stepTagBodies(): void {
+    for (let i = 0; i < this.tags.length; i++) {
+      const slot = this.tags[i];
+      const body = slot.body;
+      if (!body) continue;
+      const foe = this.opponentOf(body);
+
+      let input: InputFrame;
+      if (slot.state === TagState.Leaving) {
+        /**
+         * The exit, flown rather than scripted.
+         *
+         * A synthetic `InputFrame` pointing away from the fight with boost held
+         * — so departure goes through the same flight model, thrusters and
+         * banking as every other movement in the game. Teleporting them out, or
+         * writing straight to `vx`, would produce a mech sliding backwards with
+         * dead exhaust, which is exactly the "switched off" look this state
+         * exists to avoid.
+         */
+        const away = body.x < this.arenaW * 0.5 ? -1 : 1;
+        input = {
+          ...emptyInput(),
+          dx: away,
+          // A shallow climb, so they leave the way something under power leaves.
+          dy: -0.35,
+          held: 1 << Btn.Boost,
+        };
+      } else {
+        input =
+          this.phase === MatchPhase.Fight
+            ? this.tagAi[i].think(body, foe, this.activeProjectiles(), this.arenaW, this.arenaH)
+            : emptyInput();
+      }
+
+      body.step(input, foe, this.arenaW, this.arenaH, this.spawnQueue, this.events);
+      body.life = body.def.gauges.maxLife;
+    }
   }
 
   /** Seconds remaining, for the HUD. */
@@ -265,6 +455,9 @@ export class MatchSim {
 
     this.player.step(pIn, this.enemy, this.arenaW, this.arenaH, this.spawnQueue, this.events);
     this.enemy.step(eIn, this.player, this.arenaW, this.arenaH, this.spawnQueue, this.events);
+
+    this.stepTags();
+    this.stepTagBodies();
 
     this.stepSupporters();
 
@@ -305,6 +498,11 @@ export class MatchSim {
       return;
     }
     for (const c of this.combatants) {
+      // **A partner arrives without their escort.** One extra chassis is
+      // already a large amount of output; one extra chassis plus a drone is a
+      // different game. Skipped rather than stowed each tick because `stow` is
+      // a transition and this is a permanent condition.
+      if (this.isTagBody(c)) continue;
       const target = this.opponentOf(c);
       const before = c.supporter.state;
       c.supporter.step(
