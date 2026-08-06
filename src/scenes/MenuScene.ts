@@ -90,9 +90,20 @@ export class MenuScene extends Phaser.Scene {
          * reasonable thing to ask for. Placed after the modes because it
          * qualifies them: you choose what kind of fight, then whether anyone
          * else is allowed in it.
+         *
+         * **Disabled for now**, the same way CAMPAIGN is: the mechanic is built
+         * and measured but set aside, and a row that is visibly deferred is a
+         * better account of that than a row that quietly vanished. The handlers
+         * stay wired because `Menu` refuses a disabled row at both entry points
+         * — `confirm` and `adjust` — so nothing here can fire, and re-enabling
+         * is deleting one flag rather than reconstructing the row. The other
+         * half of the switch is `assists` in `Session.ts`, which is `false`;
+         * this flag alone would leave the mechanic on and merely unreachable.
          */
         {
           label: 'TAG/ASSIST',
+          disabled: true,
+          disabledNote: 'COMING SOON',
           value: () => (session.assists ? 'ON' : 'OFF'),
           onSelect: () => this.toggleAssists(),
           onAdjust: () => this.toggleAssists(),

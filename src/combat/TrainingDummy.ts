@@ -129,7 +129,10 @@ export const FORCE_BUTTONS: readonly (number | null)[] = [
 const BUTTON_LABELS: Record<number, string> = {
   [Btn.Main]: 'MAIN GUN',
   [Btn.Heavy]: 'HEAVY SHOT',
-  [Btn.Sub]: 'TAG/ASSIST',
+  // TAG/ASSIST is off, and training ignored it even when it was on — the dummy
+  // calls nobody. Forcing this button is therefore a no-op unless it arrives as
+  // part of the salvo motion, which is what the name now says.
+  [Btn.Sub]: 'SUB / SALVO',
   [Btn.Melee]: 'MELEE',
   [Btn.Boost]: 'BOOST',
   [Btn.Barrier]: 'GUARD',

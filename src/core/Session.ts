@@ -80,8 +80,16 @@ export const session = {
    * built, and the HUD row stays blank.
    *
    * Training ignores it either way; the dummy calls nobody.
+   *
+   * **Currently off, and the menu row that flips it is disabled.** The mechanic
+   * is built and measured (D150, D154) but is being set aside for now; the row
+   * stays visible and dead the way CAMPAIGN does, so it reads as deferred rather
+   * than as something that was never there. Re-enabling is this default plus the
+   * `disabled` flag on the TAG/ASSIST row in `MenuScene.ts` — kept as two
+   * deliberate edits rather than one shared constant, because turning the
+   * mechanic back on is a decision that should be made twice.
    */
-  assists: true,
+  assists: false,
   /**
    * The arena being fought over.
    *

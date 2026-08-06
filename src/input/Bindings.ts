@@ -74,9 +74,13 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   // volley — which never worked, because the escort spends the same charge rack
   // every tick and the press lost that race on every chassis in every match.
   //
-  // It calls a second pilot in. The drone keeps its rack and its volleys; the
-  // salvo motion still rides them. See `src/data/assists.ts`.
-  sub: 'TAG/ASSIST',
+  // Then TAG/ASSIST, which is currently switched off (`assists` in
+  // `Session.ts`). **With it off the plain press does nothing** — it only sets
+  // `tagRequested`, and `BattleScene` refuses that — so the button's one live
+  // job is being the button half of the salvo motion, and the label names that
+  // instead. Naming the dead meaning here is how `wantsDroneToggle` survived two
+  // iterations. Restore 'TAG/ASSIST' when the mechanic comes back.
+  sub: 'SUB / SALVO MOTION',
   melee: 'SWORD / MELEE',
   boost: 'BOOST / DASH / BRAKE',
   barrier: 'BARRIER / GUARD',

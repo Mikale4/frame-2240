@@ -7368,3 +7368,31 @@ Three things follow:
 **0.163 at HARD is the best figure this project has measured.** The two tiers
 disagree in direction on lead, which is exactly the case the protocol keeps a
 second sample for.
+
+---
+
+## D155 — TAG/ASSIST switched off, and the button relabelled
+
+Owner's call: set the mechanic aside for now, keep the row visible. The row is
+now `disabled` with a `COMING SOON` note, exactly as CAMPAIGN is, and
+`session.assists` defaults to `false`. Both halves are needed — the flag alone
+leaves the mechanic live and merely unreachable, and the default alone leaves a
+row that toggles a value nothing reads.
+
+Verified in the browser rather than asserted: the row renders
+`▸ TAG/ASSIST   COMING SOON` at `#4d5a6e` and scale 1 — **dim and unscaled under
+the cursor**, matching CAMPAIGN — and confirm, left and right all leave the scene
+and the row unchanged. `Menu` refuses a disabled row at both entry points, so the
+handlers could stay wired; re-enabling is deleting one flag.
+
+**The relabelling is the part that was nearly missed.** The rebinding panel still
+advertised a `TAG/ASSIST` button on `S / PAD B`, and the training rig still
+offered `TAG/ASSIST` under FORCE BUTTON. Neither does anything now: a plain
+`Btn.Sub` press only sets `tagRequested`, which `BattleScene` refuses when
+assists are off. But the button is **not** dead — `Combatant.ts:2145` runs the
+salvo motion off it, independently of assists — so removing the binding would
+have broken a live command. Both labels now read `SUB / SALVO`, which is what the
+button still does. Naming a dead meaning in the UI is precisely how
+`wantsDroneToggle` survived two iterations.
+
+699 tests, 31 files, typecheck and build clean.
