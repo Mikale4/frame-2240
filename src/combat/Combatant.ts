@@ -146,6 +146,9 @@ export const DESPERATION_LIFE = 1 / 3;
 /** Melee lock reach, ×. Puts it past the width of the viewport. */
 const DESPERATE_MELEE_RANGE = 9;
 
+/** Thruster load while simply holding station in the air. Presentation only. */
+const HOVER_THRUST = 0.2;
+
 /**
  * The three dials the ground game is bought with, alongside the recoil rule in
  * `fire` and the removed forced takeoff on the heavy.
@@ -2970,9 +2973,20 @@ export class Combatant implements FlightState {
       this.flying = true;
       this.pendingTakeoff = true;
     }
+    // **A machine hanging in the air is working hardest of all.**
+    //
+    // This floored at zero, so a mech holding station with no input showed no
+    // exhaust whatever — hovering motionless above a cloud deck with nothing
+    // visibly holding it up. Thrust is presentation only (the leg trail, the
+    // thruster splay and the plume read it; nothing in the simulation does), so
+    // the floor is free and it is what makes the machines look airborne rather
+    // than pasted onto the sky.
+    //
+    // The ramp it creates is the point: station-keeping at HOVER, movement at
+    // roughly 0.7, a brake at 0.25, and boost or dash at full.
     this.thrust = clamp(
       r.boosting ? 1 : r.braking ? 0.25 : Math.hypot(intent.dx, intent.dy) * 0.7,
-      0,
+      this.flying && !this.grounded ? HOVER_THRUST : 0,
       1,
     );
     if (this.dashTicks > 0) this.thrust = 1;

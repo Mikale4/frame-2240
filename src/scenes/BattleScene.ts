@@ -90,6 +90,7 @@ export class BattleScene extends Phaser.Scene {
   private hud!: Hud;
   private debug!: DebugOverlay;
   private effects!: Effects;
+  private thrusterFx!: Effects;
   private backdrop!: Backdrop;
   private ground!: GroundPlane;
   private renderers: MechRenderer[] = [];
@@ -317,6 +318,11 @@ export class BattleScene extends Phaser.Scene {
     this.backdrop = new Backdrop(this);
     this.ground = new GroundPlane(this);
     this.effects = new Effects(this, 50);
+    // **Exhaust belongs behind the machine.** One shared layer at depth 50 put
+    // plumes over the chassis, so they read as painted on rather than as coming
+    // out of a nozzle. Impacts and explosions still want to be in front, so
+    // this is a second pool underneath the mechs (20/21) rather than a move.
+    this.thrusterFx = new Effects(this, 15, 240);
 
     this.renderers = [
       new MechRenderer(this, playerDef, playerDef.id),
@@ -448,6 +454,7 @@ export class BattleScene extends Phaser.Scene {
       ...this.overdriveAuras,
       ...this.decoyGhosts.map((r) => r.root),
       this.effects.container,
+      this.thrusterFx.container,
       ...this.debug.worldObjects,
     ];
     const uiObjects = [
@@ -2236,7 +2243,7 @@ export class BattleScene extends Phaser.Scene {
           if (!w) continue;
           const speed = Math.hypot(c.vx, c.vy);
           const ang = speed > 0.2 ? Math.atan2(c.vy, c.vx) + Math.PI : c.aim + Math.PI;
-          this.effects.thruster(w.x, w.y, ang, c.thrust, c.def.tint.thruster);
+          this.thrusterFx.thruster(w.x, w.y, ang, c.thrust, c.def.tint.thruster);
         }
       }
 
@@ -2380,6 +2387,7 @@ export class BattleScene extends Phaser.Scene {
 
     // ---- overlays --------------------------------------------------------
     this.effects.update(dt);
+    this.thrusterFx.update(dt);
     this.hud.update(dt);
     for (const b of this.banter) b.update(dt);
     this.debug.update(dt * 1000, (x, y) => ({ x, y }));

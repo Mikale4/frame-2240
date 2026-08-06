@@ -733,17 +733,22 @@ export class Effects {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     // Clear of the nozzle. Scaled by power so a light burn sits closer in.
+    // Curved rather than linear, so the three states are clearly separated:
+    // holding station is a whisper, moving is a plume, and boost or dash is
+    // unmistakable. A linear ramp made a hover and a burn look much too alike
+    // once the hover floor meant the plume was always lit.
+    const hot = power * power;
     const off = 6 + power * 7;
-    const speed = 3.2 + power * 5.4;
+    const speed = 3.0 + power * 4.0 + hot * 3.0;
     this.emit({
       key: TEX.streak,
       x: x + cos * off,
       y: y + sin * off,
       life: 7 + power * 7,
-      scaleFrom: 0.16 + power * 0.30,
+      scaleFrom: 0.13 + power * 0.16 + hot * 0.26,
       scaleTo: 0.02,
       tint,
-      alpha: 0.16 + power * 0.20,
+      alpha: 0.12 + power * 0.12 + hot * 0.24,
       rotation: angle,
       // Thin: the plume is long and narrow, and the narrowness is most of why
       // it reads as thrust rather than as smoke.
@@ -760,10 +765,10 @@ export class Effects {
       x: x + cos * 2,
       y: y + sin * 2,
       life: 5 + power * 4,
-      scaleFrom: 0.07 + power * 0.11,
+      scaleFrom: 0.06 + power * 0.05 + hot * 0.10,
       scaleTo: 0.01,
       tint,
-      alpha: 0.18 + power * 0.22,
+      alpha: 0.14 + power * 0.10 + hot * 0.22,
       vx: cos * (1.0 + power * 1.6),
       vy: sin * (1.0 + power * 1.6),
       drag: 0.9,

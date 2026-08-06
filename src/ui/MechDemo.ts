@@ -105,7 +105,10 @@ export class MechDemo {
     this.holder.add(this.renderer.root);
     // Small pool: two nozzles on one machine, not a battlefield.
     this.effects = new Effects(scene, 0, 90);
-    this.holder.add(this.effects.root);
+    // **Under the rig**, so the plume emerges from behind the nozzle rather
+    // than being painted across the chassis. Same reasoning as the battle
+    // scene's separate exhaust layer.
+    this.holder.addAt(this.effects.root, 0);
     this.tint = def.tint.thruster;
 
     this.pose = {
