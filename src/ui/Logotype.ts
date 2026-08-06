@@ -449,8 +449,27 @@ export function wordPolys(text: string, style: LogoStyle): Pt[][] {
 
 // ---------------------------------------------------------------- rendering
 
-/** Pixels of margin around the wordmark, for the edge stroke and the bloom. */
-const PAD = 26;
+/**
+ * Bloom radius under the letters, in **device pixels**.
+ *
+ * Canvas `shadowBlur` is not affected by the transformation matrix — it is
+ * always device space. An earlier version divided this by the glyph scale to
+ * "compensate" for the scaled context, which did the opposite: at cap 66 the
+ * scale is 0.66, so a nominal 22 became a real 33.
+ */
+const BLOOM_PX = 18;
+
+/**
+ * Margin around the wordmark, for the edge stroke and the bloom.
+ *
+ * **Derived from the bloom rather than set beside it.** A Gaussian tail needs
+ * roughly twice its radius to reach zero, and when this was a hand-picked 26
+ * against a 33-pixel blur the glow was sliced flat by the texture bounds — the
+ * word carried alpha 87 along its top and bottom edges and drew a visible
+ * rectangle over the background. Computing it means the two cannot drift apart
+ * again.
+ */
+const PAD = Math.ceil(BLOOM_PX * 2.4);
 
 export interface LogoTexture {
   key: string;
@@ -528,7 +547,8 @@ export function createLogoTexture(
   // is exactly what PAD is for.
   ctx.save();
   ctx.shadowColor = 'rgba(150,196,255,0.5)';
-  ctx.shadowBlur = 22 / scale;
+  // Device pixels, and deliberately not divided by `scale` — see BLOOM_PX.
+  ctx.shadowBlur = BLOOM_PX;
   ctx.fillStyle = 'rgba(0,0,0,1)';
   ctx.fill(path);
   ctx.restore();
