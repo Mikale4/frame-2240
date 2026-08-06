@@ -1,4 +1,7 @@
-# Babel Sword: Reignition
+# F.R.A.M.E. 2240
+
+**Field-Rated Aerial Manoeuvre Element.** Nobody says the five words any more.
+Developed under the working title *Babel Sword: Reignition*.
 
 An original 2D free-flight mecha combat game — momentum flight, soft-lock
 gunnery, a hit-confirmed sword chain, a barrier that banks damage into your

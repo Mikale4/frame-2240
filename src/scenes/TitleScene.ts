@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_SUBTITLE, GAME_TITLE, GAME_VERSION, VIEW_H, VIEW_W } from '../core/GameConfig';
+import { GAME_TITLE, GAME_VERSION, VIEW_H, VIEW_W } from '../core/GameConfig';
 import { InputManager } from '../input/InputManager';
 import { bigTitle, smallText } from '../ui/Menu';
 import { MECHS } from '../data/mechs';
@@ -78,9 +78,10 @@ export class TitleScene extends Phaser.Scene {
 
     // ---- titles ----------------------------------------------------------
     bigTitle(this, GAME_TITLE, 96, 74, '#eaf2ff');
-    const sub = bigTitle(this, GAME_SUBTITLE, 144, 30, '#ffd166');
-    sub.setLetterSpacing(10);
-    smallText(this, 'ORIGINAL AERIAL MECHA COMBAT', VIEW_W / 2, 174, 12, '#7d8ea8');
+    // **The initialism is not spelled out here, deliberately.** In the world
+    // nobody expands it, so a title screen that does would be the one place the
+    // game speaks out of character. It is in the README for anyone who wants it.
+    smallText(this, 'ORIGINAL AERIAL MECHA COMBAT', VIEW_W / 2, 150, 12, '#7d8ea8');
 
     // ---- press start -----------------------------------------------------
     this.prompt = this.add

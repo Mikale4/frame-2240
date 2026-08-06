@@ -1,10 +1,10 @@
 @echo off
 setlocal
-title Babel Sword: Reignition - Dev Server
+title F.R.A.M.E. 2240 - Dev Server
 cd /d "%~dp0"
 
 echo ============================================
-echo   BABEL SWORD: REIGNITION
+echo   F.R.A.M.E. 2240
 echo   Starting local development server...
 echo ============================================
 echo.

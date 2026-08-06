@@ -1,11 +1,38 @@
 /**
  * Global, configurable identity + resolution constants.
  *
- * The working title is intentionally kept in one place (CLAUDE.md asks for the
- * title to stay configurable).
+ * The title is intentionally kept in one place (CLAUDE.md asks for the title to
+ * stay configurable).
+ *
+ * **The game is F.R.A.M.E. 2240, not a Babel Sword rendition.** It was developed
+ * under the working title "Babel Sword: Reignition" and takes its combat design
+ * from that game, but it is an original work and now carries its own name.
+ * References to Babel Sword elsewhere in the tree are either historical record
+ * (`docs/DECISIONS.md`) or citations of the reference material, and are correct
+ * as they stand.
+ *
+ * **F.R.A.M.E. is an initialism the world has worn down into a common noun.**
+ * It expands to *Field-Rated Aerial Manoeuvre Element* — procurement boilerplate
+ * in which nothing admits the machine is a weapon. The Archive writes "frame",
+ * "airframe", "service frame", "AV frames" in plain lowercase throughout, and
+ * that is the point: nobody says the five words any more, the way nobody expands
+ * radar. The lowercase usage is evidence the designation is old, not a
+ * contradiction of it.
+ *
+ * **The expansion is deliberately not a constant, because nothing renders it.**
+ * It is in `README.md` and here; the title screen shows the initialism alone, on
+ * the grounds that a world where nobody expands it should not have its title
+ * screen be the one place that does. An exported string no scene draws is how
+ * `wantsDroneToggle` survived two iterations.
+ *
+ * **2240 is a survivor count, not a year, and the misreading is deliberate.**
+ * It is the number of people taken off Stillwake on the lift Halden Rook held
+ * open (`src/data/archive.ts`, Rook's entry). A player is *meant* to read it as
+ * a date and learn otherwise late — the present is 43 CE. **Nothing player-
+ * facing may gloss the number before the story does.** Do not write "2,240"
+ * with a comma, do not caption it, and do not let a menu or a README explain it.
  */
-export const GAME_TITLE = 'BABEL SWORD';
-export const GAME_SUBTITLE = 'REIGNITION';
+export const GAME_TITLE = 'F.R.A.M.E. 2240';
 export const GAME_VERSION = '0.1.0';
 
 /**

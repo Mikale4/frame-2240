@@ -1,10 +1,10 @@
 @echo off
 setlocal
-title Babel Sword: Reignition - Production Build
+title F.R.A.M.E. 2240 - Production Build
 cd /d "%~dp0"
 
 echo ============================================
-echo   BABEL SWORD: REIGNITION
+echo   F.R.A.M.E. 2240
 echo   Building the production bundle...
 echo ============================================
 echo.

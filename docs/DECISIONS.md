@@ -7396,3 +7396,43 @@ button still does. Naming a dead meaning in the UI is precisely how
 `wantsDroneToggle` survived two iterations.
 
 699 tests, 31 files, typecheck and build clean.
+
+---
+
+## D156 — the game is F.R.A.M.E. 2240
+
+The working title is retired. The game takes its combat design from Babel Sword
+and says so in the README, but it is an original work and now carries its own
+name.
+
+**F.R.A.M.E. — Field-Rated Aerial Manoeuvre Element.** Chosen over an earlier
+S.P.A.R. proposal because *frame* is already the fiction's native word for the
+machine: the Archive writes "airframe", "service frame", "programme airframes",
+"AV frames seldom lead a performance category", "LT and EW frames assembled from
+salvage" — dozens of times, in plain lowercase. The initialism is presented as
+one the world has worn down into a common noun, the way nobody expands radar, so
+the Archive's existing lowercase usage is evidence the designation is old rather
+than a contradiction to reconcile. The expansion is deliberately bloodless
+procurement boilerplate; nothing in it admits the machine is a weapon.
+
+**2240 is a survivor count and the misreading is deliberate.** It is already
+canon — `archive.ts:546`, in Halden Rook's entry: *"The 2,240 people removed from
+Stillwake used the lift he held open."* Not a death toll, and attached to a pilot
+the player can fly, whose entry closes by noting he has never once commented on
+the evacuation total.
+
+Written **without the comma**, against the initial recommendation. The concern
+was that a four-digit number reads as a year and the setting is 43 CE; the
+owner's ruling is that this is the point — the player assumes a date and learns
+late in the story that it is a number of people. **This makes the ambiguity a
+feature to protect, not a defect to fix.** `GameConfig.ts` carries the standing
+rule: nothing player-facing may gloss the number before the story does.
+
+**The expansion is not on the title screen** and is not a constant. A world where
+nobody expands the initialism should not have its title screen be the one place
+that does, and an exported string no scene draws is how `wantsDroneToggle`
+survived. It lives in the README and in `GameConfig.ts`'s comment.
+
+Measured on screen: the title renders 618px wide on the 960px stage, 171px clear
+each side. The 36-character expansion would have run ~950px at the 30px the old
+ten-letter subtitle used, which is how the layout question surfaced at all.

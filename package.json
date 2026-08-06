@@ -1,8 +1,8 @@
 {
-  "name": "babel-sword-reignition",
+  "name": "frame-2240",
   "version": "0.1.0",
   "private": true,
-  "description": "Babel Sword: Reignition - an original 2D free-flight mecha combat game.",
+  "description": "F.R.A.M.E. 2240 - an original 2D free-flight mecha combat game.",
   "type": "module",
   "scripts": {
     "dev": "vite",

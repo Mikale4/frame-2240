@@ -15,7 +15,7 @@ function showFatal(message: string): void {
   const el = document.getElementById('boot-error');
   if (!el) return;
   el.style.display = 'block';
-  el.textContent = `${GAME_TITLE}: REIGNITION failed to start.\n\n${message}`;
+  el.textContent = `${GAME_TITLE} failed to start.\n\n${message}`;
 }
 
 window.addEventListener('error', (e) => {
