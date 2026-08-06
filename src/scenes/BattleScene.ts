@@ -2259,6 +2259,9 @@ export class BattleScene extends Phaser.Scene {
       // NOCTURNE's claw, TERRAMOTH's pile, OBELISK's shield — have no such node
       // and `setPartVisible` is a no-op for them.
       r.setPartVisible('meleeEnergy', drawn);
+      // NULLTIDE's baton discharge, on the same rule: it is drawn over the rod,
+      // so it appears and disappears with it. A no-op for the other seven.
+      r.setPartVisible('meleeArc', drawn);
       // **One weapon in the hand at a time.** This first stowed the gun for a
       // swing only, so that firing while the blade was held out did not come
       // from an empty hand. Looked at on screen that trade is the wrong way

@@ -6950,3 +6950,75 @@ wrongly.
   TERRAMOTH now takes the pairing +0.10. Its z on win rate is unchanged at
   +1.97 because the field tightened around it.
 * No compensating change was bundled. 638 tests green, ladder included.
+
+## D146 — NULLTIDE's glaive becomes an extended shock baton
+
+The weapon stops being an energy weapon. It is now **all hardware** — an
+extended telescopic baton, modelled in `build_mechs.py` under `blade == "baton"`
+— with **electricity drawn crawling over it** by a new generator,
+`tools/electric_baton.py`. NULLTIDE is out of `BLADES` in `energy_blade.py`, and
+its rig carries `arc: true` instead of an `energy` root.
+
+It fits the machine better than the glaive did: NULLTIDE is the disruptor, its
+main gun is `Element.Shock` and its melee chain already carried `Element.Shock`.
+The weapon was the only part of it that did not say so.
+
+### It is a separate part, not a second use of `meleeEnergy`
+
+`meleeArc` is its own rig part with its own manifest row, its own generator and
+its own animation branch. That looks like duplication and is not: the two layers
+share only frame-cycling, and every other property is opposed.
+
+| | `meleeEnergy` | `meleeArc` |
+| --- | --- | --- |
+| what it is | plasma projected from an emitter | discharge over solid hardware |
+| construction | filaments accumulated into a **silhouette** | bolts between **electrodes** |
+| scaling | breathes from a root; needs an `anchor` | never scales; centred origin |
+| bloom streak | yes, beam geometry | no — there is no beam |
+
+`roster.test.ts` now guards both in both directions and asserts **no machine can
+carry both**, which would draw a projected blade through a solid rod.
+
+### Three faults found by looking at it, none of which a test would have caught
+
+**1. It read as an antenna.** The first baton reused the glaive's 0.048 haft
+radius throughout. The polearm had carried its mass in a discharge head; a rod
+has nowhere else to carry it. The supplied MK-7 reference is unambiguous — a
+baton has a *caged strike head*, roughly three times the shaft radius and about a
+sixth of the length — and that is the silhouette that reads as a weapon at
+NULLTIDE's 0.89 rig scale. Everything else is ~1.45x the first cut.
+
+**2. It read as sporadic.** Every frame was built as an independent re-strike, on
+the reasoning that a real spark is over in a millisecond. True of a spark, false
+of this weapon: nothing on the rod survived between frames, so there was never a
+discharge to *follow* — only a new one every 71 ms. The fix is the same shape as
+the blades': roll the topology once and hold it, advance only the kinks, each on
+a whole-number cycle so the loop closes seamlessly. Frames went 10 → 24, and the
+near-binary brightness gate in `animateArc` came out.
+
+**3. It read as flat, tied to the top and bottom of the rod.** This one was an
+actual bug and the most instructive. **Every endpoint had `y = 0`** — the whole
+discharge lived in one plane through the weapon's axis and could not go anywhere
+but up and down. A rod is a cylinder, so the arcs have to sit on its
+*circumference*: endpoints are now taken at spaced angles and spiral along the
+run, and each kink displaces along **two** perpendiculars rather than one.
+Far-side segments are dimmed to 0.46, which is the only depth cue the sprite
+carries, because the layer draws above the hardware and nothing occludes it.
+
+The first pass at that used five spokes per gap, doubled the channel count to 66
+and read as *a spindle of light with a handle*. Three spokes still puts a run on
+every face; the density that survived review is 31 channels.
+
+### The tile is a band, not a square
+
+`_fit` here is rectangular, unlike the blade generator's. A baton is long and
+thin and its discharge is a band: the content measures 504x104 inside a 512
+square, so a square tile is three-quarters empty. At 24 frames that produced a
+**2048x4224** atlas for one chassis — past the 4096 maximum texture size a good
+deal of hardware reports, which is a will-not-load problem rather than a wasted-
+bytes one. Banded, it is 2048x1920.
+
+The player-visible archive text was updated with it: "the arc glaive opens a
+five-hit cascade" is now "the shock baton". The chain's own numbers are
+unchanged — a baton at full extension is the same lever the polearm was, and the
+five hits were authored against the lever.

@@ -582,15 +582,6 @@ BLADES = {
         width=0.058, peak_at=0.14, taper=0.80, tip=0.13, flare=18.0, look="shard",
         dim=(48, 130, 205), body=(150, 216, 255), core=(242, 251, 255),
     ),
-    # NULLTIDE: head at x=1.02..1.12, prongs at 1.10. The modelled rod ran from
-    # (1.15,-0.03) to (1.75,0.15) — 16 deg above the haft. Same root and tip, but
-    # broad and bellied instead of a rod: a five-hit sweep needs a blade with a
-    # face to sweep with.
-    "nulltide": dict(
-        chord=dict(root=(1.15, -0.03), tip=(1.75, 0.145), bow=0.05),
-        width=0.125, peak_at=0.34, taper=0.85, tip=0.16, flare=26.0, look="cleaver",
-        dim=(10, 116, 200), body=(60, 224, 255), core=(230, 252, 255),
-    ),
 }
 
 

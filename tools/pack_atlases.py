@@ -53,9 +53,18 @@ PARTS = [
 # `meleeEnergy` is the projected blade, split out of `meleeWeapon` so it can skip
 # the Freestyle contour and be animated on its own. NOCTURNE's claw, TERRAMOTH's
 # pile driver and OBELISK's shield project nothing and have none.
+#
+# `meleeArc` is NULLTIDE's shock baton discharge — drawn *over* hardware rather
+# than projected from an emitter, by `tools/electric_baton.py`. It is a separate
+# optional part rather than a second use of `meleeEnergy` because the two animate
+# differently: a blade breathes from a root, an arc re-strikes in place.
+#
 # Frames 1..N of an animated part. Frame 0 keeps the bare name so the rig can
 # reference it without knowing the part is animated at all.
-OPTIONAL_PARTS = ["meleeEnergy"] + [f"meleeEnergy_{i}" for i in range(1, 12)]
+OPTIONAL_PARTS = (
+    ["meleeEnergy"] + [f"meleeEnergy_{i}" for i in range(1, 12)]
+    + ["meleeArc"] + [f"meleeArc_{i}" for i in range(1, 24)]
+)
 
 
 def pack_mech(mech_id):

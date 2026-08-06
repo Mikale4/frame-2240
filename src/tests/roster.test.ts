@@ -409,8 +409,38 @@ describe.skipIf(!fs.existsSync(MANIFEST))('projected blades are declared consist
     const projecting = ROSTER.filter((d) => d.rig.parts.some((p) => p.name === 'meleeEnergy'))
       .map((d) => d.id)
       .sort();
-    // The claw, the pile driver and the ram shield project nothing.
-    expect(projecting).toEqual(['cirrus', 'halcyon', 'nulltide', 'pyre', 'vesper']);
+    // The claw, the pile driver and the ram shield project nothing — and nor
+    // does NULLTIDE's shock baton, which is hardware with discharge drawn over
+    // it rather than a blade projected from an emitter (D146).
+    expect(projecting).toEqual(['cirrus', 'halcyon', 'pyre', 'vesper']);
+  });
+
+  /**
+   * The same contract for the arc layer, and it is needed for the same reason:
+   * a declared part with no sprite renders a missing texture, and a sprite with
+   * no part is art nothing draws.
+   *
+   * It is checked separately rather than folded in with `meleeEnergy` because
+   * the two must never both appear on one machine — they are alternative
+   * answers to "what is lit about this weapon", and a chassis carrying both
+   * would draw a projected blade through a solid rod.
+   */
+  for (const def of ROSTER) {
+    it(`${def.id} agrees on whether it carries discharge`, () => {
+      const inRig = def.rig.parts.some((p) => p.name === 'meleeArc');
+      const inSprites = 'meleeArc' in (meta.parts[def.id] ?? {});
+      expect([def.id, inRig]).toEqual([def.id, inSprites]);
+      if (inRig) expect(def.rig.drawOrder).toContain('meleeArc');
+      // Never both.
+      if (inRig) expect(def.rig.parts.some((p) => p.name === 'meleeEnergy')).toBe(false);
+    });
+  }
+
+  it('has exactly the machines the roster says carry discharge', () => {
+    const arcing = ROSTER.filter((d) => d.rig.parts.some((p) => p.name === 'meleeArc'))
+      .map((d) => d.id)
+      .sort();
+    expect(arcing).toEqual(['nulltide']);
   });
 });
 

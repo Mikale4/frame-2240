@@ -67,6 +67,19 @@ function makeRig(o: {
    * `tools/energy_blade.py`; `roster.test.ts` asserts they agree.
    */
   energy?: readonly [number, number];
+  /**
+   * That this weapon carries **discharge crawling over its hardware**, rather
+   * than projected energy leaving an emitter. NULLTIDE's shock baton is the
+   * only one, and the two are deliberately different parts rather than one
+   * flag: a projected blade breathes from a root and is a silhouette, while an
+   * arc layer re-strikes in place and has none.
+   *
+   * A bare `true` because there is no root to carry. The blade needs one only
+   * because it scales, and a sprite scales about its centre; this layer never
+   * scales, so a centred origin is exactly right. Generated into
+   * `manifest.json` by `tools/electric_baton.py`.
+   */
+  arc?: boolean;
   leftThruster: [number, number];
   rightThruster: [number, number];
 }): MechRigDef {
@@ -101,6 +114,8 @@ function makeRig(o: {
       ...(o.energy
         ? [{ ...p('meleeEnergy', 'rightArm', o.meleeWeapon, 'turret'), anchor: o.energy }]
         : []),
+      // Same pivot again, and no anchor — see `arc` above.
+      ...(o.arc ? [p('meleeArc', 'rightArm', o.meleeWeapon, 'turret')] : []),
       p('leftThruster', 'core', o.leftThruster, 'thruster'),
       p('rightThruster', 'core', o.rightThruster, 'thruster'),
     ],
@@ -119,8 +134,10 @@ function makeRig(o: {
       'mainWeapon',
       'meleeWeapon',
       // Above the hardware: a projected blade is emitted from the weapon, so it
-      // must not be occluded by it.
+      // must not be occluded by it. Discharge is on the outside of the rod for
+      // the same reason.
       ...(o.energy ? ['meleeEnergy'] : []),
+      ...(o.arc ? ['meleeArc'] : []),
     ],
   };
 }
@@ -1810,7 +1827,9 @@ export const NULLTIDE: MechDef = {
     rightArm: [15, 3],
     mainWeapon: [35, 9],
     meleeWeapon: [25, 6],
-    energy: [66.65, 4.55],
+    // The glaive became an extended shock baton (D146): all hardware, with the
+    // electricity drawn over it instead of a blade projected from it.
+    arc: true,
     leftThruster: [-34, -1],
     rightThruster: [-30, 11],
   }),
@@ -1956,8 +1975,11 @@ export const NULLTIDE: MechDef = {
     selfKnockback: 9.0,
     element: Element.Shock,
   }),
-  // A glaive is a polearm: longer reach and a wider sweep than a saber, but
-  // heavier, so five strokes rather than six or eight.
+  // An extended baton: longer reach and a wider sweep than a saber, but heavier
+  // at the head, so five strokes rather than six or eight. The weapon changed
+  // shape in D146 and these numbers did not — a baton at full extension is the
+  // same length of lever the polearm was, and the chain was authored against
+  // the lever rather than against the blade.
   meleeLock: {
     name: 'NULLTIDE CASCADE FIVE',
     hits: 5,
@@ -1970,8 +1992,9 @@ export const NULLTIDE: MechDef = {
     lockout: 58,
     swing: 9,
     gap: 5,
-    // A polearm held out at reach for the whole arc. Constant momentum through
-    // a wide sweep; it never extends because it was already out there.
+    // Held out at reach for the whole arc. Constant momentum through a wide
+    // sweep; it never extends because it was already out there — which is now
+    // literally true of the hardware, since the baton is drawn extended.
     arc: { windup: 68, sweep: 246, windupFrac: 0.30, alternate: true, motion: 'sweep', reach: 30 },
     damage: [26, 26, 30, 30, 72],
     knock: [3, 3, 4, 4, 13],

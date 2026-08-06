@@ -467,7 +467,7 @@ export const MECH_ARCHIVE: ArchiveEntry[] = [
         'salvage.',
       'Cryogenic and electrical payloads slow movement, drain systems and produce ' +
         'intermittent stalls. Direct damage output remains below that of current line ' +
-        'frames. The arc glaive opens a five-hit cascade once the target has been slowed. ' +
+        'frames. The shock baton opens a five-hit cascade once the target has been slowed. ' +
         'No reach distinction is assigned to the weapon.',
       'JAMMING FIELD halves the opposing frame\'s energy regeneration while EW-14 ' +
         'remains active. STATIC stays deployed and projects a separate false silhouette ' +
@@ -705,7 +705,7 @@ export const PILOT_ARCHIVE: ArchiveEntry[] = [
         'the opposing frame\'s energy regeneration. STATIC remains deployed while ' +
         'projecting a separate false silhouette of NULLTIDE; drone, frame and projection ' +
         'may all be visible together. The projection causes no damage, though its ' +
-        'imitation fire may stun. The arc glaive opens a five-hit cascade once the target ' +
+        'imitation fire may stun. The shock baton opens a five-hit cascade once the target ' +
         'has been slowed.',
       'One personal remark survives in a Brightwake mechanic\'s statement. Senna asked ' +
         'why anyone would want to be remembered. The witness first entered the remark as ' +

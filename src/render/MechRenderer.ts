@@ -112,6 +112,20 @@ export class MechRenderer {
    * the shape has to change too.
    */
   private energyFrames: string[] = [];
+  /**
+   * The same three fields for the **arc** layer — NULLTIDE's shock baton.
+   *
+   * Deliberately not folded into the energy ones. The two layers share only the
+   * frame-cycling; everything else about them differs, because a projected
+   * blade and discharge over hardware are different phenomena. The blade
+   * breathes from its root, so it scales and needs an anchor; the arc layer
+   * never scales, because a baton does not grow. The blade's flicker is a
+   * stepped surge around a bright floor; the arc's is near-binary, since a
+   * strike either happens or does not.
+   */
+  private arcHalo: Phaser.GameObjects.Image | null = null;
+  private arcFrames: string[] = [];
+  private arcPhase = 0;
   /** Layer base; the y term in depthSortAt orders mechs within the layer. */
   private depthBase = 20;
 
@@ -154,6 +168,7 @@ export class MechRenderer {
     // The saber is stowed until a melee sequence lights it.
     this.setPartVisible('meleeWeapon', false);
     this.setPartVisible('meleeEnergy', false);
+    this.setPartVisible('meleeArc', false);
 
     // Projected energy is drawn additively so it reads as light rather than as
     // a painted solid, and it gets a second, fainter copy behind it: that halo
@@ -210,6 +225,28 @@ export class MechRenderer {
         const name = `${base}_${i}`;
         if (!tex.has(name)) break;
         this.energyFrames.push(name);
+      }
+    }
+
+    // The arc layer. Same additive second copy — discharge is light and has to
+    // read as light — but no origin work, because it does not scale.
+    const arc = this.nodes.get('meleeArc');
+    if (arc) {
+      const halo = scene.add.image(0, 0, arc.sprite.texture.key, arc.sprite.frame.name);
+      halo.setScale(PART_SCALE);
+      halo.setBlendMode(Phaser.BlendModes.ADD);
+      halo.setAlpha(0.45);
+      halo.setOrigin(0.5, 0.5);
+      arc.container.addAt(halo, 0);
+      this.arcHalo = halo;
+
+      const tex = scene.textures.get(arc.sprite.texture.key);
+      const base = arc.sprite.frame.name;
+      this.arcFrames = [base];
+      for (let i = 1; ; i++) {
+        const name = `${base}_${i}`;
+        if (!tex.has(name)) break;
+        this.arcFrames.push(name);
       }
     }
 
@@ -322,6 +359,7 @@ export class MechRenderer {
 
     this.applyTwoHandedGrip(c.grip, turretRot + spinLocal);
     this.animateEnergy(dt);
+    this.animateArc(dt);
 
     // Damage flash: tint every part white briefly. A status affliction otherwise
     // washes the machine in its element's colour, the way the reference
@@ -535,6 +573,50 @@ export class MechRenderer {
     // the halo's job is brightness, not spread. It breathes with the core, from
     // the same anchor, or it would separate again the moment the blade stretched.
     halo.setScale(PART_SCALE * kx, PART_SCALE * ky);
+  }
+
+  /**
+   * The shock baton's discharge.
+   *
+   * Three things it deliberately does *not* do, each of which `animateEnergy`
+   * does and each of which would be wrong here:
+   *
+   * * **No breath.** The blade surges in length because a flame grows out of its
+   *   source. A baton is a solid object; scaling the discharge would scale it
+   *   off the rod it is crawling on, and there is no root anchor to pin it by
+   *   because it should never have needed one.
+   * * **The frames are phases and must run in order.** `electric_baton.py`
+   *   holds one channel topology across the whole loop and advances only the
+   *   kinks, so consecutive frames are consecutive moments of one discharge.
+   *   They are stepped at 20 Hz over 24 phases — a 1.2 s cycle.
+   * * **The brightness ripple is shallow.** An earlier cut gated this
+   *   near-binary, dropping two frames in seven to a dim floor on the theory
+   *   that a strike is an event. Together with a re-rolled shape per frame that
+   *   read as *sporadic* — noise rather than a weapon that is switched on. The
+   *   rod is energised continuously; the light on it only breathes.
+   */
+  private animateArc(dt: number): void {
+    const node = this.nodes.get('meleeArc');
+    if (!node || !node.container.visible) return;
+    this.arcPhase += dt;
+    const t = this.arcPhase;
+
+    const nf = this.arcFrames.length;
+    if (nf > 1) {
+      const idx = Math.floor(t * 20) % nf;
+      const name = this.arcFrames[idx];
+      if (node.sprite.frame.name !== name) {
+        node.sprite.setFrame(name);
+        this.arcHalo?.setFrame(name);
+      }
+    }
+
+    // Two cycles at coprime rates, so the swell never settles into a beat. Both
+    // shallow: the shape is carrying the motion, and this only keeps the light
+    // from sitting perfectly still while it does.
+    const lvl = 0.5 + 0.28 * Math.sin(t * 11.0) + 0.22 * Math.sin(t * 4.3);
+    node.sprite.setAlpha(0.72 + 0.28 * lvl);
+    this.arcHalo?.setAlpha(0.26 + 0.30 * lvl);
   }
 
   setPartVisible(name: string, visible: boolean): void {

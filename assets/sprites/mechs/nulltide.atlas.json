@@ -1,249 +1,29 @@
 {
  "frames": {
-  "meleeEnergy": {
+  "meleeWeapon": {
    "frame": {
     "x": 0,
     "y": 0,
-    "w": 448,
-    "h": 448
+    "w": 512,
+    "h": 512
    },
    "rotated": false,
    "trimmed": false,
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 448,
-    "h": 448
+    "w": 512,
+    "h": 512
    },
    "sourceSize": {
-    "w": 448,
-    "h": 448
-   }
-  },
-  "meleeEnergy_1": {
-   "frame": {
-    "x": 448,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "sourceSize": {
-    "w": 448,
-    "h": 448
-   }
-  },
-  "meleeEnergy_2": {
-   "frame": {
-    "x": 896,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "sourceSize": {
-    "w": 448,
-    "h": 448
-   }
-  },
-  "meleeEnergy_3": {
-   "frame": {
-    "x": 1344,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "sourceSize": {
-    "w": 448,
-    "h": 448
-   }
-  },
-  "meleeEnergy_4": {
-   "frame": {
-    "x": 0,
-    "y": 448,
-    "w": 448,
-    "h": 448
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "sourceSize": {
-    "w": 448,
-    "h": 448
-   }
-  },
-  "meleeEnergy_5": {
-   "frame": {
-    "x": 448,
-    "y": 448,
-    "w": 448,
-    "h": 448
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "sourceSize": {
-    "w": 448,
-    "h": 448
-   }
-  },
-  "meleeEnergy_6": {
-   "frame": {
-    "x": 896,
-    "y": 448,
-    "w": 448,
-    "h": 448
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "sourceSize": {
-    "w": 448,
-    "h": 448
-   }
-  },
-  "meleeEnergy_7": {
-   "frame": {
-    "x": 1344,
-    "y": 448,
-    "w": 448,
-    "h": 448
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "sourceSize": {
-    "w": 448,
-    "h": 448
-   }
-  },
-  "meleeEnergy_8": {
-   "frame": {
-    "x": 0,
-    "y": 896,
-    "w": 448,
-    "h": 448
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "sourceSize": {
-    "w": 448,
-    "h": 448
-   }
-  },
-  "meleeEnergy_9": {
-   "frame": {
-    "x": 448,
-    "y": 896,
-    "w": 448,
-    "h": 448
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "sourceSize": {
-    "w": 448,
-    "h": 448
-   }
-  },
-  "meleeEnergy_10": {
-   "frame": {
-    "x": 896,
-    "y": 896,
-    "w": 448,
-    "h": 448
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "sourceSize": {
-    "w": 448,
-    "h": 448
-   }
-  },
-  "meleeEnergy_11": {
-   "frame": {
-    "x": 1344,
-    "y": 896,
-    "w": 448,
-    "h": 448
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 448,
-    "h": 448
-   },
-   "sourceSize": {
-    "w": 448,
-    "h": 448
+    "w": 512,
+    "h": 512
    }
   },
   "core": {
    "frame": {
-    "x": 0,
-    "y": 1344,
+    "x": 512,
+    "y": 0,
     "w": 320,
     "h": 320
    },
@@ -262,8 +42,8 @@
   },
   "head": {
    "frame": {
-    "x": 320,
-    "y": 1344,
+    "x": 832,
+    "y": 0,
     "w": 320,
     "h": 320
    },
@@ -282,8 +62,8 @@
   },
   "backpack": {
    "frame": {
-    "x": 640,
-    "y": 1344,
+    "x": 1152,
+    "y": 0,
     "w": 320,
     "h": 320
    },
@@ -302,8 +82,8 @@
   },
   "lowerBody": {
    "frame": {
-    "x": 960,
-    "y": 1344,
+    "x": 1472,
+    "y": 0,
     "w": 320,
     "h": 320
    },
@@ -322,8 +102,8 @@
   },
   "legFar": {
    "frame": {
-    "x": 1280,
-    "y": 1344,
+    "x": 0,
+    "y": 512,
     "w": 320,
     "h": 320
    },
@@ -342,8 +122,8 @@
   },
   "legNear": {
    "frame": {
-    "x": 1600,
-    "y": 1344,
+    "x": 320,
+    "y": 512,
     "w": 320,
     "h": 320
    },
@@ -362,8 +142,8 @@
   },
   "leftArm": {
    "frame": {
-    "x": 0,
-    "y": 1664,
+    "x": 640,
+    "y": 512,
     "w": 320,
     "h": 320
    },
@@ -382,8 +162,8 @@
   },
   "subWeapon": {
    "frame": {
-    "x": 320,
-    "y": 1664,
+    "x": 960,
+    "y": 512,
     "w": 320,
     "h": 320
    },
@@ -402,8 +182,8 @@
   },
   "rightArm": {
    "frame": {
-    "x": 640,
-    "y": 1664,
+    "x": 1280,
+    "y": 512,
     "w": 320,
     "h": 320
    },
@@ -422,28 +202,8 @@
   },
   "mainWeapon": {
    "frame": {
-    "x": 960,
-    "y": 1664,
-    "w": 320,
-    "h": 320
-   },
-   "rotated": false,
-   "trimmed": false,
-   "spriteSourceSize": {
-    "x": 0,
-    "y": 0,
-    "w": 320,
-    "h": 320
-   },
-   "sourceSize": {
-    "w": 320,
-    "h": 320
-   }
-  },
-  "meleeWeapon": {
-   "frame": {
-    "x": 1280,
-    "y": 1664,
+    "x": 1600,
+    "y": 512,
     "w": 320,
     "h": 320
    },
@@ -462,8 +222,8 @@
   },
   "leftThruster": {
    "frame": {
-    "x": 1600,
-    "y": 1664,
+    "x": 0,
+    "y": 832,
     "w": 320,
     "h": 320
    },
@@ -482,8 +242,8 @@
   },
   "rightThruster": {
    "frame": {
-    "x": 0,
-    "y": 1984,
+    "x": 320,
+    "y": 832,
     "w": 320,
     "h": 320
    },
@@ -502,8 +262,8 @@
   },
   "drone": {
    "frame": {
-    "x": 320,
-    "y": 1984,
+    "x": 640,
+    "y": 832,
     "w": 320,
     "h": 320
    },
@@ -519,6 +279,486 @@
     "w": 320,
     "h": 320
    }
+  },
+  "meleeArc": {
+   "frame": {
+    "x": 960,
+    "y": 832,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_1": {
+   "frame": {
+    "x": 1472,
+    "y": 832,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_2": {
+   "frame": {
+    "x": 0,
+    "y": 1152,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_3": {
+   "frame": {
+    "x": 512,
+    "y": 1152,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_4": {
+   "frame": {
+    "x": 1024,
+    "y": 1152,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_5": {
+   "frame": {
+    "x": 1536,
+    "y": 1152,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_6": {
+   "frame": {
+    "x": 0,
+    "y": 1280,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_7": {
+   "frame": {
+    "x": 512,
+    "y": 1280,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_8": {
+   "frame": {
+    "x": 1024,
+    "y": 1280,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_9": {
+   "frame": {
+    "x": 1536,
+    "y": 1280,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_10": {
+   "frame": {
+    "x": 0,
+    "y": 1408,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_11": {
+   "frame": {
+    "x": 512,
+    "y": 1408,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_12": {
+   "frame": {
+    "x": 1024,
+    "y": 1408,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_13": {
+   "frame": {
+    "x": 1536,
+    "y": 1408,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_14": {
+   "frame": {
+    "x": 0,
+    "y": 1536,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_15": {
+   "frame": {
+    "x": 512,
+    "y": 1536,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_16": {
+   "frame": {
+    "x": 1024,
+    "y": 1536,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_17": {
+   "frame": {
+    "x": 1536,
+    "y": 1536,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_18": {
+   "frame": {
+    "x": 0,
+    "y": 1664,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_19": {
+   "frame": {
+    "x": 512,
+    "y": 1664,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_20": {
+   "frame": {
+    "x": 1024,
+    "y": 1664,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_21": {
+   "frame": {
+    "x": 1536,
+    "y": 1664,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_22": {
+   "frame": {
+    "x": 0,
+    "y": 1792,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
+  },
+  "meleeArc_23": {
+   "frame": {
+    "x": 512,
+    "y": 1792,
+    "w": 512,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 512,
+    "h": 128
+   }
   }
  },
  "meta": {
@@ -527,7 +767,7 @@
   "format": "RGBA8888",
   "size": {
    "w": 2048,
-   "h": 2304
+   "h": 1920
   },
   "scale": "1",
   "note": "Untrimmed: each frame is square with its pivot at the centre."

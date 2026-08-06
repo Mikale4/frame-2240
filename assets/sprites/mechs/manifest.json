@@ -500,7 +500,7 @@
       "weapon": "arc",
       "booster": "wing",
       "pod": "compact",
-      "blade": "glaive"
+      "blade": "baton"
     }
   },
   "parts": {
@@ -2073,12 +2073,12 @@
         "dims_bu": [
           0.6604,
           0.3684,
-          1.1195
+          1.1296
         ],
         "dims_logical_px": [
           39.6,
           22.1,
-          67.2
+          67.8
         ]
       },
       "subWeapon": {
@@ -2099,14 +2099,14 @@
         "file": "nulltide_rightArm.png",
         "tile": 320,
         "dims_bu": [
-          0.5172,
+          0.557,
           0.3551,
-          1.1195
+          1.1296
         ],
         "dims_logical_px": [
-          31.0,
+          33.4,
           21.3,
-          67.2
+          67.8
         ]
       },
       "mainWeapon": {
@@ -2153,16 +2153,16 @@
       },
       "meleeWeapon": {
         "file": "nulltide_meleeWeapon.png",
-        "tile": 320,
+        "tile": 512,
         "dims_bu": [
-          1.34,
-          0.128,
-          0.3095
+          2.06,
+          0.224,
+          0.266
         ],
         "dims_logical_px": [
-          80.4,
-          7.7,
-          18.6
+          123.6,
+          13.4,
+          16.0
         ]
       },
       "drone": {
@@ -2179,28 +2179,23 @@
           39.6
         ]
       },
-      "meleeEnergy": {
-        "root_px": [
-          133.3,
-          9.1
+      "meleeArc": {
+        "file": "nulltide_meleeArc.png",
+        "tile": [
+          512,
+          128
         ],
-        "root_logical_px": [
-          66.65,
-          4.55
-        ],
-        "file": "nulltide_meleeEnergy.png",
-        "tile": 448,
         "dims_bu": [
-          3.5667,
+          4.2,
           0.0,
-          3.5667
+          0.8667
         ],
         "dims_logical_px": [
-          214.0,
+          252.0,
           0.0,
-          214.0
+          52.0
         ],
-        "source": "tools/energy_blade.py \u2014 drawn, not modelled; no Blender object"
+        "source": "tools/electric_baton.py \u2014 drawn, not modelled; no Blender object"
       }
     }
   }
