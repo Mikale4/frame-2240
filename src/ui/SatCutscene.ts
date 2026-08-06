@@ -46,7 +46,6 @@ export class SatCutscene {
   private readonly scrim: Phaser.GameObjects.Rectangle;
   private readonly barTop: Phaser.GameObjects.Rectangle;
   private readonly barBottom: Phaser.GameObjects.Rectangle;
-  private readonly rays: Phaser.GameObjects.Image[] = [];
   private readonly portrait: Phaser.GameObjects.Image;
   private readonly portraitPanel: Phaser.GameObjects.Rectangle;
   private readonly ruling: HoloRuling;
@@ -61,7 +60,7 @@ export class SatCutscene {
   /** +1 when the portrait comes from the left, -1 from the right. */
   private side = 1;
 
-  constructor(scene: Phaser.Scene, rayTexture: string) {
+  constructor(scene: Phaser.Scene, _rayTexture?: string) {
     this.root = scene.add.container(0, 0);
     this.root.setDepth(1500);
     this.root.setScrollFactor(0);
@@ -72,14 +71,12 @@ export class SatCutscene {
       .setOrigin(0, 0);
     this.root.add(this.scrim);
 
-    // Speed lines behind the portrait. Cheap, and they sell the push-in.
-    for (let i = 0; i < 14; i++) {
-      const ray = scene.add.image(0, 0, rayTexture);
-      ray.setBlendMode(Phaser.BlendModes.ADD);
-      ray.setOrigin(0.5, 0.5);
-      this.rays.push(ray);
-      this.root.add(ray);
-    }
+    // **No speed lines.** Fourteen additive streaks used to radiate from behind
+    // the portrait to sell the push-in. They were drawn at the panel's centre
+    // and spread well past its edges, so once the panel became a holographic
+    // plate they read as leaking out of it rather than as motion. The card has
+    // the slide, the letterbox bars and the overshoot on the mode name doing
+    // that work already.
 
     // The same holographic plate as the corner banter boxes and the rival-skill
     // modal — see `src/ui/HoloPanel.ts`. It used to be a dark plate with a
@@ -205,7 +202,6 @@ export class SatCutscene {
     this.pilotText.setText(opts.pilot);
     this.lineText.setText(opts.line ?? '');
 
-    for (const r of this.rays) r.setTint(opts.tint);
 
     this.root.setVisible(true);
     this.layout(0);
@@ -266,15 +262,6 @@ export class SatCutscene {
     // The mode name arrives a beat late and overshoots, so it lands hard.
     this.modeText.setScale(1.25 - 0.25 * eased);
 
-    for (let i = 0; i < this.rays.length; i++) {
-      const ray = this.rays[i];
-      const a = (i / this.rays.length) * Math.PI * 2;
-      const spread = 90 + (1 - eased) * 260;
-      ray.setPosition(px + Math.cos(a) * spread, VIEW_H / 2 + Math.sin(a) * spread * 0.6);
-      ray.setRotation(a);
-      ray.setScale(1.6 * eased, 0.09);
-      ray.setAlpha(0.5 * eased);
-    }
   }
 
   /** Cuts it short, for a rematch or a pause. */
