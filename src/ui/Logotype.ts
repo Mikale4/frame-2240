@@ -194,7 +194,7 @@ export interface LogoStyle {
   edge: number;
   edgeColor: number;
   /** Ornament drawn behind the word. */
-  ornament: 'rosette' | 'rules' | 'none';
+  ornament: 'rules' | 'none';
 }
 
 /**
@@ -230,7 +230,9 @@ export const LOGO_STYLES: Record<string, LogoStyle> = {
   },
   /**
    * **HERALDIC** — the Final Fantasy read. Much higher contrast, pointed
-   * terminals, a slight lean, and the gantry rosette behind it. This is the one
+   * terminals and a slight lean. The circular backdrop it used to carry is now
+   * `TitleMark`'s, drawn once for the whole mark rather than once per word. This
+   * is the one
    * that treats the title as a crest rather than as a nameplate.
    */
   heraldic: {
@@ -252,7 +254,7 @@ export const LOGO_STYLES: Record<string, LogoStyle> = {
     ],
     edge: 1.3,
     edgeColor: 0x140d05,
-    ornament: 'rosette',
+    ornament: 'none',
   },
   /**
    * **ORDNANCE** — painted on a hull. Nearly monoline, flat terminals, wide
@@ -575,12 +577,15 @@ function hex(v: number): string {
 }
 
 /**
- * The ornament behind the word.
+ * Per-word chrome drawn into the same texture as the letters.
  *
- * `rosette` is a gantry rose window — the stage is called CATHEDRAL YARD because
- * of what its girders do to light, and a rose window drawn as an engineering
- * elevation is the one ornament this world can own. It is line art at low alpha
- * so it reads as structure behind the name rather than as decoration on it.
+ * **The circular ornament used to live here and no longer does.** It was a
+ * gantry rose window drawn as an engineering elevation, and baking it into
+ * `createLogoTexture` meant it was drawn once per wordmark — so the title
+ * screen carried two of them, one behind the name and one behind the number,
+ * which is not what a single backdrop is. It is now one element owned by
+ * `TitleMark`, where it is also replaceable by real art. What is left here is
+ * only chrome that genuinely belongs to one word.
  */
 function drawOrnament(
   ctx: CanvasRenderingContext2D,
@@ -588,92 +593,40 @@ function drawOrnament(
   minX: number,
   maxX: number,
 ): void {
-  const midY = CAP * 0.5;
+  if (style.ornament !== 'rules') return;
   ctx.save();
   ctx.lineCap = 'butt';
 
-  if (style.ornament === 'rules') {
-    // Twin rules running the full width, breaking where the word sits. Reads as
-    // a datum line on a drawing.
-    ctx.strokeStyle = 'rgba(150,178,214,0.34)';
-    ctx.lineWidth = 1.6;
+  // Twin rules running the full width. Reads as a datum line on a drawing.
+  ctx.strokeStyle = 'rgba(150,178,214,0.34)';
+  ctx.lineWidth = 1.6;
+  for (const y of [CAP * 0.06, CAP * 0.97]) {
+    ctx.beginPath();
+    ctx.moveTo(minX - 16, y);
+    ctx.lineTo(maxX + 16, y);
+    ctx.stroke();
+  }
+  // Corner ticks, turned inward.
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = 'rgba(232,196,138,0.55)';
+  for (const [x, dir] of [
+    [minX - 16, 1],
+    [maxX + 16, -1],
+  ] as const) {
     for (const y of [CAP * 0.06, CAP * 0.97]) {
       ctx.beginPath();
-      ctx.moveTo(minX - 16, y);
-      ctx.lineTo(maxX + 16, y);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 13 * dir, y);
       ctx.stroke();
     }
-    // Corner ticks, turned inward.
-    ctx.lineWidth = 2.4;
-    ctx.strokeStyle = 'rgba(232,196,138,0.55)';
-    for (const [x, dir] of [
-      [minX - 16, 1],
-      [maxX + 16, -1],
-    ] as const) {
-      for (const y of [CAP * 0.06, CAP * 0.97]) {
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + 13 * dir, y);
-        ctx.stroke();
-      }
-      ctx.beginPath();
-      ctx.moveTo(x, CAP * 0.06);
-      ctx.lineTo(x, CAP * 0.97);
-      ctx.stroke();
-    }
-    ctx.restore();
-    return;
-  }
-
-  // ---- rosette ----------------------------------------------------------
-  const cx = (minX + maxX) / 2;
-  const cy = midY;
-  const R = CAP * 0.92;
-
-  ctx.strokeStyle = 'rgba(214,178,110,0.30)';
-  ctx.lineWidth = 1.5;
-  for (const r of [R, R * 0.78, R * 0.42]) {
     ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.moveTo(x, CAP * 0.06);
+    ctx.lineTo(x, CAP * 0.97);
     ctx.stroke();
   }
-
-  // Radial spokes — sixteen, as a gantry ring would be framed.
-  ctx.lineWidth = 1.1;
-  ctx.strokeStyle = 'rgba(214,178,110,0.26)';
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(cx + Math.cos(a) * R * 0.42, cy + Math.sin(a) * R * 0.42);
-    ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
-    ctx.stroke();
-  }
-
-  // Outer lancets: the pointed heads that make it a window and not a wheel.
-  ctx.lineWidth = 1.4;
-  ctx.strokeStyle = 'rgba(236,206,150,0.34)';
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
-    const t = R * 1.14;
-    ctx.beginPath();
-    ctx.moveTo(cx + Math.cos(a - 0.13) * R, cy + Math.sin(a - 0.13) * R);
-    ctx.lineTo(cx + Math.cos(a) * t, cy + Math.sin(a) * t);
-    ctx.lineTo(cx + Math.cos(a + 0.13) * R, cy + Math.sin(a + 0.13) * R);
-    ctx.stroke();
-  }
-
-  // Long horizontal spars through the ring, tying it to the wordmark's line.
-  ctx.lineWidth = 1.6;
-  ctx.strokeStyle = 'rgba(150,178,214,0.30)';
-  for (const y of [cy - CAP * 0.34, cy + CAP * 0.34]) {
-    ctx.beginPath();
-    ctx.moveTo(minX - 30, y);
-    ctx.lineTo(maxX + 30, y);
-    ctx.stroke();
-  }
-
   ctx.restore();
 }
+
 
 /**
  * Splits the title into its name and its number.

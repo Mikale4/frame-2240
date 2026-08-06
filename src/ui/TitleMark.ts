@@ -84,6 +84,85 @@ const INK_FAINT = 'rgba(146,176,220,0.42)';
 const INK_BRIGHT = 'rgba(226,198,142,0.85)';
 
 /**
+ * Texture key for the medallion: a faded view of CATHEDRAL YARD behind the
+ * whole mark. Loaded by `BootScene` only when the art exists — see
+ * `docs/TITLE_MEDALLION_BRIEF.md`.
+ */
+export const MEDALLION_KEY = 'title_yard';
+
+/** Drawn width of the medallion in pixels, on the 960x540 logical screen. */
+const MEDALLION_PX = 520;
+
+/**
+ * Opacity of the medallion. Low: it is a backdrop, not an illustration.
+ *
+ * The placeholder sits lower than the real art will, because hard line art and
+ * a soft painted view do not read at the same weight for the same alpha — the
+ * rose window at 0.3 competes with the mechs, where a faded painting at 0.3
+ * will not. The briefed figure is the one the art is designed against, so it is
+ * the one that stays.
+ */
+const MEDALLION_ALPHA = 0.3;
+const MEDALLION_ALPHA_PLACEHOLDER = 0.17;
+
+/**
+ * The placeholder medallion: a gantry rose window drawn as an engineering
+ * elevation.
+ *
+ * Stands in until real art arrives. The stage is called CATHEDRAL YARD because
+ * of what its girders do to light, so a rose window drawn as a structural
+ * elevation is at least the right idea in the right world — but it is line art
+ * standing where a painted view of the place should be, and it is meant to be
+ * replaced rather than kept.
+ *
+ * **Its centre is deliberately empty**, which is the same constraint the real
+ * art is briefed to honour: the lettering sits across the middle, so the middle
+ * has to be the quietest part of the picture.
+ */
+function medallionFallback(scene: Phaser.Scene, key: string, size: number): void {
+  if (scene.textures.exists(key)) return;
+  const tex = scene.textures.createCanvas(key, size, size);
+  if (!tex) return;
+  const ctx = tex.getContext();
+  const c = size / 2;
+  const R = size * 0.44;
+
+  ctx.strokeStyle = 'rgba(214,178,110,0.55)';
+  ctx.lineWidth = Math.max(1.2, size * 0.0035);
+  for (const r of [R, R * 0.78, R * 0.42]) {
+    ctx.beginPath();
+    ctx.arc(c, c, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Radial spokes — sixteen, as a gantry ring would be framed.
+  ctx.strokeStyle = 'rgba(214,178,110,0.46)';
+  ctx.lineWidth = Math.max(1, size * 0.0026);
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(c + Math.cos(a) * R * 0.42, c + Math.sin(a) * R * 0.42);
+    ctx.lineTo(c + Math.cos(a) * R, c + Math.sin(a) * R);
+    ctx.stroke();
+  }
+
+  // Outer lancets: the pointed heads that make it a window and not a wheel.
+  ctx.strokeStyle = 'rgba(236,206,150,0.55)';
+  ctx.lineWidth = Math.max(1.1, size * 0.0032);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+    const t = R * 1.13;
+    ctx.beginPath();
+    ctx.moveTo(c + Math.cos(a - 0.13) * R, c + Math.sin(a - 0.13) * R);
+    ctx.lineTo(c + Math.cos(a) * t, c + Math.sin(a) * t);
+    ctx.lineTo(c + Math.cos(a + 0.13) * R, c + Math.sin(a + 0.13) * R);
+    ctx.stroke();
+  }
+
+  tex.refresh();
+}
+
+/**
  * Draws one gear into a texture: filleted teeth, a rim band, a relieved web, a
  * bored hub with a keyway, and one witness mark.
  *
@@ -264,7 +343,23 @@ export class TitleMark {
   constructor(scene: Phaser.Scene, x: number, y: number, style: LogoStyle, capPx = 66) {
     this.container = scene.add.container(x, y).setDepth(1200).setScrollFactor(0);
 
-    // Gears first, so everything else lands on top of them.
+    // Medallion first: the place, behind the machinery, behind the name.
+    //
+    // **One element for the whole mark.** This used to be baked into each
+    // wordmark texture, which meant the screen carried two of them — a backdrop
+    // drawn once per foreground object is not a backdrop. Falls back to drawn
+    // line art when the painted art is absent, so the composition never has a
+    // hole in it while the asset is outstanding.
+    const hasArt = scene.textures.exists(MEDALLION_KEY);
+    const key = hasArt ? MEDALLION_KEY : 'title_yard_placeholder';
+    if (!hasArt) medallionFallback(scene, key, 512);
+    const medallion = scene.add
+      .image(10, 6, key)
+      .setAlpha(hasArt ? MEDALLION_ALPHA : MEDALLION_ALPHA_PLACEHOLDER);
+    medallion.setDisplaySize(MEDALLION_PX, MEDALLION_PX);
+    this.container.add(medallion);
+
+    // Gears next, so everything else lands on top of them.
     for (const g of TRAIN) {
       const key = `gear_${g.r}_${g.teeth}_${g.web}`;
       gearTexture(scene, key, g.r, g.teeth, g.web);

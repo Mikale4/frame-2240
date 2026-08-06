@@ -7536,3 +7536,37 @@ sprites. Angular speed is scaled by `1 / teeth` and neighbours counter-rotate,
 which is the real ratio. Tooth phase is deliberately not solved.
 
 32 files, 711 tests. Build clean.
+
+---
+
+## D160 — the circular backdrop becomes one element, and gets briefed as art
+
+The rose window behind the title was drawn by `createLogoTexture`, which runs
+**once per wordmark** — so the title screen carried two of them, one behind the
+name and one behind the number. A backdrop drawn once per foreground object is
+not a backdrop. It is now a single element owned by `TitleMark`, sitting under
+the gear train and both blocks.
+
+**It is also the wrong kind of art.** Line art was a reasonable stand-in for a
+crest; the owner's call is a faded view of CATHEDRAL YARD in the same style as
+the stage layers. `docs/TITLE_MEDALLION_BRIEF.md` is the self-contained brief,
+written to be handed to an image model with the four stage layers attached as
+style reference. The constraints that matter are compositional rather than
+descriptive: **the centre must be the quietest part of the picture**, because
+the lettering sits across it, and **the centre must stay cold**, because warm
+tones there would eat gold letters.
+
+**The asset load is hand-gated and must stay that way.** `TITLE_MEDALLION_ART`
+in `BootScene` is `false` until the file exists. The dev server answers a missing
+path with `index.html` and a 200, so loading an absent PNG hands the decoder an
+HTML document rather than failing, and the loader waits on it forever — the game
+would simply never boot. `TitleMark` draws its own placeholder while the flag is
+off, so the composition never has a hole in it.
+
+The placeholder runs at a lower alpha than the real art will: hard line art and a
+soft painted view do not read at the same weight for the same opacity. The
+briefed 0.30 is what the art is designed against, so that is the figure that
+stays in the spec.
+
+Verified on screen: one medallion in the display list, not two. 711 tests, build
+clean.

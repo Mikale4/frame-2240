@@ -110,6 +110,18 @@ export class BootScene extends Phaser.Scene {
       );
     }
 
+    // Title medallion: the faded view of the yard behind the title mark.
+    //
+    // **Hand-gated, and it must stay that way.** The dev server answers a
+    // missing path with `index.html` and a 200, so a `load.image` for a file
+    // that is not there hands the decoder an HTML document instead of failing —
+    // the loader then waits on it forever and the game never boots. Flip this
+    // to `true` in the same commit that adds the file, never before.
+    // `TitleMark` draws its own placeholder while this is off.
+    // Brief: `docs/TITLE_MEDALLION_BRIEF.md`.
+    const TITLE_MEDALLION_ART = false;
+    if (TITLE_MEDALLION_ART) this.load.image('title_yard', 'ui/title_yard.png');
+
     // Arena parallax layers.
     // `fore` is the fast foreground: free-standing girder columns that sweep
     // past in front of the machines. Added in D124 with the hand-authored art.
