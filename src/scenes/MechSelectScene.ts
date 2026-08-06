@@ -11,6 +11,7 @@ import { InputManager } from '../input/InputManager';
 import { bigTitle, smallText } from '../ui/Menu';
 import { ROSTER } from '../data/mechs';
 import { ROLE_BRIEF } from '../data/droneRoles';
+import { MechDemo } from '../ui/MechDemo';
 import { sfx } from '../audio/Sfx';
 import { HOLO_FILL, holoLevel, holoRuling, type HoloRuling } from '../ui/HoloPanel';
 import { music } from '../audio/Music';
@@ -49,6 +50,25 @@ const GRID_TOP = GRID_Y - PLATE_H / 2;
 const PORTRAIT_SIZE = 232;
 const PORTRAIT_X = GRID_LEFT / 2;
 const PORTRAIT_Y = GRID_TOP + PORTRAIT_SIZE / 2;
+/**
+ * The demo sits low in its panel and small inside it.
+ *
+ * A mech is drawn from its chassis centre with legs hanging below, so centring
+ * the rig in the box hangs the feet out of the bottom. The drop lifts the
+ * *visual* mass to the middle; the scale keeps a 2490-hull siege walker inside
+ * a 232px box without cropping its shoulders.
+ */
+const DEMO_SCALE = 1.06;
+const DEMO_DROP = -10;
+/**
+ * Nudge left, because the rig's origin is its **chassis**, not its silhouette.
+ *
+ * `core` sits at (0, 0) and the weapon arm extends right from it, so centring
+ * the origin in the panel leaves the machine visibly right-of-centre. This
+ * balances the weapon rather than the pivot. It is one number for all eight —
+ * they differ in reach, but not enough to be worth measuring per chassis.
+ */
+const DEMO_NUDGE_X = -16;
 
 /**
  * Roster select: pick your machine, then your rival.
@@ -87,7 +107,10 @@ export class MechSelectScene extends Phaser.Scene {
 
   private cells: Phaser.GameObjects.Container[] = [];
   private cursor!: Phaser.GameObjects.Rectangle;
-  private portrait!: Phaser.GameObjects.Image;
+  private demo: MechDemo | null = null;
+  private demoId = '';
+  /** Invisible rect keeping the panel's geometry readable at a glance. */
+  private demoMask!: Phaser.GameObjects.Rectangle;
   private heading!: Phaser.GameObjects.Text;
   private nameText!: Phaser.GameObjects.Text;
   private pilotText!: Phaser.GameObjects.Text;
@@ -144,9 +167,26 @@ export class MechSelectScene extends Phaser.Scene {
     this.add
       .rectangle(px, py, PORTRAIT_SIZE, PORTRAIT_SIZE, 0x0a0e18, 0.85)
       .setStrokeStyle(2, 0x2b3550);
-    this.portrait = this.add
-      .image(px, py, `pilot_${ROSTER[0].id}`)
-      .setDisplaySize(PORTRAIT_SIZE - 8, PORTRAIT_SIZE - 8);
+    // **The machine, not the pilot's face.**
+    //
+    // This panel used to show a static portrait. A player choosing between
+    // eight machines wants to know what the *machine* does, and eight faces
+    // cannot tell them apart the way eight silhouettes can — TERRAMOTH's bulk
+    // against CIRRUS's frame is the whole decision, and it is invisible in a
+    // bust. The demo hovers and runs a manoeuvre every couple of seconds; see
+    // `src/ui/MechDemo.ts`.
+    //
+    // The pilot is still here — name, faction and blurb sit under the panel,
+    // and the thumbnails still carry the face during battle banter.
+    // Clipped to the panel. TERRAMOTH's pile driver and PYRE's scythe both
+    // reach past the plate mid-swing, and a weapon crossing the border reads as
+    // a layering bug rather than as energy. Masking rather than shrinking keeps
+    // the machines as large as the box allows.
+    this.demoMask = this.add
+      .rectangle(px, py, PORTRAIT_SIZE - 6, PORTRAIT_SIZE - 6, 0xffffff, 0)
+      .setOrigin(0.5)
+      .setVisible(false);
+    this.rebuildDemo();
 
     this.nameText = this.add
       .text(px, py + 132, '', { fontFamily: FONT, fontSize: '20px', color: '#ffd166', fontStyle: 'bold', align: 'center' })
@@ -340,7 +380,7 @@ export class MechSelectScene extends Phaser.Scene {
     // Centred on the plate, which is centred on the cell — no offset.
     this.cursor.setPosition(pos.x, pos.y);
 
-    this.portrait.setTexture(`pilot_${def.id}`);
+    if (this.demoId !== def.id) this.rebuildDemo();
     this.nameText.setText(`${def.codeName}  ${def.name}`);
     this.nameText.setColor('#' + def.tint.accent.toString(16).padStart(6, '0'));
     this.pilotText.setText(`${def.pilot}\n${def.faction}`);
@@ -457,6 +497,25 @@ export class MechSelectScene extends Phaser.Scene {
     } else {
       this.cursor.setVisible(true);
     }
+  }
+
+  /**
+   * Swaps the demo to whichever machine the cursor is on.
+   *
+   * Torn down and rebuilt rather than retargeted because `MechRenderer` builds
+   * its container tree from a specific `MechDef.rig` in its constructor —
+   * eight chassis do not share a part list, and NULLTIDE alone carries a
+   * `meleeArc` node nobody else has.
+   */
+  private rebuildDemo(): void {
+    const def = ROSTER[this.index] ?? ROSTER[0];
+    this.demo?.destroy();
+    this.demoId = def.id;
+    this.demo = new MechDemo(this, def, PORTRAIT_X + DEMO_NUDGE_X, PORTRAIT_Y + DEMO_DROP, DEMO_SCALE);
+    // Above the panel plate, below the skill modal and the headings.
+    this.demo.root.setDepth(120);
+    // A fresh mask each rebuild: the old holder is destroyed with it.
+    this.demo.root.setMask(this.demoMask.createGeometryMask());
   }
 
   /** The tier the current stage is editing. */
@@ -582,6 +641,8 @@ export class MechSelectScene extends Phaser.Scene {
 
     // A slow pulse on the cursor, so the selection is findable at a glance.
     this.cursor.setAlpha(0.65 + 0.35 * Math.sin(this.t * 5));
+
+    this.demo?.update(delta / 1000);
 
     // The skill panel flickers like the projected hardware everywhere else in
     // this game does. `flickerLevel` is the same stepped table the energy
