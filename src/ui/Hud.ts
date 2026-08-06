@@ -355,15 +355,20 @@ export class Hud {
         this.flightTexts[side].setColor(c.flying ? '#9fe0ff' : '#8effc0');
       }
 
-      // Only worth a line while there is actually a choice to have made: with no
-      // escort in the air the lock has nowhere else to go, and a permanent
-      // "TARGET: PILOT" is noise.
+      // Only worth a line when the lock is somewhere **surprising**.
+      //
+      // The guard used to be "is there an escort to choose between", which
+      // sounds like the same thing and is not: escorts are airborne for 76-94 %
+      // of a match, so `TARGET: PILOT` was on screen essentially permanently —
+      // the exact state the note here already called noise. Targeting the pilot
+      // is the default and the assumption; it does not need announcing. The
+      // line now appears only when the lock is on the escort, which is the case
+      // a player actually needs telling about.
       const foe = side === 0 ? e : p;
       const escort = foe?.supporter;
-      if (escort?.hittable) {
-        const onDrone = c.lockPref === 'drone';
-        this.targetTexts[side].setText(onDrone ? `TARGET: ${foe.def.supporter.name}` : 'TARGET: PILOT');
-        this.targetTexts[side].setColor(onDrone ? '#ffd166' : '#7f8ea6');
+      if (escort?.hittable && c.lockPref === 'drone') {
+        this.targetTexts[side].setText(`TARGET: ${foe.def.supporter.name}`);
+        this.targetTexts[side].setColor('#ffd166');
       } else {
         this.targetTexts[side].setText('');
       }

@@ -693,30 +693,74 @@ export class Effects {
   }
 
   /**
-   * Thruster plume. Emitted every other call and kept small: these stack
-   * additively every frame from two nozzles per mech, so a generous size here
-   * washes the chassis out completely.
+   * Thruster plume: a jet, not a puff.
+   *
+   * **The old version solved the wrong problem.** Its note read "kept small:
+   * these stack additively every frame from two nozzles per mech, so a generous
+   * size here washes the chassis out completely" — the washout is real, and the
+   * answer taken was to shrink everything: a round glow at 0.26 scale and 0.48
+   * alpha, moving 1–3 px a frame against 0.88 drag. That barely leaves the
+   * nozzle. Two of them, on a chassis, read as a soft haze around the machine's
+   * middle rather than as thrust, which is exactly how it was reported.
+   *
+   * A jet is **directional**, and direction is free — it costs no brightness.
+   * So the fix is length and travel rather than size:
+   *
+   * * spawned **behind** the nozzle, not on it, so the plume starts clear of
+   *   the chassis instead of half-buried in it;
+   * * an elongated `streak` aligned to the exhaust axis rather than a round
+   *   glow, which is what makes a moving particle read as a jet;
+   * * real initial speed with light drag, so it actually streams;
+   * * every frame rather than every other, because a stream needs continuity —
+   *   the alpha is dropped to pay for it, so total additive load is unchanged.
+   *
+   * A small round core is kept at the nozzle mouth: that is the hot spot the
+   * streak trails out of, and without it the jet reads as detached.
    */
-  private thrusterPhase = 0;
-
   thruster(x: number, y: number, angle: number, power: number, tint: number): void {
     if (power <= 0.05) return;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    // Clear of the nozzle. Scaled by power so a light burn sits closer in.
+    const off = 6 + power * 7;
+    const speed = 3.2 + power * 5.4;
+    this.emit({
+      key: TEX.streak,
+      x: x + cos * off,
+      y: y + sin * off,
+      life: 7 + power * 7,
+      scaleFrom: 0.16 + power * 0.30,
+      scaleTo: 0.02,
+      tint,
+      alpha: 0.16 + power * 0.20,
+      rotation: angle,
+      // Thin: the plume is long and narrow, and the narrowness is most of why
+      // it reads as thrust rather than as smoke.
+      scaleYMul: 0.30,
+      vx: cos * speed,
+      vy: sin * speed,
+      drag: 0.95,
+      fadePow: 1.5,
+    });
+    // The nozzle's hot core, every other frame — small, bright, and stationary.
     if (++this.thrusterPhase % 2 !== 0) return;
     this.emit({
       key: TEX.glow,
-      x,
-      y,
-      life: 6 + power * 6,
-      scaleFrom: 0.09 + power * 0.17,
+      x: x + cos * 2,
+      y: y + sin * 2,
+      life: 5 + power * 4,
+      scaleFrom: 0.07 + power * 0.11,
       scaleTo: 0.01,
       tint,
-      alpha: 0.22 + power * 0.26,
-      vx: Math.cos(angle) * (1.0 + power * 2.0),
-      vy: Math.sin(angle) * (1.0 + power * 2.0),
-      drag: 0.88,
-      fadePow: 1.3,
+      alpha: 0.18 + power * 0.22,
+      vx: cos * (1.0 + power * 1.6),
+      vy: sin * (1.0 + power * 1.6),
+      drag: 0.9,
+      fadePow: 1.4,
     });
   }
+
+  private thrusterPhase = 0;
 
   dash(x: number, y: number, angle: number, tint: number): void {
     this.emit({
