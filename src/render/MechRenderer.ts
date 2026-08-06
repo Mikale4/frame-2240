@@ -251,11 +251,27 @@ export class MechRenderer {
     }
 
     // Apply the authored draw order by re-sorting siblings within each parent.
+    //
+    // **A part's own sprite is a sibling of its children**, and that is the
+    // subtlety this used to miss. Every child container is added to the parent
+    // *after* the parent's sprite, so a bare `bringToTop` per part could only
+    // ever push children further above their parent's art — the chassis was
+    // permanently the bottom-most thing in its own container, and no ordering
+    // written in `drawOrder` could put a leg behind it.
+    //
+    // Naming a part whose children are being ordered around it therefore has to
+    // move the *sprite*, not the container. `core` is the only one that needs
+    // it today: the far leg goes under the chassis and the near leg over it,
+    // which is the entire depth read of a walking rig.
     const order = def.rig.drawOrder;
     for (const name of order) {
       const node = this.nodes.get(name);
       if (!node) continue;
       const parent = node.container.parentContainer;
+      if (parent && node.sprite.parentContainer === node.container && this.hasChildParts(def, name)) {
+        node.container.bringToTop(node.sprite);
+        continue;
+      }
       if (parent) parent.bringToTop(node.container);
     }
   }
@@ -647,6 +663,16 @@ export class MechRenderer {
    * `scale` folds in the facing mirror and the pseudo-3D depth scale, so
    * callers can size effects to match what is on screen.
    */
+  /**
+   * Does any other part hang off this one?
+   *
+   * Decides whether naming a part in `drawOrder` should move its sprite (so its
+   * children can be ordered on both sides of it) or its container.
+   */
+  private hasChildParts(def: MechDef, name: string): boolean {
+    return def.rig.parts.some((q) => q.parent === name);
+  }
+
   partWorld(name: string): { x: number; y: number; angle: number; scale: number } | null {
     const node = this.nodes.get(name);
     if (!node) return null;

@@ -102,8 +102,14 @@ function makeRig(o: {
       p('head', 'core', o.head, 'turret'),
       p('backpack', 'core', o.backpack, 'chassis'),
       p('lowerBody', 'core', o.lowerBody, 'chassis'),
-      p('legFar', 'lowerBody', [0, 1], 'legFar'),
-      p('legNear', 'lowerBody', [0, 1], 'legNear'),
+      // **Parented to `core`, not to `lowerBody`, so the torso can come between
+      // them.** A container's children always draw above its own sprite, and
+      // reordering only works between siblings — so while both legs lived
+      // inside `lowerBody` they were necessarily *both* drawn in front of the
+      // chassis, whatever `drawOrder` asked for. The pelvis offset is folded
+      // into the pivot here, leaving the world position identical.
+      p('legFar', 'core', [o.lowerBody[0], o.lowerBody[1] + 1], 'legFar'),
+      p('legNear', 'core', [o.lowerBody[0], o.lowerBody[1] + 1], 'legNear'),
       p('leftArm', 'core', o.leftArm, 'turret'),
       p('subWeapon', 'leftArm', o.subWeapon, 'turret'),
       p('rightArm', 'core', o.rightArm, 'turret'),
@@ -126,8 +132,10 @@ function makeRig(o: {
       'subWeapon',
       'legFar',
       'lowerBody',
-      'legNear',
+      // The chassis sits *between* the legs: far leg behind it, near leg in
+      // front. That one ordering is the whole depth read of a walking rig.
       'core',
+      'legNear',
       'head',
       'rightThruster',
       'rightArm',

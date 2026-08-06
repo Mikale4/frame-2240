@@ -38,8 +38,16 @@ const HALCYON_RIG: MechRigDef = {
     { name: 'backpack', parent: 'core', x: -26, y: -18, rotation: 0, follow: 'chassis' },
     { name: 'lowerBody', parent: 'core', x: -8, y: 26, rotation: 0, follow: 'chassis' },
     // Legs hang off the pelvis at the hip line and stride in antiphase.
-    { name: 'legFar', parent: 'lowerBody', x: 0, y: 1, rotation: 0, follow: 'legFar' },
-    { name: 'legNear', parent: 'lowerBody', x: 0, y: 1, rotation: 0, follow: 'legNear' },
+    //
+    // **Parented to `core`, not to `lowerBody`, so the torso can come between
+    // them.** Phaser draws a container's children above the container's own
+    // sprite, and reordering only works between siblings — so while both legs
+    // lived inside `lowerBody` they were necessarily *both* in front of the
+    // chassis, whatever `drawOrder` said. The pelvis offset is folded into
+    // their pivots, so the world position is unchanged and `roster.test.ts`
+    // still matches the Blender exporter.
+    { name: 'legFar', parent: 'core', x: -8, y: 27, rotation: 0, follow: 'legFar' },
+    { name: 'legNear', parent: 'core', x: -8, y: 27, rotation: 0, follow: 'legNear' },
     { name: 'leftArm', parent: 'core', x: -2, y: -2, rotation: 0, follow: 'turret' },
     { name: 'subWeapon', parent: 'leftArm', x: -3, y: -23, rotation: 0, follow: 'turret' },
     { name: 'rightArm', parent: 'core', x: 16, y: 6, rotation: 0, follow: 'turret' },
@@ -67,8 +75,10 @@ const HALCYON_RIG: MechRigDef = {
     'subWeapon',
     'legFar',
     'lowerBody',
-    'legNear',
+    // The chassis sits *between* the legs: far leg behind it, near leg in front.
+    // That one ordering is the whole depth read of a walking rig.
     'core',
+    'legNear',
     'head',
     'rightThruster',
     'rightArm',
