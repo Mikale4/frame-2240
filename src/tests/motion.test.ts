@@ -158,6 +158,7 @@ describe('walk cycle', () => {
     const far = parts.find((x) => x.name === 'legFar')!;
     const pose: RigPose = {
       turretRot: 0,
+      turretRotHead: 0,
       spin: 0,
     weaponSpin: 0,
     lean: 0,

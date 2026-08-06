@@ -92,6 +92,18 @@ export interface MechPoseSource {
  */
 const GRIP_SPACING = 5;
 
+/**
+ * How quickly each assembly chases the aim, per second.
+ *
+ * The *ratio* is what matters, not the absolute figures: the head arrives
+ * roughly twice as fast as the arms, which is enough separation to read at a
+ * glance without the weapons feeling like they are dragging through treacle.
+ * Melee is unaffected — the swing arc is added on top of this undamped, so a
+ * strike keeps its authored timing exactly.
+ */
+const AIM_RATE_HEAD = 26;
+const AIM_RATE_ARM = 12;
+
 export class MechRenderer {
   readonly root: Phaser.GameObjects.Container;
   private readonly bank: Phaser.GameObjects.Container;
@@ -128,6 +140,11 @@ export class MechRenderer {
   private arcPhase = 0;
   /** Layer base; the y term in depthSortAt orders mechs within the layer. */
   private depthBase = 20;
+  /** Smoothed aim, per assembly. See the note in `sync`. */
+  private aimHead = 0;
+  private aimArm = 0;
+  private aimInit = false;
+  private lastFacing = 1;
 
   constructor(scene: Phaser.Scene, def: MechDef, mechId: string) {
     this.def = def;
@@ -361,7 +378,32 @@ export class MechRenderer {
     this.bank.y = bob;
     this.bank.rotation = bankLocal;
 
-    const turretRot = wrapAngle(aimLocal - bankLocal);
+    const aimTarget = wrapAngle(aimLocal - bankLocal);
+    // **Head and arms arrive at a new aim at different times.**
+    //
+    // Both used to be driven straight off this number on the same frame, so
+    // whatever the amplitude difference, they started and stopped together and
+    // read as one rigid assembly. Smoothed separately, the light sensor head
+    // gets there first and the weapon arms trail in behind it — which is the
+    // difference between a turret slewing and a machine looking at something.
+    //
+    // Exponential, keyed on real elapsed time rather than a per-frame constant,
+    // so the lag is the same at any frame rate.
+    if (!this.aimInit || facing !== this.lastFacing) {
+      // Snap on the first frame and on every facing flip. A flip is a ~180°
+      // change in local space, and easing through it sweeps the head and arms
+      // right around the chassis — a mech turning to face the other way should
+      // simply be facing the other way.
+      this.aimHead = aimTarget;
+      this.aimArm = aimTarget;
+      this.aimInit = true;
+      this.lastFacing = facing;
+    } else {
+      const k = (rate: number): number => 1 - Math.exp(-rate * dt);
+      this.aimHead += wrapAngle(aimTarget - this.aimHead) * k(AIM_RATE_HEAD);
+      this.aimArm += wrapAngle(aimTarget - this.aimArm) * k(AIM_RATE_ARM);
+    }
+    const turretRot = this.aimArm;
     const spinLocal = facing > 0 ? c.spin : -c.spin;
     // The simulation says when an arm is carrying a swing. Testing the attack
     // kind here missed the lock-on sequence entirely — it never sets `attack` —
@@ -372,6 +414,7 @@ export class MechRenderer {
     // keeping the leading leg the leading leg whichever way the mech walks.
     const pose: RigPose = {
       turretRot,
+      turretRotHead: this.aimHead,
       spin: spinLocal,
       weaponSpin: facing > 0 ? c.weaponSpin : -c.weaponSpin,
       lean: facing > 0 ? c.lean : -c.lean,

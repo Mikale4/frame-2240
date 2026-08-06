@@ -18,6 +18,22 @@ import { DEG } from '../core/MathUtil';
 export interface RigPose {
   /** Aim, expressed relative to the banking chassis. */
   turretRot: number;
+  /**
+   * The same aim as the **head** has got round to, which is not the same number.
+   *
+   * A sensor head and a weapon arm have nothing in common mechanically: one is
+   * light and gimballed, the other is a mass of actuator carrying a gun. They
+   * were both driven straight off `turretRot` on the same frame, differing only
+   * in amplitude via `HEAD_TRACKING` — and amplitude alone does not read as
+   * independence. Two parts that start, move and stop on the same tick look
+   * bolted together however far each one travels.
+   *
+   * What the eye actually reads is **lag**. `MechRenderer` smooths this toward
+   * the aim faster than it smooths the arms, so the head arrives first and the
+   * weapons trail in behind it. That is the whole difference between a turret
+   * and a machine.
+   */
+  turretRotHead: number;
   /** Melee sword spin, applied to every turret part. */
   spin: number;
   /**
@@ -163,7 +179,9 @@ export function partLocalRotation(part: RigPart, inheritsTurret: boolean, pose: 
       if (inheritsTurret) {
         return pose.meleeing && WEAPON_PARTS.has(part.name) ? own + pose.weaponSpin : own;
       }
-      let r = own + pose.turretRot * (part.name === 'head' ? HEAD_TRACKING : 1);
+      let r =
+        own +
+        (part.name === 'head' ? pose.turretRotHead * HEAD_TRACKING : pose.turretRot);
       if (pose.meleeing && part.name !== 'head') r += pose.spin;
       return r;
     }

@@ -29,6 +29,9 @@ function worldRotation(
 
 const restPose: RigPose = {
   turretRot: 0,
+  // Mirrors the aim: these fixtures test rotation maths, not the
+  // head/arm lag, which lives in `MechRenderer`.
+  turretRotHead: 0,
   spin: 0,
     weaponSpin: 0,
     lean: 0,
@@ -100,8 +103,22 @@ describe('rig aim rotation', () => {
 
   it('tracks the head only partway, and never doubles it', () => {
     const parts = MECHS.halcyon.rig.parts;
-    const p = pose({ turretRot: 60 * DEG });
+    // At rest the two aims agree; `MechRenderer` only separates them in time.
+    const p = pose({ turretRot: 60 * DEG, turretRotHead: 60 * DEG });
     expect(worldRotation(parts, 'head', p)).toBeCloseTo(60 * DEG * HEAD_TRACKING, 6);
+  });
+
+  /**
+   * The head follows its *own* aim, so the renderer can let it arrive before
+   * the arms do. Reading `turretRot` for both is what made a head and a pair of
+   * weapon arms move as one rigid assembly.
+   */
+  it('reads the head off turretRotHead rather than the arm aim', () => {
+    const parts = MECHS.halcyon.rig.parts;
+    const p = pose({ turretRot: 0, turretRotHead: 60 * DEG });
+    expect(worldRotation(parts, 'head', p)).toBeCloseTo(60 * DEG * HEAD_TRACKING, 6);
+    // ...and the arms are unmoved by the head's.
+    expect(worldRotation(parts, 'rightArm', p)).toBeCloseTo(0, 6);
   });
 
   it('leaves chassis parts on the bank alone', () => {
