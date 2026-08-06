@@ -12,7 +12,7 @@ import { bigTitle, smallText } from '../ui/Menu';
 import { ROSTER } from '../data/mechs';
 import { ROLE_BRIEF } from '../data/droneRoles';
 import { sfx } from '../audio/Sfx';
-import { flickerLevel } from '../render/EnergyFlicker';
+import { HOLO_FILL, holoLevel, holoRuling, type HoloRuling } from '../ui/HoloPanel';
 import { music } from '../audio/Music';
 
 const FONT = 'ui-monospace, Consolas, monospace';
@@ -23,6 +23,9 @@ const STATS_TOP = 292;
 const HINT_Y = VIEW_H - 24;
 /** Gap between the stats block and the weapon list below it. */
 const STATS_GAP = 12;
+/** The rival-skill modal, and the holographic ruling inside it. */
+const PANEL_W = 300;
+const PANEL_H = 104;
 
 /**
  * Roster grid geometry, hoisted out of `buildGrid` so the portrait column can be
@@ -97,6 +100,7 @@ export class MechSelectScene extends Phaser.Scene {
   private skillText!: Phaser.GameObjects.Text;
   private skillHint!: Phaser.GameObjects.Text;
   private skillBg!: Phaser.GameObjects.Rectangle;
+  private ruling!: HoloRuling;
 
   constructor() {
     super('MechSelect');
@@ -262,10 +266,19 @@ export class MechSelectScene extends Phaser.Scene {
     // 0.94 fill failed over a bright, busy screen; over a dimmed one a lighter
     // fill reads as a projected panel rather than a pasted box, and there is no
     // legible detail left underneath to bleed through.
+    //
+    // The fill is a **holographic teal**, not near-black. A dark box reads as a
+    // hole cut in the screen; a lit one reads as something being *projected*
+    // over it, which is what this panel is — the same claim the energy blades
+    // and the baton's discharge make, in the same colour family.
     const panelBg = this.add
-      .rectangle(0, 0, 300, 104, 0x060a12, 0.62)
+      .rectangle(0, 0, PANEL_W, PANEL_H, HOLO_FILL, 0.5)
       .setStrokeStyle(3, 0xffd166);
     this.skillBg = panelBg;
+    // Scanlines, redrawn each frame so they can drift. Drawing rather than
+    // masking a static sprite is what keeps them inside the panel for free:
+    // the loop simply never emits a line outside the interior.
+    this.ruling = holoRuling(this, -PANEL_W / 2 + 3, -PANEL_H / 2 + 3, PANEL_W - 6, PANEL_H - 6);
     // The caption sits above the value it names, and it is a *label*, not a
     // control hint: the footer along the bottom of the screen already says what
     // the arrows and ENTER do, so repeating it inside the modal was noise in
@@ -282,7 +295,7 @@ export class MechSelectScene extends Phaser.Scene {
     this.skillText = this.add
       .text(0, 8, '', { fontFamily: FONT, fontSize: '26px', color: '#ffd166', fontStyle: 'bold', align: 'center' })
       .setOrigin(0.5);
-    this.skillPanel.add([scrim, panelBg, this.skillText, this.skillHint]);
+    this.skillPanel.add([scrim, panelBg, this.ruling.gfx, this.skillText, this.skillHint]);
 
     smallText(
       this,
@@ -578,11 +591,15 @@ export class MechSelectScene extends Phaser.Scene {
     // screen. The panel keeps a high floor so the number stays readable at the
     // dimmest step; it is a flicker, not a blink you have to wait out.
     if (this.skillPanel.visible) {
-      const lvl = flickerLevel(Math.floor(this.t * 60));
-      this.skillBg.setFillStyle(0x060a12, 0.5 + 0.16 * lvl);
-      this.skillBg.setStrokeStyle(3, 0xffd166, 0.55 + 0.45 * lvl);
+      const lvl = holoLevel(this.t);
+      // **The frame does not flicker.** It is the one part of this that is not
+      // being projected — it is the border of the control itself, and blinking
+      // it made the whole panel look like it was failing rather than lit.
+      // Only what is *inside* the frame is holographic.
+      this.skillBg.setFillStyle(HOLO_FILL, 0.42 + 0.16 * lvl);
       this.skillText.setAlpha(0.82 + 0.18 * lvl);
       this.skillHint.setAlpha(0.6 + 0.4 * lvl);
+      this.ruling.update(this.t);
     }
 
     const ui = this.input$.readUi();

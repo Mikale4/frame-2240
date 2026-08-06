@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { VIEW_H, VIEW_W } from '../core/GameConfig';
 import { BANTER_PRIORITY, type BanterTrigger } from '../data/banter';
+import { HOLO_FILL, holoLevel, holoRuling, type HoloRuling } from './HoloPanel';
 
 const FONT = 'ui-monospace, Consolas, monospace';
 
@@ -26,7 +27,9 @@ const MARGIN = 14;
 export class BanterBox {
   private readonly root: Phaser.GameObjects.Container;
   private readonly panel: Phaser.GameObjects.Rectangle;
-  private readonly edge: Phaser.GameObjects.Rectangle;
+  private readonly ruling: HoloRuling;
+  /** Seconds, for the ruling's drift. */
+  private t = 0;
   private readonly portrait: Phaser.GameObjects.Image;
   private readonly nameText: Phaser.GameObjects.Text;
   private readonly lineText: Phaser.GameObjects.Text;
@@ -55,18 +58,25 @@ export class BanterBox {
     this.root.setScrollFactor(0);
     this.root.setAlpha(0);
 
+    // **A holographic plate, matching the rival-skill modal** — see
+    // `src/ui/HoloPanel.ts` for what makes the look read as projected. The
+    // border carries the pilot's accent, so a glance still says who is talking.
     this.panel = scene.add
-      .rectangle(0, 0, PANEL_W, PANEL_H, 0x080c15, 0.86)
+      .rectangle(0, 0, PANEL_W, PANEL_H, HOLO_FILL, 0.5)
       .setOrigin(0, 0)
       .setStrokeStyle(2, tint, 0.9);
     this.root.add(this.panel);
 
-    // A thicker bar on the outer edge, so the two boxes read as belonging to
-    // the corner they sit in rather than floating.
-    this.edge = scene.add
-      .rectangle(rightAligned ? PANEL_W - 3 : 0, 0, 3, PANEL_H, tint, 1)
-      .setOrigin(0, 0);
-    this.root.add(this.edge);
+    // **The frame is even on all four sides.**
+    //
+    // There used to be a 3px bar down the outer edge on top of the 2px stroke,
+    // so one side was 5px and the other three were 2px. It was meant to seat
+    // the box into its corner; on screen it just read as a border someone had
+    // got wrong. The corner is already established by which side the box slides
+    // in from and by the portrait's position, so the bar was buying nothing
+    // that was not already paid for.
+    this.ruling = holoRuling(scene, 2, 2, PANEL_W - 4, PANEL_H - 4);
+    this.root.add(this.ruling.gfx);
 
     const px = rightAligned ? PANEL_W - 8 - THUMB / 2 : 8 + THUMB / 2;
     this.portrait = scene.add.image(px, PANEL_H / 2, thumbKey);
@@ -132,6 +142,7 @@ export class BanterBox {
   /** `dt` is in seconds. */
   update(dt: number): void {
     const f = dt * 60;
+    this.t += dt;
     if (this.cooldown > 0) this.cooldown -= f;
 
     if (this.hold > 0) {
@@ -153,6 +164,10 @@ export class BanterBox {
     const x = this.rightAligned ? VIEW_W - MARGIN - PANEL_W : MARGIN;
     this.root.setX(x + off);
     this.root.setAlpha(eased);
+
+    // The plate is lit; the frame is not. Same division as the skill modal.
+    this.ruling.update(this.t);
+    this.panel.setFillStyle(HOLO_FILL, 0.42 + 0.16 * holoLevel(this.t));
   }
 
   /** Clears the box outright, for a rematch. */
@@ -166,9 +181,8 @@ export class BanterBox {
   }
 
   destroy(): void {
+    // The container owns every child, the ruling's graphics included.
     this.root.destroy();
-    void this.panel;
-    void this.edge;
   }
 }
 
