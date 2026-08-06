@@ -209,16 +209,20 @@ does to light and scale: enormous vertical girders receding into haze, the sense
 of a nave, a space far larger than the thing fighting inside it. The machines
 should look small in it.
 
-### 2.3 Proposed lore — NOT YET CANON, needs the owner's approval
+### 2.3 The stage's lore — APPROVED CANON
 
-**CATHEDRAL YARD has no Archive entry.** The Archive is the game's canon and is
-deliberately complete; it contains 21 entries covering the world, the Descent,
-the war, the eight machines and the eight pilots, and the stage is not among
-them. Everything in this subsection is a *proposal written to fit the existing
-canon*, offered so the art has a story to hang on. **It is not established and
-must be approved before anyone treats it as fact.**
+**Approved by the owner, 2026-08-06.** This was a proposal written to fit the
+existing canon; it is now established, and the art, the Archive and any future
+campaign copy may treat it as fact.
 
-Proposed:
+One thing this approval does *not* yet do: **CATHEDRAL YARD still has no Archive
+entry.** The Archive is where the game's canon is published to the player — 21
+entries covering the world, the Descent, the war, the eight machines and the
+eight pilots — and the stage is not among them. The lore below is canon whether
+or not it is in there, but until an entry exists the player cannot read it.
+Writing that entry is open work, not part of this approval.
+
+Canon:
 
 > A drydock yard abandoned after the Seven Yards War. Built to take ore convoys
 > and fit out airframes, its lift network was cut during the settlement and never
@@ -229,7 +233,7 @@ Proposed:
 > still stand. The gantry lights still run, drawing off a reactor nobody
 > decommissioned.
 
-Two things this buys the art:
+Two things this gives the art:
 1. **Abandoned but powered.** Lights on, nobody home. Warm sodium against cold
    blue, and no crew, no traffic, no lit windows with people behind them.
 2. **A reason both fighters are here** that fits a setting where no war is

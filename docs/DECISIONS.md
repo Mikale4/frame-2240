@@ -7436,3 +7436,27 @@ survived. It lives in the README and in `GameConfig.ts`'s comment.
 Measured on screen: the title renders 618px wide on the 960px stage, 171px clear
 each side. The 36-character expansion would have run ~950px at the 30px the old
 ten-letter subtitle used, which is how the layout question surfaced at all.
+
+---
+
+## D157 — CATHEDRAL YARD's lore is canon
+
+Approved by the owner. `STAGE_ART_BRIEF.md` §2.3 was written as a proposal
+explicitly marked *NOT YET CANON*; it is now established, and the art, the
+Archive and any future campaign copy may treat it as fact. The yard is a drydock
+abandoned after the Seven Yards War, its lift network cut at the settlement and
+never restored, held by nobody — which is why disputes are settled there, on the
+one structure at this altitude no power's claim covers. Abandoned but powered:
+lights on, nobody home.
+
+Two things the approval does **not** settle, both left open rather than folded in:
+
+* **CATHEDRAL YARD still has no Archive entry.** The Archive is where canon is
+  published to the player, and 21 entries cover the world, the Descent, the war,
+  the eight machines and the eight pilots. The stage is canon whether or not it
+  is in there, but until an entry exists the player cannot read it.
+* **The "orbital drydock" wording still contradicts the setting** in `README.md`
+  and `tools/blender/build_arena.py`. The world is atmospheric — spars and
+  gantries above a cloud deck at ~2,000 m — so "orbital" is wrong regardless of
+  this approval. It was flagged in the brief and is still only flagged; changing
+  it is a separate edit and was not bundled here.
