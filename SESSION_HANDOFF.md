@@ -59,7 +59,13 @@ confirmed by arithmetic.
 
 ---
 
-## 4. NEXT TASK — pick one; none is blocked
+## 4. OPEN WORK — ask the user which, do not pick
+
+**Nothing here is assigned.** Open the session by putting the options to the
+user and letting them choose. Everything below is unblocked and can start
+immediately; the list is roughly ordered by how much it is costing to leave
+undone, not by priority. There are also longer-horizon items under *Also open* —
+several are design questions only the user can settle.
 
 ### 4a. `TIER_LIST.md` is stale and should be regenerated
 
