@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ActState } from '../combat/types';
 import { MechRenderer, type MechPoseSource } from '../render/MechRenderer';
+import { Effects } from '../render/Effects';
 import type { MechDef } from '../mechs/MechDef';
 import { ARENA_H } from '../core/GameConfig';
 
@@ -66,6 +67,19 @@ const DURATION: Record<Beat, number> = {
 export class MechDemo {
   private readonly renderer: MechRenderer;
   private readonly holder: Phaser.GameObjects.Container;
+  /**
+   * The demo's own particle system.
+   *
+   * Thruster plumes are emitted by `BattleScene`, not by `MechRenderer`, so a
+   * rig drawn anywhere else has working thruster *parts* — they splay and
+   * gimbal under load — and no exhaust at all. The panel gets a small pool of
+   * its own, parented into the holder so the plumes move and clip with the
+   * machine rather than floating across the menu behind it.
+   */
+  private readonly effects: Effects;
+  private readonly tint: number;
+  /** Scratch for world -> holder-local conversion. */
+  private readonly scratch = new Phaser.Math.Vector2();
   private readonly pose: MechPoseSource;
   private beat = 0;
   private beatT = 0;
@@ -89,6 +103,10 @@ export class MechDemo {
     this.holder.setScale(scale);
     this.renderer = new MechRenderer(scene, def, def.id);
     this.holder.add(this.renderer.root);
+    // Small pool: two nozzles on one machine, not a battlefield.
+    this.effects = new Effects(scene, 0, 90);
+    this.holder.add(this.effects.root);
+    this.tint = def.tint.thruster;
 
     this.pose = {
       alive: true,
@@ -208,10 +226,27 @@ export class MechDemo {
     }
 
     this.renderer.sync(p, this.x, this.y, dt);
+
+    // Exhaust, from the nozzles themselves. `partWorld` is in world space and
+    // the pool lives inside the holder, so each point comes back through the
+    // holder's inverse transform.
+    if (p.thrust > 0.08) {
+      const m = this.holder.getWorldTransformMatrix();
+      // Opposite the way the machine is pointing: it has no velocity to trail.
+      const ang = p.aim + Math.PI;
+      for (const name of ['leftThruster', 'rightThruster']) {
+        const w = this.renderer.partWorld(name);
+        if (!w) continue;
+        m.applyInverse(w.x, w.y, this.scratch);
+        this.effects.thruster(this.scratch.x, this.scratch.y, ang, p.thrust, this.tint);
+      }
+    }
+    this.effects.update(dt);
   }
 
   destroy(): void {
     this.renderer.destroy();
+    // Destroys the effects layer too: it is a child of the holder.
     this.holder.destroy();
   }
 }

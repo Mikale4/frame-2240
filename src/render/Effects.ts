@@ -32,6 +32,17 @@ export class Effects {
   private pool: Particle[] = [];
   private readonly layer: Phaser.GameObjects.Container;
 
+  /**
+   * The container every particle lives in.
+   *
+   * Exposed so a caller can re-parent the whole system — the mech-select demo
+   * puts it inside the panel's holder so plumes are transformed and clipped
+   * with the machine instead of floating over the menu.
+   */
+  get root(): Phaser.GameObjects.Container {
+    return this.layer;
+  }
+
   constructor(scene: Phaser.Scene, depth: number, capacity = 420) {
     this.layer = scene.add.container(0, 0);
     this.layer.setDepth(depth);

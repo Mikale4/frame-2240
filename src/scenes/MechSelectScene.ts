@@ -514,7 +514,9 @@ export class MechSelectScene extends Phaser.Scene {
     this.demo = new MechDemo(this, def, PORTRAIT_X + DEMO_NUDGE_X, PORTRAIT_Y + DEMO_DROP, DEMO_SCALE);
     // Above the panel plate, below the skill modal and the headings.
     this.demo.root.setDepth(120);
-    // A fresh mask each rebuild: the old holder is destroyed with it.
+    // A fresh mask each rebuild: the old holder is destroyed with it. The
+    // effects pool is a child of the same holder, so the plumes are clipped
+    // by this too.
     this.demo.root.setMask(this.demoMask.createGeometryMask());
   }
 
