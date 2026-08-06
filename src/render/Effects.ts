@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { TEX } from './Textures';
 import { ProjKind } from '../combat/types';
+import { thrusterFxFor, type ThrusterFx } from './ThrusterProfiles';
 import { depthScaleAt } from '../core/Depth';
 import { PROJ_FAMILIES, type ProjFamilyId } from '../projectiles/families';
 
@@ -735,6 +736,7 @@ export class Effects {
     power: number,
     tint: number,
     size = 1,
+    fx: ThrusterFx = thrusterFxFor(''),
   ): void {
     if (power <= 0.05) return;
     const cos = Math.cos(angle);
@@ -744,50 +746,51 @@ export class Effects {
     // boost or a dash look like it costs something.
     const hot = power * power;
     const burn = hot * power;
+    // Per-builder irregularity. Concord frames are near-zero here by design;
+    // Free Latitude salvage is the highest on the roster.
+    const jit = (amt: number): number => 1 + (Math.random() - 0.5) * 2 * fx.jitter * amt;
 
-    // **A cone, not a line.** One jet at rest opening to three under load, so
-    // the plume visibly *widens* as the reactor is opened up. Count is the
-    // cheapest dramatic dial there is: it reads instantly and costs no extra
-    // brightness per particle.
-    const jets = power > 0.72 ? 3 : power > 0.38 ? 2 : 1;
-    const spread = 0.14 + 0.26 * hot;
+    // **A cone, not a line.** Jet count opens up under load, so the plume
+    // visibly widens as the reactor does — the cheapest dramatic dial there is,
+    // and it costs no brightness per particle.
+    const jets = Math.max(1, Math.round(fx.jetsLow + (fx.jetsHigh - fx.jetsLow) * hot));
+    const spread = fx.spread + fx.spreadHot * hot;
     for (let i = 0; i < jets; i++) {
-      const off = jets === 1 ? 0 : (i / (jets - 1) - 0.5) * spread;
-      const a = angle + off;
+      const off = jets === 1 ? 0 : (i / (jets - 1) - 0.5) * spread * 2;
+      const a = angle + off * jit(1) + (Math.random() - 0.5) * fx.jitter * 0.25;
       const ca = Math.cos(a);
       const sa = Math.sin(a);
-      // Clear of the nozzle, and further out the harder it is burning.
       const lead = (6 + power * 8) * size;
+      const sp = (fx.speed + fx.speedHot * hot) * size * jit(0.6);
       this.emit({
         key: TEX.streak,
         x: x + ca * lead,
         y: y + sa * lead,
-        life: 8 + power * 8,
-        scaleFrom: (0.20 + power * 0.20 + hot * 0.45) * size,
+        life: (fx.life + power * fx.lifePower) * jit(0.4),
+        scaleFrom: (fx.len + power * fx.lenPower + hot * fx.lenHot) * size * jit(0.5),
         scaleTo: 0.02,
         tint,
-        alpha: 0.15 + power * 0.13 + hot * 0.32,
+        alpha: (fx.alpha + power * fx.alphaPower + hot * fx.alphaHot) * jit(0.3),
         rotation: a,
         // Thin: the plume is long and narrow, and the narrowness is most of
         // why it reads as thrust rather than as smoke.
-        scaleYMul: 0.28,
-        vx: ca * (3.5 + power * 4.0 + hot * 4.0) * size,
-        vy: sa * (3.5 + power * 4.0 + hot * 4.0) * size,
-        drag: 0.95,
+        scaleYMul: fx.thin,
+        vx: ca * sp,
+        vy: sa * sp,
+        drag: fx.drag,
         fadePow: 1.5,
       });
     }
 
     // The nozzle's hot core. Every other frame at low load — a hover should
     // shimmer rather than roar — and every frame once it is working.
-    const coreEveryFrame = power > 0.5;
-    if (coreEveryFrame || ++this.thrusterPhase % 2 === 0) {
+    if (power > 0.5 || ++this.thrusterPhase % 2 === 0) {
       this.emit({
         key: TEX.glow,
         x: x + cos * 2 * size,
         y: y + sin * 2 * size,
         life: 5 + power * 5,
-        scaleFrom: (0.09 + power * 0.09 + hot * 0.18) * size,
+        scaleFrom: (0.09 + power * 0.09 + hot * 0.18) * size * jit(0.3),
         scaleTo: 0.01,
         tint,
         alpha: 0.16 + power * 0.12 + hot * 0.30,
@@ -798,11 +801,11 @@ export class Effects {
       });
     }
 
-    // **White-hot centre, at full burn only.** The one element that is not the
-    // machine's own colour: at maximum output the flame stops being cyan or
-    // amber and goes white in the middle, which is what a reactor being emptied
-    // looks like and what separates a dash from merely moving fast.
-    if (burn > 0.42) {
+    // **White-hot centre, near full burn.** The one element that is not the
+    // machine's own colour: at maximum output a flame stops being cyan or amber
+    // and goes white in the middle. Ashfall reaches it earliest and Ironwake
+    // plant barely reaches it at all.
+    if (power > fx.whiteAt) {
       this.emit({
         key: TEX.streak,
         x: x + cos * 5 * size,
@@ -813,11 +816,33 @@ export class Effects {
         tint: 0xffffff,
         alpha: 0.22 + burn * 0.34,
         rotation: angle,
-        scaleYMul: 0.20,
+        scaleYMul: fx.thin * 0.7,
         vx: cos * (6.0 + burn * 6.0) * size,
         vy: sin * (6.0 + burn * 6.0) * size,
         drag: 0.93,
         fadePow: 1.8,
+      });
+    }
+
+    // Embers. Ashfall throws them constantly, Emberline sheds them when it is
+    // working hard, and Concord never does — a certified frame does not spit.
+    const embers = Math.round(fx.embers * (0.35 + hot));
+    for (let i = 0; i < embers; i++) {
+      const a = angle + (Math.random() - 0.5) * (spread * 3 + 0.5);
+      const sp = (2 + Math.random() * 5) * size;
+      this.emit({
+        key: TEX.spark,
+        x,
+        y,
+        life: 12 + Math.random() * 14,
+        scaleFrom: (0.05 + Math.random() * 0.07) * size,
+        scaleTo: 0.01,
+        tint,
+        alpha: 0.5 + Math.random() * 0.3,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        drag: 0.94,
+        fadePow: 1.4,
       });
     }
   }

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ActState } from '../combat/types';
 import { MechRenderer, type MechPoseSource } from '../render/MechRenderer';
 import { Effects } from '../render/Effects';
+import { thrusterFxFor, type ThrusterFx } from '../render/ThrusterProfiles';
 import type { MechDef } from '../mechs/MechDef';
 import { ARENA_H } from '../core/GameConfig';
 
@@ -80,6 +81,8 @@ export class MechDemo {
   private readonly tint: number;
   /** Chassis scale, so a big machine gets a big plume. */
   private readonly size: number;
+  /** How this machine's builder burns. See `ThrusterProfiles`. */
+  private readonly fx: ThrusterFx;
   /** Scratch for world -> holder-local conversion. */
   private readonly scratch = new Phaser.Math.Vector2();
   private readonly pose: MechPoseSource;
@@ -113,6 +116,7 @@ export class MechDemo {
     this.holder.addAt(this.effects.root, 0);
     this.tint = def.tint.thruster;
     this.size = def.rig.scale;
+    this.fx = thrusterFxFor(def.faction);
 
     this.pose = {
       alive: true,
@@ -296,7 +300,9 @@ export class MechDemo {
         const w = this.renderer.partWorld(name);
         if (!w) continue;
         m.applyInverse(w.x, w.y, this.scratch);
-        this.effects.thruster(this.scratch.x, this.scratch.y, ang, p.thrust, this.tint, this.size);
+        this.effects.thruster(
+          this.scratch.x, this.scratch.y, ang, p.thrust, this.tint, this.size, this.fx,
+        );
       }
     }
     this.effects.update(dt);

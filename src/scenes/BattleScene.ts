@@ -7,6 +7,7 @@ import { RivalAI } from '../ai/RivalAI';
 import { Rng } from '../core/Rng';
 import { InputManager } from '../input/InputManager';
 import { MechRenderer, PART_SCALE, type MechPoseSource } from '../render/MechRenderer';
+import { thrusterFxFor } from '../render/ThrusterProfiles';
 import { partTexture } from '../render/PartTexture';
 import { Effects } from '../render/Effects';
 import { Backdrop } from '../render/Backdrop';
@@ -2247,7 +2248,10 @@ export class BattleScene extends Phaser.Scene {
           const ang = speed > 0.2 ? Math.atan2(c.vy, c.vx) + Math.PI : c.aim + Math.PI;
           // `rig.scale` spans 0.82 (CIRRUS) to 1.29 (TERRAMOTH); without it a
           // fixed plume looks 57 % smaller against the biggest machine.
-          this.thrusterFx.thruster(w.x, w.y, ang, c.thrust, c.def.tint.thruster, c.def.rig.scale);
+          this.thrusterFx.thruster(
+            w.x, w.y, ang, c.thrust, c.def.tint.thruster, c.def.rig.scale,
+            thrusterFxFor(c.def.faction),
+          );
         }
       }
 
