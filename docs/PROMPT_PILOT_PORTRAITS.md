@@ -33,6 +33,32 @@ each pilot that should show in their face.
 > Treat the attached image as the character sheet and the description below as
 > the authority on intent.
 >
+> **Repaint it. Do not smooth or upscale it.** The most likely failure here is
+> an output that is my original image de-pixelated — same pose, same crop, same
+> flat lighting, just cleaner. That reads as a filter, not an illustration. The
+> seven requirements below are what make it a painting:
+>
+> 1. **Hard shadow edges.** Two or three flat tone steps with a *visible
+>    terminator* between lit and shadow — on the face, the neck, and every fold
+>    of fabric. No airbrush, no soft falloff, no continuous gradients.
+> 2. **Directional light with real cast shadows.** Key from the upper left, cool
+>    blue rim from the upper right. The image must actually contain: a shadow
+>    under the jaw falling onto the neck, a shadow from the hair falling onto the
+>    forehead and brow, and shadows from any worn equipment falling onto the
+>    chest and collar. **Cast shadows are most of what makes hand-painted art
+>    look hand-painted.**
+> 3. **Matte surfaces.** No glossy sheen on fabric, armour or equipment.
+>    Highlights are hard-edged shapes, not shiny gradients.
+> 4. **Varied line weight.** Heavy where forms overlap and along the shadow
+>    side; thinning to nothing on lit edges. Never a uniform outline.
+> 5. **Correct age.** Render the age given in the description. Subtle skin
+>    texture, faint lines at the eye corners on the older pilots, real jaw
+>    structure. Not a flawless idealised face.
+> 6. **Hair in clumps.** A few large defined masses with one hard-edged highlight
+>    band across them — not many thin individually-shaded strands with sheen.
+> 7. **Worn fabric.** These are working garments in an industrial world. Subtle
+>    weave, and light wear at collars and shoulder seams.
+>
 > **These are eight portraits in one set.** They must look like they were drawn
 > by the same artist on the same afternoon: identical light direction (key light
 > from the upper left, cool rim light from the upper right), identical line
@@ -203,6 +229,32 @@ of the eight; the restraint is the characterisation.
 
 ---
 
+## Learned on the first pass — read this before generating
+
+The first attempt (NAIA VESK) got the **character design exactly right** — every
+accessory, the insignia, the beauty mark, the earring, the headphone cable
+routing and the expression all carried faithfully. Design fidelity is not the
+risk. **Rendering is.**
+
+What came back was the original artwork *de-pixelated*: same pose, same crop,
+smoothed. Every fault traced to that:
+
+| Observed | What to ask for instead |
+| --- | --- |
+| Continuous airbrushed gradients on skin and fabric | Hard-edged tone steps with a visible terminator |
+| No cast shadows anywhere in the image | Jaw onto neck, hair onto brow, equipment onto chest |
+| Flat frontal lighting | Key upper-left, cool rim upper-right |
+| Glossy plastic sheen on jacket and gear | Matte paint; hard-edged highlight shapes |
+| One uniform thin outline | Thick-to-thin tapering ink |
+| Idealised mid-20s face on an early-30s character | The stated age, with skin texture and wear |
+| Hair as many thin shiny strands | Few large clumps, one hard highlight band |
+
+**If you only enforce two things, enforce hard shadow edges and cast shadows.**
+An image containing three genuine cast shadows stops reading as generated almost
+immediately.
+
+---
+
 ## What to check before accepting a set
 
 1. Put all eight side by side. Does any one of them look like a different
@@ -212,3 +264,8 @@ of the eight; the restraint is the characterisation.
 4. Is the green background truly flat, with no glow or shadow cast onto it?
 5. Is each character still recognisably the same person as the attached
    original?
+6. **Are there real cast shadows** — under the jaw, from the hair, from worn
+   equipment? If not, reject it; this is the fault that recurs.
+7. Is there a hard edge between lit and shadow on the face, or does the tone
+   slide smoothly from one to the other? It must be hard.
+8. Does the pilot look the age they are written as, or ten years younger?
