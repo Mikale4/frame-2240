@@ -140,6 +140,24 @@ export class MechDemo {
       status: {} as MechPoseSource['status'],
     };
 
+    // **Centred on its own silhouette, per chassis.**
+    //
+    // The rig's origin is `core`, which is nowhere near the middle of what you
+    // actually see — the weapon arm reaches out one side, the legs hang below,
+    // and every chassis is a different shape. Placing the origin at the panel
+    // centre therefore leaves each machine offset by a different amount, and
+    // PYRE — the tallest silhouette on the roster — hung out of the box
+    // entirely. A hand-tuned nudge fixes exactly one of the eight.
+    //
+    // So: pose it once, measure what is visible, and shift the holder by
+    // whatever it takes to put that centre on the point we were given.
+    this.update(0);
+    const b = this.visibleBounds();
+    if (b) {
+      this.holder.x += x - (b.L + b.R) / 2;
+      this.holder.y += y - (b.T + b.B) / 2;
+    }
+
     // Stagger the rotation per chassis so a screen of these is not in lockstep.
     // A cheap string hash rather than the rng, because this must be identical
     // every time the screen opens — a demo that starts somewhere new each visit
@@ -147,6 +165,40 @@ export class MechDemo {
     let h = 0;
     for (let i = 0; i < def.id.length; i++) h = (h * 31 + def.id.charCodeAt(i)) | 0;
     this.beat = Math.abs(h) % ROTATION.length;
+  }
+
+  /**
+   * World-space bounds of everything currently drawn, ignoring hidden parts.
+   *
+   * `Container.getBounds` counts invisible children, and the rig keeps the
+   * melee weapon and its energy layer hidden for the whole demo — on some
+   * chassis that is the single widest thing in the tree, so the built-in
+   * measurement is badly wrong here.
+   */
+  private visibleBounds(): { L: number; R: number; T: number; B: number } | null {
+    let L = Infinity;
+    let R = -Infinity;
+    let T = Infinity;
+    let B = -Infinity;
+    const walk = (c: Phaser.GameObjects.Container): void => {
+      for (const ch of c.list) {
+        const asC = ch as Phaser.GameObjects.Container;
+        if (Array.isArray(asC.list)) {
+          walk(asC);
+          continue;
+        }
+        const img = ch as Phaser.GameObjects.Image;
+        if (!img.visible || typeof img.getBounds !== 'function') continue;
+        const r = img.getBounds();
+        if (r.width < 1) continue;
+        L = Math.min(L, r.x);
+        R = Math.max(R, r.right);
+        T = Math.min(T, r.y);
+        B = Math.max(B, r.bottom);
+      }
+    };
+    walk(this.renderer.root);
+    return L === Infinity ? null : { L, R, T, B };
   }
 
   /** The holder, for depth and placement. Not the renderer's own root. */

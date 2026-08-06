@@ -58,23 +58,21 @@ const PORTRAIT_Y = GRID_TOP + PORTRAIT_SIZE / 2;
  * *visual* mass to the middle; the scale keeps a 2490-hull siege walker inside
  * a 232px box without cropping its shoulders.
  */
-const DEMO_SCALE = 1.06;
-const DEMO_DROP = -10;
 /**
- * Nudge **right**, to leave the exhaust somewhere to go.
+ * Sized so the **largest** machine fits whole, not so the average one looks big.
  *
- * This was -16, balancing the silhouette: `core` sits at (0, 0) and the weapon
- * arm extends right, so centring the pivot leaves the machine looking
- * right-of-centre. Correct for a static pose and wrong once the thrusters lit —
- * the machine faces right, so its plume streams *left*, and measured against
- * the panel the nozzle sat at x=79 with the mask edge at x=43. Thirty-six
- * pixels of runway, and the rest of the exhaust clipped away.
+ * Measured against the 226 px panel, visible parts only: TERRAMOTH is 377 px
+ * wide and PYRE 358 x 358 at scale 1, so at the old 1.06 the two biggest
+ * chassis were nearly twice the box and were being saved only by the mask.
+ * Cropping the machine you are asking someone to choose is the wrong trade —
+ * one scale that fits everything keeps the *relative* sizes honest, which is
+ * the information the panel exists to convey. A siege walker should look like
+ * one next to a skirmisher.
  *
- * Composed the way you would frame any vehicle under power instead: subject
- * forward, exhaust trailing into open space behind it. The weapon tip crowds
- * the right edge now, but it is thin and the plume is the thing with mass.
+ * 0.48 puts TERRAMOTH at 181 px and CIRRUS at 98, inside 226 either way, and
+ * leaves the margin the exhaust needs to be visible at all.
  */
-const DEMO_NUDGE_X = 22;
+const DEMO_SCALE = 0.48;
 
 /**
  * Roster select: pick your machine, then your rival.
@@ -184,6 +182,27 @@ export class MechSelectScene extends Phaser.Scene {
     //
     // The pilot is still here — name, faction and blurb sit under the panel,
     // and the thumbnails still carry the face during battle banter.
+    // **The yard, behind the machine.** A mech hanging in an empty box reads as
+    // a spec-sheet render; the same mech against CATHEDRAL YARD's girders reads
+    // as a machine that lives somewhere. Reuses the arena layers already loaded
+    // for the battle, framed on the structure rather than the sky above it —
+    // the same fault the title screen had, see `TitleScene`.
+    //
+    // Heavily dimmed and desaturated: this is a backing plate, and the mech has
+    // to stay the brightest thing in the box.
+    const yardFar = this.add
+      .image(px - PORTRAIT_SIZE / 2 - 380, py - PORTRAIT_SIZE / 2 - 250, 'arena_far')
+      .setOrigin(0, 0)
+      .setScale(0.55)
+      .setTint(0x2a3550)
+      .setAlpha(0.55);
+    const yardMid = this.add
+      .image(px - PORTRAIT_SIZE / 2 - 330, py - PORTRAIT_SIZE / 2 - 300, 'arena_mid')
+      .setOrigin(0, 0)
+      .setScale(0.62)
+      .setTint(0x44506e)
+      .setAlpha(0.5);
+
     // Clipped to the panel. TERRAMOTH's pile driver and PYRE's scythe both
     // reach past the plate mid-swing, and a weapon crossing the border reads as
     // a layering bug rather than as energy. Masking rather than shrinking keeps
@@ -192,6 +211,10 @@ export class MechSelectScene extends Phaser.Scene {
       .rectangle(px, py, PORTRAIT_SIZE - 6, PORTRAIT_SIZE - 6, 0xffffff, 0)
       .setOrigin(0.5)
       .setVisible(false);
+    for (const layer of [yardFar, yardMid]) {
+      layer.setDepth(100);
+      layer.setMask(this.demoMask.createGeometryMask());
+    }
     this.rebuildDemo();
 
     this.nameText = this.add
@@ -517,7 +540,9 @@ export class MechSelectScene extends Phaser.Scene {
     const def = ROSTER[this.index] ?? ROSTER[0];
     this.demo?.destroy();
     this.demoId = def.id;
-    this.demo = new MechDemo(this, def, PORTRAIT_X + DEMO_NUDGE_X, PORTRAIT_Y + DEMO_DROP, DEMO_SCALE);
+    // Dead centre: `MechDemo` measures its own silhouette and centres itself
+    // on this point, so no per-chassis fudge is needed here.
+    this.demo = new MechDemo(this, def, PORTRAIT_X, PORTRAIT_Y, DEMO_SCALE);
     // Above the panel plate, below the skill modal and the headings.
     this.demo.root.setDepth(120);
     // A fresh mask each rebuild: the old holder is destroyed with it. The
