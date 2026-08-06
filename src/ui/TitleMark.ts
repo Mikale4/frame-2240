@@ -167,12 +167,20 @@ export class TitleMark {
     const axis = Phaser.Math.DegToRad(AXIS_DEG);
     // Opposite ends of one descending axis: the name up and left, the number
     // down and right, which is also the order they are read in.
+    //
+    // Held close enough to read as one mark. The two blocks overlap in x — the
+    // number starts left of where the name ends — and only clear each other
+    // because each texture carries `PAD` of empty margin and the ink inside it
+    // stops well short of the edge. Moving them further together eats that
+    // margin before it touches the glyphs, so the collision to watch for is ink
+    // against ink, not box against box.
+
     const wordImg = scene.add
-      .image(-150, -40, wm.key)
+      .image(-124, -32, wm.key)
       .setRotation(axis)
       .setOrigin(0.5, 0.5);
     const numImg = scene.add
-      .image(196, 58, nm.key)
+      .image(158, 48, nm.key)
       .setRotation(axis)
       .setOrigin(0.5, 0.5);
 
