@@ -716,6 +716,48 @@ export const PILOT_ARCHIVE: ArchiveEntry[] = [
   },
 ];
 
+// ---------------------------------------------------------- the battlefields
+
+/**
+ * The places fought over, one entry per stage.
+ *
+ * **Ids match `session.arena`**, so a stage and its entry cannot drift apart —
+ * adding an arena without adding its page here is visible as a missing id rather
+ * than as silence.
+ *
+ * There is one stage today. The section is a list rather than a single entry
+ * because that is the only difference between this being extensible and this
+ * needing to be rewritten when the second arena lands.
+ */
+export const BATTLEFIELD_ARCHIVE: ArchiveEntry[] = [
+  {
+    id: 'cathedral_yard',
+    title: 'CATHEDRAL YARD',
+    subtitle: 'Free Latitude salvage survey · unclaimed structure · last sounding 41 CE',
+    tagline: 'Abandoned high-altitude drydock. Held by no power, which is why matters are settled on it.',
+    body: [
+      'Cut into the lattice to take ore convoys and fit out airframes, and for as long as the routes ' +
+        'ran it did both. Its lift network was severed during the 30 CE settlement and never ' +
+        'restored. In the thirteen years since, nothing has been built there and nobody has lived ' +
+        'on it.',
+      'The structure hangs on residual buoyancy alone. It will hold weight; it will not hold a ' +
+        'population, because there is no lift to bring one up and no yard service to keep one there. ' +
+        'The cradles still stand. The gantry lights still run, drawing off a reactor nobody was ever ' +
+        'sent to decommission — the yard is unoccupied and lit, which is not a combination the ' +
+        'register has a category for.',
+      'No power\'s claim covers it, and that is the whole of its present significance. The standing ' +
+        'rules permit a contested matter to be resolved on neutral plate, and at this altitude the ' +
+        'yard is the only plate that qualifies. Contested docking, claim enforcement and changes of ' +
+        'yard control are settled on it, under rules issued case by case, by machines. Nothing about ' +
+        'any of it is a declared war.',
+      'The name is not official and appears on no register. It describes what the structure does to ' +
+        'light: vertical girders at a scale nothing else in the yards matches, receding into haze, ' +
+        'dust drifting through the gantry beams. Crews who have worked it use the word nave without ' +
+        'appearing to mean anything by it. A frame in the middle of that does not look large.',
+    ],
+  },
+];
+
 /** Everything the Archive shows, in the order its sections appear. */
 export const ARCHIVE_SECTIONS = [
   {
@@ -726,6 +768,10 @@ export const ARCHIVE_SECTIONS = [
     // Stillwake — which is where three of the roster's entries lead back to.
     entries: [WORLD_ENTRY, DESCENT_ENTRY, FACTION_ENTRY, WAR_ENTRY, STILLWAKE_ENTRY],
   },
+  // Places sit between the setting and the machines: the world explains why a
+  // yard is worth fighting over, and the yard explains what the machines are
+  // standing on. Putting them after PILOTS would file a location under people.
+  { id: 'battlefields', label: 'BATTLEFIELDS', entries: BATTLEFIELD_ARCHIVE },
   { id: 'mechs', label: 'MACHINES', entries: MECH_ARCHIVE },
   { id: 'pilots', label: 'PILOTS', entries: PILOT_ARCHIVE },
 ] as const;

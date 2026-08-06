@@ -7460,3 +7460,34 @@ Two things the approval does **not** settle, both left open rather than folded i
   gantries above a cloud deck at ~2,000 m — so "orbital" is wrong regardless of
   this approval. It was flagged in the brief and is still only flagged; changing
   it is a separate edit and was not bundled here.
+
+---
+
+## D158 — BATTLEFIELDS, and CATHEDRAL YARD becomes readable
+
+D157 approved the stage's lore but left it unpublished: the Archive is where
+canon reaches the player, and the stage was not in it. It is now, in a fourth
+section.
+
+**Placed between THE WORLD and MACHINES.** The world explains why a yard is
+worth fighting over and the yard explains what the machines are standing on;
+filing a location after PILOTS would file a place under people. `ArchiveScene`
+builds its list from `ARCHIVE_SECTIONS`, so this was data only — no scene change.
+
+**`BATTLEFIELD_ARCHIVE` is a list with one element, on purpose.** That is the
+only difference between the section being extensible and it needing a rewrite
+when the second arena lands.
+
+**Ids are arena ids, and a test now enforces it.** The comment claiming stage and
+entry cannot drift was, when written, true of nothing — `session.arena` is a
+plain string and no registry existed to check it against. `archiveProse.test.ts`
+now asserts the session's arena has an entry, reading the id off the session
+rather than naming it, so a second arena is caught the same way. *A comment is
+not evidence* is a trap this project has already paid for.
+
+The entry writes the yard as **high-altitude**, not orbital. The contradicting
+"orbital drydock" wording in `README.md` and `build_arena.py` is still open and
+still not bundled — but it now disagrees with published canon rather than with a
+proposal, which raises its cost.
+
+700 tests, 31 files. Build clean.

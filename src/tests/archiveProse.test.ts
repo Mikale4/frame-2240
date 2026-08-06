@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ARCHIVE_SECTIONS } from '../data/archive';
+import { ARCHIVE_SECTIONS, BATTLEFIELD_ARCHIVE } from '../data/archive';
+import { session } from '../core/Session';
 
 /**
  * Format guards for the Archive's prose.
@@ -64,6 +65,16 @@ describe('archive prose format', () => {
       const ids = s.entries.map((e) => e.id);
       expect(new Set(ids).size, s.id).toBe(ids.length);
     }
+  });
+
+  it('gives the arena being fought over a battlefield entry', () => {
+    // BATTLEFIELD_ARCHIVE's ids are meant to be arena ids, so that shipping a
+    // stage without its page is a failure rather than a silence. Nothing else
+    // couples the two, and the comment claiming they are coupled is only true
+    // while this runs. There is one arena today; this reads it off the session
+    // rather than naming it, so a second one is caught the same way.
+    const ids = BATTLEFIELD_ARCHIVE.map((e) => e.id);
+    expect(ids, 'arena has no BATTLEFIELDS entry').toContain(session.arena);
   });
 
   it('uses a spaced em dash rather than a hyphen standing in for one', () => {
