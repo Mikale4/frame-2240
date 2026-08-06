@@ -78,6 +78,8 @@ export class MechDemo {
    */
   private readonly effects: Effects;
   private readonly tint: number;
+  /** Chassis scale, so a big machine gets a big plume. */
+  private readonly size: number;
   /** Scratch for world -> holder-local conversion. */
   private readonly scratch = new Phaser.Math.Vector2();
   private readonly pose: MechPoseSource;
@@ -104,12 +106,13 @@ export class MechDemo {
     this.renderer = new MechRenderer(scene, def, def.id);
     this.holder.add(this.renderer.root);
     // Small pool: two nozzles on one machine, not a battlefield.
-    this.effects = new Effects(scene, 0, 90);
+    this.effects = new Effects(scene, 0, 200);
     // **Under the rig**, so the plume emerges from behind the nozzle rather
     // than being painted across the chassis. Same reasoning as the battle
     // scene's separate exhaust layer.
     this.holder.addAt(this.effects.root, 0);
     this.tint = def.tint.thruster;
+    this.size = def.rig.scale;
 
     this.pose = {
       alive: true,
@@ -241,7 +244,7 @@ export class MechDemo {
         const w = this.renderer.partWorld(name);
         if (!w) continue;
         m.applyInverse(w.x, w.y, this.scratch);
-        this.effects.thruster(this.scratch.x, this.scratch.y, ang, p.thrust, this.tint);
+        this.effects.thruster(this.scratch.x, this.scratch.y, ang, p.thrust, this.tint, this.size);
       }
     }
     this.effects.update(dt);

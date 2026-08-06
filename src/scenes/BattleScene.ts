@@ -322,7 +322,8 @@ export class BattleScene extends Phaser.Scene {
     // plumes over the chassis, so they read as painted on rather than as coming
     // out of a nozzle. Impacts and explosions still want to be in front, so
     // this is a second pool underneath the mechs (20/21) rather than a move.
-    this.thrusterFx = new Effects(this, 15, 240);
+    // Three jets per nozzle at full burn, two nozzles, two machines.
+    this.thrusterFx = new Effects(this, 15, 420);
 
     this.renderers = [
       new MechRenderer(this, playerDef, playerDef.id),
@@ -2243,7 +2244,9 @@ export class BattleScene extends Phaser.Scene {
           if (!w) continue;
           const speed = Math.hypot(c.vx, c.vy);
           const ang = speed > 0.2 ? Math.atan2(c.vy, c.vx) + Math.PI : c.aim + Math.PI;
-          this.thrusterFx.thruster(w.x, w.y, ang, c.thrust, c.def.tint.thruster);
+          // `rig.scale` spans 0.82 (CIRRUS) to 1.29 (TERRAMOTH); without it a
+          // fixed plume looks 57 % smaller against the biggest machine.
+          this.thrusterFx.thruster(w.x, w.y, ang, c.thrust, c.def.tint.thruster, c.def.rig.scale);
         }
       }
 

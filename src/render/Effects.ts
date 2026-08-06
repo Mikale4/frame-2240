@@ -728,52 +728,98 @@ export class Effects {
    * A small round core is kept at the nozzle mouth: that is the hot spot the
    * streak trails out of, and without it the jet reads as detached.
    */
-  thruster(x: number, y: number, angle: number, power: number, tint: number): void {
+  thruster(
+    x: number,
+    y: number,
+    angle: number,
+    power: number,
+    tint: number,
+    size = 1,
+  ): void {
     if (power <= 0.05) return;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    // Clear of the nozzle. Scaled by power so a light burn sits closer in.
-    // Curved rather than linear, so the three states are clearly separated:
-    // holding station is a whisper, moving is a plume, and boost or dash is
-    // unmistakable. A linear ramp made a hover and a burn look much too alike
-    // once the hover floor meant the plume was always lit.
+    // Two curves above the linear one. `hot` ramps late, so movement and a
+    // burn separate; `burn` is effectively top-end only and is what makes a
+    // boost or a dash look like it costs something.
     const hot = power * power;
-    const off = 6 + power * 7;
-    const speed = 3.0 + power * 4.0 + hot * 3.0;
-    this.emit({
-      key: TEX.streak,
-      x: x + cos * off,
-      y: y + sin * off,
-      life: 7 + power * 7,
-      scaleFrom: 0.13 + power * 0.16 + hot * 0.26,
-      scaleTo: 0.02,
-      tint,
-      alpha: 0.12 + power * 0.12 + hot * 0.24,
-      rotation: angle,
-      // Thin: the plume is long and narrow, and the narrowness is most of why
-      // it reads as thrust rather than as smoke.
-      scaleYMul: 0.30,
-      vx: cos * speed,
-      vy: sin * speed,
-      drag: 0.95,
-      fadePow: 1.5,
-    });
-    // The nozzle's hot core, every other frame — small, bright, and stationary.
-    if (++this.thrusterPhase % 2 !== 0) return;
-    this.emit({
-      key: TEX.glow,
-      x: x + cos * 2,
-      y: y + sin * 2,
-      life: 5 + power * 4,
-      scaleFrom: 0.06 + power * 0.05 + hot * 0.10,
-      scaleTo: 0.01,
-      tint,
-      alpha: 0.14 + power * 0.10 + hot * 0.22,
-      vx: cos * (1.0 + power * 1.6),
-      vy: sin * (1.0 + power * 1.6),
-      drag: 0.9,
-      fadePow: 1.4,
-    });
+    const burn = hot * power;
+
+    // **A cone, not a line.** One jet at rest opening to three under load, so
+    // the plume visibly *widens* as the reactor is opened up. Count is the
+    // cheapest dramatic dial there is: it reads instantly and costs no extra
+    // brightness per particle.
+    const jets = power > 0.72 ? 3 : power > 0.38 ? 2 : 1;
+    const spread = 0.14 + 0.26 * hot;
+    for (let i = 0; i < jets; i++) {
+      const off = jets === 1 ? 0 : (i / (jets - 1) - 0.5) * spread;
+      const a = angle + off;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      // Clear of the nozzle, and further out the harder it is burning.
+      const lead = (6 + power * 8) * size;
+      this.emit({
+        key: TEX.streak,
+        x: x + ca * lead,
+        y: y + sa * lead,
+        life: 8 + power * 8,
+        scaleFrom: (0.20 + power * 0.20 + hot * 0.45) * size,
+        scaleTo: 0.02,
+        tint,
+        alpha: 0.15 + power * 0.13 + hot * 0.32,
+        rotation: a,
+        // Thin: the plume is long and narrow, and the narrowness is most of
+        // why it reads as thrust rather than as smoke.
+        scaleYMul: 0.28,
+        vx: ca * (3.5 + power * 4.0 + hot * 4.0) * size,
+        vy: sa * (3.5 + power * 4.0 + hot * 4.0) * size,
+        drag: 0.95,
+        fadePow: 1.5,
+      });
+    }
+
+    // The nozzle's hot core. Every other frame at low load — a hover should
+    // shimmer rather than roar — and every frame once it is working.
+    const coreEveryFrame = power > 0.5;
+    if (coreEveryFrame || ++this.thrusterPhase % 2 === 0) {
+      this.emit({
+        key: TEX.glow,
+        x: x + cos * 2 * size,
+        y: y + sin * 2 * size,
+        life: 5 + power * 5,
+        scaleFrom: (0.09 + power * 0.09 + hot * 0.18) * size,
+        scaleTo: 0.01,
+        tint,
+        alpha: 0.16 + power * 0.12 + hot * 0.30,
+        vx: cos * (1.2 + power * 2.0) * size,
+        vy: sin * (1.2 + power * 2.0) * size,
+        drag: 0.9,
+        fadePow: 1.4,
+      });
+    }
+
+    // **White-hot centre, at full burn only.** The one element that is not the
+    // machine's own colour: at maximum output the flame stops being cyan or
+    // amber and goes white in the middle, which is what a reactor being emptied
+    // looks like and what separates a dash from merely moving fast.
+    if (burn > 0.42) {
+      this.emit({
+        key: TEX.streak,
+        x: x + cos * 5 * size,
+        y: y + sin * 5 * size,
+        life: 5 + burn * 5,
+        scaleFrom: (0.16 + burn * 0.30) * size,
+        scaleTo: 0.02,
+        tint: 0xffffff,
+        alpha: 0.22 + burn * 0.34,
+        rotation: angle,
+        scaleYMul: 0.20,
+        vx: cos * (6.0 + burn * 6.0) * size,
+        vy: sin * (6.0 + burn * 6.0) * size,
+        drag: 0.93,
+        fadePow: 1.8,
+      });
+    }
   }
 
   private thrusterPhase = 0;

@@ -61,14 +61,20 @@ const PORTRAIT_Y = GRID_TOP + PORTRAIT_SIZE / 2;
 const DEMO_SCALE = 1.06;
 const DEMO_DROP = -10;
 /**
- * Nudge left, because the rig's origin is its **chassis**, not its silhouette.
+ * Nudge **right**, to leave the exhaust somewhere to go.
  *
- * `core` sits at (0, 0) and the weapon arm extends right from it, so centring
- * the origin in the panel leaves the machine visibly right-of-centre. This
- * balances the weapon rather than the pivot. It is one number for all eight —
- * they differ in reach, but not enough to be worth measuring per chassis.
+ * This was -16, balancing the silhouette: `core` sits at (0, 0) and the weapon
+ * arm extends right, so centring the pivot leaves the machine looking
+ * right-of-centre. Correct for a static pose and wrong once the thrusters lit —
+ * the machine faces right, so its plume streams *left*, and measured against
+ * the panel the nozzle sat at x=79 with the mask edge at x=43. Thirty-six
+ * pixels of runway, and the rest of the exhaust clipped away.
+ *
+ * Composed the way you would frame any vehicle under power instead: subject
+ * forward, exhaust trailing into open space behind it. The weapon tip crowds
+ * the right edge now, but it is thin and the plume is the thing with mass.
  */
-const DEMO_NUDGE_X = -16;
+const DEMO_NUDGE_X = 22;
 
 /**
  * Roster select: pick your machine, then your rival.
