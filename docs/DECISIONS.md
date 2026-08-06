@@ -7022,3 +7022,89 @@ The player-visible archive text was updated with it: "the arc glaive opens a
 five-hit cascade" is now "the shock baton". The chain's own numbers are
 unchanged — a baton at full extension is the same lever the polearm was, and the
 five hits were authored against the lever.
+
+## D147 — The ground game gets verbs, and the sweep that cannot see them
+
+Seven changes, all grounded-only. **`balance.ts` measures them at exactly zero
+at both tiers**, and that is the expected result rather than a disappointing
+one — see the last section.
+
+### The grounded branch never did what its own comment claimed
+
+`FlightModel.ts` carried this, above the grounded branch:
+
+> // Dash and boost stay available so ground movement is not a dead end.
+
+**They were not.** The branch `return`s before the dash block and long before
+the boost block. For the whole life of the model a machine with FlyingMode off
+could only walk, at roughly half its flight speed, with no jump and no way to
+close. Nothing tested it and nothing measured it, so an intention nobody
+implemented read as a design for four sessions.
+
+That is the real explanation for `grounded` being **0.0 %** across all eight
+machines — a defect on the handoff's list (§8e) filed as an AI mystery. It was
+never an AI question. There was nothing on the deck worth choosing.
+
+### What the deck paid, before
+
+| | |
+| --- | --- |
+| `defence.groundedMul` | TERRAMOTH **0.66**, stacking on `mul` 0.88 → **42 % off incoming** |
+| `groundedBoostRegen` | TERRAMOTH 3.4 vs 2.6 field, and it zeroes the refill delay |
+
+Both work correctly. Both were unclaimable: the bracing bonus needed you to
+stand somewhere you could not fight from, and the fast refuel filled the one
+gauge that is **only spendable after you leave**. The ground was a pit stop.
+
+And one button cancelled it outright — **the heavy forced FlyingMode on**,
+inherited from the reference's Level 2 shot. A siege platform could not fire its
+mortar while planted.
+
+### The seven
+
+* **Jump** — `Btn.Boost` with no horizontal input. Leaves the deck *without*
+  switching FlyingMode on, so gravity still owns you: a hop, not lift-off. Costs
+  `GROUND_JUMP_COST` (0.6) of a dash, because getting off the floor should not
+  be priced like crossing the arena.
+* **Ground charge** — `Btn.Boost` with a direction. A real dash, same gauge cost
+  and cooldown, that keeps you on the deck and cannot be aimed vertically. The
+  approach tool the slowest machine on the roster has never had.
+* **Boost kick** — pressing again mid-hop requests FlyingMode, so the ground is
+  never a trap. `FlightModel` does not own `flying`, so it returns a request.
+* **A — the heavy no longer forces takeoff.** The reference rule goes; the
+  identity stays. `ground.test.ts` asserted the old behaviour and now asserts
+  the new one, with the reasoning attached rather than deleted.
+* **B — a planted frame eats its own recoil.** TERRAMOTH's mortar is 4.2, and
+  recoil shoves you off the line you aimed along. This is the reason to stand
+  that the deck never had: not more damage, but output arriving where it was
+  pointed.
+* **C — knockback ×0.85 while planted.** Deliberately slight, per the request.
+  A braced frame is harder to shove, not immovable; a mech that could not be
+  moved would make the deck a place opponents cannot fight you rather than one
+  you chose.
+* **E — weapon energy ×1.5 while planted.** TERRAMOTH runs `dry` 13 % at HARD,
+  worst on the roster by 2.6x, and this is the one gauge a planted frame can
+  spend where it stands.
+* **F — guarded hits cost ×0.7 barrier while planted.** The barrier decides how
+  long a position can be held at all.
+
+### The sweep measures zero, and that is the finding
+
+**EXTREME 0.192 and HARD 0.195, bit-identical to the D145 baseline, every row
+unchanged.** Not a null result to be explained away — the expected one, and
+worth having:
+
+**`RivalAI.ts` contains no reference to `Btn.Flight` or to `flying`.** The rival
+cannot leave flight mode. It is airborne for 100 % of every measured match, so
+every rule above is unreachable in a sweep *by construction*. A non-flat result
+would have meant something was broken in airborne play.
+
+So the harness cannot be the evidence here, and 13 new tests are:
+`flight.test.ts` covers jump, charge, boost kick, the refuel and the refusals;
+`combat.test.ts` covers A, B, C, E and F against a real planted TERRAMOTH.
+
+**The next step is a separate, measurable one**: teach the rival to choose the
+deck. That is an AI change and gets its own sweep and its own entry — §2 of
+`TESTING_PROTOCOL.md`, and D143 is the record of what stacking levers costs.
+Until then this is a player-facing feature, and the honest claim is that it is
+tested, not that it is balanced.

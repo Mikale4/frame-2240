@@ -68,6 +68,15 @@ export interface FlightIntent {
   boostRegenScale?: number;
 }
 
+/**
+ * A standing jump's share of a dash's gauge cost.
+ *
+ * Cheaper than a dash because it buys height rather than distance, and because
+ * the ground game is meant to be *enterable* — charging full price to get off
+ * the deck would make the bracing bonus something you pay to leave.
+ */
+export const GROUND_JUMP_COST = 0.6;
+
 export interface FlightResult {
   /** True when a dash actually started this tick (for events/effects). */
   dashStarted: boolean;
@@ -79,6 +88,18 @@ export interface FlightResult {
   grounded: boolean;
   /** True on the tick the mech touched down. */
   landed: boolean;
+  /** A standing jump left the deck this tick. */
+  jumped: boolean;
+  /**
+   * The second boost press, taken while already airborne in ground mode.
+   *
+   * `FlightModel` does not own `flying` — `Combatant` does — so this is a
+   * request rather than an action: jump, then press again to light the
+   * thrusters and become airborne properly.
+   */
+  boostKick: boolean;
+  /** A ground charge started this tick. */
+  charged: boolean;
 }
 
 /**
@@ -102,6 +123,9 @@ export function stepFlight(
     braking: false,
     grounded: false,
     landed: false,
+    jumped: false,
+    boostKick: false,
+    charged: false,
   };
 
   if (s.dashCooldown > 0) s.dashCooldown--;
@@ -113,18 +137,73 @@ export function stepFlight(
   const boostDrain = intent.boostFree ? 0 : def.boostDrain;
 
   // ---- grounded mode (FlyingMode off) -----------------------------------
-  // The reference is not purely aerial: with the flight flag clear a machine
-  // walks and is pulled down. Dash and boost stay available so ground movement
-  // is not a dead end.
+  //
+  // **This comment used to claim "dash and boost stay available so ground
+  // movement is not a dead end". They were not.** The branch returns below,
+  // and every dash and boost path sits after that return — so for the whole
+  // life of the model a machine with FlyingMode off could only walk, at roughly
+  // half its flight speed, with no jump and no way to close. That is why
+  // `grounded` measured 0.0 % across the entire roster in AI play, and why the
+  // deck was purely a pit stop: park, take the bracing bonus, refill a boost
+  // tank you cannot spend until you leave.
+  //
+  // The ground now has three verbs of its own:
+  //
+  // * **Jump** — Boost with no horizontal input. Leaves the deck *without*
+  //   switching FlyingMode on, so gravity still owns you: a hop, not lift-off.
+  // * **Charge** — Boost with a horizontal direction. A committed rush along
+  //   the deck, which is the approach tool a siege frame has never had.
+  // * **Boost kick** — Boost again while airborne from a jump. Requests
+  //   FlyingMode from `Combatant`, so the ground is never a trap.
   if (intent.flying === false) {
     const groundY = intent.groundY ?? Infinity;
     const wasAirborne = s.y < groundY - 0.5;
+    const onDeck = s.y >= groundY - 0.5;
 
     if (!intent.lunging) {
       s.vx += Math.sign(intent.dx) * def.accel;
       const cap = def.walkSpeed * intent.speedScale;
       if (Math.abs(s.vx) > cap) s.vx = Math.sign(s.vx) * cap;
       if (intent.dx === 0) s.vx *= def.groundFriction;
+    }
+
+    // Ground charge: a horizontal dash that keeps you on the deck. Same gauge
+    // cost and cooldown as an air dash, so it is the same resource decision —
+    // what differs is that it cannot be aimed vertically, which is the whole
+    // trade for a move that keeps the bracing bonus.
+    if (
+      intent.dash &&
+      onDeck &&
+      intent.dx !== 0 &&
+      s.dashTicks <= 0 &&
+      s.dashCooldown <= 0 &&
+      s.boost >= dashCost
+    ) {
+      s.boost -= dashCost;
+      s.boostRegenTimer = def.boostRegenDelay;
+      s.dashTicks = def.dashTicks;
+      s.dashCooldown = def.dashTicks + def.dashCooldown;
+      s.dashDirX = Math.sign(intent.dx);
+      s.dashDirY = 0;
+      result.dashStarted = true;
+      result.charged = true;
+    } else if (intent.dash && onDeck && s.boost >= def.dashCost * GROUND_JUMP_COST) {
+      // Standing jump. Cheaper than a dash — it buys height, not distance.
+      s.boost -= def.dashCost * GROUND_JUMP_COST;
+      s.boostRegenTimer = def.boostRegenDelay;
+      s.vy -= def.takeoffImpulse;
+      result.jumped = true;
+    } else if (intent.dash && !onDeck) {
+      // The second press, mid-hop: light the thrusters properly.
+      result.boostKick = true;
+    }
+
+    // A charge runs as a real dash, so it keeps the authored burst speed rather
+    // than being clamped to the walk cap above.
+    if (s.dashTicks > 0) {
+      s.dashTicks--;
+      const ds = def.dashSpeed * (intent.dashSpeedScale ?? intent.speedScale);
+      s.vx = s.dashDirX * ds;
     }
 
     s.vy += def.gravity;

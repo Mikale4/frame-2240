@@ -114,8 +114,24 @@ describe('FlyingMode', () => {
     expect(ground.boost).toBeGreaterThan(air.boost);
   });
 
-  /** The reference switched FlyingMode on automatically for its Level 2 shot. */
-  it('takes off automatically for a heavy shot', () => {
+  /**
+   * **Reversed deliberately, and this is the record of why.**
+   *
+   * The reference switched FlyingMode on automatically for its Level 2 shot,
+   * and this test asserted that faithfully. On *this* roster it was destructive
+   * rather than faithful: it meant a planted machine could not fire its heavy
+   * without being kicked off the deck, so the entire grounded reward — bracing
+   * (`defence.groundedMul`, 34 % off for TERRAMOTH), the faster refuel, and now
+   * recoil immunity and the braced guard — was cancelled by the one button a
+   * siege platform exists to press.
+   *
+   * TERRAMOTH is authored end to end around standing and shooting: the best
+   * `groundedMul` on the roster, the fastest `groundedBoostRegen`, and the
+   * slowest airframe in the game. The reference's rule made that build
+   * unplayable, so the rule goes and the identity stays. A pilot who wants the
+   * shot airborne still has the flight toggle and the jump.
+   */
+  it('stays planted when a grounded mech fires its heavy', () => {
     const c = make();
     const k = ctx();
     c.step(press(Btn.Flight), null, W, H, k.spawns, k.events);
@@ -123,7 +139,7 @@ describe('FlyingMode', () => {
     expect(c.flying).toBe(false);
 
     c.step(press(Btn.Heavy), null, W, H, k.spawns, k.events);
-    expect(c.flying).toBe(true);
+    expect(c.flying).toBe(false);
     expect(c.attack?.kind).toBe(ProjKind.Heavy);
   });
 

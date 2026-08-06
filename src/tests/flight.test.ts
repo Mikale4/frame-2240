@@ -146,3 +146,67 @@ describe('flight model', () => {
     expect([a.x, a.y, a.vx, a.vy, a.boost]).toEqual([b.x, b.y, b.vx, b.vy, b.boost]);
   });
 });
+
+/**
+ * The ground game.
+ *
+ * These exist because the grounded branch carried a comment claiming "dash and
+ * boost stay available so ground movement is not a dead end" while returning
+ * before either could run — an intention nobody implemented and no test
+ * checked, for the whole life of the model. `grounded` measured 0.0 % across
+ * the roster in AI play and nobody looked at why.
+ *
+ * A balance sweep cannot cover any of this: `RivalAI` never touches
+ * `Btn.Flight`, so the rival is airborne 100 % of the time and every lever here
+ * is invisible to `balance.ts` by construction. These assertions are the only
+ * thing standing behind the feature.
+ */
+describe('ground game', () => {
+  const G = 200;
+  const ground = (over: Partial<FlightIntent> = {}): FlightIntent =>
+    intent({ flying: false, groundY: G, ...over });
+
+  it('jumps off the deck on a boost press with no direction', () => {
+    const s = state({ y: G });
+    const r = stepFlight(s, def, ground({ dash: true }));
+    expect(r.jumped).toBe(true);
+    expect(s.vy).toBeLessThan(0);
+    expect(s.boost).toBeLessThan(def.maxBoost);
+  });
+
+  it('charges along the deck on a boost press with a direction', () => {
+    const s = state({ y: G });
+    const r = stepFlight(s, def, ground({ dash: true, dx: 1 }));
+    expect(r.charged).toBe(true);
+    expect(r.jumped).toBe(false);
+    // A charge is a real dash: far faster than the walk cap it replaces.
+    expect(s.vx).toBeGreaterThan(def.walkSpeed * 1.5);
+  });
+
+  it('asks for flight on a second boost press while airborne from a jump', () => {
+    const s = state({ y: G });
+    stepFlight(s, def, ground({ dash: true }));
+    expect(s.y).toBeLessThan(G);
+    const r = stepFlight(s, def, ground({ dash: true }));
+    expect(r.boostKick).toBe(true);
+  });
+
+  it('does not ask for flight while still standing', () => {
+    const s = state({ y: G });
+    const r = stepFlight(s, def, ground({ dash: true }));
+    expect(r.boostKick).toBe(false);
+  });
+
+  it('still refuels the boost tank faster while planted', () => {
+    const s = state({ y: G, boost: 0 });
+    stepFlight(s, def, ground());
+    expect(s.boost).toBeCloseTo(def.boostRegen * def.groundedBoostRegen, 5);
+  });
+
+  it('refuses a charge with no gauge left', () => {
+    const s = state({ y: G, boost: 0 });
+    const r = stepFlight(s, def, ground({ dash: true, dx: 1 }));
+    expect(r.charged).toBe(false);
+    expect(r.jumped).toBe(false);
+  });
+});

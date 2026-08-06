@@ -145,6 +145,24 @@ export const DESPERATION_LIFE = 1 / 3;
  */
 /** Melee lock reach, ×. Puts it past the width of the viewport. */
 const DESPERATE_MELEE_RANGE = 9;
+
+/**
+ * The three dials the ground game is bought with, alongside the recoil rule in
+ * `fire` and the removed forced takeoff on the heavy.
+ *
+ * All three are deliberately modest. The deck already carried a large reward —
+ * `defence.groundedMul`, worth 34 % off incoming for TERRAMOTH — that nothing
+ * could ever claim, because the grounded branch of `FlightModel` had no jump,
+ * no dash and no boost, and firing the heavy kicked you off the floor. The work
+ * here is mostly *removing reasons not to stand*; these are the small reasons
+ * to stay once you are there.
+ */
+/** Incoming knockback taken while planted. Slight, by design — see `knockbackScale`. */
+const GROUNDED_KNOCKBACK = 0.85;
+/** Weapon-energy regen multiplier while planted. */
+const GROUNDED_ENERGY_REGEN = 1.5;
+/** Share of the usual barrier drain a guarded hit costs while planted. */
+const GROUNDED_GUARD_COST = 0.7;
 /** Dash speed, ×, on top of the Speed burst's own thrust scaling. */
 export const DESPERATE_DASH = 1.9;
 /** Projectile speed, ×, on top of the Shoot burst's own scaling. */
@@ -855,6 +873,14 @@ export class Combatant implements FlightState {
   /** Set by stepMotion when a dash begins, consumed by step() to emit an event. */
   private dashStartedThisTick = false;
   private landedThisTick = false;
+  /**
+   * A takeoff owed to the event stream, set by the boost kick out of a jump.
+   *
+   * Deferred rather than pushed at the point of decision because `stepMotion`
+   * has no `events` array — every other takeoff is raised in `tryStartAction`,
+   * which does.
+   */
+  private pendingTakeoff = false;
   /** Arena floor for this combatant; set by MatchSim. */
   groundY = Infinity;
 
@@ -1343,6 +1369,19 @@ export class Combatant implements FlightState {
   }
 
   /**
+   * How much of an incoming hit's knockback actually moves this machine.
+   *
+   * **Deliberately slight.** A braced frame is harder to shove, not immovable —
+   * knockback is how an exchange creates space, and a mech that could not be
+   * moved at all while standing would make the deck a place opponents cannot
+   * fight you, rather than one you have chosen to fight from. 15 % off is
+   * enough to feel planted and nowhere near enough to be a wall.
+   */
+  get knockbackScale(): number {
+    return this.grounded ? GROUNDED_KNOCKBACK : 1;
+  }
+
+  /**
    * Fraction of a hit that gets through a Shield burst, by category.
    *
    * Melee is tested before pierce because a melee attack is *also* marked
@@ -1471,6 +1510,10 @@ export class Combatant implements FlightState {
     }
 
     this.stepMotion(input);
+    if (this.pendingTakeoff) {
+      this.pendingTakeoff = false;
+      events.push({ t: 'takeoff', x: this.x, y: this.y, id: this.id });
+    }
     if (this.landedThisTick) {
       this.landedThisTick = false;
       events.push({ t: 'land', x: this.x, y: this.y, id: this.id });
@@ -1556,6 +1599,13 @@ export class Combatant implements FlightState {
       : g.energyRegen *
         (this.shootActive ? 2.2 : 1) *
         (passive?.energyRegenMul ?? 1) *
+        // Planted reload. The deck already refilled the boost tank faster
+        // (`groundedBoostRegen`), which was a reward for standing still that
+        // could only be spent by leaving. Weapon energy is the one a planted
+        // frame can actually use where it stands, and TERRAMOTH — which runs
+        // `dry` 13 % at HARD, worst on the roster by 2.6x — is the machine the
+        // ground game is authored around.
+        (this.grounded ? GROUNDED_ENERGY_REGEN : 1) *
         jam;
     this.energy = Math.min(g.maxEnergy, this.energy + regen);
 
@@ -2040,12 +2090,7 @@ export class Combatant implements FlightState {
         isPressed(input, Btn.Main) ||
         (isHeld(input, Btn.Main) && this.autoFireReady());
       if (twinDown) {
-        if (!this.flying) {
-          this.flying = true;
-          this.vy -= this.def.flight.takeoffImpulse * 0.6;
-          this.grounded = false;
-          events.push({ t: 'takeoff', x: this.x, y: this.y, id: this.id });
-        }
+        // **No forced takeoff.** See the note on the heavy shot below.
         // The twin slot is skipped when the heavy is the offline one, so a
         // Shoot burst still fires the gun the pilot still has.
         if (!this.weaponDisabled(WeaponSlot.Heavy)) this.beginCo(d.heavy);
@@ -2054,19 +2099,24 @@ export class Combatant implements FlightState {
       }
     }
 
-    // Heavy shot. The reference switched FlyingMode on automatically for its
-    // Level 2 shot, so a heavy commitment always happens airborne.
+    // Heavy shot.
+    //
+    // **This used to force FlyingMode on**, copying the reference, whose Level 2
+    // shot switched it automatically. Inherited, and on this roster it was
+    // destructive: a siege platform could not fire its mortar without being
+    // kicked off the deck, which took the bracing bonus away at exactly the
+    // moment it was earned. TERRAMOTH is authored around standing and shooting —
+    // `groundedMul` 0.66, the best on the roster, and the slowest airframe in
+    // the game — and the heavy was the one button that made standing impossible.
+    //
+    // A pilot who wants to be airborne for the shot can take off; that is what
+    // the flight toggle and the new jump are for. Nothing here should decide it
+    // for them.
     if (
       isPressed(input, Btn.Heavy) &&
       !this.weaponDisabled(WeaponSlot.Heavy) &&
       (this.energyFree || this.energy >= d.heavy.energyCost)
     ) {
-      if (!this.flying) {
-        this.flying = true;
-        this.vy -= this.def.flight.takeoffImpulse * 0.6;
-        this.grounded = false;
-        events.push({ t: 'takeoff', x: this.x, y: this.y, id: this.id });
-      }
       this.begin(d.heavy);
       return;
     }
@@ -2856,7 +2906,13 @@ export class Combatant implements FlightState {
 
     // Recoil pushes the chassis back along the aim axis — but only when the
     // chassis itself fired. A drone's shot must not shove its owner around.
-    if (a.recoil && !from) {
+    //
+    // **A planted frame eats its own recoil.** Firing airborne shoves you off
+    // the line you were aiming along, which is a real cost — TERRAMOTH's mortar
+    // is 4.2 — and the deck is what a gun platform braces against. This is the
+    // reason to stand still that the ground game never had: not more damage,
+    // but output that arrives where it was pointed.
+    if (a.recoil && !from && !this.grounded) {
       this.vx -= Math.cos(aim) * a.recoil;
       this.vy -= Math.sin(aim) * a.recoil;
     }
@@ -2908,6 +2964,12 @@ export class Combatant implements FlightState {
     if (r.dashStarted) this.dashStartedThisTick = true;
     this.grounded = r.grounded;
     if (r.landed) this.landedThisTick = true;
+    // The second boost press mid-hop asks for FlyingMode, which the model
+    // cannot set itself. Costs nothing extra: the jump already paid.
+    if (r.boostKick && !this.flying) {
+      this.flying = true;
+      this.pendingTakeoff = true;
+    }
     this.thrust = clamp(
       r.boosting ? 1 : r.braking ? 0.25 : Math.hypot(intent.dx, intent.dy) * 0.7,
       0,
@@ -3112,8 +3174,9 @@ export class Combatant implements FlightState {
       this.invuln = Math.max(this.invuln, this.def.gauges.hitInvuln);
       this.guarding = false;
       const l0 = Math.hypot(p.vx, p.vy) || 1;
-      this.vx += (p.vx / l0) * p.knockback;
-      this.vy += (p.vy / l0) * p.knockback;
+      const k0 = p.knockback * this.knockbackScale;
+      this.vx += (p.vx / l0) * k0;
+      this.vy += (p.vy / l0) * k0;
       return 'hit';
     }
 
@@ -3164,10 +3227,17 @@ export class Combatant implements FlightState {
           : isMelee
             ? b.meleeGuardScale
             : b.guardScale);
-      if (!this.barrierFree) this.barrier = Math.max(0, this.barrier - p.guardDamage * 0.5);
+      // Braced guard: blocking costs less gauge with your feet on something.
+      // The barrier is the resource that decides how long you can hold a
+      // position at all, so this is the dial that turns the deck from a place
+      // you survive into a place you can be *held*.
+      if (!this.barrierFree) {
+        const drain = p.guardDamage * 0.5 * (this.grounded ? GROUNDED_GUARD_COST : 1);
+        this.barrier = Math.max(0, this.barrier - drain);
+      }
       this.barrierRegenTimer = this.def.gauges.barrierRegenDelay;
       this.hitstop = Math.max(this.hitstop, Math.floor(p.hitstop * 0.6));
-      const kb = p.knockback * 0.4;
+      const kb = p.knockback * 0.4 * this.knockbackScale;
       const l = Math.hypot(p.vx, p.vy) || 1;
       this.vx += (p.vx / l) * kb;
       this.vy += (p.vy / l) * kb;
@@ -3210,8 +3280,9 @@ export class Combatant implements FlightState {
     this.act = ActState.Hitstun;
 
     const l = Math.hypot(p.vx, p.vy) || 1;
-    this.vx += (p.vx / l) * p.knockback;
-    this.vy += (p.vy / l) * p.knockback;
+    const k = p.knockback * this.knockbackScale;
+    this.vx += (p.vx / l) * k;
+    this.vy += (p.vy / l) * k;
     return 'hit';
   }
 

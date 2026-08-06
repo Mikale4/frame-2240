@@ -580,3 +580,104 @@ describe('damage and death', () => {
     expect(c.act).toBe(ActState.Hitstun);
   });
 });
+
+/**
+ * The ground game's combat half.
+ *
+ * `balance.ts` cannot see any of this — `RivalAI` never presses `Btn.Flight`,
+ * so the rival is airborne for 100 % of every measured match and every rule
+ * below is unreachable in a sweep. These assertions are the feature's only
+ * evidence, which is why each one names the behaviour rather than the constant.
+ */
+describe('ground game — combat rules', () => {
+  const G = 600;
+  /** Plants a machine on the deck, as `MatchSim` does with a real floor. */
+  // TERRAMOTH deliberately: it is the machine the ground game is authored
+  // around, and the only one whose `groundedMul` is worth standing for.
+  function planted(def = MECHS.terramoth): Combatant {
+    const c = make(def, 400, G);
+    c.groundY = G;
+    c.flying = false;
+    const k = ctx();
+    // One step to settle onto the floor and set `grounded`.
+    run(c, emptyInput(), 2, null, k);
+    return c;
+  }
+
+  it('plants a machine that has flight switched off', () => {
+    expect(planted().grounded).toBe(true);
+  });
+
+  /** A — the heavy used to force FlyingMode on and kick the mech off the deck. */
+  it('keeps a planted mech on the deck when it fires its heavy', () => {
+    const c = planted();
+    const k = ctx();
+    c.step(press(Btn.Heavy), null, W, H, k.spawns, k.events);
+    expect(c.flying).toBe(false);
+    expect(k.events.some((e) => e.t === 'takeoff')).toBe(false);
+  });
+
+  /** B — a planted frame eats its own recoil. */
+  it('takes no recoil while planted and real recoil while airborne', () => {
+    const grounded = planted();
+    const kg = ctx();
+    const before = grounded.vx;
+    run(grounded, press(Btn.Main), grounded.def.main.startup + 1, null, kg);
+    expect(kg.spawns.length).toBeGreaterThan(0);
+    expect(grounded.vx).toBeCloseTo(before, 5);
+
+    const air = make(grounded.def, 400, 200);
+    const ka = ctx();
+    run(air, press(Btn.Main), air.def.main.startup + 1, null, ka);
+    expect(ka.spawns.length).toBeGreaterThan(0);
+    expect(air.vx).toBeLessThan(0);
+  });
+
+  /** C — slight, not immovable. */
+  it('resists knockback slightly while planted, and is still moved', () => {
+    const shot = (): ProjectileSpawn => ({
+      x: 0, y: 0, vx: 10, vy: 0, damage: 0, guardDamage: 0, life: 4, radius: 6,
+      ownerId: 1, team: Team.Enemy, kind: ProjKind.Bullet,
+      barrier: BarrierResponse.Absorb, hitstop: 0, hitstun: 0, knockback: 10,
+      homing: 0, pierceCount: 0,
+    });
+    const g = planted();
+    const a = make(g.def, 400, 200);
+    g.takeHit(shot());
+    a.takeHit(shot());
+    expect(g.vx).toBeGreaterThan(0);          // still shoved
+    expect(g.vx).toBeLessThan(a.vx);          // just less far
+    expect(g.vx / a.vx).toBeGreaterThan(0.7); // and not by much
+  });
+
+  /** E — planted reload. */
+  it('regenerates weapon energy faster while planted', () => {
+    const g = planted();
+    const a = make(g.def, 400, 200);
+    g.energy = 0;
+    a.energy = 0;
+    const k = ctx();
+    run(g, emptyInput(), 30, null, k);
+    run(a, emptyInput(), 30, null, k);
+    expect(g.energy).toBeGreaterThan(a.energy);
+  });
+
+  /** F — braced guard. */
+  it('spends less barrier on a guarded hit while planted', () => {
+    const guarded = (): ProjectileSpawn => ({
+      x: 0, y: 0, vx: 10, vy: 0, damage: 20, guardDamage: 40, life: 4, radius: 6,
+      ownerId: 1, team: Team.Enemy, kind: ProjKind.Bullet,
+      barrier: BarrierResponse.Absorb, hitstop: 0, hitstun: 0, knockback: 0,
+      homing: 0, pierceCount: 0,
+    });
+    const g = planted();
+    const a = make(g.def, 400, 200);
+    g.guarding = true;
+    a.guarding = true;
+    const b0 = g.barrier;
+    g.takeHit(guarded());
+    a.takeHit(guarded());
+    expect(g.barrier).toBeLessThan(b0);        // still costs something
+    expect(g.barrier).toBeGreaterThan(a.barrier);
+  });
+});
