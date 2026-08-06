@@ -176,11 +176,11 @@ export class TitleMark {
     // against ink, not box against box.
 
     const wordImg = scene.add
-      .image(-124, -32, wm.key)
+      .image(-108, -26, wm.key)
       .setRotation(axis)
       .setOrigin(0.5, 0.5);
     const numImg = scene.add
-      .image(158, 48, nm.key)
+      .image(138, 40, nm.key)
       .setRotation(axis)
       .setOrigin(0.5, 0.5);
 
