@@ -1,13 +1,5 @@
 import Phaser from 'phaser';
 import { ActState } from '../combat/types';
-import {
-  swingArcAngle,
-  swingGrip,
-  swingLean,
-  swingLift,
-  swingReach,
-  swingWeaponSpin,
-} from '../combat/Combatant';
 import { MechRenderer, type MechPoseSource } from '../render/MechRenderer';
 import type { MechDef } from '../mechs/MechDef';
 import { ARENA_H } from '../core/GameConfig';
@@ -29,14 +21,15 @@ import { ARENA_H } from '../core/GameConfig';
  * and would cost a full combat step per frame per panel, to produce a fight
  * nobody is watching.
  *
- * The melee beat uses `swingArcAngle` and its five siblings — **the same
- * authored arc the simulation swings**, not an approximation of it. PYRE's
- * scythe sweeps 246° here because that is what `meleeLock.arc` says, so a
- * weapon re-authored in `rosterExtra.ts` re-animates here with no work.
+ * **No melee beat.** The panel deliberately shows movement and gunnery only. A
+ * swing needs a target to be legible — read at 232 px with nothing to hit, the
+ * authored arc reads as the machine flailing rather than as a strike. It is a
+ * one-line restore in `ROTATION` if that ever stops being true; the arc helpers
+ * in `Combatant` are still exported.
  */
 
 /** One thing the machine can be caught doing. */
-type Beat = 'idle' | 'boost' | 'fire' | 'melee' | 'dash' | 'saturate';
+type Beat = 'idle' | 'boost' | 'fire' | 'dash' | 'saturate';
 
 /**
  * The order is deliberate rather than random.
@@ -53,9 +46,9 @@ const ROTATION: readonly Beat[] = [
   'boost',
   'idle',
   'fire',
-  'melee',
   'idle',
   'dash',
+  'idle',
   'fire',
   'idle',
   'saturate',
@@ -66,7 +59,6 @@ const DURATION: Record<Beat, number> = {
   idle: 1.9,
   boost: 1.6,
   fire: 1.3,
-  melee: 1.8,
   dash: 1.1,
   saturate: 1.7,
 };
@@ -74,7 +66,6 @@ const DURATION: Record<Beat, number> = {
 export class MechDemo {
   private readonly renderer: MechRenderer;
   private readonly holder: Phaser.GameObjects.Container;
-  private readonly def: MechDef;
   private readonly pose: MechPoseSource;
   private beat = 0;
   private beatT = 0;
@@ -84,7 +75,6 @@ export class MechDemo {
   private readonly y: number;
 
   constructor(scene: Phaser.Scene, def: MechDef, x: number, y: number, scale = 1) {
-    this.def = def;
     // **Local origin, because `sync` owns the renderer's transform.**
     //
     // `MechRenderer.sync` sets the root's position, scale *and* depth every
@@ -196,25 +186,6 @@ export class MechDemo {
         p.thrust = 0.22;
         // A kick on each shot, which the renderer turns into a rig jitter.
         p.hitstop = within < 0.12 ? 2 : 0;
-        break;
-      }
-
-      case 'melee': {
-        // The authored arc, run twice — the same functions the lock uses.
-        const arc = this.def.meleeLock.arc;
-        const hit = u < 0.5 ? 0 : 1;
-        const local = (u % 0.5) / 0.5;
-        p.act = ActState.Attack;
-        p.swinging = true;
-        p.spin = swingArcAngle(arc, local, hit);
-        p.reach = swingReach(arc, local, hit);
-        p.grip = swingGrip(arc, local);
-        p.weaponSpin = swingWeaponSpin(arc, local, hit);
-        p.lean = swingLean(arc, local, hit);
-        p.lift = swingLift(arc, local, hit);
-        p.aim = 0.1;
-        p.bank = -0.12 * Math.sin(local * Math.PI);
-        p.thrust = 0.3;
         break;
       }
 
