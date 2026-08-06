@@ -33,9 +33,9 @@
 
 ## 2. State — verified
 
-* **638 tests** (29 files), typecheck clean, production build clean.
-* Working tree clean on `master`, no other branches. HEAD **`0c527cf`**.
-* `docs/DECISIONS.md` runs to **D143**. `docs/TIER_LIST.md` regenerated from one
+* **647 tests** (29 files), typecheck clean, production build clean.
+* Working tree clean on `master`, no other branches. HEAD **`100576d`**.
+* `docs/DECISIONS.md` runs to **D146**. `docs/TIER_LIST.md` regenerated from one
   12-seed run and is current.
 * Blender is **5.1.2 / EEVEE Next**.
 
@@ -64,48 +64,26 @@ the default controls moved to arrows + ZXC.
 
 ---
 
-## 4. NEXT TASK — CIRRUS, and the user has a hypothesis
+## 4. NEXT TASK
 
-CIRRUS is **71 % / +1.95σ on win rate**, the closest anything has come to the
-outlier flag without crossing it, and its margin is *broad* — it beats all seven
-and only TERRAMOTH holds it even.
+All three items the previous handoff named are **done** — D144, D145, D146. What
+is open now:
 
-Telemetry says the cause is **hit rate, not damage**: it throws 312.8 nominal dps
-against OBELISK's 390.3 and lands **22.6 %** where the field lands 6.5–9.1 %.
-Its attack values are the wrong lever.
-
-**The user's hypothesis, untested when the session ended:** CIRRUS is accurate
-*because it melees about half the time*, and melee is a short-range hitbox on a
-committed lock, so it lands far more reliably than anything fired.
-
-**This is directly measurable and the plumbing is already there.** The `hit`
-event carries `kind: ProjKind` (`src/combat/types.ts:242`), so
-`tools/probe/telemetry.ts` can split `landed` by kind in the switch at line ~309
-with no new instrumentation. The question to answer:
-
-* What share of each machine's *landed* damage is `ProjKind.Melee`?
-* Is CIRRUS's **ranged** arrival rate also above the field, or only its melee?
-
-If only melee, the user is right and the lever is the eight-hit chain. If its
-ranged arrival is high too, the cause is the range it fights at (538 px, closest
-on the roster) and the fact that it takes the **least stun of anyone** while
-being there — which is the more interesting finding.
-
-**Then: the roster pass.** Spread is 0.198 → 0.266, bought deliberately in D142.
-D143 records five measured attempts to pay it back, all failed. The next move is
-in the shape of D127 — fix the bottom rather than trim the top — and D127 reached
-0.198 that way.
-
-### Also outstanding
-
-* **NULLTIDE's glaive → an extended baton with animated electricity**, requested
-  and never started. It stops being an energy weapon: remove it from
-  `BLADES` in `energy_blade.py`, drop `energy` from its rig entry in
-  `rosterExtra.ts` (which now carries the blade root, not a bare `true`), and
-  the electricity wants a different generator from the projected-blade one.
-* `add_swept_blade` in `build_mechs.py` is now dead code.
-
----
+1. **CIRRUS is still the top at 68 % / +1.97σ**, and D144 killed the standing
+   explanation. Melee arrival is a roster-wide constant of 73–88 % and CIRRUS is
+   *fourth of eight* on it; the entire gap is **ranged** arrival, 18.3 % against
+   a field median of 6.2 %. No account of it can rest on fighting close, because
+   VESPER is second on that column from **790 px**, the furthest on the roster.
+2. **The largest unexamined thing on the project**: real dps is
+   `arrive × nominal`, and the roster's damage numbers are authored as if
+   nominal were the currency. The three best ranged arrivals belong to the three
+   *lowest* nominal dps machines. CIRRUS turns 331 nominal into 70.7 real;
+   OBELISK turns 394 into 27.3. That is a roster-wide authoring question.
+3. **`add_swept_blade` in `build_mechs.py` is dead code** — untouched, still
+   dead, and now that no weapon models energy at all it can go.
+4. The arc layer is one machine's. If a second ever wants discharge, the
+   `meleeArc` plumbing is general — only `BLADES`-style per-mech geometry in
+   `electric_baton.py` is hard-coded to NULLTIDE.
 
 ## 5. Traps this session paid for
 
@@ -143,16 +121,24 @@ in the shape of D127 — fix the bottom rather than trim the top — and D127 re
 
 ## 6. Roster — measured, current
 
-**EXTREME: spread 0.266, no outliers.** CIRRUS 71 %, TERRAMOTH 40 %.
-**HARD: spread 0.306, TERRAMOTH −2.06σ**, still the only flag anywhere.
-Fairness 19/28 → **13/28** inside ±0.10; the one bad pairing (VESPER over
-TERRAMOTH, +0.66) is unchanged.
+**EXTREME: spread 0.192, no outliers.** CIRRUS 68 %, NOCTURNE 40 % on win rate,
+PYRE last on lead. **HARD: spread 0.195, and for the first time there is no
+flagged outlier at either tier** — TERRAMOTH cleared, −2.06σ → −1.53σ.
 
-`docs/TIER_LIST.md` has the full rows, the regenerated matchup chart and the
-CIRRUS analysis. All three sections came from one run, which is the rule that
-table exists under.
+0.192 is the best figure ever measured here, past D127's 0.198, and it was paid
+for with **one dial**: TERRAMOTH's main `projSpeed` 11 → 17 (D145). Its repeater
+reached 682 px while the machine fought at 664–745, and 60 % of its rounds were
+expiring in open air.
 
----
+Fairness 13/28 → **15/28** inside ±0.10. The one bad pairing is unchanged in
+identity and smaller: **VESPER over TERRAMOTH, +0.66 → +0.55**, and it is now the
+*only* thing wrong with that machine — six of its other seven pairings are inside
+±0.10. §5 of `TIER_LIST.md` records that this restores the argument D120 rested
+on, every row of which had decayed.
+
+`docs/TIER_LIST.md` has the full rows, the regenerated matchup chart, the CIRRUS
+analysis and the D145 sweep. All sections came from one run, which is the rule
+that table exists under.
 
 ## 7. Art direction, settled
 
@@ -237,11 +223,13 @@ from the sprite PNGs.
 | CIRRUS `LT-21` | Mira Holloway | 1440 | Free Latitude | twin daggers, 8 | `stab` |
 | OBELISK `GD-09` | Saar Tengku | 2070 | Ironwake | ram shield, 2 | `bash` |
 | PYRE `IN-05` | Rasa Volkov | 1860 | Ashfall | energy scythe, 3 | `reap` |
-| NULLTIDE `EW-14` | Io Senna | 1610 | Free Latitude | glaive, 5 | `sweep` |
+| NULLTIDE `EW-14` | Io Senna | 1610 | Free Latitude | shock baton, 5 | `sweep` |
 
-**Energy blades**: HALCYON, VESPER, CIRRUS, PYRE, NULLTIDE — until NULLTIDE
-becomes a baton (§4). The claw, pile driver and shield project nothing and
-correctly have no `meleeEnergy` part; `roster.test.ts` enforces that both ways.
+**Energy blades**: HALCYON, VESPER, CIRRUS, PYRE. The claw, pile driver and
+shield project nothing and correctly have no `meleeEnergy` part. **NULLTIDE
+carries `meleeArc` instead** (D146) — hardware with discharge drawn over it, from
+`tools/electric_baton.py`. `roster.test.ts` enforces both parts both ways, and
+that no machine carries both.
 
 **Pilot genders are fixed by `docs/PILOT_PORTRAIT_SPEC.md`** — four women, four
 men. **Mechs are "it"; pilots get their own pronouns. The present is 43 CE.**
