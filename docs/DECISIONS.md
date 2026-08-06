@@ -7175,3 +7175,65 @@ form, and the grounded telemetry column stays. D143's disposition, for D143's
 reason: the machinery and the evidence are what let the next attempt start from
 the table instead of from the idea. The ground game itself remains a
 player-facing feature and is unaffected — see D147.
+
+## D149 — The presentation pass, and the faults it turned up
+
+A long session of visual work driven entirely by the user watching the screen.
+Almost none of it was found by a test, and three of the faults had been shipped
+and reviewed repeatedly without anyone noticing. Recorded together because the
+*pattern* is the useful part: every one was a thing the code said it did and did
+not do.
+
+### Four "it says it does this" faults
+
+* **`drawOrder` never worked for the legs.** Every rig authored
+  `… legFar, lowerBody, legNear, core …`, plainly meaning the far leg behind the
+  chassis. Both legs were parented to `lowerBody`, and the renderer applied the
+  order with `parent.bringToTop()`, which only sorts siblings within one parent.
+  A container's children always draw above its own sprite, so the chassis was
+  permanently the bottom-most thing in its own container and **the authored
+  order was unreachable**. Legs now parent to `core` with the pelvis offset
+  folded into their pivots — world positions unchanged, which is what
+  `roster.test.ts` proves — and the renderer sorts each part's *sprite* among
+  its child containers by `drawOrder` position.
+* **`FlightModel`'s grounded branch** claimed "dash and boost stay available so
+  ground movement is not a dead end" and returned before either (D147).
+* **The HUD's `TARGET:` line** was guarded on "does the foe have an escort",
+  true 76–94 % of a match, so `TARGET: PILOT` was permanent — the exact state
+  the comment above it called noise. Shows only on the escort now.
+* **The training console bound confirm and adjust to the same function** on
+  every value row. Turning the escorts off and pressing start called the toggle
+  a second time and put them back. Escape worked, because escape never touches
+  the row. Left/right now adjust; confirm starts the drill.
+
+### Presentation
+
+* **Menu backdrops were framed on the emptiest corner of the arena art.** Both
+  layers were placed at native size with origin (0,0) in a 960×540 view, so
+  Title and Results showed the top-left ~30 % of a 3072×1024 image: sky, and one
+  column tip clipping the corner that read as a stray fragment.
+* **`src/ui/HoloPanel.ts`** now owns the panel language — lit teal fill,
+  drifting scanlines, a steady frame, and the stepped flicker from D140's
+  tables. Three surfaces were drawing their own version of it.
+* **The select screen shows the machine, not the pilot** (`MechDemo`): a live
+  rig on a fixed beat rotation, driven through `MechPoseSource` rather than a
+  simulation. Scaled so the *largest* chassis fits whole and centred on its own
+  measured silhouette, because the rig origin is `core` and every chassis is a
+  different shape.
+* **Thruster exhaust** got the most work: it draws behind the machine now
+  (depth 15 against mechs at 20/21), is always lit while flying —
+  `thrust` floored at zero, so a hovering mech had nothing holding it up — and
+  scales to the chassis. `ThrusterProfiles.ts` keys the *behaviour* on faction,
+  not chassis, because exhaust is a manufacturer signature: Concord burns clean
+  and even, Emberline is a Concord engine with the tolerances gone, Ironwake
+  billows, Free Latitude is fast and deliberately irregular, Ashfall throws
+  embers.
+
+### Two measurement lessons, both mine
+
+* **A `tail -4` on vitest hid a whole test file failing to collect.** The count
+  was ten lower than the previous run and that was the only tell. Read the
+  *file* count, not just the test count.
+* **The manual loop pump reports near-zero `dt`**, so nothing ages out and a
+  particle pool looks saturated at 90/90 when its real peak is 37. Anything
+  time-dependent has to be measured on real frames.

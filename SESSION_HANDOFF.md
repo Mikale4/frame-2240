@@ -1,30 +1,30 @@
 # Session Handoff — Babel Sword: Reignition
 
-> Rewritten at the end of a long session (D136–D143).
-> Read this, then `CLAUDE.md`, then **`docs/TESTING_PROTOCOL.md`**, then §9.
+> Rewritten at the end of a long session (D144–D149).
+> Read this, then `CLAUDE.md`, then **`docs/TESTING_PROTOCOL.md`**, then §4.
 
 ---
 
 ## 1. Do these before working
 
-1. **Read `docs/TESTING_PROTOCOL.md`.** Durable home for the rules in §9; this
-   file is rewritten every session and that one is not. First rule: **test by
-   playing at EXTREME**, never NORMAL — five AI traits execute at no other tier,
-   and there are now **six** (`targetIq` joined them).
+1. **Read `docs/TESTING_PROTOCOL.md`.** Durable home for these rules; this file
+   is rewritten every session and that one is not. First rule: **test by playing
+   at EXTREME**, never NORMAL — six AI traits execute at no other tier.
 2. **Report EXTREME first.** HARD is a corroborating second sample and has
    overturned an EXTREME-only conclusion (D120).
-3. **Report win rate, not just lead.** Different numbers; they disagree. CIRRUS
-   is the live example — see §6.
+3. **Report win rate, not just lead.** They disagree, and D145 chose a shipped
+   value on exactly that — two settings tied on spread and only win rate could
+   tell them apart.
 4. **"Last" is not "outlier".** `balance.ts` prints `z` and a dispersion line.
 5. **Never bundle an incidental change with a fix** (D125).
-6. **Show the user images, don't just describe them.** Use `SendUserFile`.
-   Nearly all the useful art feedback this session came from images going back
-   and forth — including three separate defects the user spotted on screen that
-   no test would have caught.
-7. **Start the dev server**: `npm run dev` from Bash. Port **5173**.
-8. Write commit messages to a file and `git commit -F` — backticks break
-   heredocs, and they will also silently eat a `\`name\`` inside a Python
-   `str.replace`, which mangled a doc comment this session.
+6. **Show the user images, don't describe them.** Use `SendUserFile`. Every
+   visual fault this session came from the user looking at the screen; not one
+   came from a test.
+7. **Start the dev server**: `npm run dev` from Bash. Port **5173**, or **5174**
+   if 5173 is taken — read the output rather than assuming.
+8. Write commit messages to a file and `git commit -F`. Backticks break
+   heredocs, and a heredoc **ate a `\'` escape** this session and silently broke
+   a test file's parse.
 9. **Git has no configured identity.** Commit with
    `GIT_AUTHOR_NAME=Claude GIT_AUTHOR_EMAIL=noreply@anthropic.com` (and the
    `GIT_COMMITTER_*` pair) or it fails.
@@ -33,166 +33,173 @@
 
 ## 2. State — verified
 
-* **647 tests** (29 files), typecheck clean, production build clean.
-* Working tree clean on `master`, no other branches. HEAD **`100576d`**.
-* `docs/DECISIONS.md` runs to **D146**. `docs/TIER_LIST.md` regenerated from one
-  12-seed run and is current.
+* **660 tests** (29 files), typecheck clean, production build clean.
+* Working tree clean on `master`, no other branches. HEAD **`fd18bfa`**.
+* `docs/DECISIONS.md` runs to **D149**. `docs/TIER_LIST.md` is current as of
+  D145, regenerated from one 12-seed run.
 * Blender is **5.1.2 / EEVEE Next**.
 
 ---
 
 ## 3. What happened this session
 
-**D136 — the other four energy blades.** HALCYON, VESPER, CIRRUS and NULLTIDE
-were still modelled energy, and all four rendered as the *same flat white cone*
-because emission 2.4/3.0 clips every channel. All five are drawn now.
-**Blender builds no energy geometry at all** — `energy_blade.py` owns the PNG,
-the canvas and the manifest row.
+**D144 — CIRRUS's accuracy is not its melee.** The probe was counting a
+numerator without its denominator. Melee arrival is a roster constant of 73–88 %
+and CIRRUS is fourth of eight on it; its edge is entirely *ranged* arrival.
 
-**D137–D139 — training.** A rig console on the pause menu (drones, infinite sat,
-health, command list, PLAYER 2 dummy/CPU, force button/command/move), a cosmetic
-weapon-draw toggle, and the pilot now revives like the dummy.
+**D145 — TERRAMOTH's repeater 11 → 17.** Spread **0.266 → 0.192** at EXTREME,
+best ever measured, and **0.306 → 0.195** at HARD, clearing the only flagged
+outlier the project has produced.
 
-**D140 — the flicker**, transcribed from the 2005 reference's own `.air` tables.
+**D146 — NULLTIDE's glaive became an extended shock baton**, all hardware, with
+electricity drawn over it by `tools/electric_baton.py`.
 
-**D141 — melee reaches the escort.** **D142 — the lock is a choice.**
-**D143 — target selection cannot pay for D142.** See §4 and §6.
+**D147 — the ground game got verbs.** **D148 — teaching the rival to use them
+measured worse in every configuration and ships off.**
 
-**Art, unnumbered but committed.** Hands on all eight machines (every arm ended
-in a bare block), NOCTURNE's claws rebuilt to the supplied concept sheet, and
-the default controls moved to arrows + ZXC.
+**D149 — a long presentation pass.** The pattern worth carrying: four separate
+faults were *code that said it did something and did not*.
 
 ---
 
-## 4. NEXT TASK
+## 4. NEXT TASK — the sub-weapon button
 
-All three items the previous handoff named are **done** — D144, D145, D146. What
-is open now:
+`Btn.Sub` is the one control in the game that does not work, and it is **not
+unwired — it is starved.** The diagnosis is done; the design choice is not.
 
-1. **CIRRUS is still the top at 68 % / +1.97σ**, and D144 killed the standing
-   explanation. Melee arrival is a roster-wide constant of 73–88 % and CIRRUS is
-   *fourth of eight* on it; the entire gap is **ranged** arrival, 18.3 % against
-   a field median of 6.2 %. No account of it can rest on fighting close, because
-   VESPER is second on that column from **790 px**, the furthest on the roster.
-2. **The largest unexamined thing on the project**: real dps is
-   `arrive × nominal`, and the roster's damage numbers are authored as if
-   nominal were the currency. The three best ranged arrivals belong to the three
-   *lowest* nominal dps machines. CIRRUS turns 331 nominal into 70.7 real;
-   OBELISK turns 394 into 27.3. That is a roster-wide authoring question.
-3. **`add_swept_blade` in `build_mechs.py` is dead code** — untouched, still
-   dead, and now that no weapon models energy at all it can go.
-4. The arc layer is one machine's. If a second ever wants discharge, the
-   `meleeArc` plumbing is general — only `BLADES`-style per-mech geometry in
-   `electric_baton.py` is hard-coded to NULLTIDE.
+`Combatant.tryStartAction` (~line 2025) calls `orderAssist(d.sub)`, which
+refuses unless `subCharges >= cost && supporter.ready`. The drone's own
+`requestVolley()` — whose comment says it *"asks every tick"* — spends those
+charges first. The button competes with the escort for one pool and always
+loses. Every mech, every match.
 
-## 5. Traps this session paid for
+There is a vestigial second half: **`RivalAI.ts` (~line 2006) still carries a
+comment saying `Btn.Sub` "deploys and recalls the drone"**, true two designs ago
+and not now, and the AI presses it via `wantsDroneToggle` for a reason that no
+longer exists. Whatever is chosen, that and `wantsDroneToggle` go with it.
 
-* **Ablate; do not reason.** `breaker` — "kill the escort that keeps shoving you
-  out of melee" — was the most intuitive of five levers and measured as the
-  *worst configuration on the table*, worse than doing nothing, and it broke the
-  difficulty ladder by itself.
-* **Levers do not add.** `finish` and `blocking` each beat doing nothing and
-  *together* were worse than either alone.
-* **A 6-seed harness is not the instrument.** `targetablate.ts` separated levers
-  that `balance.ts` at 12 seeds showed were noise. Only compare within one
-  harness; confirm on `balance.ts` before believing anything.
-* **A silhouette is an extremum, not a mean.** Antithetic pairing cancelled the
-  filaments' average displacement and did nothing for the blade's outline,
-  because whichever single filament reaches furthest still sets the edge.
-* **`roundPixels` turns sub-pixel motion into 1 px shake.** Scaling about a
-  sprite centre and translating back is exact arithmetic and visibly shivered.
-  Put the origin on the anchor instead, once.
-* **Amplitude on a long blade is measured at the tip, in pixels.** ±3 % is 10
-  logical px on PYRE's scythe.
-* **A partial `build_all(only=[...])` still writes a partial `manifest.json`.**
-  Save a merge base **before** the build. Rebuild order: Blender → merge →
-  `energy_blade.py` → `pack_atlases.py`.
-* **`await import('/src/core/Session.ts')` hands back a module the game is not
-  using**, reliably, once `Session.ts` has been edited. Drive the real menus.
-* **The Browser pane stops compositing when it loses foreground** and Phaser's
-  loop stalls while `loop.running` still reports `true`. Pump it by hand:
-  `game.loop.step(performance.now())`. Without that, menu navigation silently
-  does nothing and the cursor just sits there.
-* **Watch out for hitstun swallowing a test's only button press.** Two false
-  negatives this session came from that and from a drone being yanked back to
-  its owner every tick, so it was never where the harness put it.
+**Three options were put to the user and none has been chosen — ask first.**
+
+1. **Reserve a charge for the player.** Smallest fix: the drone's auto-volley
+   cannot spend the last charge; only the button can. Makes the existing design
+   work as written.
+2. **Manual drone command** — reclaim the original intent: aim, send forward,
+   recall. **This was the recommendation**: CLAUDE.md lists drones as core
+   identity and the player currently has no relationship with theirs.
+3. **Give it to the mech instead of the drone** — a real second weapon per
+   chassis. Most work, most new game.
+
+### Also open
+
+* **Roster.** EXTREME spread 0.192, no outliers at either tier. The bottom is
+  **NOCTURNE at 40 % win while sitting 5th on lead** — the two columns
+  disagreeing is the PYRE-at-D121 signature, and `TIER_LIST.md` says to find the
+  specific cause rather than average them.
+* **`arrive × nominal` is the real damage currency and the roster is authored on
+  `nominal`.** The three best ranged arrivals belong to the three *lowest*
+  nominal-dps machines. Largest unexamined thing on the project.
+* **Title rename.** The user likes **S.P.A.R.** as an acronym naming *the
+  machines*. On the table: **Self-Propelled Armoured Rig** — real military
+  nomenclature, faction-neutral, and it splits registers usefully (paperwork
+  says S.P.A.R., pilots say "frame"). Not applied. `GAME_TITLE` /
+  `GAME_SUBTITLE` in `GameConfig.ts`, plus a docs pass.
+* **Art briefs written and unused**: `docs/PROMPT_PILOT_PORTRAITS.md`,
+  `docs/PROMPT_TITLE_ART.md`. **The anime portrait restyle was abandoned** — the
+  select screen shows an animated mech instead. Thumbnails unchanged.
+* **CATHEDRAL YARD's lore is a proposal awaiting approval**
+  (`STAGE_ART_BRIEF.md` §2.3). The user floated making the stage Stillwake,
+  which contradicts Stillwake having fallen below the storm layer. Needs a
+  ruling.
+* `add_swept_blade` in `build_mechs.py` is dead code.
+
+---
+
+## 5. Traps this project has paid for
+
+* **Ablate; do not reason.** The most intuitive AI lever has now measured worst
+  **twice** — `breaker` (D143), `groundIq` (D148).
+* **Levers do not add.** Subsets beat their union, in both D143 and D148.
+* **A lever that ties on spread can still buy a flagged outlier.** Check the
+  outlier line, not just the spread.
+* **A 6-seed harness is not the instrument.** Confirm on `balance.ts` at 12
+  seeds before believing anything.
+* **`tail -n` on vitest hides a test *file* failing to collect.** Read the file
+  count. That cost ten tests silently this session.
+* **The manual loop pump reports near-zero `dt`.** Particle lifetimes and pool
+  saturation must be measured on real frames — 90/90 was really 37/90.
+* **A comment is not evidence.** Four D149 faults were code contradicting its
+  own docstring.
+* **NOCTURNE has its own `NOCTURNE_RIG`** and does *not* inherit rig changes
+  from HALCYON by spread. Missed once this session.
+* **The Browser pane stops compositing when it loses foreground.** Pump by hand.
+* **Scripted `Enter` in battle opens the pause menu.** Drive menus, not fights.
+  An orphaned `requestAnimationFrame` from a timed-out call keeps running and
+  will crash the game with *your* code in the stack.
 
 ---
 
 ## 6. Roster — measured, current
 
-**EXTREME: spread 0.192, no outliers.** CIRRUS 68 %, NOCTURNE 40 % on win rate,
-PYRE last on lead. **HARD: spread 0.195, and for the first time there is no
-flagged outlier at either tier** — TERRAMOTH cleared, −2.06σ → −1.53σ.
+**EXTREME: spread 0.192, no outliers. HARD: 0.195, no outliers** — the first
+sweep with nothing flagged anywhere. CIRRUS 68 % top, NOCTURNE 40 % bottom.
+Fairness 15/28 inside ±0.10. The one bad pairing is VESPER over TERRAMOTH at
++0.55, kept by design decision (D120), and now the *only* thing wrong with that
+machine.
 
-0.192 is the best figure ever measured here, past D127's 0.198, and it was paid
-for with **one dial**: TERRAMOTH's main `projSpeed` 11 → 17 (D145). Its repeater
-reached 682 px while the machine fought at 664–745, and 60 % of its rounds were
-expiring in open air.
+`docs/TIER_LIST.md` has the full rows, the chart and the CIRRUS analysis.
 
-Fairness 13/28 → **15/28** inside ±0.10. The one bad pairing is unchanged in
-identity and smaller: **VESPER over TERRAMOTH, +0.66 → +0.55**, and it is now the
-*only* thing wrong with that machine — six of its other seven pairings are inside
-±0.10. §5 of `TIER_LIST.md` records that this restores the argument D120 rested
-on, every row of which had decayed.
-
-`docs/TIER_LIST.md` has the full rows, the regenerated matchup chart, the CIRRUS
-analysis and the D145 sweep. All sections came from one run, which is the rule
-that table exists under.
+---
 
 ## 7. Art direction, settled
 
-Semi-realistic machines that belong in CATHEDRAL YARD's painted world, separating
-from the background as foreground subjects. **Do not re-propose cel shading, do
-not darken the mechs toward the stage, do not model energy as geometry** — all
-three were tried and rejected (D128, D129, D132).
+Semi-realistic machines in CATHEDRAL YARD's painted world. **Do not re-propose
+cel shading, do not darken the mechs toward the stage, do not model energy as
+geometry** — all tried and rejected (D128, D129, D132).
 
-Energy is drawn, not modelled. Density and colour are separate dials. Brightness
-is **stepped** (a lamp is lit or it is not, and the jump is the effect); length
-**rides between keys** (a blade that steps its length reads as resizing).
+Energy is drawn, not modelled. Brightness is **stepped**; length **rides between
+keys**. `src/ui/HoloPanel.ts` owns the UI panel language;
+`src/render/ThrusterProfiles.ts` owns exhaust behaviour **by faction**.
 
 ---
 
 ## 8. Known-open defects
 
 * **8a.** Ladder test is slow and coupled to HALCYON.
-* **8b.** `Combatant.fire` builds its projectile spawn field by field. **Assert
-  on the pooled projectile, never on the attack.**
-* **8c.** New world-space `Graphics` must join `BattleScene.worldObjects`.
-* **8d.** The AI never *chooses* a command motion; the lance connects 1–2 %.
-* **8e.** `grounded` is **0.0 %** for all eight machines in AI play.
-* **8f.** The AI never chooses a sub-weapon.
-* **8h.** `Element.Corrosive` is carried by **nobody**.
+* **8b.** `Combatant.fire` builds its spawn field by field. **Assert on the
+  pooled projectile, never on the attack.**
+* **8c.** New world-space `Graphics` must join `BattleScene.worldObjects`, or
+  the UI camera draws a second copy elsewhere.
+* **8d.** ~~The AI never chooses a command motion~~ — **corrected this session.**
+  It does produce them (it has no other route to the lance); it just does not
+  deliberate. The old "lance connects 1–2 %" figure is wrong: it is 18–24 %.
+* **8e.** ~~`grounded` is 0.0 %~~ — **explained in D147**: nothing on the deck
+  was worth choosing. Still 0.0 % in AI play by design after D148.
+* **8f.** The sub-weapon button — **now §4, diagnosis complete.**
+* **8h.** `Element.Corrosive` is carried by nobody.
 * **8i.** `MechPoseSource` is the structural contract for anything drawn through
-  `MechRenderer`; it has caught `BattleScene.decoyState` repeatedly.
-* **8j.** NOCTURNE is `{ ...HALCYON }` — any new `MechDef` field added to
-  HALCYON needs a line on NOCTURNE. `roster.test.ts` now guards the one that
-  matters (`meleeEnergy` and its anchor).
-* **NEW — training ends the session if the player dies to a P2 CPU?** No: both
-  sides revive (D138/D141 era). But `MatchPhase.Over` still ends it on a
-  *timeout*, which a long drill will hit at 99 minutes.
+  `MechRenderer`; it now also covers `MechDemo`.
+* **8j.** NOCTURNE is `{ ...HALCYON }` **but its rig is a separate constant.**
+* Training ends on a timeout at 99 minutes.
 
 ---
 
 ## 9. Driving the game from the Browser pane
 
-`window.__BSR__` is the Phaser game. **Pump the loop by hand** — see §5. Skip the
-menus only if you can reach the game's own `session`; this session could not, so
-drive the real menus with the pump.
+`window.__BSR__` is the Phaser game. **Pump the loop by hand.**
 
 ```js
 const pump = (n = 6) => { for (let i = 0; i < n; i++) __BSR__.loop.step(performance.now() + i * 16); };
 const key = (code) => {
   const mk = t => new KeyboardEvent(t, { code, key: code, bubbles: true, cancelable: true });
-  window.dispatchEvent(mk('keydown')); pump(4);
-  window.dispatchEvent(mk('keyup')); pump(4);
+  window.dispatchEvent(mk('keydown')); pump(14);
+  window.dispatchEvent(mk('keyup')); pump(8);
 };
 ```
 
-`game.scene.start` does **not** stop its caller. Freeze with `game.loop.sleep()`.
-You **cannot** read the canvas back, but `game.renderer.snapshotArea` works —
-though pulling the base64 out is expensive, so prefer composing evidence offline
-from the sprite PNGs.
+Menus drive reliably; battles do not. To inspect a cutscene or a panel, call it
+directly — `getScene('Battle').cutscene.play({...})` — rather than trying to
+produce the situation in play. **Never leave a `requestAnimationFrame` loop
+running.**
 
 ---
 
@@ -202,13 +209,14 @@ from the sprite PNGs.
 | --- | --- |
 | `CLAUDE.md` | Project rules, structure, definition of done |
 | **`docs/TESTING_PROTOCOL.md`** | How to verify. Test at EXTREME; the traps |
-| **`docs/TIER_LIST.md`** | **Current.** Rows, chart, dispersion, CIRRUS |
-| `docs/DECISIONS.md` | **D1–D143** |
-| `docs/ARSENAL_PROPOSAL.md` | **Reviewed, unbuilt.** Projectiles and patterns |
+| **`docs/TIER_LIST.md`** | Rows, chart, dispersion, CIRRUS |
+| `docs/DECISIONS.md` | **D1–D149** |
+| `docs/ARSENAL_PROPOSAL.md` | Reviewed, unbuilt |
+| `docs/PROMPT_PILOT_PORTRAITS.md` | Portrait brief. **Restyle abandoned** |
+| `docs/PROMPT_TITLE_ART.md` | Title key-visual brief. Unused |
 | `tools/probe/balance.ts` | Who is winning. The instrument of record |
 | `tools/probe/telemetry.ts` | *How* a machine spent its match |
-| `tools/probe/targetablate.ts` | **New.** Per-lever ablation of target selection |
-| `tools/energy_blade.py` | Draws all five projected blades |
+| `tools/electric_baton.py` | NULLTIDE's discharge |
 
 ---
 
@@ -225,11 +233,9 @@ from the sprite PNGs.
 | PYRE `IN-05` | Rasa Volkov | 1860 | Ashfall | energy scythe, 3 | `reap` |
 | NULLTIDE `EW-14` | Io Senna | 1610 | Free Latitude | shock baton, 5 | `sweep` |
 
-**Energy blades**: HALCYON, VESPER, CIRRUS, PYRE. The claw, pile driver and
-shield project nothing and correctly have no `meleeEnergy` part. **NULLTIDE
-carries `meleeArc` instead** (D146) — hardware with discharge drawn over it, from
-`tools/electric_baton.py`. `roster.test.ts` enforces both parts both ways, and
-that no machine carries both.
+**Energy blades**: HALCYON, VESPER, CIRRUS, PYRE. **NULLTIDE carries `meleeArc`
+instead** — hardware with discharge drawn over it. The claw, pile driver and ram
+shield project nothing. `roster.test.ts` enforces all three cases.
 
 **Pilot genders are fixed by `docs/PILOT_PORTRAIT_SPEC.md`** — four women, four
 men. **Mechs are "it"; pilots get their own pronouns. The present is 43 CE.**
