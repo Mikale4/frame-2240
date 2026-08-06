@@ -241,8 +241,23 @@ export class MechSelectScene extends Phaser.Scene {
 
     // Rival skill, shown only on the final stage.
     this.skillPanel = this.add.container(VIEW_W / 2, VIEW_H * 0.50).setDepth(1000).setVisible(false);
+    // **Opaque, and behind it a scrim.**
+    //
+    // This was 0.94, on the reasoning that 6 % pass-through is invisible. It is
+    // not: the panel sits directly over the mech grid and the stat block, and
+    // 6 % of bright cyan labels on a near-black fill still reads. On screen the
+    // roster names and the POWER/SPEED rows were legible *through* the panel,
+    // which made the game's one modal look broken.
+    //
+    // The scrim is the other half. A modal that merely covers the middle of a
+    // busy screen still competes with everything around it; dimming the rest is
+    // what makes it read as a question being asked. It is the first child, so
+    // it draws under the panel, and it lives inside the container so it shows
+    // and hides with it — the container sits at the view centre, which is why a
+    // full-view rect at local (0, 0) lines up exactly.
+    const scrim = this.add.rectangle(0, 0, VIEW_W, VIEW_H, 0x03060c, 0.72);
     const panelBg = this.add
-      .rectangle(0, 0, 460, 150, 0x05080f, 0.94)
+      .rectangle(0, 0, 460, 150, 0x05080f, 1)
       .setStrokeStyle(3, 0xffd166);
     this.skillText = this.add
       .text(0, -22, '', { fontFamily: FONT, fontSize: '26px', color: '#ffd166', fontStyle: 'bold', align: 'center' })
@@ -255,7 +270,7 @@ export class MechSelectScene extends Phaser.Scene {
         align: 'center',
       })
       .setOrigin(0.5);
-    this.skillPanel.add([panelBg, this.skillText, this.skillHint]);
+    this.skillPanel.add([scrim, panelBg, this.skillText, this.skillHint]);
 
     smallText(
       this,

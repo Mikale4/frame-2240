@@ -54,9 +54,22 @@ export class TitleScene extends Phaser.Scene {
       g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1);
       g.fillRect(0, (i * VIEW_H) / 40, VIEW_W, VIEW_H / 40 + 1);
     }
-    const far = this.add.image(0, VIEW_H - 300, 'arena_far').setOrigin(0, 0);
+    // **These were framed on the emptiest corner of the art.**
+    //
+    // Both layers were placed at native size with origin (0,0) near the bottom
+    // of a 960x540 view — `arena_far` is 3072x1024 and `arena_mid` is 1536x1024,
+    // so the screen showed the top-left ~30 % of each: sky, and nothing else.
+    // The one visible feature was the tip of a single column clipping the
+    // bottom-left corner, which read as a stray fragment rather than as
+    // scenery. Every lit gantry, every warm lamp and the whole silhouette of
+    // CATHEDRAL YARD sat below the frame.
+    //
+    // Centred horizontally and pulled up so the structure fills the lower half,
+    // with the skyline behind the showcase mechs. The top stays clear for the
+    // logo — the backdrop should seat the title in a place, not compete with it.
+    const far = this.add.image((VIEW_W - 3072) / 2, 170, 'arena_far').setOrigin(0, 0);
     far.setTint(0x4a5878).setAlpha(0.65);
-    const mid = this.add.image(-120, VIEW_H - 190, 'arena_mid').setOrigin(0, 0);
+    const mid = this.add.image((VIEW_W - 1536) / 2, -170, 'arena_mid').setOrigin(0, 0);
     mid.setTint(0x6d7c9c).setAlpha(0.5);
 
     // ---- mech showcase ---------------------------------------------------

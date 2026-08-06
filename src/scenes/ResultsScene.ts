@@ -19,10 +19,12 @@ export class ResultsScene extends Phaser.Scene {
     this.input$ = new InputManager(this);
     this.input$.reset();
 
-    // Reuse the arena art as a static, dimmed backing plate.
-    const far = this.add.image(0, VIEW_H - 320, 'arena_far').setOrigin(0, 0);
+    // Reuse the arena art as a static, dimmed backing plate. Framed on the
+    // structure rather than on the sky above it — see the note in
+    // `TitleScene`, which had the same fault and the same cause.
+    const far = this.add.image((VIEW_W - 3072) / 2, 150, 'arena_far').setOrigin(0, 0);
     far.setTint(0x2b3550).setAlpha(0.8);
-    const mid = this.add.image(-80, VIEW_H - 210, 'arena_mid').setOrigin(0, 0);
+    const mid = this.add.image((VIEW_W - 1536) / 2, -200, 'arena_mid').setOrigin(0, 0);
     mid.setTint(0x39435f).setAlpha(0.55);
     makeScrim(this, 0.6, 5);
 
