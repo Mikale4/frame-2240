@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { VIEW_H, VIEW_W } from '../core/GameConfig';
 import { SAT_MODE_NAMES } from '../combat/types';
+import { HOLO_FILL, holoLevel, holoRuling, type HoloRuling } from './HoloPanel';
 
 const FONT = 'ui-monospace, Consolas, monospace';
 
@@ -10,9 +11,17 @@ export const CUTSCENE_TICKS = 76;
 const IN_TICKS = 14;
 const OUT_TICKS = 16;
 
-/** Drawn portrait size, and the plate behind it. */
-const PORTRAIT = 216;
-const PANEL = 240;
+/**
+ * Drawn portrait size, and the plate behind it.
+ *
+ * **Sized for the 96px thumbnail, not the 256px portrait.** This card used to
+ * pull the full portrait, on the reasoning that it was the one place with room
+ * for it. Now it uses the same thumbnail the corner banter boxes do, so a pilot
+ * looks identical wherever they appear — and 128 keeps the upscale from a 96px
+ * source to 1.33x, which pixel art survives. 216 would not have.
+ */
+const PORTRAIT = 128;
+const PANEL = 152;
 
 /**
  * The saturation activation cutscene.
@@ -40,7 +49,9 @@ export class SatCutscene {
   private readonly rays: Phaser.GameObjects.Image[] = [];
   private readonly portrait: Phaser.GameObjects.Image;
   private readonly portraitPanel: Phaser.GameObjects.Rectangle;
-  private readonly portraitEdge: Phaser.GameObjects.Rectangle;
+  private readonly ruling: HoloRuling;
+  /** Seconds, for the ruling's drift. */
+  private t = 0;
   private readonly modeText: Phaser.GameObjects.Text;
   private readonly subText: Phaser.GameObjects.Text;
   private readonly pilotText: Phaser.GameObjects.Text;
@@ -70,21 +81,20 @@ export class SatCutscene {
       this.root.add(ray);
     }
 
-    // The same frame the corner banter boxes use, scaled up: dark plate, thin
-    // tinted border, thicker bar on the outer edge. A translucent coloured
-    // square was the first attempt and read as an unfinished placeholder —
-    // reusing the established panel makes the cutscene look like part of the
-    // same interface rather than a different screen.
+    // The same holographic plate as the corner banter boxes and the rival-skill
+    // modal — see `src/ui/HoloPanel.ts`. It used to be a dark plate with a
+    // thicker bar down the outer edge; the bar went when the banter boxes lost
+    // theirs, for the same reason: it made one side of the frame 5px and the
+    // other three 2px, which reads as a border somebody got wrong rather than
+    // as a design.
     this.portraitPanel = scene.add
-      .rectangle(0, VIEW_H / 2, PANEL, PANEL, 0x080c15, 0.86)
+      .rectangle(0, VIEW_H / 2, PANEL, PANEL, HOLO_FILL, 0.5)
       .setOrigin(0.5, 0.5)
       .setStrokeStyle(2, 0xffffff, 0.9);
     this.root.add(this.portraitPanel);
 
-    this.portraitEdge = scene.add
-      .rectangle(0, VIEW_H / 2, 4, PANEL, 0xffffff, 1)
-      .setOrigin(0.5, 0.5);
-    this.root.add(this.portraitEdge);
+    this.ruling = holoRuling(scene, -PANEL / 2 + 3, -PANEL / 2 + 3, PANEL - 6, PANEL - 6);
+    this.root.add(this.ruling.gfx);
 
     this.portrait = scene.add.image(0, VIEW_H / 2, '__missing');
     this.portrait.setOrigin(0.5, 0.5);
@@ -150,8 +160,8 @@ export class SatCutscene {
   }
 
   /**
-   * Starts the cutscene. `portraitKey` is the full 256px portrait, not the
-   * thumbnail — this is the one place there is room for it.
+   * Starts the cutscene. `portraitKey` is the **thumbnail**, the same art the
+   * corner banter boxes use, so a pilot reads identically wherever they appear.
    */
   play(opts: {
     portraitKey: string;
@@ -185,7 +195,6 @@ export class SatCutscene {
     this.portrait.setDisplaySize(PORTRAIT, PORTRAIT);
     // Border and edge take the pilot's accent, exactly as their banter box does.
     this.portraitPanel.setStrokeStyle(2, opts.tint, 0.9);
-    this.portraitEdge.setFillStyle(opts.tint, 1);
 
     this.modeText.setText(opts.label ?? `${SAT_MODE_NAMES[opts.mode] ?? 'SATURATION'}`);
     // A forced burst is labelled as one and goes red, so the cutscene never
@@ -241,9 +250,13 @@ export class SatCutscene {
     this.portrait.setAlpha(eased);
     this.portraitPanel.setX(px);
     this.portraitPanel.setAlpha(eased);
-    // The heavy bar sits on the screen-edge side, matching the corner boxes.
-    this.portraitEdge.setX(px - this.side * (PANEL / 2 - 2));
-    this.portraitEdge.setAlpha(eased);
+    // The ruling is drawn in local space around the origin, so it rides the
+    // panel by being moved with it rather than redrawn at the panel's position.
+    this.ruling.gfx.setPosition(px, VIEW_H / 2);
+    this.ruling.gfx.setAlpha(eased * 0.9);
+    this.t += 1 / 60;
+    this.ruling.update(this.t);
+    this.portraitPanel.setFillStyle(HOLO_FILL, 0.42 + 0.16 * holoLevel(this.t));
 
     const textX = VIEW_W * (this.side > 0 ? 0.66 : 0.34);
     for (const t of [this.modeText, this.subText, this.pilotText, this.lineText]) {

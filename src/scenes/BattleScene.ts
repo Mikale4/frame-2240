@@ -1110,7 +1110,7 @@ export class BattleScene extends Phaser.Scene {
               this.effects.saturationBurst(c.x, c.y, mode, c.def.tint.accent, c.facing);
             }
             this.cutscene.play({
-              portraitKey: `pilot_${c.def.id}`,
+              portraitKey: `pilot_${c.def.id}_thumb`,
               pilot: c.def.pilot,
               mode: SatMode.Speed,
               line: pickBanter(c.def.id, 'overdrive', this.banterRng.next()),
@@ -1145,7 +1145,7 @@ export class BattleScene extends Phaser.Scene {
             // The blade lights: the energy goes somewhere, and it goes there.
             this.effects.melee(c.x, c.y, c.aim, 2, c.def.tint.glow);
             this.cutscene.play({
-              portraitKey: `pilot_${c.def.id}`,
+              portraitKey: `pilot_${c.def.id}_thumb`,
               pilot: c.def.pilot,
               mode: SatMode.Speed,
               line: pickBanter(c.def.id, 'overdriveSpent', this.banterRng.next()),
@@ -1178,7 +1178,7 @@ export class BattleScene extends Phaser.Scene {
             this.effects.saturationBurst(c.x, c.y, SatMode.Shield, c.def.tint.accent, c.facing);
             this.effects.guardBreak(c.x, c.y);
             this.cutscene.play({
-              portraitKey: `pilot_${c.def.id}`,
+              portraitKey: `pilot_${c.def.id}_thumb`,
               pilot: c.def.pilot,
               mode: SatMode.Shield,
               line: pickBanter(c.def.id, 'lastStand', this.banterRng.next()),
@@ -1266,7 +1266,7 @@ export class BattleScene extends Phaser.Scene {
           // into the corner box where it would be buried under the flash.
           if (c) {
             this.cutscene.play({
-              portraitKey: `pilot_${c.def.id}`,
+              portraitKey: `pilot_${c.def.id}_thumb`,
               pilot: c.def.pilot,
               mode: ev.mode,
               // A forced burst gets the desperate variant, so the cutscene
@@ -1795,18 +1795,12 @@ export class BattleScene extends Phaser.Scene {
     // A layer under the mechs, so an escort never hides its own machine.
     sprite.setDepth(depthSortAt(s.y, 18));
 
-    // Thruster plume trailing the drone whenever it is working to keep up.
-    const speed = Math.hypot(s.vx, s.vy);
-    if (speed > 1.2 && Math.random() < 0.5) {
-      const back = s.aim + Math.PI;
-      this.effects.thruster(
-        s.x + Math.cos(back) * 16 * dz,
-        s.y + Math.sin(back) * 16 * dz,
-        Math.atan2(s.vy, s.vx) + Math.PI,
-        Math.min(1, speed / 8),
-        c.def.tint.thruster,
-      );
-    }
+    // **No plume on the escort.** It used to trail one whenever it was working
+    // to keep up, which was fine while the effect was a small dim puff and is
+    // not now: exhaust reads as *the machine you are flying*, and four sources
+    // of it on screen — two mechs and two drones — turns a legible cue into
+    // clutter. The drone is a small thing that follows; it does not need to
+    // announce its own thrust.
 
     // Bars drawn on the drone itself.
     //
