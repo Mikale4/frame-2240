@@ -824,29 +824,106 @@ export class Effects {
 
   private thrusterPhase = 0;
 
-  dash(x: number, y: number, angle: number, tint: number): void {
+  /**
+   * A dash: the loudest thing the thrusters ever do.
+   *
+   * This was one streak and one ring, which read as a swipe rather than as a
+   * machine emptying its boost tank in a tenth of a second. A dash is the most
+   * expensive movement in the game and it should look it — so the burst is
+   * built as an actual exhaust event rather than a motion line: a hard flash at
+   * the nozzles, a cone of jets thrown backwards, and a shock ring.
+   *
+   * `size` scales the whole thing to the chassis, for the same reason the plume
+   * does — a fixed burst is lost against TERRAMOTH and enormous on CIRRUS.
+   */
+  dash(x: number, y: number, angle: number, tint: number, size = 1): void {
+    const back = angle + Math.PI;
+    const cb = Math.cos(back);
+    const sb = Math.sin(back);
+
+    // The trail the machine leaves along its travel, as before but longer.
     this.emit({
       key: TEX.streak,
       x,
       y,
-      life: 13,
-      scaleFrom: 1.5,
+      life: 14,
+      scaleFrom: 1.7 * size,
       scaleTo: 0.2,
       tint,
       alpha: 0.9,
-      rotation: angle + Math.PI,
+      rotation: back,
       scaleYMul: 0.42,
       fadePow: 1.4,
     });
+
+    // **White-hot flash at the nozzles.** The ignition, and the brightest frame
+    // of the whole move.
+    this.emit({
+      key: TEX.glow,
+      x: x + cb * 10 * size,
+      y: y + sb * 10 * size,
+      life: 7,
+      scaleFrom: 0.62 * size,
+      scaleTo: 0.04,
+      tint: 0xffffff,
+      alpha: 0.85,
+      fadePow: 2.2,
+    });
+
+    // A cone of exhaust thrown backwards. Seven jets over a wide arc, so the
+    // burst has width and does not read as a second motion line.
+    for (let i = 0; i < 7; i++) {
+      const spread = (i / 6 - 0.5) * 0.9;
+      const a = back + spread;
+      const sp = (7 + Math.random() * 7) * size;
+      this.emit({
+        key: TEX.streak,
+        x: x + Math.cos(a) * 12 * size,
+        y: y + Math.sin(a) * 12 * size,
+        life: 9 + Math.random() * 7,
+        scaleFrom: (0.45 + Math.random() * 0.35) * size,
+        scaleTo: 0.03,
+        tint: i % 3 === 0 ? 0xffffff : tint,
+        alpha: 0.55 + Math.random() * 0.3,
+        rotation: a,
+        scaleYMul: 0.26,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        drag: 0.9,
+        fadePow: 1.6,
+      });
+    }
+
+    // Sparks off the burn, thrown wide.
+    for (let i = 0; i < 9; i++) {
+      const a = back + (Math.random() - 0.5) * 1.5;
+      const sp = (4 + Math.random() * 9) * size;
+      this.emit({
+        key: TEX.spark,
+        x,
+        y,
+        life: 10 + Math.random() * 10,
+        scaleFrom: (0.10 + Math.random() * 0.12) * size,
+        scaleTo: 0.01,
+        tint,
+        alpha: 0.8,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        drag: 0.92,
+        fadePow: 1.5,
+      });
+    }
+
+    // The shock ring, larger and quicker than it was.
     this.emit({
       key: TEX.ring,
       x,
       y,
-      life: 14,
-      scaleFrom: 0.15,
-      scaleTo: 1.1,
+      life: 15,
+      scaleFrom: 0.15 * size,
+      scaleTo: 1.5 * size,
       tint: 0xffffff,
-      alpha: 0.55,
+      alpha: 0.62,
       fadePow: 2,
     });
   }

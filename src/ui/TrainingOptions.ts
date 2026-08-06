@@ -26,6 +26,13 @@ import { MECHS } from '../data/mechs';
  * Every row applies immediately through the hooks rather than on resume, so the
  * effect is visible the moment the menu closes and nothing has to remember to
  * flush pending state.
+ *
+ * **Left and right change a setting; confirm starts the drill.** Confirm used
+ * to be bound to the same function as adjust on every value row, so pressing it
+ * cycled the row a second time — turn the escorts off with left, press start,
+ * and they came straight back on, while pressing escape worked. The two keys
+ * now mean different things, which is the only way a console like this can be
+ * used without surprises.
  */
 export interface TrainingHooks {
   /** Set the player's life to a fraction of max, now. */
@@ -38,6 +45,17 @@ export interface TrainingHooks {
   applyP2: () => void;
   /** Swap the menu for the command reference. */
   openCommands: () => void;
+  /**
+   * Close the console and get back to the drill.
+   *
+   * **Confirm on a settings row means "start", not "toggle again".** Every row
+   * here applies live, so by the time a player presses confirm the change they
+   * made with left/right has already happened — and binding confirm to the same
+   * toggle function simply undid it. Turning the escorts off and pressing start
+   * put them straight back on, while pressing escape worked, which is a
+   * genuinely baffling thing to hand someone.
+   */
+  resume: () => void;
 }
 
 export function trainingMenuItems(hooks: TrainingHooks): MenuItem[] {
@@ -76,13 +94,13 @@ export function trainingMenuItems(hooks: TrainingHooks): MenuItem[] {
     {
       label: 'PLAYER 2',
       value: () => (dummy() ? 'DUMMY' : 'CPU'),
-      onSelect: toggleP2,
+      onSelect: hooks.resume,
       onAdjust: toggleP2,
     },
     {
       label: 'P2 SKILL',
       value: () => DIFFICULTY_NAMES[t.p2Difficulty] ?? 'NORMAL',
-      onSelect: () => bumpSkill(1),
+      onSelect: hooks.resume,
       onAdjust: bumpSkill,
       disabled: dummy,
       disabledNote: 'DUMMY',
@@ -90,9 +108,7 @@ export function trainingMenuItems(hooks: TrainingHooks): MenuItem[] {
     {
       label: 'FORCE BUTTON',
       value: () => forceButtonLabel(t.forceButton),
-      onSelect: () => {
-        t.forceButton = cycle(FORCE_BUTTONS, t.forceButton, 1);
-      },
+      onSelect: hooks.resume,
       onAdjust: (dir) => {
         t.forceButton = cycle(FORCE_BUTTONS, t.forceButton, dir);
       },
@@ -102,9 +118,7 @@ export function trainingMenuItems(hooks: TrainingHooks): MenuItem[] {
     {
       label: 'FORCE COMMAND',
       value: () => commandLabel(t.forceCommand),
-      onSelect: () => {
-        t.forceCommand = cycle(FORCE_COMMANDS, t.forceCommand, 1);
-      },
+      onSelect: hooks.resume,
       onAdjust: (dir) => {
         t.forceCommand = cycle(FORCE_COMMANDS, t.forceCommand, dir);
       },
@@ -114,9 +128,7 @@ export function trainingMenuItems(hooks: TrainingHooks): MenuItem[] {
     {
       label: 'FORCE MOVE',
       value: () => moveLabel(t.forceMove),
-      onSelect: () => {
-        t.forceMove = cycle(FORCE_MOVES, t.forceMove, 1);
-      },
+      onSelect: hooks.resume,
       onAdjust: (dir) => {
         t.forceMove = cycle(FORCE_MOVES, t.forceMove, dir);
       },
@@ -126,19 +138,19 @@ export function trainingMenuItems(hooks: TrainingHooks): MenuItem[] {
     {
       label: 'DRONES',
       value: () => (t.drones ? 'ACTIVE' : 'OFF'),
-      onSelect: toggleDrones,
+      onSelect: hooks.resume,
       onAdjust: toggleDrones,
     },
     {
       label: 'SAT MODE',
       value: () => (t.infiniteSat ? 'INFINITE' : 'NORMAL'),
-      onSelect: toggleSat,
+      onSelect: hooks.resume,
       onAdjust: toggleSat,
     },
     {
       label: 'HEALTH',
       value: () => healthLabel(t.health),
-      onSelect: () => bumpHealth(1),
+      onSelect: hooks.resume,
       onAdjust: bumpHealth,
     },
     { label: 'COMMAND LIST', onSelect: () => hooks.openCommands() },

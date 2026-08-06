@@ -587,6 +587,7 @@ export class BattleScene extends Phaser.Scene {
       applyHealth: (frac) => this.setTrainingHealth(frac),
       applyP2: () => this.applyP2(),
       openCommands: () => this.openCommands(),
+      resume: () => this.closePause(),
     });
   }
 
@@ -1039,7 +1040,7 @@ export class BattleScene extends Phaser.Scene {
           break;
         case 'dash': {
           const c = this.byId(ev.id);
-          this.effects.dash(ev.x, ev.y, ev.angle, c?.def.tint.thruster ?? 0x74d6ff);
+          this.effects.dash(ev.x, ev.y, ev.angle, c?.def.tint.thruster ?? 0x74d6ff, c?.def.rig.scale ?? 1);
           sfx.dash();
           break;
         }
@@ -1067,7 +1068,7 @@ export class BattleScene extends Phaser.Scene {
         }
         case 'droneDeploy': {
           const c = this.byId(ev.ownerId);
-          this.effects.dash(ev.x, ev.y, 0, c?.def.tint.thruster ?? 0x74d6ff);
+          this.effects.dash(ev.x, ev.y, 0, c?.def.tint.thruster ?? 0x74d6ff, c?.def.rig.scale ?? 1);
           sfx.assist();
           if (ev.ownerId === s.player.id) {
             this.hud.banner(`${c?.def.supporter.name ?? 'DRONE'} DEPLOY`, 36);
