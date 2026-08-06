@@ -7491,3 +7491,48 @@ still not bundled — but it now disagrees with published canon rather than with
 proposal, which raises its cost.
 
 700 tests, 31 files. Build clean.
+
+---
+
+## D159 — original letterforms, and a title mark that is not a line of text
+
+The title was system monospace at 74px. That is right for a HUD readout and
+wrong for a title, and a stack that resolves to Consolas on one machine and
+something else on the next is not a logo. `src/ui/Logotype.ts` now draws the
+name from original glyphs.
+
+**Skeletons, not outlines.** Each glyph is strokes between points on a 100-unit
+cap box; the renderer supplies weight, terminal, chamfer, slant, curvature and
+taper. A *style* is therefore a parameter set rather than a second alphabet, so
+a change to `R` is a change to every style's `R`. Three ship: `milled`
+(chamfered, constant weight, curves flattened to chords), `heraldic` (curved
+bowls, modulated strokes, the one in use), `ordnance` (near-monoline).
+
+**Curves and taper had to be added after the first render.** Straight skeletons
+at constant width produce engineering lettering and nothing else; the flow in a
+drawn title comes from a centreline that bends and a weight that swells along
+it. `curves` and `modulation` let the engineering styles share the alphabet by
+flattening and de-modulating it rather than forking it.
+
+**The full stop vanished twice.** Both terminals of a `point` stroke collapse to
+one vertex, so the single glyph built from one such stroke produced a two-vertex
+polygon that the draw loop skipped. The word rendered `FRAME 2240` and looked
+entirely deliberate — no error, no log. The first fix closed the ends against an
+inboard sample, which a straight stroke does not have, so it changed nothing.
+The real fix is a floor of two samples whenever a cap is shaped.
+`logotype.test.ts` now asserts every title character encloses area, per style.
+
+**`Logotype.ts` imports Phaser as a type only.** Phaser's device probe touches
+`window` at import, so the first version of the test collected zero tests and
+`tail` showed a plausible-looking pass. Read the file count.
+
+**The mark is two blocks on a diagonal**, not a line: `F.R.A.M.E.` high and
+left, `2240` low and right, both tilted anticlockwise so they lean against the
+arrangement. The name is on the left because putting the number there made the
+mark read `2240 F.R.A.M.E.` regardless of layout.
+
+**A four-gear train turns behind it**, rasterised once per gear and rotated as
+sprites. Angular speed is scaled by `1 / teeth` and neighbours counter-rotate,
+which is the real ratio. Tooth phase is deliberately not solved.
+
+32 files, 711 tests. Build clean.

@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
-import { GAME_TITLE, GAME_VERSION, VIEW_H, VIEW_W } from '../core/GameConfig';
+import { GAME_VERSION, VIEW_H, VIEW_W } from '../core/GameConfig';
 import { InputManager } from '../input/InputManager';
-import { bigTitle, smallText } from '../ui/Menu';
+import { smallText } from '../ui/Menu';
+import { LOGO_STYLES } from '../ui/Logotype';
+import { TitleMark } from '../ui/TitleMark';
 import { MECHS } from '../data/mechs';
 import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
@@ -18,6 +20,7 @@ import { partTexture } from '../render/PartTexture';
 export class TitleScene extends Phaser.Scene {
   private input$!: InputManager;
   private t = 0;
+  private mark!: TitleMark;
   private mechGroups: Phaser.GameObjects.Container[] = [];
   private prompt!: Phaser.GameObjects.Text;
   /** Blocks input for a beat so the button that returned here cannot re-enter. */
@@ -77,11 +80,11 @@ export class TitleScene extends Phaser.Scene {
     this.showcase('nocturne', VIEW_W * 0.84, VIEW_H * 0.52, -1);
 
     // ---- titles ----------------------------------------------------------
-    bigTitle(this, GAME_TITLE, 96, 74, '#eaf2ff');
     // **The initialism is not spelled out here, deliberately.** In the world
     // nobody expands it, so a title screen that does would be the one place the
     // game speaks out of character. It is in the README for anyone who wants it.
-    smallText(this, 'ORIGINAL AERIAL MECHA COMBAT', VIEW_W / 2, 150, 12, '#7d8ea8');
+    this.mark = new TitleMark(this, VIEW_W / 2, 118, LOGO_STYLES.heraldic);
+    smallText(this, 'ORIGINAL AERIAL MECHA COMBAT', VIEW_W / 2, 246, 12, '#7d8ea8');
 
     // ---- press start -----------------------------------------------------
     this.prompt = this.add
@@ -148,6 +151,7 @@ export class TitleScene extends Phaser.Scene {
 
   override update(_time: number, delta: number): void {
     this.t += delta / 1000;
+    this.mark.update(this.t);
 
     // Gentle hover so the showcase mechs feel alive.
     this.mechGroups.forEach((m, i) => {
