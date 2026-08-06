@@ -12,6 +12,7 @@ import { bigTitle, smallText } from '../ui/Menu';
 import { ROSTER } from '../data/mechs';
 import { ROLE_BRIEF } from '../data/droneRoles';
 import { sfx } from '../audio/Sfx';
+import { flickerLevel } from '../render/EnergyFlicker';
 import { music } from '../audio/Music';
 
 const FONT = 'ui-monospace, Consolas, monospace';
@@ -95,6 +96,7 @@ export class MechSelectScene extends Phaser.Scene {
   private skillPanel!: Phaser.GameObjects.Container;
   private skillText!: Phaser.GameObjects.Text;
   private skillHint!: Phaser.GameObjects.Text;
+  private skillBg!: Phaser.GameObjects.Rectangle;
 
   constructor() {
     super('MechSelect');
@@ -256,19 +258,29 @@ export class MechSelectScene extends Phaser.Scene {
     // and hides with it — the container sits at the view centre, which is why a
     // full-view rect at local (0, 0) lines up exactly.
     const scrim = this.add.rectangle(0, 0, VIEW_W, VIEW_H, 0x03060c, 0.72);
+    // Semi-transparent, which it can be *because* of the scrim. The original
+    // 0.94 fill failed over a bright, busy screen; over a dimmed one a lighter
+    // fill reads as a projected panel rather than a pasted box, and there is no
+    // legible detail left underneath to bleed through.
     const panelBg = this.add
-      .rectangle(0, 0, 460, 150, 0x05080f, 1)
+      .rectangle(0, 0, 300, 104, 0x060a12, 0.62)
       .setStrokeStyle(3, 0xffd166);
-    this.skillText = this.add
-      .text(0, -22, '', { fontFamily: FONT, fontSize: '26px', color: '#ffd166', fontStyle: 'bold', align: 'center' })
-      .setOrigin(0.5);
+    this.skillBg = panelBg;
+    // The caption sits above the value it names, and it is a *label*, not a
+    // control hint: the footer along the bottom of the screen already says what
+    // the arrows and ENTER do, so repeating it inside the modal was noise in
+    // the one place the player should be reading a single number.
     this.skillHint = this.add
-      .text(0, 30, 'ARROWS  adjust        ENTER  FIGHT', {
+      .text(0, -32, 'CPU DIFFICULTY', {
         fontFamily: FONT,
-        fontSize: '12px',
+        fontSize: '11px',
         color: '#8fa3bd',
         align: 'center',
       })
+      .setOrigin(0.5);
+    this.skillHint.setLetterSpacing(2);
+    this.skillText = this.add
+      .text(0, 8, '', { fontFamily: FONT, fontSize: '26px', color: '#ffd166', fontStyle: 'bold', align: 'center' })
       .setOrigin(0.5);
     this.skillPanel.add([scrim, panelBg, this.skillText, this.skillHint]);
 
@@ -428,9 +440,6 @@ export class MechSelectScene extends Phaser.Scene {
       // eight stars were not.
       this.skillText.setText(`${'◆'.repeat(d + 1)}${'◇'.repeat(DIFFICULTY_COUNT - d - 1)}\n${DIFFICULTY_NAMES[d]}`);
       this.skillText.setColor(DIFFICULTY_COLOURS[d]);
-      this.skillHint.setText(
-        `ARROWS  adjust        ENTER  ${this.picking === 'enemySkill' ? 'FIGHT' : 'NEXT'}`,
-      );
       this.cursor.setVisible(false);
     } else {
       this.cursor.setVisible(true);
@@ -560,6 +569,21 @@ export class MechSelectScene extends Phaser.Scene {
 
     // A slow pulse on the cursor, so the selection is findable at a glance.
     this.cursor.setAlpha(0.65 + 0.35 * Math.sin(this.t * 5));
+
+    // The skill panel flickers like the projected hardware everywhere else in
+    // this game does. `flickerLevel` is the same stepped table the energy
+    // blades run on (D140, transcribed from the reference's own `.air` data) —
+    // a lamp is lit or it is not, and the jump is the effect. A sine here would
+    // read as a gentle fade and would not match a single other lit thing on
+    // screen. The panel keeps a high floor so the number stays readable at the
+    // dimmest step; it is a flicker, not a blink you have to wait out.
+    if (this.skillPanel.visible) {
+      const lvl = flickerLevel(Math.floor(this.t * 60));
+      this.skillBg.setFillStyle(0x060a12, 0.5 + 0.16 * lvl);
+      this.skillBg.setStrokeStyle(3, 0xffd166, 0.55 + 0.45 * lvl);
+      this.skillText.setAlpha(0.82 + 0.18 * lvl);
+      this.skillHint.setAlpha(0.6 + 0.4 * lvl);
+    }
 
     const ui = this.input$.readUi();
     if (ui.left) this.move(-1, 0);
