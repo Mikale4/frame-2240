@@ -7108,3 +7108,70 @@ deck. That is an AI change and gets its own sweep and its own entry — §2 of
 `TESTING_PROTOCOL.md`, and D143 is the record of what stacking levers costs.
 Until then this is a player-facing feature, and the honest claim is that it is
 tested, not that it is balanced.
+
+## D148 — The rival can choose the deck, and measuring says it should not
+
+`groundIq`: a profile trait, EXTREME only, separately switchable so it could be
+ablated. It lets a rival toggle FlyingMode and fight planted, which nothing in
+`RivalAI` had ever been able to do — the class contained no reference to
+`Btn.Flight` at all.
+
+**It ships off.** Every configuration measured worse than doing nothing.
+
+### The table
+
+EXTREME, 12 seeds, both slot orders, 84 samples per mech. The control was run
+last and reproduced the baseline **exactly**, so the trait is what moved these
+numbers and not drift from the edit.
+
+| configuration | spread | outliers |
+| --- | --- | --- |
+| **off — control** | **0.192** | none |
+| narrow: retreat-to-reload only | 0.193 | **CIRRUS flagged** |
+| only when out-ranged | 0.203 | none |
+| only for resources (energy / boost / barrier) | 0.208 | none |
+| all four reasons | 0.212 | none |
+
+Three findings, and the first two are D143's findings again on new ground.
+
+**The most intuitive AI lever on the table measured worst.** "A siege walker
+should plant" is the same shape of claim as D143's `breaker` — obviously right,
+measurably wrong. TERRAMOTH is the machine the ground game is authored around,
+and turning this on took it 48 % → 46 % and its lead −0.039 → −0.053. It made
+the one machine it was designed for worse.
+
+**The levers do not add.** Each subset beat the union: 0.203 and 0.208 against
+0.212. Two reasons to stand on the deck is one reason too many, exactly as
+`finish + blocking` was in D143.
+
+**The one configuration that ties on spread buys a flagged outlier.** The narrow
+retreat-to-reload case lands at 0.193 against 0.192 — inside noise — and flags
+CIRRUS. That is the same signature `blocking` produced in D143, and it is worth
+recognising as a pattern: a lever that looks free on the aggregate is often
+paying for itself somewhere the aggregate cannot see.
+
+### What is probably wrong, and it is not the reward
+
+The deck's rewards are real and were verified by test in D147. The suspicion is
+that the **transition** is what costs, not the state:
+
+* Grounded uptime peaked at **4 %** for TERRAMOTH and 2 % for OBELISK, yet moved
+  the roster by 0.020. An effect that large from a behaviour that rare is not
+  the planted state paying badly — it is the *decision* costing something.
+* Toggling flight off does not put you on the deck; it starts you falling. The
+  descent is time spent neither maneuvering nor braced.
+* `GROUND_COMMIT` is 90 ticks, so a decision made at a bad moment is held for a
+  second and a half.
+
+**Next attempt should test the transition rather than the reasons.** Cheaper
+commit, or only planting when already low, or refusing to plant while any round
+is in the air. All three are one-line changes against the machinery this entry
+leaves in place.
+
+### Kept, not deleted
+
+`groundIq` stays in the profile table at `false`, `wantsGround` stays in full
+form, and the grounded telemetry column stays. D143's disposition, for D143's
+reason: the machinery and the evidence are what let the next attempt start from
+the table instead of from the idea. The ground game itself remains a
+player-facing feature and is unaffected — see D147.

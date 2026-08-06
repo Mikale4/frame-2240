@@ -172,6 +172,15 @@ const DISENGAGE_TICKS = 64;
  * likes the idea.
  */
 const STANCE_COMMIT = 20;
+/**
+ * Ticks the rival holds a flight-mode decision before reconsidering.
+ *
+ * Long, because the decision is expensive both ways: taking off spends the
+ * takeoff impulse and gives up the bracing bonus, and planting halves your
+ * speed. A short commit produces a rival that hovers on the boundary paying
+ * both costs.
+ */
+const GROUND_COMMIT = 90;
 /** Beyond this the sniper stance is worth its cost; inside it, it is a coffin. */
 const SNIPER_OPEN_RANGE = 620;
 /** Crowded. Drop the stance and get the legs back. */
@@ -319,6 +328,22 @@ export interface AiProfile {
    */
   frameIq: boolean;
   /**
+   * Will fight from the deck when the deck is the better place to be.
+   *
+   * D147 gave the ground real verbs — a jump, a charge, recoil immunity, a
+   * braced guard and a planted reload — and gave the bracing bonus something to
+   * be earned by. Nothing could use them: this class contains no reference to
+   * `Btn.Flight` at all, so every rival is airborne for 100 % of every match and
+   * `grounded` measured 0.0 % across the roster.
+   *
+   * **Gated, and separately switchable, because it must be ablatable.** The
+   * standing lesson (D143, and §2 of `TESTING_PROTOCOL.md`) is that the most
+   * intuitive AI lever on this project measured as the *worst* configuration on
+   * the table. "Obviously a siege walker should plant" is exactly that shape of
+   * claim, and this flag is how it gets tested rather than believed.
+   */
+  groundIq: boolean;
+  /**
    * Can commit to a **plan** — see `AiPlan`.
    *
    * Separate from the knowledge flags on purpose. Those say what a tier can
@@ -424,6 +449,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     statusIq: false,
     frameIq: false,
     planIq: false,
+    groundIq: false,
     resourceIq: false,
     droneIq: false,
     targetIq: false,
@@ -447,6 +473,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     statusIq: false,
     frameIq: false,
     planIq: false,
+    groundIq: false,
     resourceIq: false,
     droneIq: false,
     targetIq: false,
@@ -479,6 +506,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     statusIq: true,
     frameIq: true,
     planIq: false,
+    groundIq: false,
     resourceIq: false,
     droneIq: false,
     targetIq: false,
@@ -506,6 +534,7 @@ export const AI_PROFILES: Record<Difficulty, AiProfile> = {
     statusIq: true,
     frameIq: true,
     planIq: true,
+    groundIq: false,
     resourceIq: true,
     droneIq: true,
     targetIq: true,
@@ -560,6 +589,8 @@ export class RivalAI {
   private disengage = 0;
   /** Debounce on the sniper stance switch. See `STANCE_COMMIT`. */
   private stanceHold = 0;
+  /** Ticks before the flight toggle may be reconsidered. See `wantsGround`. */
+  private groundHold = 0;
   /** Buffered decision, released after the reaction delay. */
   private reactTimer = 0;
   private dirX = 0;
@@ -683,6 +714,42 @@ export class RivalAI {
     const dy = self.y - foe.y;
     const len = Math.hypot(dx, dy) || 1;
     return (foe.vx * dx + foe.vy * dy) / len > KITE_CLOSING_SPEED;
+  }
+
+  /**
+   * Is the deck the better place to be right now?
+   *
+   * Four gates, and the first is the one that keeps this honest: **planting has
+   * to actually help the chassis.** `defence.groundedMul` is authored per
+   * machine and is not always a bonus — CIRRUS's is 1.1, i.e. a skimmer pinned
+   * to the floor takes *more*, which is deliberate. VESPER and NULLTIDE sit at
+   * 1.0 and gain nothing. A rival that plants because planting is a good idea in
+   * general would be handing three machines a straight loss.
+   */
+  private wantsGround(self: Combatant, foe: Combatant, dist: number): boolean {
+    // 1. The chassis must want it at all.
+    if (self.def.defence.groundedMul >= 0.98) return false;
+
+    // 2. Never on the floor with a sword coming. The deck costs vertical
+    //    evasion, and melee is the one thing that punishes losing it — the
+    //    lunge closes faster than a walk can leave.
+    if (foe.meleeLock !== null || foe.attack?.kind === ProjKind.Melee) return false;
+    if (dist < self.effectiveMeleeRange * 1.6) return false;
+
+    // 3. Never while the job is to close. A planted frame cannot approach, and
+    //    `Approach` is the tactic that says distance is the problem.
+    if (this.tactic === AiTactic.Approach || this.tactic === AiTactic.Evade) return false;
+
+    // 4. And then only for a reason the deck actually answers. Each of these
+    //    maps to a rule D147 added, rather than to a general preference:
+    //    energy -> planted reload, boost -> the faster refuel, barrier -> the
+    //    braced guard, out-ranged -> recoil-free fire from a held position.
+    const g = self.def.gauges;
+    const dry = self.energy < g.maxEnergy * 0.35;
+    const noBoost = self.boost < self.def.flight.maxBoost * 0.3;
+    const lowGuard = self.barrier < g.maxBarrier * 0.4;
+    const outRanged = reachOf(foe.def).max > reachOf(self.def).max * 1.05;
+    return dry || noBoost || lowGuard || outRanged;
   }
 
   private disengageReach(self: Combatant, foe: Combatant): number {
@@ -1172,6 +1239,25 @@ export class RivalAI {
         // using its overdrive, which is a much louder failure than a silent one.
         pressed.v |= 1 << Btn.Saturation;
         held.v |= 1 << Btn.Saturation;
+      }
+    }
+
+    // ---- The deck ----------------------------------------------------------
+    //
+    // Toggling FlyingMode is a real commitment — a planted frame walks at about
+    // half its flight speed — so the answer is held for `GROUND_COMMIT` ticks
+    // rather than re-decided every tick. Without that the rival flickers on the
+    // boundary and gets the costs of both states and the benefits of neither,
+    // which is the failure mode `stanceHold` exists to prevent for the sniper.
+    if (this.p.groundIq) {
+      if (this.groundHold > 0) this.groundHold--;
+      else {
+        const want = this.wantsGround(self, foe, dist);
+        if (want !== !self.flying) {
+          pressed.v |= 1 << Btn.Flight;
+          held.v |= 1 << Btn.Flight;
+          this.groundHold = GROUND_COMMIT;
+        }
       }
     }
 

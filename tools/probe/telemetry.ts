@@ -100,6 +100,15 @@ interface Tally {
   ticksSwinging: number;
   ticksGuarding: number;
   /**
+   * Ticks spent planted on the deck.
+   *
+   * Added for D148. The handoff carried "grounded is 0.0 % for all eight
+   * machines" as a known defect for four sessions without this probe being able
+   * to print it, which is part of why it was filed as an AI mystery rather than
+   * investigated — see D147 for what it actually was.
+   */
+  ticksGrounded: number;
+  /**
    * Per weapon: rounds spawned, rounds consumed on contact, rounds that expired
    * in flight, and the mean distance a round covered before it stopped existing.
    *
@@ -155,6 +164,7 @@ function blank(): Tally {
     ticksNoEnergy: 0,
     ticksSwinging: 0,
     ticksGuarding: 0,
+    ticksGrounded: 0,
     bursts: 0,
     burnouts: 0,
     droneDown: 0,
@@ -198,6 +208,7 @@ function merge(into: Tally, from: Tally): void {
   into.ticksNoEnergy += from.ticksNoEnergy;
   into.ticksSwinging += from.ticksSwinging;
   into.ticksGuarding += from.ticksGuarding;
+  into.ticksGrounded += from.ticksGrounded;
   into.bursts += from.bursts;
   into.burnouts += from.burnouts;
   into.droneDown += from.droneDown;
@@ -486,6 +497,7 @@ function duel(a: MechDef, b: MechDef, seed: number, tier: Difficulty, ticks: num
       if (c.energy < c.def.main.energyCost) x.ticksNoEnergy++;
       if (c.swinging) x.ticksSwinging++;
       if (c.guarding) x.ticksGuarding++;
+      if (c.grounded) x.ticksGrounded++;
       // `onStation` rather than a liveness flag: a drone in the backpack is not
       // shooting, dome-ing or tethering, so for every question this probe is
       // asked it is as absent as a dead one.
@@ -592,6 +604,7 @@ function line(id: string, x: Tally): string {
     // half the time", which no other column here can give.
     ` swing ${pct(x.ticksSwinging)}%` +
     ` grd ${pct(x.ticksGuarding)}%` +
+    ` gnd ${pct(x.ticksGrounded)}%` +
     ` stun ${pct(x.act[ActState.Hitstun])}%` +
     ` dry ${pct(x.ticksNoEnergy)}%` +
     ` dist ${(x.distSum / Math.max(1, x.ticks)).toFixed(0).padStart(3)}`
