@@ -132,7 +132,9 @@ export class BootScene extends Phaser.Scene {
     // Brief: `docs/TITLE_STAGE_ART_BRIEF.md`.
     const TITLE_STAGE_ART = true;
     if (TITLE_STAGE_ART) {
-      for (const l of ['sky', 'haze', 'peaks', 'sea', 'cliff_mid', 'cliff_fore']) {
+      // `yards` is absent on purpose — see TitleScene's TITLE_LAYERS. Add it
+      // here and to that list in the same commit as the file, never before.
+      for (const l of ['sky', 'sea', 'structure', 'deck']) {
         this.load.image(`title_${l}`, `ui/title_${l}.png`);
       }
     }

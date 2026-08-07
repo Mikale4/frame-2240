@@ -10,12 +10,9 @@ import { music } from '../audio/Music';
 /**
  * The backdrop stack, furthest first, with an optional grading tint.
  *
- * **Aerial perspective, applied as grading rather than asked for as art.** The
- * delivered layers are painted at a uniform level of finish, so the near rock
- * arrives as fully rendered stone competing with everything in front of it. The
- * brief asked the foreground for "a shape, not a subject"; darkening it toward
- * silhouette is how that gets honoured without regenerating anything. Distance
- * eats contrast, and the nearest thing is the one that should be a shadow.
+ * All five layers are composed in one 1536x1024 frame, **including the opaque
+ * sky**, so the whole set is drawn to one shared rect and registers by
+ * construction rather than by five hand-tuned offsets.
  *
  * **Tint only — do not reach for `preFX` here.** A colour matrix and a small
  * blur read better on paper and cost a visible defect: once an object is put on
@@ -23,13 +20,17 @@ import { music } from '../audio/Music';
  * and the extra pass misaligns these `setDisplaySize`-scaled layers just enough
  * to expose a band of the opaque sky along the bottom of the screen. Tint is a
  * vertex multiply with no render target and no such trap.
+ *
+ * **`title_yards` is missing.** The distant-yard layer came back empty — max
+ * alpha 5 of 255, scattered as noise over the whole frame — and it is the layer
+ * that gives the cloud sea scale and says the world is inhabited. It belongs
+ * between the sea and the structure when it exists; `BootScene` gates it.
  */
 const TITLE_LAYERS: readonly (readonly [string, number?])[] = [
-  ['title_haze'],
-  ['title_peaks'],
+  ['title_sky'],
   ['title_sea'],
-  ['title_cliff_mid', 0x737d90],
-  ['title_cliff_fore', 0x3a4252],
+  ['title_structure'],
+  ['title_deck'],
 ];
 
 /**
@@ -70,22 +71,27 @@ export class TitleScene extends Phaser.Scene {
 
     // ---- background: the title's own vista --------------------------------
     //
-    // Was CATHEDRAL YARD's arena layers, tinted and offset to find an empty
-    // corner to put a logo on. That spent the game's only stage before the
-    // player had seen it, and a dockyard interior is a cramped first impression
-    // of a game about flight. This is a mountain summit above the cloud sea.
+    // The open edge of a yard's deck, above the cloud sea at dawn. It borrowed
+    // CATHEDRAL YARD's arena layers first, which spent the game's only stage
+    // before the player had seen it; then a mountain summit, which was a nature
+    // scene fronting a game with no nature in it.
     //
-    // **The five transparent layers were composed in one 1536x1024 frame**, so
-    // they are drawn to a single shared rect and line up by construction rather
-    // than by five hand-tuned offsets. The sky is 16:9 and covers exactly.
-    const sky = this.add.image(0, 0, 'title_sky').setOrigin(0, 0);
-    sky.setDisplaySize(VIEW_W, VIEW_W * (941 / 1672));
-
-    // 3:2 art on a 16:9 screen: filling the width overflows the height by 100px.
-    // Anchored to the bottom, because that is where the rock is and the surplus
-    // is empty sky the opaque layer already covers.
+    // 3:2 art on a 16:9 screen overflows the height by 100px, taken off the top,
+    // which is empty sky the opaque layer covers anyway. See `TITLE_LAYERS`.
     const layerH = VIEW_W * (1024 / 1536);
     for (const [key, tint] of TITLE_LAYERS) {
+      // **The deck does not quite reach the corners.** Its art runs to the last
+      // row of the frame but covers only 92 % of the width there, and what shows
+      // through the remaining 8 % is the opaque sky's warm horizon — a pink band
+      // along the bottom of the screen, under a structure that should be
+      // hanging over two kilometres of nothing. A dark plate immediately behind
+      // the deck fills it with the void that belongs there. Measured, not
+      // guessed: the gap is the corners, so the plate only has to be a strip.
+      if (key === 'title_deck') {
+        this.add
+          .rectangle(0, VIEW_H - 74, VIEW_W, 74, 0x080b12)
+          .setOrigin(0, 0);
+      }
       const img = this.add.image(0, VIEW_H - layerH, key).setOrigin(0, 0);
       img.setDisplaySize(VIEW_W, layerH);
       if (tint) img.setTint(tint);
