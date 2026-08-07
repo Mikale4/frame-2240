@@ -44,36 +44,27 @@ export class TitleScene extends Phaser.Scene {
     // there has been a gesture, and it starts immediately.
     music.play('title');
 
-    // ---- background ------------------------------------------------------
-    const g = this.add.graphics();
-    for (let i = 0; i < 40; i++) {
-      const t = i / 39;
-      const c = Phaser.Display.Color.Interpolate.ColorWithColor(
-        Phaser.Display.Color.ValueToColor(0x070a14),
-        Phaser.Display.Color.ValueToColor(0x2a2038),
-        100,
-        Math.round(t * 100),
-      );
-      g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1);
-      g.fillRect(0, (i * VIEW_H) / 40, VIEW_W, VIEW_H / 40 + 1);
+    // ---- background: the title's own vista --------------------------------
+    //
+    // Was CATHEDRAL YARD's arena layers, tinted and offset to find an empty
+    // corner to put a logo on. That spent the game's only stage before the
+    // player had seen it, and a dockyard interior is a cramped first impression
+    // of a game about flight. This is a mountain summit above the cloud sea.
+    //
+    // **The five transparent layers were composed in one 1536x1024 frame**, so
+    // they are drawn to a single shared rect and line up by construction rather
+    // than by five hand-tuned offsets. The sky is 16:9 and covers exactly.
+    const sky = this.add.image(0, 0, 'title_sky').setOrigin(0, 0);
+    sky.setDisplaySize(VIEW_W, VIEW_W * (941 / 1672));
+
+    // 3:2 art on a 16:9 screen: filling the width overflows the height by 100px.
+    // Anchored to the bottom, because that is where the rock is and the surplus
+    // is empty sky the opaque layer already covers.
+    const layerH = VIEW_W * (1024 / 1536);
+    for (const key of ['title_haze', 'title_peaks', 'title_sea', 'title_cliff_mid', 'title_cliff_fore']) {
+      const img = this.add.image(0, VIEW_H - layerH, key).setOrigin(0, 0);
+      img.setDisplaySize(VIEW_W, layerH);
     }
-    // **These were framed on the emptiest corner of the art.**
-    //
-    // Both layers were placed at native size with origin (0,0) near the bottom
-    // of a 960x540 view — `arena_far` is 3072x1024 and `arena_mid` is 1536x1024,
-    // so the screen showed the top-left ~30 % of each: sky, and nothing else.
-    // The one visible feature was the tip of a single column clipping the
-    // bottom-left corner, which read as a stray fragment rather than as
-    // scenery. Every lit gantry, every warm lamp and the whole silhouette of
-    // CATHEDRAL YARD sat below the frame.
-    //
-    // Centred horizontally and pulled up so the structure fills the lower half,
-    // with the skyline behind the showcase mechs. The top stays clear for the
-    // logo — the backdrop should seat the title in a place, not compete with it.
-    const far = this.add.image((VIEW_W - 3072) / 2, 170, 'arena_far').setOrigin(0, 0);
-    far.setTint(0x4a5878).setAlpha(0.65);
-    const mid = this.add.image((VIEW_W - 1536) / 2, -170, 'arena_mid').setOrigin(0, 0);
-    mid.setTint(0x6d7c9c).setAlpha(0.5);
 
     // ---- mech showcase ---------------------------------------------------
     this.showcase('halcyon', VIEW_W * 0.17, VIEW_H * 0.52, 1);

@@ -123,6 +123,20 @@ export class BootScene extends Phaser.Scene {
     const TITLE_MEDALLION_ART = true;
     if (TITLE_MEDALLION_ART) this.load.image('title_stillwake', 'ui/title_stillwake.png');
 
+    // Title screen backdrop: a mountain summit above the cloud sea.
+    //
+    // The title used to borrow CATHEDRAL YARD's arena layers, which spent the
+    // game's only stage before the player had seen it and made a dockyard
+    // interior the first impression of a game about flight. It has its own vista
+    // now. Same hand-gating rule as the medallion above, for the same reason.
+    // Brief: `docs/TITLE_STAGE_ART_BRIEF.md`.
+    const TITLE_STAGE_ART = true;
+    if (TITLE_STAGE_ART) {
+      for (const l of ['sky', 'haze', 'peaks', 'sea', 'cliff_mid', 'cliff_fore']) {
+        this.load.image(`title_${l}`, `ui/title_${l}.png`);
+      }
+    }
+
     // Arena parallax layers.
     // `fore` is the fast foreground: free-standing girder columns that sweep
     // past in front of the machines. Added in D124 with the hand-authored art.
