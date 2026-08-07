@@ -8,6 +8,31 @@ import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
 
 /**
+ * The backdrop stack, furthest first, with an optional grading tint.
+ *
+ * **Aerial perspective, applied as grading rather than asked for as art.** The
+ * delivered layers are painted at a uniform level of finish, so the near rock
+ * arrives as fully rendered stone competing with everything in front of it. The
+ * brief asked the foreground for "a shape, not a subject"; darkening it toward
+ * silhouette is how that gets honoured without regenerating anything. Distance
+ * eats contrast, and the nearest thing is the one that should be a shadow.
+ *
+ * **Tint only — do not reach for `preFX` here.** A colour matrix and a small
+ * blur read better on paper and cost a visible defect: once an object is put on
+ * the FX pipeline Phaser keeps it there, `preFX.clear()` does not take it off,
+ * and the extra pass misaligns these `setDisplaySize`-scaled layers just enough
+ * to expose a band of the opaque sky along the bottom of the screen. Tint is a
+ * vertex multiply with no render target and no such trap.
+ */
+const TITLE_LAYERS: readonly (readonly [string, number?])[] = [
+  ['title_haze'],
+  ['title_peaks'],
+  ['title_sea'],
+  ['title_cliff_mid', 0x737d90],
+  ['title_cliff_fore', 0x3a4252],
+];
+
+/**
  * Attract screen: a vista, the title, and nothing to decide.
  *
  * Every option used to live here, which made the first thing a player saw a
@@ -60,9 +85,10 @@ export class TitleScene extends Phaser.Scene {
     // Anchored to the bottom, because that is where the rock is and the surplus
     // is empty sky the opaque layer already covers.
     const layerH = VIEW_W * (1024 / 1536);
-    for (const key of ['title_haze', 'title_peaks', 'title_sea', 'title_cliff_mid', 'title_cliff_fore']) {
+    for (const [key, tint] of TITLE_LAYERS) {
       const img = this.add.image(0, VIEW_H - layerH, key).setOrigin(0, 0);
       img.setDisplaySize(VIEW_W, layerH);
+      if (tint) img.setTint(tint);
     }
 
     // ---- titles ----------------------------------------------------------
