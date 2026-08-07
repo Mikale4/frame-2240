@@ -79,6 +79,26 @@ const TRAIN: GearSpec[] = [
 /** Degrees per second for a 26-tooth gear; everything else scales off it. */
 const BASE_RPM = 5.5;
 
+/**
+ * Supersampling factor for the gear rasters.
+ *
+ * **This is what stops the train shaking.** The game runs `roundPixels: true`,
+ * and a gear is line art roughly a pixel and a half wide. Rasterised at final
+ * size, every stroke crawls across a pixel boundary as the wheel turns, and a
+ * ring of crawling strokes reads as the whole gear vibrating. Drawing at twice
+ * the size and displaying at half means each screen pixel averages four texels,
+ * so the lines resolve to steady grey instead of flickering between on and off.
+ *
+ * Costs one boot-time raster at 4x the area and nothing per frame.
+ *
+ * **Two, not more.** Three measured *worse* — 65 hard pixel flips against 25 —
+ * because linear filtering averages a 2x2 texel neighbourhood and nothing
+ * larger, so a 2x reduction is exactly what it can resolve and a 3x reduction
+ * undersamples again. Raising this without also generating mipmaps makes the
+ * problem it was added to fix come back.
+ */
+const GEAR_SS = 2;
+
 const INK = 'rgba(146,176,220,0.7)';
 const INK_FAINT = 'rgba(146,176,220,0.42)';
 const INK_BRIGHT = 'rgba(226,198,142,0.85)';
@@ -200,7 +220,9 @@ function gearTexture(
 ): void {
   if (scene.textures.exists(key)) return;
   const pad = 10;
-  const size = Math.ceil((r + pad) * 2);
+  // Everything below is drawn in supersampled space; the caller scales back down.
+  r *= GEAR_SS;
+  const size = Math.ceil((r + pad * GEAR_SS) * 2);
   const tex = scene.textures.createCanvas(key, size, size);
   if (!tex) return;
   const ctx = tex.getContext();
@@ -390,6 +412,10 @@ export class TitleMark {
       const key = `gear_${g.r}_${g.teeth}_${g.web}`;
       gearTexture(scene, key, g.r, g.teeth, g.web);
       const img = scene.add.image(g.x, g.y, key).setAlpha(g.alpha);
+      // Back down to logical size. Linear filtering is what actually averages
+      // the supersampled texels; without it this would just be a bigger raster.
+      img.setScale(1 / GEAR_SS);
+      scene.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
       this.container.add(img);
       // Real ratio: angular speed is inversely proportional to tooth count.
       this.gears.push({ img, rate: ((BASE_RPM * 26) / g.teeth) * g.dir });
