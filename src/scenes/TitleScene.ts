@@ -4,24 +4,26 @@ import { InputManager } from '../input/InputManager';
 import { smallText } from '../ui/Menu';
 import { LOGO_STYLES } from '../ui/Logotype';
 import { TitleMark } from '../ui/TitleMark';
-import { MECHS } from '../data/mechs';
 import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
-import { PART_SCALE } from '../render/MechRenderer';
-import { partTexture } from '../render/PartTexture';
 
 /**
- * Attract screen: title art, a slow parade of mechs, and nothing to decide.
+ * Attract screen: a vista, the title, and nothing to decide.
  *
  * Every option used to live here, which made the first thing a player saw a
  * settings form. The options now live in `MenuScene`; this screen exists to be
  * looked at, and any button moves on.
+ *
+ * **Two showcase mechs used to stand in the middle of it.** They were built to
+ * give a flat backdrop something to look at. The backdrop is now the subject,
+ * and two machines parked in front of it were competing with the thing they were
+ * hired to decorate. The roster is introduced on the select screen, where the
+ * player is choosing from it.
  */
 export class TitleScene extends Phaser.Scene {
   private input$!: InputManager;
   private t = 0;
   private mark!: TitleMark;
-  private mechGroups: Phaser.GameObjects.Container[] = [];
   private prompt!: Phaser.GameObjects.Text;
   /** Blocks input for a beat so the button that returned here cannot re-enter. */
   private armAt = 0;
@@ -33,9 +35,6 @@ export class TitleScene extends Phaser.Scene {
   create(): void {
     this.input$ = new InputManager(this);
     this.input$.reset();
-    // Field initialisers do not re-run on a scene restart, so clear this or
-    // returning to the title would animate the previous visit's dead containers.
-    this.mechGroups = [];
     this.t = 0;
     this.armAt = 0.25;
 
@@ -66,10 +65,6 @@ export class TitleScene extends Phaser.Scene {
       img.setDisplaySize(VIEW_W, layerH);
     }
 
-    // ---- mech showcase ---------------------------------------------------
-    this.showcase('halcyon', VIEW_W * 0.17, VIEW_H * 0.52, 1);
-    this.showcase('nocturne', VIEW_W * 0.84, VIEW_H * 0.52, -1);
-
     // ---- titles ----------------------------------------------------------
     // **The initialism is not spelled out here, deliberately.** In the world
     // nobody expands it, so a title screen that does would be the one place the
@@ -94,61 +89,9 @@ export class TitleScene extends Phaser.Scene {
     smallText(this, `v${GAME_VERSION}`, VIEW_W - 12, VIEW_H - 10, 10, '#3f4c5e', [1, 1]);
   }
 
-  /** Builds a static assembled mech from its part sprites for the title art. */
-  private showcase(mechId: string, x: number, y: number, facing: number): void {
-    const def = MECHS[mechId];
-    const root = this.add.container(x, y);
-    root.scaleX = facing;
-    root.setScale(facing * 1.45, 1.45);
-
-    const nodes = new Map<string, Phaser.GameObjects.Container>();
-    for (const part of def.rig.parts) {
-      const c = this.add.container(part.x, part.y);
-      const tex = partTexture(this, mechId, part.name);
-      const img = this.add.image(0, 0, tex.key, tex.frame);
-      img.setScale(PART_SCALE);
-      c.add(img);
-      nodes.set(part.name, c);
-    }
-    for (const part of def.rig.parts) {
-      const node = nodes.get(part.name)!;
-      const parent = part.parent ? nodes.get(part.parent) : null;
-      (parent ?? root).add(node);
-    }
-    for (const name of def.rig.drawOrder) {
-      const n = nodes.get(name);
-      if (n?.parentContainer) n.parentContainer.bringToTop(n);
-    }
-
-    // The showcase is a rest pose, so stow the melee weapon exactly as the
-    // in-game rig does. Drawn together, the saber blade crosses straight
-    // through the rifle.
-    nodes.get('meleeWeapon')?.setVisible(false);
-
-    root.setData('nodes', nodes);
-    this.mechGroups.push(root);
-
-    this.add
-      .text(x, y + 96, `${def.codeName}\n${def.name}`, {
-        fontFamily: 'ui-monospace, Consolas, monospace',
-        fontSize: '15px',
-        color: '#' + def.tint.primary.toString(16).padStart(6, '0'),
-        align: 'center',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5, 0)
-      .setStroke('#070b12', 5);
-  }
-
   override update(_time: number, delta: number): void {
     this.t += delta / 1000;
     this.mark.update(this.t);
-
-    // Gentle hover so the showcase mechs feel alive.
-    this.mechGroups.forEach((m, i) => {
-      m.y += Math.sin(this.t * 1.5 + i * 1.7) * 0.16;
-      m.rotation = Math.sin(this.t * 0.9 + i) * 0.02;
-    });
 
     // Slow pulse rather than a hard blink: readable, and it never disappears at
     // the moment someone looks at it.
