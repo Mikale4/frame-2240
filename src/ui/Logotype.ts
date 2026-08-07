@@ -315,7 +315,14 @@ function strokePoly(s: Stroke, style: LogoStyle): Pt[] {
   const base = style[s.w];
   const capA = s.cap ?? 'flat';
   const capB = s.capB ?? s.cap ?? 'flat';
-  const curve = s.c && style.curves ? s.c : null;
+  // **Flattened, never discarded.** `curves: false` used to drop the control
+  // point entirely, which collapsed both of `0`'s opposing arcs onto the same
+  // vertical chord — one bar instead of a ring — and turned `2`'s shoulder into
+  // a diagonal, so the number read `zz41`. Every engineering style shipped
+  // broken and the test suite missed it, because a bar still encloses ink.
+  // Flattening to a few chords keeps the letterform and still reads as machined.
+  const curve = s.c ?? null;
+  const segments = style.curves ? 20 : 3;
 
   /**
    * Taper at `t`, pulled toward constant width by the style.
@@ -349,8 +356,9 @@ function strokePoly(s: Stroke, style: LogoStyle): Pt[] {
   // actual fix; closing the ends against an inboard sample only works if one
   // exists.
   const shapedCap = capA !== 'flat' || capB !== 'flat';
-  const N =
-    curve || (s.taper && s.taper.length > 2 && style.modulation > 0) ? 20 : shapedCap ? 2 : 1;
+  const N = curve
+    ? segments
+    : (s.taper && s.taper.length > 2 && style.modulation > 0) ? 20 : shapedCap ? 2 : 1;
 
   const at = (t: number): { p: Pt; u: Pt; h: number } => {
     let p: Pt;

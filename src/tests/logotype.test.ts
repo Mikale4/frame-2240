@@ -59,6 +59,41 @@ describe('logotype', () => {
     expect(measure('F.', style)).toBeGreaterThan(measure('F', style));
   });
 
+  it('keeps a glyph recognisable when a style flattens its curves', () => {
+    // **Ink is not legibility.** `curves: false` used to discard the control
+    // point instead of flattening it, which put both of `0`'s opposing arcs on
+    // the same vertical chord — a single bar — and dropped `2`'s shoulder to a
+    // diagonal. The number rendered `zz41` in every engineering style, and the
+    // area assertions above all passed, because a bar encloses ink perfectly
+    // well. Comparing the flattened glyph against the curved one is what
+    // catches a letterform collapsing rather than merely existing.
+    const curved = LOGO_STYLES.heraldic;
+    const flat = LOGO_STYLES.milled;
+    for (const ch of ['0', '2', 'R']) {
+      const inkArea = (style: (typeof LOGO_STYLES)[string]) =>
+        wordPolys(ch, style)
+          .filter((p) => p.length >= 3)
+          .reduce((sum, p) => sum + area(p), 0);
+      const ratio = inkArea(flat) / inkArea(curved);
+      // Weights differ between the two styles, so this is deliberately loose —
+      // it is checking that the shape survived, not that it is identical.
+      expect(ratio, `${ch} changes shape drastically when flattened`).toBeGreaterThan(0.45);
+      expect(ratio, `${ch} changes shape drastically when flattened`).toBeLessThan(2.2);
+    }
+  });
+
+  it('draws the zero as a ring rather than a bar in every style', () => {
+    // The specific collapse, named. A ring spans most of its advance; the bar it
+    // degenerated into spanned one stem width.
+    for (const [name, style] of STYLES) {
+      const xs = wordPolys('0', style)
+        .filter((p) => p.length >= 3)
+        .flatMap((p) => p.map(([x]) => x));
+      const width = Math.max(...xs) - Math.min(...xs);
+      expect(width, `zero is ${width.toFixed(1)} wide in ${name}`).toBeGreaterThan(40);
+    }
+  });
+
   it('splits the title into a name and a number', () => {
     expect(splitTitle('F.R.A.M.E. 2240')).toEqual(['F.R.A.M.E.', '2240']);
     // Degrades rather than throwing, since the title is meant to be configurable.
