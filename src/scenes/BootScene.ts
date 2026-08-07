@@ -110,7 +110,8 @@ export class BootScene extends Phaser.Scene {
       );
     }
 
-    // Title medallion: the faded view of the yard behind the title mark.
+    // Title medallion: the faded semi-silhouette of Stillwake Yard behind the
+    // title mark.
     //
     // **Hand-gated, and it must stay that way.** The dev server answers a
     // missing path with `index.html` and a 200, so a `load.image` for a file
@@ -120,7 +121,7 @@ export class BootScene extends Phaser.Scene {
     // `TitleMark` draws its own placeholder while this is off.
     // Brief: `docs/TITLE_MEDALLION_BRIEF.md`.
     const TITLE_MEDALLION_ART = false;
-    if (TITLE_MEDALLION_ART) this.load.image('title_yard', 'ui/title_yard.png');
+    if (TITLE_MEDALLION_ART) this.load.image('title_stillwake', 'ui/title_stillwake.png');
 
     // Arena parallax layers.
     // `fore` is the fast foreground: free-standing girder columns that sweep

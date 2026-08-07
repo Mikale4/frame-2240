@@ -7570,3 +7570,37 @@ stays in the spec.
 
 Verified on screen: one medallion in the display list, not two. 711 tests, build
 clean.
+
+---
+
+## D161 — the medallion is STILLWAKE, not CATHEDRAL YARD
+
+Owner's correction, and it is a better idea than the one it replaces. The
+backdrop behind the title was briefed as a view of CATHEDRAL YARD — the stage the
+game is fought on. It is now **Stillwake Yard**.
+
+**A yard is a floating city**, which the brief had underplayed. `WORLD_ENTRY`:
+"Permanent structures are classed as yards. Each is a lattice of girder and plate
+built to receive ore convoys, process cargo and support a resident population."
+Stillwake specifically carried **9,000 people on 140 lift spars**
+(`STILLWAKE_ENTRY`).
+
+**So the medallion is the thing the title's number counts.** `2240` is the
+evacuation total from that yard. Putting Stillwake behind the name makes the two
+halves of the mark refer to each other, which CATHEDRAL YARD never could — the
+stage is where the game happens, not what the title is about.
+
+**It is drawn intact, lit and inhabited.** The cascade propagated in four
+minutes, recovery failed nineteen minutes later, and the yard settled through the
+rest of the day and continued below the storm layer. Showing it whole is the
+point: the place in the picture does not exist. A burning or listing yard would
+be melodrama *and* would leak the reveal — D156 established that a player is
+meant to read `2240` as a year until late in the story, so the art must read as
+"a sci-fi city" and nothing more to anyone who has not opened the Archive. The
+brief says this in as many words, twice.
+
+It also sets up a deliberate contrast: CATHEDRAL YARD is the cold empty one,
+lights on and nobody home. Stillwake is its opposite.
+
+Asset renamed `title_yard.png` → `title_stillwake.png`, key to match, so nothing
+in the tree still implies the stage. `TITLE_MEDALLION_ART` stays `false`.

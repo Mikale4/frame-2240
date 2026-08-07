@@ -84,11 +84,17 @@ const INK_FAINT = 'rgba(146,176,220,0.42)';
 const INK_BRIGHT = 'rgba(226,198,142,0.85)';
 
 /**
- * Texture key for the medallion: a faded view of CATHEDRAL YARD behind the
- * whole mark. Loaded by `BootScene` only when the art exists — see
+ * Texture key for the medallion: a faded semi-silhouette of **STILLWAKE YARD**
+ * behind the whole mark. Loaded by `BootScene` only when the art exists — see
  * `docs/TITLE_MEDALLION_BRIEF.md`.
+ *
+ * **Not CATHEDRAL YARD**, which is the stage the game is fought on. Stillwake is
+ * the floating city that went into the storm layer, and `2240` in the title is
+ * the number of people taken off it alive — so the backdrop is the thing the
+ * number counts. The image must read as nothing more than a city to anyone who
+ * has not opened the Archive.
  */
-export const MEDALLION_KEY = 'title_yard';
+export const MEDALLION_KEY = 'title_stillwake';
 
 /** Drawn width of the medallion in pixels, on the 960x540 logical screen. */
 const MEDALLION_PX = 520;
@@ -109,11 +115,10 @@ const MEDALLION_ALPHA_PLACEHOLDER = 0.17;
  * The placeholder medallion: a gantry rose window drawn as an engineering
  * elevation.
  *
- * Stands in until real art arrives. The stage is called CATHEDRAL YARD because
- * of what its girders do to light, so a rose window drawn as a structural
- * elevation is at least the right idea in the right world — but it is line art
- * standing where a painted view of the place should be, and it is meant to be
- * replaced rather than kept.
+ * Stands in until real art arrives, and is a stand-in in subject as well as in
+ * medium: the finished piece is a semi-silhouette of Stillwake Yard, not a
+ * rose window. This is line art holding a slot, and it is meant to be replaced
+ * rather than kept.
  *
  * **Its centre is deliberately empty**, which is the same constraint the real
  * art is briefed to honour: the lettering sits across the middle, so the middle
@@ -351,7 +356,7 @@ export class TitleMark {
     // line art when the painted art is absent, so the composition never has a
     // hole in it while the asset is outstanding.
     const hasArt = scene.textures.exists(MEDALLION_KEY);
-    const key = hasArt ? MEDALLION_KEY : 'title_yard_placeholder';
+    const key = hasArt ? MEDALLION_KEY : 'title_medallion_placeholder';
     if (!hasArt) medallionFallback(scene, key, 512);
     const medallion = scene.add
       .image(10, 6, key)
