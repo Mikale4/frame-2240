@@ -3,21 +3,30 @@
 **For an external artist or image model producing the parallax backdrop for the
 title screen of *F.R.A.M.E. 2240*.**
 
-The title screen currently borrows CATHEDRAL YARD's stage layers, which is wrong
-twice over: it spends the game's only arena before the player has seen it, and a
-dockyard interior is a cramped first impression for a game about flight. This
-replaces it with a vista.
+The title screen originally borrowed CATHEDRAL YARD's stage layers, which spent
+the game's only arena before the player had seen it. It was replaced by a vista,
+and the vista is now being replaced in turn — see §0.
 
-**Subject: the edge of a mountain summit, above an endless cloud sea, at dawn.**
+**Subject: the open edge of a yard's deck, above an endless cloud sea, at dawn.**
 
 ---
 
 ## 0. The prompt to paste
 
-**Self-contained — paste it on its own.** Attaching the existing CATHEDRAL YARD
-layers as a style reference is optional here and possibly unhelpful: this is a
-*natural* vista, not an industrial one, and the only thing it needs to share with
-them is palette discipline and painterly weight.
+**Revision 2.** The first pass delivered a mountain summit above the cloud sea.
+It was beautiful and it was wrong: a nature scene says nothing about a game whose
+entire vocabulary is girder, plate, gantry, sodium lamp and lift spar. A mountain
+and a sunrise could front any game.
+
+The composition survives; the subject changes. **You are standing on the edge of
+a yard's deck, not a cliff.** Same drop, same cloud sea, same dawn — but the
+frame around it is industry, and the distant peaks become *other yards*, which
+states the whole setting in one image.
+
+**Also less detailed on purpose.** The first delivery was painted at a uniform
+high finish, which made the near rock compete with everything in front of it and
+had to be graded back in the engine. This asks for broad flat forms and
+silhouette weight instead.
 
 ```
 I need parallax background layers for the title screen of a 2D game. Each layer
@@ -25,124 +34,124 @@ must be a separate image file with a transparent background except where stated.
 
 Part 1 - The Place
 
-A world where the ground is gone. A permanent layer of storm and suspended
-particulate begins about two kilometres up and covers the entire dead surface,
-so from above it looks like an endless ocean of cloud stretching to the horizon
-in every direction. Nothing lives below it.
+A world where the ground is gone. A permanent layer of storm covers the dead
+surface, and everything that survives is built on enormous structures suspended
+in the cold clear air two kilometres above it. These structures are called
+yards: lattices of girder and plate that carry docks, foundries, cranes and a
+resident population, held up by reactor-driven spars.
 
-The viewpoint is the edge of a mountain summit - one of the few peaks high
-enough that its bare rock still stands above that cloud ocean. The camera is a
-person standing at the very lip of a sheer drop, looking out. Directly below
-the edge the rock falls away into nothing. Beyond it: the cloud sea, vast,
-still, and going on forever.
+The viewpoint is a person standing at the open edge of one of these yards -
+right at the lip of its deck, where the plating stops and there is nothing
+below but two kilometres of air and then the cloud. Looking out from that edge:
+the cloud ocean, vast and still, going on forever, with a few other yards
+floating far away on the horizon.
 
-It is dawn. Cold thin air. Immense scale. The feeling is awe and exposure - the
-beauty of standing somewhere no one should be able to stand.
+It is dawn. Cold thin air. Immense scale. The feeling is awe and exposure - and
+the quiet of an industrial place before anyone is awake.
 
 Part 2 - Art Direction
 
-Painterly semi-realistic rendering. Confident, restrained, atmospheric.
-Grounded and naturalistic - not fantasy, not stylised, not cel shaded, not
-photographic.
+Grounded industrial science fiction. Girder, plate, rivet, cable, truss, mast,
+crane, deck grating, sodium lamp. Not fantasy, not clean white utopian sci-fi,
+not cyberpunk neon, not steampunk. Heavy honest load-bearing engineering.
 
-Palette: cold desaturated blue-grey for the rock and the cloud sea, with warm
-dawn light - pale gold and soft rose - raking in low from one side and catching
-the tops of the clouds and the upper edges of the rock. Deep cool shadow. High
-altitude clarity: the air is thin, so distance reads as loss of contrast rather
-than as fog.
+Painterly, but SIMPLE AND BROAD. This is the single most important instruction
+after the subject: use large flat shapes, strong silhouettes and restrained
+value ranges. Do NOT render fine surface texture, small rivets, intricate
+panelling, detailed rock or individually painted cloud lumps. Each layer should
+read clearly as a shape at a glance from across a room. Less detail, bigger
+forms, fewer elements. If in doubt, remove.
 
-Vast, dramatic, breathtaking. The scale should feel almost frightening.
+Palette: cold desaturated blue-grey steel, with warm dawn light - pale gold and
+soft rose - raking in low from one side. Deep cool shadow. High altitude
+clarity: distance reads as loss of contrast, not as fog.
 
-No text. No lettering. No characters. No people. No creatures. No vehicles. No
-buildings. No structures. No aircraft. Nothing man-made anywhere in any layer.
+No text. No lettering. No characters. No people. No creatures. No aircraft. No
+robots. No mecha.
 
 Strict flat side-on view, orthographic, 2D game background. No perspective
-convergence, no vanishing point, no camera lens effects, no lens flare.
+convergence, no vanishing point, no lens effects.
 
 Part 3 - The Layers
 
-Generate these as separate images, 16:9, in a consistent style with identical
-lighting direction and colour harmony so they read as one place.
+Generate these as separate images, 16:9, with identical lighting direction and
+colour harmony so they read as one place.
 
 1. SKY (furthest, moves least)
-The high vault. Dawn gradient - deep cold blue at the top grading to pale gold
-near the horizon. Thin high cloud, sparse, flat, catching the low light.
-A few fading stars at the very top.
+The high vault at dawn. A clean simple gradient - deep cold blue at the top to
+pale gold near the horizon. Very sparse thin high cloud. A few fading stars at
+the top. Almost nothing else.
 Fully opaque. This is the only layer with no transparency.
-No horizon line, no land, no cloud sea.
+No horizon line, no structures, no cloud sea.
 
-2. FAR HORIZON HAZE
-The band where the cloud ocean meets the sky. Extremely soft, low contrast,
-almost featureless - a pale luminous strip that dissolves upward into nothing.
-This is what sells the distance.
-Transparent above and below the band.
-
-3. CLOUD SEA (the main surface)
-The top of the endless storm layer, seen from above and slightly to the side,
-running the full width of the image as a horizontal field.
-Long slow rolling swell - broad soft undulations like a calm ocean, not fluffy
-cumulus and not flat fog. Dense enough to read as a surface you could not fall
-through.
-CRITICAL: light this FLATLY and EVENLY. Do NOT paint sun glitter, sparkle,
-specular highlights, bright rim light on the wave crests, or any strong
-directional lighting into this layer. It must be an even, neutral, softly lit
-surface. Lighting and shimmer are added separately later, and any highlights
-painted in here will fight them.
-CRITICAL: this layer must TILE SEAMLESSLY LEFT TO RIGHT. The left edge and the
-right edge must match exactly so it can repeat forever.
+2. CLOUD SEA
+The top of the endless storm layer, running the full width as a horizontal
+field, seen from above. Long slow rolling swell - broad soft undulations like a
+calm ocean. Simple large forms only: no fluffy detailed cumulus, no individually
+painted lumps.
+Light it FLATLY and EVENLY. Do NOT paint sun glitter, sparkle, specular
+highlights or bright rim light on the crests - shimmer is added separately later
+and painted highlights will fight it.
+This layer must TILE SEAMLESSLY LEFT TO RIGHT.
 Transparent above the cloud surface.
 
-4. DISTANT PEAKS
-Two or three other summits far away, breaking up through the cloud sea near the
-horizon. Small, pale, very low contrast, almost lost in haze.
-They exist to give the cloud sea scale and to prove it is a layer with things
-under it.
-Transparent everywhere else. No detail. No structures.
-
-5. MID CLIFF
-The mountain's own mass, falling away below and to one side. Bare stone -
-strata, fracture, scree, snow caught in the lee. Lit from the same low dawn
-angle, deep cool shadow on the faces turned away.
-Positioned low and toward one side of the frame, leaving the centre and the
-upper area open.
+3. DISTANT YARDS
+Two or three other floating yards, far away on the cloud sea near the horizon.
+Small, pale, very low contrast, almost lost in haze - flat silhouettes with no
+internal detail. Each is a long horizontal industrial platform with a few masts
+above and tapering support spars below.
+They exist to give scale and to say that this world is inhabited.
 Transparent everywhere else.
 
-6. FOREGROUND CLIFF EDGE (nearest, moves most)
-The lip of rock the viewer is standing on. A near-black, high-contrast
-silhouette occupying only the very bottom of the frame and a little way up the
-left and right edges.
-Almost no internal detail - it is a shape, not a subject.
-The centre and the whole upper two thirds of the frame must be completely
-empty and transparent.
+4. MID STRUCTURE
+The near edge of our own yard, off to one side: a mass of gantry trusses, dock
+cranes and stacked deck levels, receding away. Mid-dark, simplified, reading as
+massing rather than as detail. Lit from the same low dawn angle.
+Positioned low and toward one side, leaving the centre and the upper area open.
+Transparent everywhere else.
+
+5. FOREGROUND DECK EDGE (nearest, moves most)
+The deck plating the viewer is standing on, and the structure immediately around
+it. A near-black, high-contrast silhouette: the lip of the deck running along
+the very bottom of the frame with a simple safety rail or kerb, and a heavy
+girder or crane leg cropping in from one side.
+Almost no internal detail - this is a shape, not a subject. It should read as
+pure black cut-out at a glance.
+The centre and the whole upper two thirds of the frame must be completely empty
+and transparent.
 
 Part 4 - Composition
 
-- The horizon line should sit LOW, at roughly the lower third of the frame, so
-  the sky dominates. This is a picture about air.
-- THE UPPER LEFT MUST STAY OPEN AND QUIET in every layer. A large title logo is
-  placed there. No peaks, no cloud detail, no high-contrast shapes in that
-  region.
-- The lower centre must also stay readable - menu text sits there.
-- Nothing may cross the exact centre of the frame at mid height.
+- The horizon should sit LOW, around the lower third, so the sky dominates.
+- THE UPPER LEFT MUST STAY OPEN AND QUIET in every layer. A large title logo
+  sits there. Nothing high-contrast in that region.
+- The lower centre must stay readable - menu text sits there.
+- Keep the far middle of the frame clear and simple.
 
 No text.
 ```
 
 ---
 
-## 1. Why not literal water
+## 1. Why not literal water, and why not a mountain
 
 The setting has no sea, and the art must not imply one. The surface of the world
 is dead and covered; the "ocean" in this picture is the top of the storm layer,
 seen from above. That is why the brief asks for **long slow swell rather than
-cumulus** — it has to read as a surface — and why the **distant peaks** matter
-more than they look: they are the only cue that tells the viewer this is a cloud
-deck with a world under it rather than water.
+cumulus** — it has to read as a surface — and why the **distant yards** matter
+more than they look: they are the cue that tells the viewer this is a cloud deck
+with a world on it rather than water.
 
-The mountain is canon-safe for the same reason it is interesting. The deck begins
-at about 2,000 m; real peaks exceed that. A summit above the cloud is one of the
-very few places in this world where bare ground still exists in open air, and
-nobody has any reason to be standing on one.
+**The mountain was canon-safe and still wrong.** A summit above the deck is
+legitimate — the cloud begins around 2,000 m and real peaks exceed that — and the
+first pass delivered a genuinely beautiful one. But a title screen is a claim
+about what a game is, and rock and sunrise are a claim any game could make. This
+one is about machines living on structures in the sky, so the thing you are
+standing on should be a structure. Swapping the cliff for a deck edge keeps every
+part of the composition that worked and changes what the picture is *of*.
+
+The distant yards do a second job the peaks could not: they say the world is
+inhabited, and that there are more of these places than the one you are on.
 
 ## 2. Animating the cloud sea
 
