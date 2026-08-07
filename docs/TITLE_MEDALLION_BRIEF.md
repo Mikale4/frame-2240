@@ -24,53 +24,68 @@ dissolving into haze. That is the register this piece lives in.
 **Self-contained — paste it on its own, with the stage layer images attached.**
 Attach this file only if the model asks for more context.
 
+**Revision 2**, after the first pass was composited and measured. Two things
+changed and both were failures of this brief rather than of the art: the delivery
+must be **light on dark**, and the yard must be **alone** — see §6.
+
 ```
 I am attaching reference images: the parallax background layers for a 2D game
-stage. I need a new piece of art for the same game, set in the same world, in
-exactly the same style as those references.
+stage. I need a new piece of art for the same game, set in the same world.
 
 Part 1 - The Subject
 
-STILLWAKE YARD: a floating city, seen from a distance, at night, intact.
+STILLWAKE YARD: a floating city, alone, at night, intact.
 
 In this world the ground is gone - a permanent storm layer covers a dead
 surface, and everything that survives is built on structures suspended in the
 cold clear air two kilometres above it. The largest of those structures are
 called yards: enormous lattices of girder and plate, each one a working city
 carrying docks, foundries, cargo handling and a resident population. They hold
-their altitude on reactor-driven lift spars.
+their altitude on reactor-driven lift spars that rake downward beneath the hull
+like the roots of the city.
 
 Stillwake was one of these. Nine thousand people lived on it. It was held aloft
 by a hundred and forty lift spars. It was a home, a port and an industrial
 plant at the same time, and it is depicted here INTACT and INHABITED and LIT -
-the way it was before it was lost. Nothing in the image is damaged, burning,
-falling or tilted. This is a memory of a place, not a disaster.
+the way it was before it was lost. Nothing is damaged, burning, falling or
+tilted. This is a memory of a place, not a disaster.
 
-Part 2 - Art Direction
+Part 2 - THE MOST IMPORTANT INSTRUCTIONS
 
-Match the attached reference layers: same lighting logic, same colour harmony,
-same structural vocabulary, same rust and wear treatment. This must read as the
-same world drawn by the same hand. Match the FAR BACKGROUND layer most closely -
-desaturated, low contrast, dissolving into haze.
+These two rules override everything else. A previous attempt failed on both.
 
-Grounded industrial science fiction. Girder, plate, rivet, cable, truss, mast,
-crane, sodium lamp. Not fantasy, not clean white utopian sci-fi, not cyberpunk
-neon, not steampunk. Heavy honest load-bearing engineering. Painterly
-semi-realistic rendering.
+1. THE YARD AND NOTHING ELSE. Draw only the structure itself. NO clouds, NO
+   cloud sea, NO storm layer, NO fog banks, NO sky, NO ground, NO horizon, NO
+   stars, NO moon, NO atmosphere, NO background of any kind. The structure
+   floats alone in empty space with nothing around it, above it or beneath it.
+   Everything that is not the yard must be empty.
 
-Render it as a SEMI-SILHOUETTE: the city is a large dark desaturated blue-grey
-mass, read mainly as shape, but with real structure legible inside that mass -
-tiers, trusses, hulls, cranes, the long downward rake of the lift spars beneath
-it. Detailed, but low contrast. Think of a distant city at night in haze: you
-can see how it is built, but everything is dim and nothing is crisp.
+2. LIGHT STRUCTURE ON A BLACK BACKGROUND. This artwork is composited onto a
+   very dark screen at low opacity. Anything dark will be completely invisible.
+   So: put it on a PURE BLACK background, and render the yard itself in PALE
+   COLD LIGHT - light desaturated blue-grey and cool silver-white, as though
+   the whole structure is catching cold moonlight against a black void. The
+   girders, plates, trusses, hulls, cranes and lift spars should read as LIGHT
+   shapes drawn on black. Do NOT make the city a dark or black silhouette. Do
+   NOT use a white, pale or light background.
 
-Its lights are small and warm - thousands of tiny sodium window and lamp points
-scattered through the structure, densest in the lower and outer districts.
-These are the only warm notes in the image and they must stay small. No glow
-bloom, no light shafts, no lens flare.
+Part 3 - Art Direction
 
-Below and behind it: cold thin air, and far underneath, the top of an endless
-storm layer. Above it: cold empty void.
+Grounded industrial science fiction, matching the attached references for
+structural vocabulary: girder, plate, rivet, cable, truss, mast, crane, dock
+berth, cargo gantry, sodium lamp. Not fantasy, not clean white utopian sci-fi,
+not cyberpunk neon, not steampunk. Heavy honest load-bearing engineering.
+
+Render it as a DETAILED LUMINOUS SILHOUETTE. The overall shape of the city must
+read instantly as one clear profile, but the inside of that shape is full of
+legible structure: stacked tiers and decks, truss work, dock berths, foundry
+stacks, cranes, masts, catwalks, cable runs, and the long downward rake of the
+lift spars beneath the hull. Fine, intricate, architectural. Like a technical
+elevation drawn in light.
+
+A small number of tiny warm sodium window lights, scattered through the lower
+tiers - these are the only warm notes and they must stay small points. No glow
+bloom, no light shafts, no lens flare, no volumetric haze.
 
 Strict side view, orthographic, flat 2D elevation. No perspective convergence,
 no vanishing point, no three-quarter view, no aerial view.
@@ -78,40 +93,23 @@ no vanishing point, no three-quarter view, no aerial view.
 No text. No lettering. No numbers. No logos. No characters. No people. No
 creatures. No aircraft. No mecha. No robots.
 
-Part 3 - What To Make
-
-A single square image containing one CIRCULAR composition: the city contained
-within a circle, like a round window onto it.
+Part 4 - Format
 
 - Square canvas, 1:1 aspect ratio, 2048x2048.
-- Fully transparent background outside the circular composition.
-- The imagery must FADE OUT softly toward the edge of the circle into full
-  transparency. Do not draw a hard circular border, a ring, a frame, or a rim.
-  There should be no crisp edge anywhere - the circle is defined by where the
-  art fades away, not by an outline.
-- The circle should fill most of the square, leaving a small transparent margin.
+- Pure black background. Transparent alpha outside the structure is welcome if
+  you can produce it, but the background must be black either way.
+- The yard should be a wide horizontal mass sitting slightly BELOW the centre
+  of the square, with its lift spars raking down into the lower area and its
+  masts and cranes rising toward the middle.
+- THE UPPER THIRD OF THE SQUARE MUST BE EMPTY BLACK. Large lettering is placed
+  there. Nothing may occupy it.
+- Let the extreme left and right ends of the structure thin out and fade into
+  the black rather than stopping at a hard edge.
 
-Composition rules, which matter more than the subject:
+Part 5 - Also Useful
 
-- THE CENTRE MUST BE QUIET. Large lettering is placed on top of the middle of
-  this image. The central horizontal third should be the emptiest,
-  lowest-contrast, least-detailed part of the picture. Compose so that this
-  band is open air, haze, or the flattest and dimmest part of the structure.
-  No bright window clusters, no crisp edges, no busy linework, no strong
-  silhouette boundary running through the middle of the image.
-- SIT THE CITY LOW. Put the main mass of the yard in the lower half, with its
-  lift spars raking down out of the bottom of the circle. Let masts, cranes and
-  upper trusses rise into the upper third. The middle stays the calmest.
-- KEEP THE CENTRE COLD. The warm window lights belong low and around the
-  outside. The middle of the image must stay cold blue-grey - warm tones there
-  would destroy the readability of what sits on top of it.
-- LOW CONTRAST OVERALL. This is a faded memory, not a crisp illustration.
-  Deliver it at full opacity; it will be faded down in the engine.
-
-Part 4 - Also Useful
-
-Provide a second version with the same composition but the city mass pushed
-slightly darker and denser, so the two can be compared against the lettering.
+Provide a second version with the same composition but the structure rendered
+brighter and higher contrast, so the two can be compared against the lettering.
 
 No text.
 ```
@@ -233,3 +231,29 @@ warm accents, and no hard silhouette boundary in that band.
   same commit.** Until that flag is flipped the engine draws its own placeholder,
   because a missing asset is served an HTML page by the dev server rather than a
   404, and the image decoder hangs on it forever — the game simply never boots.
+
+## 6. What the first pass measured
+
+The first delivery was two dark-on-light paintings: a black city over a pale
+cloud sea, on transparency. Both were composited at true size and 0.30 opacity
+over the real title screen, behind the real lettering, before being judged.
+
+**The yard was invisible.** Not dim — absent. A near-black silhouette at 30 %
+over a dark blue-violet background has almost no separation from it, so the
+subject of the picture disappeared completely and the only surviving element was
+the pale cloud mass, which read as a grey smudge competing with the showcase
+mechs and the tagline. The single part that survived was the part that was not
+supposed to be the subject.
+
+Two corrections, both faults in this brief rather than in the art:
+
+* **Revision 1 never said what the image sits on.** It specified composition in
+  detail and omitted the background it would be composited over, so dark-on-light
+  was a perfectly reasonable reading of it. Tone direction now leads the prompt.
+* **The clouds were briefed in and should not have been.** They came from
+  describing the setting rather than the object. The subject is the yard; the
+  storm layer belongs to the world, not to this picture.
+
+The alpha, for the record, was correct on the first attempt — all four corners
+transparent, ~24 % of the image carrying any opacity. That part of the brief
+worked.
