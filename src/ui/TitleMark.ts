@@ -96,8 +96,18 @@ const INK_BRIGHT = 'rgba(226,198,142,0.85)';
  */
 export const MEDALLION_KEY = 'title_stillwake';
 
-/** Drawn width of the medallion in pixels, on the 960x540 logical screen. */
-const MEDALLION_PX = 520;
+/**
+ * Drawn width of the medallion in pixels, on the 960x540 logical screen.
+ *
+ * **Near the floor.** What makes the art read as a city rather than a smudge is
+ * its internal structure — truss work, dock cranes, deck detail — and that is
+ * the first thing lost as it shrinks. Much below this and it stops being a place.
+ */
+const MEDALLION_PX = 330;
+
+/** Offset from the mark's origin. Centred on the F.R.A.M.E. block, not the mark. */
+const MEDALLION_X = -108;
+const MEDALLION_Y = -14;
 
 /**
  * Opacity of the medallion. Low: it is a backdrop, not an illustration.
@@ -359,9 +369,20 @@ export class TitleMark {
     const key = hasArt ? MEDALLION_KEY : 'title_medallion_placeholder';
     if (!hasArt) medallionFallback(scene, key, 512);
     const medallion = scene.add
-      .image(10, 6, key)
+      .image(MEDALLION_X, MEDALLION_Y, key)
       .setAlpha(hasArt ? MEDALLION_ALPHA : MEDALLION_ALPHA_PLACEHOLDER);
     medallion.setDisplaySize(MEDALLION_PX, MEDALLION_PX);
+    // **Rotation after sizing.** `setDisplaySize` writes scaleX/scaleY and leaves
+    // rotation alone, but it is easy to read the pair as one transform and set
+    // them in the other order; doing that silently drops the tilt.
+    medallion.setRotation(Phaser.Math.DegToRad(AXIS_DEG));
+    if (hasArt) {
+      // The art is delivered as light structure on pure black with no alpha
+      // channel, so ADD composites it correctly with no keying pass: black
+      // contributes nothing and the structure adds its own light. This is also
+      // what makes the lift spars fade out at their tips for free.
+      medallion.setBlendMode(Phaser.BlendModes.ADD);
+    }
     this.container.add(medallion);
 
     // Gears next, so everything else lands on top of them.

@@ -120,7 +120,7 @@ export class BootScene extends Phaser.Scene {
     // to `true` in the same commit that adds the file, never before.
     // `TitleMark` draws its own placeholder while this is off.
     // Brief: `docs/TITLE_MEDALLION_BRIEF.md`.
-    const TITLE_MEDALLION_ART = false;
+    const TITLE_MEDALLION_ART = true;
     if (TITLE_MEDALLION_ART) this.load.image('title_stillwake', 'ui/title_stillwake.png');
 
     // Arena parallax layers.
