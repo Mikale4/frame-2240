@@ -245,9 +245,59 @@ export class BootScene extends Phaser.Scene {
     drone: [34, 26],
   };
 
+  /**
+   * Replaces a loaded layer with a copy whose bottom edge fades out.
+   *
+   * **`arena_haze.png` ends in a cliff.** Its alpha holds at 254 all the way to
+   * row 740 and reaches zero by 752 — the entire transition happens in twelve
+   * rows of a 1024-row image, so the mist has a ruled horizontal edge across the
+   * stage. Haze that stops is not haze.
+   *
+   * Done here rather than by asking for new art because it is a processing
+   * defect, not a drawing one: the painting is right, its alpha channel simply
+   * was not feathered. Erasing through a gradient costs one canvas pass at boot
+   * and nothing afterwards, and it cannot drift out of step with the art the way
+   * a second corrective layer would.
+   */
+  private featherBottom(key: string, fadeFrom: number, fadeTo: number): void {
+    if (!this.textures.exists(key)) return;
+    const src = this.textures.get(key).getSourceImage() as HTMLImageElement;
+    const w = src.width;
+    const h = src.height;
+    const tmp = document.createElement('canvas');
+    tmp.width = w;
+    tmp.height = h;
+    const ctx = tmp.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(src, 0, 0);
+    // `destination-out` erases by the gradient's own alpha, so a ramp from
+    // transparent to opaque removes progressively more of the image.
+    const grd = ctx.createLinearGradient(0, fadeFrom, 0, fadeTo);
+    grd.addColorStop(0, 'rgba(0,0,0,0)');
+    grd.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, fadeFrom, w, h - fadeFrom);
+    ctx.globalCompositeOperation = 'source-over';
+
+    this.textures.remove(key);
+    const tex = this.textures.createCanvas(key, w, h);
+    if (!tex) return;
+    tex.getContext().drawImage(tmp, 0, 0);
+    tex.refresh();
+  }
+
   create(): void {
     createEffectTextures(this);
     createPixel(this);
+
+    // **The ramp has to fade into the art's own extent.** There is no haze
+    // painted below row 751, so a longer ramp cannot add reach — it can only
+    // eat density from the band that exists. Starting at 440 measured as
+    // destroying the layer: its dense rows fell from 254 to a peak of 48.
+    // 620 to 760 keeps the band's presence and still spreads the transition
+    // over 130 rows instead of 12.
+    this.featherBottom('arena_haze', 620, 760);
 
     // Stand-ins for every chassis still awaiting its Blender pass.
     for (const def of Object.values(MECHS)) {
