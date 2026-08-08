@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ARENA_H, ARENA_W, TICK_MS, VIEW_H, VIEW_W } from '../core/GameConfig';
 import { Difficulty, session } from '../core/Session';
+import { DEMO_FADE_MS } from './TitleScene';
 import { ARC_TETHER_WIDTH, MatchSim, segmentHitsCircle } from '../combat/MatchSim';
 import { MECHS } from '../data/mechs';
 import { TAG_PAIRS, pickTagArrival, pickTagLate } from '../data/tags';
@@ -82,10 +83,11 @@ const BLADE_GLOW_THICK = 13;
 /**
  * How long the title screen's attract demo runs before returning, in seconds.
  *
- * Fifteen is long enough to show an exchange land and short enough that nobody
- * watching the screen idle mistakes it for having started a match.
+ * Long enough to show an exchange land and short enough that nobody watching
+ * the screen idle mistakes it for having started a match. The fade out begins
+ * when this expires, so the fight itself is the full twenty.
  */
-const DEMO_SECONDS = 15;
+const DEMO_SECONDS = 20;
 
 /**
  * The playable match.
@@ -244,6 +246,8 @@ export class BattleScene extends Phaser.Scene {
   private uiCam!: Phaser.Cameras.Scene2D.Camera;
   /** Seconds the attract demo has been on screen. */
   private demoElapsed = 0;
+  /** Latched once the demo's exit fade has started. */
+  private demoEnding = false;
   private worldObjects: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
@@ -507,6 +511,7 @@ export class BattleScene extends Phaser.Scene {
     // renders, including scrollFactor-0 objects, so the HUD has to live on its
     // own camera or it drifts off-screen whenever the view zooms in.
     this.demoElapsed = 0;
+    this.demoEnding = false;
     this.uiCam = this.cameras.add(0, 0, VIEW_W, VIEW_H);
     this.uiCam.setName('ui');
     this.uiCam.setScroll(0, 0);
@@ -552,7 +557,10 @@ export class BattleScene extends Phaser.Scene {
     // **The whole interface lives on this camera**, so an attract demo hides it
     // in one call rather than by tracking every HUD object individually — and
     // anything added later is hidden by construction instead of by remembering.
-    if (session.demo) this.uiCam.setVisible(false);
+    if (session.demo) {
+      this.uiCam.setVisible(false);
+      this.cameras.main.fadeIn(DEMO_FADE_MS, 0, 0, 0);
+    }
 
     this.hud.banner('READY', 60);
     sfx.matchReady();
@@ -779,10 +787,21 @@ export class BattleScene extends Phaser.Scene {
     this.scene.start('Title');
   }
 
-  /** Leaves the attract demo, clearing the flag before the scene changes. */
+  /**
+   * Leaves the attract demo behind a fade.
+   *
+   * Latches, because both exits can fire in the same frame: the clock expiring
+   * and the match ending are independent, and a double call would restart the
+   * fade and strand the scene.
+   */
   private endDemo(): void {
-    session.demo = false;
-    this.scene.start('Title');
+    if (this.demoEnding) return;
+    this.demoEnding = true;
+    this.cameras.main.fadeOut(DEMO_FADE_MS, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      session.demo = false;
+      this.scene.start('Title');
+    });
   }
 
   // -------------------------------------------------------------------- loop
@@ -808,10 +827,9 @@ export class BattleScene extends Phaser.Scene {
     if (session.demo) {
       this.demoElapsed += delta / 1000;
       const pressed = ui.confirm || ui.cancel || ui.pause || ui.up || ui.down || ui.left || ui.right;
-      if (this.demoElapsed >= DEMO_SECONDS || pressed) {
-        this.endDemo();
-        return;
-      }
+      if (this.demoElapsed >= DEMO_SECONDS || pressed) this.endDemo();
+      // Deliberately no early return: the fight goes on underneath the fade, so
+      // the last thing seen is a match in progress rather than a freeze frame.
     }
 
     if (ui.toggleDebug) this.debug.toggleText();

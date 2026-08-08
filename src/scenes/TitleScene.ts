@@ -23,8 +23,18 @@ const TITLE_DESIGN: TitleDesignId = 'instrument';
  *
  * Long enough that a player who arrived deliberately gets to look at the title
  * and press start, short enough that an abandoned screen does not sit still.
+ * Counted from scene entry, so it restarts every time the demo hands back.
  */
-const IDLE_BEFORE_DEMO_S = 8;
+const IDLE_BEFORE_DEMO_S = 10;
+
+/**
+ * Fade length either side of the attract demo, in milliseconds.
+ *
+ * Long enough to read as a transition rather than a dropped frame, short enough
+ * that it does not feel like a loading screen. The same figure is used on the
+ * way back in `BattleScene`, so the two halves match.
+ */
+export const DEMO_FADE_MS = 700;
 
 /**
  * Attract screen: a vista, the title, and nothing to decide.
@@ -44,6 +54,8 @@ export class TitleScene extends Phaser.Scene {
   private t = 0;
   private mark!: TitleMark;
   private prompt!: Phaser.GameObjects.Text;
+  /** Latches once the demo fade begins, so `update` cannot start it twice. */
+  private leaving = false;
   /** Blocks input for a beat so the button that returned here cannot re-enter. */
   private armAt = 0;
 
@@ -60,6 +72,10 @@ export class TitleScene extends Phaser.Scene {
     // without running its exit — a reload mid-demo, a thrown error — the flag
     // would otherwise survive and strip the HUD off the next real match.
     session.demo = false;
+    this.leaving = false;
+    // Fades in on every entry, not just when returning from a demo: arriving
+    // from Boot and arriving from a match then look the same.
+    this.cameras.main.fadeIn(DEMO_FADE_MS, 0, 0, 0);
 
     // Boot reaches here without a gesture, so this normally sets the intent and
     // the first keypress is what actually starts it. Coming back from a match
@@ -120,7 +136,7 @@ export class TitleScene extends Phaser.Scene {
     // the moment someone looks at it.
     this.prompt.setAlpha(0.55 + 0.45 * Math.sin(this.t * 3.4));
 
-    if (this.t < this.armAt) return;
+    if (this.t < this.armAt || this.leaving) return;
     const ui = this.input$.readUi();
     if (ui.confirm) {
       sfx.unlock();
@@ -144,6 +160,7 @@ export class TitleScene extends Phaser.Scene {
    * every demo of the same pairing would replay the identical fight.
    */
   private startDemo(): void {
+    this.leaving = true;
     const ids = ROSTER.map((m) => m.id);
     const a = Math.floor(Math.random() * ids.length);
     // Offset rather than re-rolled, so the two are distinct without a loop that
@@ -155,7 +172,14 @@ export class TitleScene extends Phaser.Scene {
     session.playerDifficulty = Difficulty.Extreme;
     session.enemyDifficulty = Difficulty.Extreme;
     session.matchIndex++;
-    session.demo = true;
-    this.scene.start('Battle');
+    // **Set on the far side of the fade, not before it.** Flipping `demo` here
+    // and starting the scene immediately would show a frame of the title with
+    // the flag already live; worse, an error during the fade would leave it set
+    // with no demo running.
+    this.cameras.main.fadeOut(DEMO_FADE_MS, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      session.demo = true;
+      this.scene.start('Battle');
+    });
   }
 }
