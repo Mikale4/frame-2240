@@ -81,9 +81,14 @@ export class GroundPlane {
     // total, which is why it read as one colour. This runs the whole way from
     // the deck's own value down to near-black, in enough steps that the
     // banding falls below one 8-bit level.
+    // **Void, not concrete.** 0x14161f is a light enough grey to read as a
+    // surface, and a surface is exactly what is not down there — the deck hangs
+    // over two kilometres of air. Starting near-black means that even with no
+    // art over it this reads as depth rather than as an undrawn rectangle. It
+    // is a backing for `arena_under`, not a substitute for it.
     const rows = 48;
-    const top = Phaser.Display.Color.ValueToColor(0x14161f);
-    const bottom = Phaser.Display.Color.ValueToColor(0x04050a);
+    const top = Phaser.Display.Color.ValueToColor(0x090b12);
+    const bottom = Phaser.Display.Color.ValueToColor(0x020306);
     for (let i = 0; i < rows; i++) {
       const c = Phaser.Display.Color.Interpolate.ColorWithColor(
         top,
