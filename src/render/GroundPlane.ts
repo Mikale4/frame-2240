@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA_H, ARENA_W, DECK_Y } from '../core/GameConfig';
+import { DECK_Y } from '../core/GameConfig';
 import { depthScaleAt, depthSortAt } from '../core/Depth';
 import type { Combatant } from '../combat/Combatant';
 
@@ -22,83 +22,35 @@ import type { Combatant } from '../combat/Combatant';
  *   what actually tells a player how high they are.
  */
 export class GroundPlane {
-  private readonly deck: Phaser.GameObjects.Graphics;
   private readonly shadows: Phaser.GameObjects.Graphics;
 
-  /**
-   * Height of the drawn slab below the contact line.
-   *
-   * **Was 220 past the arena floor and that was not enough.** Driven to the
-   * bottom of the arena with both machines low and far apart — the camera zooms
-   * out to frame them — the view reaches 354 world pixels below the deck, so
-   * the fill ran out and the parallax backdrop showed through underneath it.
-   * That is the exact leak this slab exists to prevent, displaced lower down.
-   *
-   * Generous on purpose: it is a flat fill with no per-frame cost, and the
-   * failure mode of being too short is sky under the floor.
-   */
-  private static readonly SLAB = ARENA_H - DECK_Y + 560;
   /** Above this height a machine casts no visible shadow. */
   private static readonly SHADOW_FADE = 420;
 
   get objects(): Phaser.GameObjects.GameObject[] {
-    return [this.deck, this.shadows];
+    return [this.shadows];
   }
 
+  /**
+   * **There used to be a painted slab here and it is gone.**
+   *
+   * It filled from the deck line downward to guarantee the floor was opaque, so
+   * that diving to the deck could never reveal sky through a gap beneath it.
+   * That was a real hole: `arena_near`'s art stops 172 world pixels below the
+   * contact line and the camera reaches 354.
+   *
+   * `arena_under` now draws that structure properly, and the slab measured as
+   * contributing nothing — hiding it moved the rendered pixels beneath the deck
+   * by at most 1 of 255. A fill that changes nothing is not insurance, it is
+   * something to explain, so it went with the problem it was covering.
+   *
+   * If sky ever shows under the deck again, the fix is `arena_under`'s reach or
+   * its alpha, not a rectangle over the top of it.
+   */
   constructor(scene: Phaser.Scene) {
     // Shadows sit on the deck but under the machines.
     this.shadows = scene.add.graphics();
     this.shadows.setDepth(depthSortAt(DECK_Y, 12));
-
-    this.deck = scene.add.graphics();
-    this.deck.setDepth(depthSortAt(DECK_Y, 10));
-    this.paint();
-  }
-
-  /**
-   * The deck is static world geometry, so it is painted once rather than every
-   * frame — only the shadows move.
-   *
-   * `arena_near` supplies the deck's own surface and hazard lip; this layer sits
-   * behind it and guarantees the floor is opaque all the way down, so diving to
-   * the deck can never reveal sky through a gap under it.
-   */
-  private paint(): void {
-    const g = this.deck;
-    const y = DECK_Y;
-    const slab = GroundPlane.SLAB;
-    g.clear();
-
-    // **This was a visible flat grey block.** `arena_near`'s deck art runs out
-    // 172 world pixels below the contact line — its last opaque row is 920 of
-    // 1024 — while this slab extends 250, so the bottom ~78px had nothing drawn
-    // over them and showed the bare fill. Widening the art is the other fix and
-    // needs a new asset; grading the fill is the one that also happens to be
-    // correct, because what is under the deck is two kilometres of darkening
-    // air, not a floor.
-    //
-    // The old ramp was seven bands at 0.06 alpha — about a third of a stop in
-    // total, which is why it read as one colour. This runs the whole way from
-    // the deck's own value down to near-black, in enough steps that the
-    // banding falls below one 8-bit level.
-    // **Void, not concrete.** 0x14161f is a light enough grey to read as a
-    // surface, and a surface is exactly what is not down there — the deck hangs
-    // over two kilometres of air. Starting near-black means that even with no
-    // art over it this reads as depth rather than as an undrawn rectangle. It
-    // is a backing for `arena_under`, not a substitute for it.
-    const rows = 48;
-    const top = Phaser.Display.Color.ValueToColor(0x090b12);
-    const bottom = Phaser.Display.Color.ValueToColor(0x020306);
-    for (let i = 0; i < rows; i++) {
-      const c = Phaser.Display.Color.Interpolate.ColorWithColor(
-        top,
-        bottom,
-        rows - 1,
-        i,
-      );
-      g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1);
-      g.fillRect(-400, y + (i * slab) / rows, ARENA_W + 800, slab / rows + 1);
-    }
   }
 
   /**
@@ -140,7 +92,6 @@ export class GroundPlane {
   }
 
   destroy(): void {
-    this.deck.destroy();
     this.shadows.destroy();
   }
 }
