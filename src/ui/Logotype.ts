@@ -181,6 +181,16 @@ export interface LogoStyle {
   /** Extra space between glyphs, in cap units. */
   tracking: number;
   /**
+   * Horizontal scale, applied after everything else. 1 is the drawn proportion.
+   *
+   * **The largest single lever on a wordmark's identity**, and the one thing a
+   * shared skeleton could not express until now: 0.5 and 1.5 are the same
+   * letters and read as different games. Stems narrow with the glyph, which is
+   * what a real condensed cut does — it is not a faithful optical compression,
+   * but at title size the difference is not the point.
+   */
+  xScale?: number;
+  /**
    * Whether a stroke's control point is honoured. `false` flattens every bowl
    * and shoulder to a chord, which is what makes the engineering styles read as
    * machined rather than drawn — from the same skeletons.
@@ -301,7 +311,7 @@ export function measure(text: string, style: LogoStyle): number {
     if (!g) return;
     w += g.adv + (i < chars.length - 1 ? style.tracking : 0);
   });
-  return w;
+  return w * (style.xScale ?? 1);
 }
 
 /**
@@ -442,14 +452,18 @@ function shear(p: Pt, slant: number): Pt {
  */
 export function wordPolys(text: string, style: LogoStyle): Pt[][] {
   const out: Pt[][] = [];
+  const xs = style.xScale ?? 1;
   let x = 0;
   for (const ch of text.toUpperCase()) {
     const g = GLYPHS[ch];
     if (!g) continue;
     for (const s of g.strokes) {
-      const poly = strokePoly(s, style).map(
-        ([px, py]) => shear([px + x, py], style.slant) as Pt,
-      );
+      // Shear first, then compress: shearing a compressed glyph would change
+      // the slant angle as a side effect of the proportion.
+      const poly = strokePoly(s, style).map(([px, py]) => {
+        const [sx, sy] = shear([px + x, py], style.slant);
+        return [sx * xs, sy] as Pt;
+      });
       out.push(poly);
     }
     x += g.adv + style.tracking;

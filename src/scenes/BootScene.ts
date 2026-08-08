@@ -130,7 +130,7 @@ export class BootScene extends Phaser.Scene {
     // interior the first impression of a game about flight. It has its own vista
     // now. Same hand-gating rule as the medallion above, for the same reason.
     // Brief: `docs/TITLE_STAGE_ART_BRIEF.md`.
-    const TITLE_STAGE_ART = true;
+    const TITLE_STAGE_ART = false;
     if (TITLE_STAGE_ART) {
       // `yards` is absent on purpose — see TitleScene's TITLE_LAYERS. Add it
       // here and to that list in the same commit as the file, never before.

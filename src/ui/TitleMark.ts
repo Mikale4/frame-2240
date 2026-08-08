@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_TITLE } from '../core/GameConfig';
-import { createLogoTexture, splitTitle, type LogoStyle } from './Logotype';
+import { buildTitleDesign, type TitleDesignId } from './TitleDesigns';
 
 /**
  * The title mark: two wordmark blocks on a shared diagonal, over a turning
@@ -373,11 +372,11 @@ export class TitleMark {
   private readonly gears: { img: Phaser.GameObjects.Image; rate: number }[] = [];
 
   /**
-   * @param capPx Cap height of `F.R.A.M.E.`. `2240` is drawn smaller — it is a
-   *   number attached to a name, and setting it at the same height makes the
-   *   title read as two names.
+   * @param design Which candidate lockup to draw. The letterforms and the way
+   *   the two halves relate are being chosen on the real screen rather than on
+   *   a contact sheet, so this is a parameter until one of them wins.
    */
-  constructor(scene: Phaser.Scene, x: number, y: number, style: LogoStyle, capPx = 66) {
+  constructor(scene: Phaser.Scene, x: number, y: number, design: TitleDesignId) {
     this.container = scene.add.container(x, y).setDepth(1200).setScrollFactor(0);
 
     // Medallion first: the place, behind the machinery, behind the name.
@@ -409,36 +408,20 @@ export class TitleMark {
 
     // Gears next, so everything else lands on top of them.
     for (const g of TRAIN) {
-      const key = `gear_${g.r}_${g.teeth}_${g.web}`;
-      gearTexture(scene, key, g.r, g.teeth, g.web);
-      const img = scene.add.image(g.x, g.y, key).setAlpha(g.alpha);
+      const gk = `gear_${g.r}_${g.teeth}_${g.web}`;
+      gearTexture(scene, gk, g.r, g.teeth, g.web);
+      const img = scene.add.image(g.x, g.y, gk).setAlpha(g.alpha);
       // Back down to logical size. Linear filtering is what actually averages
       // the supersampled texels; without it this would just be a bigger raster.
       img.setScale(1 / GEAR_SS);
-      scene.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
+      scene.textures.get(gk).setFilter(Phaser.Textures.FilterMode.LINEAR);
       this.container.add(img);
       // Real ratio: angular speed is inversely proportional to tooth count.
       this.gears.push({ img, rate: ((BASE_RPM * 26) / g.teeth) * g.dir });
     }
 
-    const [word, number] = splitTitle(GAME_TITLE);
-
-    const wm = createLogoTexture(scene, 'logo_word', word, style, capPx);
-    const nm = createLogoTexture(scene, 'logo_num', number, style, capPx * 0.78);
-
-    const axis = Phaser.Math.DegToRad(AXIS_DEG);
-    // Opposite ends of one descending axis: the name up and left, the number
-    // down and right, which is also the order they are read in.
-    //
-    // Held close enough to read as one mark. The two blocks overlap in x — the
-    // number begins left of where the final stop ends — and clear each other
-    // only because they pass vertically. Measured at 0 overlapping ink pixels;
-    // bounding boxes stopped being a useful check at this spacing.
-    const wordImg = scene.add.image(-108, -26, wm.key).setRotation(axis).setOrigin(0.5, 0.5);
-    const numImg = scene.add.image(138, 40, nm.key).setRotation(axis).setOrigin(0.5, 0.5);
-
-    this.container.add(wordImg);
-    this.container.add(numImg);
+    // The lettering, and how its two halves lock together, is the candidate.
+    buildTitleDesign(scene, design, this.container);
   }
 
   /** @param t Seconds. */

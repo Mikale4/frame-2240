@@ -2,36 +2,19 @@ import Phaser from 'phaser';
 import { GAME_VERSION, VIEW_H, VIEW_W } from '../core/GameConfig';
 import { InputManager } from '../input/InputManager';
 import { smallText } from '../ui/Menu';
-import { LOGO_STYLES } from '../ui/Logotype';
 import { TitleMark } from '../ui/TitleMark';
+import type { TitleDesignId } from '../ui/TitleDesigns';
 import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
 
 /**
- * The backdrop stack, furthest first, with an optional grading tint.
+ * Which candidate wordmark is on screen.
  *
- * All five layers are composed in one 1536x1024 frame, **including the opaque
- * sky**, so the whole set is drawn to one shared rect and registers by
- * construction rather than by five hand-tuned offsets.
- *
- * **Tint only — do not reach for `preFX` here.** A colour matrix and a small
- * blur read better on paper and cost a visible defect: once an object is put on
- * the FX pipeline Phaser keeps it there, `preFX.clear()` does not take it off,
- * and the extra pass misaligns these `setDisplaySize`-scaled layers just enough
- * to expose a band of the opaque sky along the bottom of the screen. Tint is a
- * vertex multiply with no render target and no such trap.
- *
- * **`title_yards` is missing.** The distant-yard layer came back empty — max
- * alpha 5 of 255, scattered as noise over the whole frame — and it is the layer
- * that gives the cloud sea scale and says the world is inhabited. It belongs
- * between the sea and the structure when it exists; `BootScene` gates it.
+ * Four lockups are being compared live rather than on a contact sheet, because
+ * a mark that reads on black can vanish on a lit background — which is exactly
+ * what happened to the first city artwork. Flip this to look at another.
  */
-const TITLE_LAYERS: readonly (readonly [string, number?])[] = [
-  ['title_sky'],
-  ['title_sea'],
-  ['title_structure'],
-  ['title_deck'],
-];
+const TITLE_DESIGN: TitleDesignId = 'instrument';
 
 /**
  * Attract screen: a vista, the title, and nothing to decide.
@@ -69,39 +52,34 @@ export class TitleScene extends Phaser.Scene {
     // there has been a gesture, and it starts immediately.
     music.play('title');
 
-    // ---- background: the title's own vista --------------------------------
+    // ---- background: twilight, standing in ------------------------------
     //
-    // The open edge of a yard's deck, above the cloud sea at dawn. It borrowed
-    // CATHEDRAL YARD's arena layers first, which spent the game's only stage
-    // before the player had seen it; then a mountain summit, which was a nature
-    // scene fronting a game with no nature in it.
+    // **Deliberately temporary.** The painted yard-deck layers are still in
+    // `assets/ui/` and briefed in `docs/TITLE_STAGE_ART_BRIEF.md`; they are not
+    // drawn because the backdrop is undecided and a lit sky makes it impossible
+    // to judge a hairline wordmark. `BootScene` no longer loads them — restoring
+    // is that flag plus the layer loop, both in git.
     //
-    // 3:2 art on a 16:9 screen overflows the height by 100px, taken off the top,
-    // which is empty sky the opaque layer covers anyway. See `TITLE_LAYERS`.
-    const layerH = VIEW_W * (1024 / 1536);
-    for (const [key, tint] of TITLE_LAYERS) {
-      // **The deck does not quite reach the corners.** Its art runs to the last
-      // row of the frame but covers only 92 % of the width there, and what shows
-      // through the remaining 8 % is the opaque sky's warm horizon — a pink band
-      // along the bottom of the screen, under a structure that should be
-      // hanging over two kilometres of nothing. A dark plate immediately behind
-      // the deck fills it with the void that belongs there. Measured, not
-      // guessed: the gap is the corners, so the plate only has to be a strip.
-      if (key === 'title_deck') {
-        this.add
-          .rectangle(0, VIEW_H - 74, VIEW_W, 74, 0x080b12)
-          .setOrigin(0, 0);
-      }
-      const img = this.add.image(0, VIEW_H - layerH, key).setOrigin(0, 0);
-      img.setDisplaySize(VIEW_W, layerH);
-      if (tint) img.setTint(tint);
+    // A flat fill would band on a gradient this dark, so it is drawn as strips
+    // fine enough that the steps fall below one 8-bit level.
+    const g = this.add.graphics();
+    for (let i = 0; i < 64; i++) {
+      const t = i / 63;
+      const c = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.ValueToColor(0x0a0714),
+        Phaser.Display.Color.ValueToColor(0x2a1c3f),
+        100,
+        Math.round(t * 100),
+      );
+      g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1);
+      g.fillRect(0, (i * VIEW_H) / 64, VIEW_W, VIEW_H / 64 + 1);
     }
 
     // ---- titles ----------------------------------------------------------
     // **The initialism is not spelled out here, deliberately.** In the world
     // nobody expands it, so a title screen that does would be the one place the
     // game speaks out of character. It is in the README for anyone who wants it.
-    this.mark = new TitleMark(this, VIEW_W / 2, 118, LOGO_STYLES.heraldic);
+    this.mark = new TitleMark(this, VIEW_W / 2, 150, TITLE_DESIGN);
     smallText(this, 'ORIGINAL AERIAL MECHA COMBAT', VIEW_W / 2, 246, 12, '#7d8ea8');
 
     // ---- press start -----------------------------------------------------
