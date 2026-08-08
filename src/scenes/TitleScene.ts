@@ -6,6 +6,8 @@ import { TitleMark } from '../ui/TitleMark';
 import type { TitleDesignId } from '../ui/TitleDesigns';
 import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
+import { Difficulty, session } from '../core/Session';
+import { ROSTER } from '../data/mechs';
 
 /**
  * Which candidate wordmark is on screen.
@@ -15,6 +17,14 @@ import { music } from '../audio/Music';
  * what happened to the first city artwork. Flip this to look at another.
  */
 const TITLE_DESIGN: TitleDesignId = 'instrument';
+
+/**
+ * Seconds of no input before the attract demo starts.
+ *
+ * Long enough that a player who arrived deliberately gets to look at the title
+ * and press start, short enough that an abandoned screen does not sit still.
+ */
+const IDLE_BEFORE_DEMO_S = 8;
 
 /**
  * Attract screen: a vista, the title, and nothing to decide.
@@ -46,6 +56,10 @@ export class TitleScene extends Phaser.Scene {
     this.input$.reset();
     this.t = 0;
     this.armAt = 0.25;
+    // Cleared on the way *in* as well as on the way out. If a demo ever dies
+    // without running its exit — a reload mid-demo, a thrown error — the flag
+    // would otherwise survive and strip the HUD off the next real match.
+    session.demo = false;
 
     // Boot reaches here without a gesture, so this normally sets the intent and
     // the first keypress is what actually starts it. Coming back from a match
@@ -80,7 +94,6 @@ export class TitleScene extends Phaser.Scene {
     // nobody expands it, so a title screen that does would be the one place the
     // game speaks out of character. It is in the README for anyone who wants it.
     this.mark = new TitleMark(this, VIEW_W / 2, 150, TITLE_DESIGN);
-    smallText(this, 'ORIGINAL AERIAL MECHA COMBAT', VIEW_W / 2, 246, 12, '#7d8ea8');
 
     // ---- press start -----------------------------------------------------
     this.prompt = this.add
@@ -113,6 +126,36 @@ export class TitleScene extends Phaser.Scene {
       sfx.unlock();
       sfx.uiConfirm();
       this.scene.start('Menu');
+      return;
     }
+    if (this.t >= IDLE_BEFORE_DEMO_S) this.startDemo();
+  }
+
+  /**
+   * Starts an attract demo: two random machines, both CPU, no interface.
+   *
+   * **A real match**, not a scripted set piece — same simulation, same AI, same
+   * arena. `EXTREME` on both sides because it is the tier that plays
+   * differently rather than merely better, and because it produces the longest
+   * fights, so fifteen seconds lands mid-exchange instead of on a knockout.
+   *
+   * `matchIndex` is bumped here because nothing else will: the demo skips
+   * `MechSelect`, which is normally what advances the seed, so without this
+   * every demo of the same pairing would replay the identical fight.
+   */
+  private startDemo(): void {
+    const ids = ROSTER.map((m) => m.id);
+    const a = Math.floor(Math.random() * ids.length);
+    // Offset rather than re-rolled, so the two are distinct without a loop that
+    // can in principle spin.
+    const b = (a + 1 + Math.floor(Math.random() * (ids.length - 1))) % ids.length;
+    session.playerMech = ids[a];
+    session.enemyMech = ids[b];
+    session.mode = 'aiVsAi';
+    session.playerDifficulty = Difficulty.Extreme;
+    session.enemyDifficulty = Difficulty.Extreme;
+    session.matchIndex++;
+    session.demo = true;
+    this.scene.start('Battle');
   }
 }

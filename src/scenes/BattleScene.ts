@@ -80,6 +80,14 @@ const BLADE_GLOW_LEN = 88;
 const BLADE_GLOW_THICK = 13;
 
 /**
+ * How long the title screen's attract demo runs before returning, in seconds.
+ *
+ * Fifteen is long enough to show an exchange land and short enough that nobody
+ * watching the screen idle mistakes it for having started a match.
+ */
+const DEMO_SECONDS = 15;
+
+/**
  * The playable match.
  *
  * The scene owns a fixed 60Hz accumulator that drives `MatchSim` (which knows
@@ -234,6 +242,8 @@ export class BattleScene extends Phaser.Scene {
   private shake = 0;
   private finished = false;
   private uiCam!: Phaser.Cameras.Scene2D.Camera;
+  /** Seconds the attract demo has been on screen. */
+  private demoElapsed = 0;
   private worldObjects: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
@@ -496,6 +506,7 @@ export class BattleScene extends Phaser.Scene {
     // A second, unzoomed camera draws the HUD. Camera zoom scales everything it
     // renders, including scrollFactor-0 objects, so the HUD has to live on its
     // own camera or it drifts off-screen whenever the view zooms in.
+    this.demoElapsed = 0;
     this.uiCam = this.cameras.add(0, 0, VIEW_W, VIEW_H);
     this.uiCam.setName('ui');
     this.uiCam.setScroll(0, 0);
@@ -538,6 +549,10 @@ export class BattleScene extends Phaser.Scene {
     ];
     this.cameras.main.ignore(uiObjects);
     this.uiCam.ignore(this.worldObjects);
+    // **The whole interface lives on this camera**, so an attract demo hides it
+    // in one call rather than by tracking every HUD object individually — and
+    // anything added later is hidden by construction instead of by remembering.
+    if (session.demo) this.uiCam.setVisible(false);
 
     this.hud.banner('READY', 60);
     sfx.matchReady();
@@ -764,6 +779,12 @@ export class BattleScene extends Phaser.Scene {
     this.scene.start('Title');
   }
 
+  /** Leaves the attract demo, clearing the flag before the scene changes. */
+  private endDemo(): void {
+    session.demo = false;
+    this.scene.start('Title');
+  }
+
   // -------------------------------------------------------------------- loop
 
   override update(_time: number, delta: number): void {
@@ -778,6 +799,19 @@ export class BattleScene extends Phaser.Scene {
     if (wantDuck !== this.musicDucked) {
       this.musicDucked = wantDuck;
       music.duck(wantDuck);
+    }
+
+    // ---- attract demo ----------------------------------------------------
+    // Runs ahead of everything: a demo must not be pausable, and any input at
+    // all should end it. Timed on wall clock rather than on simulation ticks so
+    // a slow frame cannot stretch it past its welcome.
+    if (session.demo) {
+      this.demoElapsed += delta / 1000;
+      const pressed = ui.confirm || ui.cancel || ui.pause || ui.up || ui.down || ui.left || ui.right;
+      if (this.demoElapsed >= DEMO_SECONDS || pressed) {
+        this.endDemo();
+        return;
+      }
     }
 
     if (ui.toggleDebug) this.debug.toggleText();
@@ -902,7 +936,11 @@ export class BattleScene extends Phaser.Scene {
       session.lastTimeLeft = s.secondsLeft;
       session.lastPlayerLife = s.player.life;
       session.lastEnemyLife = s.enemy.life;
-      this.time.delayedCall(280, () => this.scene.start('Results'));
+      // A demo never reaches the results table — it is an advert, and nobody
+      // asked it who won. A knockout inside the demo window is unlikely but
+      // entirely possible, so this is a real branch rather than a precaution.
+      if (session.demo) this.endDemo();
+      else this.time.delayedCall(280, () => this.scene.start('Results'));
     }
   }
 

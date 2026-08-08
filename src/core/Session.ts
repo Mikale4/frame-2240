@@ -100,6 +100,18 @@ export const session = {
    * what lets a second arena arrive as data instead of as a code change.
    */
   arena: 'cathedral_yard',
+  /**
+   * True while the title screen's attract demo is running.
+   *
+   * A demo is a real `aiVsAi` match with its interface hidden and a hard time
+   * limit, not a special mode — the simulation, the AI and the presentation are
+   * the ones the player will actually get, which is the only way an attract
+   * screen is honest about the game.
+   *
+   * Not persisted, and cleared by `TitleScene` on entry as well as on exit: a
+   * flag that survives a crash mid-demo would leave a real match with no HUD.
+   */
+  demo: false,
   /** Incremented per match so each rematch gets a fresh deterministic seed. */
   matchIndex: 0,
   lastOutcome: 'none' as MatchOutcome,
