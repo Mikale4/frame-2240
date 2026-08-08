@@ -4,15 +4,26 @@ import { depthScaleAt, depthSortAt } from '../core/Depth';
 import type { Combatant } from '../combat/Combatant';
 
 /**
- * Opacity of the under-deck fill.
+ * The under-deck darkness, as a light falloff rather than as a fill.
  *
- * Not 1. The fill exists so a gap under the floor can never show sky, but it
- * sits behind `arena_under`, which draws the actual structure — so the only
- * place it is ever seen is through that art's thinning lower half. Leaving a
- * little of the backdrop visible there is the difference between reading as a
- * lid over the world and reading as darkness with something beyond it.
+ * **A constant alpha can only ever be a sheet laid over the picture.** However
+ * transparent it is, it begins at a definite line and it covers everything past
+ * that line by the same amount, which is exactly what the eye reads as a
+ * rectangle. What is actually happening down there is that the lamps are all up
+ * on the deck and the structure below runs out of light, so the fill is built to
+ * be *that*: invisible where the light still reaches, deepening with distance
+ * from it.
+ *
+ * Two things make it blend rather than sit on top:
+ *
+ * * **It starts at zero.** There is no edge to see at the deck line, because at
+ *   the deck line the fill is not there at all.
+ * * **It eases.** Real falloff is not linear, and a linear ramp has a visible
+ *   kink at both ends where the rate of change starts and stops. Smoothstep has
+ *   zero gradient at both, so the darkness arrives and settles without a seam.
  */
-const FILL_ALPHA = 0.82;
+const FILL_COLOUR = 0x03050c;
+const FILL_ALPHA_MAX = 0.94;
 
 /**
  * The arena deck.
@@ -92,28 +103,13 @@ export class GroundPlane {
     // total, which is why it read as one colour. This runs the whole way from
     // the deck's own value down to near-black, in enough steps that the
     // banding falls below one 8-bit level.
-    // **Void, not concrete.** 0x14161f is a light enough grey to read as a
-    // surface, and a surface is exactly what is not down there — the deck hangs
-    // over two kilometres of air. Starting near-black means that even with no
-    // art over it this reads as depth rather than as an undrawn rectangle.
-    //
-    // **And slightly transparent**, which is what stops it reading as a painted
-    // block at all. `arena_under` now draws the real structure in front of it,
-    // so this is only ever glimpsed through that art's thinning lower half —
-    // letting a little of the backdrop through means what shows there is depth
-    // with something behind it rather than a lid. Opaque, it was a rectangle;
-    // at this alpha it is a darkness.
-    const rows = 48;
-    const top = Phaser.Display.Color.ValueToColor(0x090b12);
-    const bottom = Phaser.Display.Color.ValueToColor(0x020306);
+    // One colour throughout; the depth comes from the alpha ramp, not from
+    // shifting the hue. Enough bands that the steps fall below one 8-bit level.
+    const rows = 72;
     for (let i = 0; i < rows; i++) {
-      const c = Phaser.Display.Color.Interpolate.ColorWithColor(
-        top,
-        bottom,
-        rows - 1,
-        i,
-      );
-      g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), FILL_ALPHA);
+      const t = i / (rows - 1);
+      const eased = t * t * (3 - 2 * t);
+      g.fillStyle(FILL_COLOUR, FILL_ALPHA_MAX * eased);
       g.fillRect(-400, y + (i * slab) / rows, ARENA_W + 800, slab / rows + 1);
     }
   }
