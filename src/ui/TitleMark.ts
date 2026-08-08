@@ -141,6 +141,32 @@ const MEDALLION_ALPHA = 0.3;
 const MEDALLION_ALPHA_PLACEHOLDER = 0.17;
 
 /**
+ * How hard the yard struggles to hold its altitude, in degrees and pixels.
+ *
+ * **A clean sine reads as serene bobbing**, which is the opposite of the
+ * intent. Three things make it read as a structure failing to hold station
+ * rather than one floating peacefully:
+ *
+ * * **Two lists at incommensurate rates.** 0.23 and 0.37 never line up, so the
+ *   drift has no period the eye can lock onto and never returns to rest.
+ * * **The sink runs on its own clock**, unrelated to the list, so the thing is
+ *   not swinging about a point — it is losing and regaining height while
+ *   separately leaning.
+ * * **A shudder every thirteen seconds**: a damped ring, over in about a
+ *   second. Rare enough to be unsettling rather than mechanical, and it is the
+ *   single ingredient that turns drifting into struggling.
+ *
+ * Kept small deliberately. This is a backdrop behind a title, and a yard
+ * visibly falling would leak a reveal the game withholds — it should read as
+ * *not quite steady*, never as a disaster in progress.
+ */
+const LIST_DEG = 0.9;
+const LIST_DEG_2 = 0.55;
+const SINK_PX = 3.2;
+const SINK_PX_2 = 1.6;
+const SHUDDER_PERIOD_S = 13;
+
+/**
  * The placeholder medallion: a gantry rose window drawn as an engineering
  * elevation.
  *
@@ -370,6 +396,7 @@ function gearTexture(
 export class TitleMark {
   readonly container: Phaser.GameObjects.Container;
   private readonly gears: { img: Phaser.GameObjects.Image; rate: number }[] = [];
+  private medallion?: Phaser.GameObjects.Image;
 
   /**
    * @param design Which candidate lockup to draw. The letterforms and the way
@@ -405,6 +432,7 @@ export class TitleMark {
       medallion.setBlendMode(Phaser.BlendModes.ADD);
     }
     this.container.add(medallion);
+    this.medallion = medallion;
 
     // Gears next, so everything else lands on top of them.
     for (const g of TRAIN) {
@@ -427,6 +455,22 @@ export class TitleMark {
   /** @param t Seconds. */
   update(t: number): void {
     for (const g of this.gears) g.img.setRotation(Phaser.Math.DegToRad(t * g.rate));
+
+    const m = this.medallion;
+    if (!m) return;
+    // A damped ring, fired on a slow cycle and over within about a second.
+    const phase = t % SHUDDER_PERIOD_S;
+    const shudder = phase < 1.4 ? Math.sin(phase * 34) * Math.exp(-phase * 3.4) : 0;
+    const list =
+      Math.sin(t * 0.23) * LIST_DEG +
+      Math.sin(t * 0.37 + 1.7) * LIST_DEG_2 +
+      shudder * 1.6;
+    const sink =
+      Math.sin(t * 0.17 + 0.4) * SINK_PX +
+      Math.sin(t * 0.29) * SINK_PX_2 +
+      shudder * 2.2;
+    m.setRotation(Phaser.Math.DegToRad(AXIS_DEG + list));
+    m.y = MEDALLION_Y + sink;
   }
 
   destroy(): void {
