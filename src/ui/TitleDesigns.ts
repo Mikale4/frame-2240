@@ -51,13 +51,16 @@ const shared = {
  */
 const INSTRUMENT: LogoStyle = {
   ...shared,
-  stem: 5.5,
-  bar: 4.2,
-  hair: 3.4,
-  chamfer: 2,
+  // **Truly monoline.** One width for every stroke, no taper, no chamfer — the
+  // sketch is drawn with a single pen and any thick/thin at all reads as a
+  // different, softer idea. The weight classes still exist in the skeleton for
+  // other styles; this one simply sets them equal.
+  stem: 5,
+  bar: 5,
+  hair: 5,
+  chamfer: 0,
   tracking: 15,
-  curves: true,
-  modulation: 0.2,
+  modulation: 0,
   ramp: PALE,
   edge: 0,
 };
@@ -131,17 +134,26 @@ export function buildTitleDesign(
 ): void {
   if (id === 'instrument') {
     const cap = 40;
-    const word = mark(scene, 'td_i_w', WORD, INSTRUMENT, cap, 0, -34);
-    const num = mark(scene, 'td_i_n', NUM, { ...INSTRUMENT, tracking: 22 }, cap * 0.92, 0, 34);
-    // The rule spans the wider of the two, which is what makes the pair read as
-    // one object rather than as two lines that happen to be near each other.
-    const w = Math.max(word.displayWidth, num.displayWidth) * 0.86;
+    const numCap = cap * 0.94;
+    // **Both lines are justified to one width**, so their outer edges align and
+    // the rule between them spans exactly that. Solved rather than tuned: the
+    // ratio of the two natural widths is the horizontal scale that equalises
+    // them. Tracking the number by eye got close and never quite landed.
+    const wordUnits = measure(WORD, INSTRUMENT) * (cap / 100);
+    const numBase: LogoStyle = { ...INSTRUMENT, tracking: 20 };
+    const numUnits = measure(NUM, numBase) * (numCap / 100);
+    const numStyle: LogoStyle = { ...numBase, xScale: wordUnits / numUnits };
+
+    const word = mark(scene, 'td_i_w', WORD, INSTRUMENT, cap, 0, -32);
+    const num = mark(scene, 'td_i_n', NUM, numStyle, numCap, 0, 36);
+
+    const half = wordUnits / 2;
     const g = scene.add.graphics();
-    g.lineStyle(1.4, 0xd7e3f4, 0.85);
-    g.lineBetween(-w / 2, 0, w / 2, 0);
-    // A single dot on the rule, the same device the full stops use.
+    g.lineStyle(1.3, 0xd7e3f4, 0.8);
+    g.lineBetween(-half, 2, half, 2);
+    // One dot on the rule, the same device the full stops use.
     g.fillStyle(0xd7e3f4, 0.9);
-    g.fillCircle(0, 0, 2.2);
+    g.fillCircle(0, 2, 2);
     out.add([word, num, g]);
     return;
   }

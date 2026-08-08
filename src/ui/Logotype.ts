@@ -77,72 +77,79 @@ const CAP = 100;
  * same rather than a different job. Extending it is why `missingGlyphs` exists.
  */
 const GLYPHS: Record<string, Glyph> = {
-  // Stem left, two arms. The mid arm is short of the top one, which is what
-  // stops an F reading as a broken E.
+  // Verticals and diagonals are `stem`, horizontals are `bar`. A monoline style
+  // sets them equal; everything else gets thick/thin from the same skeleton.
   F: {
     adv: 60,
     strokes: [
-      { a: [10, 0], b: [10, 100], w: 'stem', cap: 'cut' },
-      { a: [10, 7], b: [58, 7], w: 'bar', capB: 'cut' },
-      { a: [10, 46], b: [46, 46], w: 'bar', capB: 'point' },
+      { a: [10, 0], b: [10, 100], w: 'stem' },
+      { a: [10, 5], b: [58, 5], w: 'bar' },
+      { a: [10, 48], b: [48, 48], w: 'bar' },
     ],
   },
-  // Bowl closed with two straights and a diagonal shoulder rather than a curve:
-  // a milled part has no arcs it does not need.
+  // Bowl closed with chords and mitred corners rather than an arc. The corner
+  // cuts are what make it read as drawn on a grid instead of drawn by hand.
   R: {
     adv: 70,
     strokes: [
-      { a: [10, 0], b: [10, 100], w: 'stem', cap: 'cut' },
-      // One bowl, not four chords. Flattened to the old chord run when a style
-      // turns curves off, which is the whole point of the control point.
-      { a: [10, 7], b: [10, 47], w: 'bar', c: [74, 27], taper: [0.85, 1.2, 0.85] },
-      { a: [38, 47], b: [68, 100], w: 'stem', c: [46, 72], capB: 'cut', taper: [1.15, 0.7] },
+      { a: [10, 0], b: [10, 100], w: 'stem' },
+      { a: [10, 5], b: [52, 5], w: 'bar' },
+      { a: [52, 5], b: [63, 16], w: 'bar' },
+      { a: [63, 16], b: [63, 36], w: 'stem' },
+      { a: [63, 36], b: [52, 47], w: 'bar' },
+      { a: [10, 47], b: [52, 47], w: 'bar' },
+      { a: [34, 47], b: [66, 100], w: 'stem', taper: [1.1, 0.85] },
     ],
   },
-  // Apex is cut flat, not pointed — a point at 74px turns into a pixel and a
-  // flat apex is the older, heavier drawing anyway.
+  // Flat apex. A point turns into a single pixel at title size, and the flat
+  // cut is the older, more mechanical drawing anyway.
   A: {
     adv: 74,
     strokes: [
-      { a: [6, 100], b: [30, 0], w: 'stem', cap: 'cut', taper: [1.2, 0.72] },
-      { a: [44, 0], b: [68, 100], w: 'stem', cap: 'cut', taper: [0.72, 1.2] },
-      { a: [30, 0], b: [44, 0], w: 'bar' },
-      { a: [17, 70], b: [57, 70], w: 'hair' },
+      { a: [8, 100], b: [28, 4], w: 'stem', taper: [1.15, 0.8] },
+      { a: [46, 4], b: [66, 100], w: 'stem', taper: [0.8, 1.15] },
+      { a: [28, 4], b: [46, 4], w: 'bar' },
+      { a: [16, 68], b: [58, 68], w: 'bar' },
     ],
   },
-  // The vertex stops above the baseline. Taking it all the way down makes the
-  // middle of the word the darkest thing in it.
+  // The vertex stops well above the baseline, which keeps the middle of the
+  // word from becoming the darkest thing in it.
   M: {
     adv: 88,
     strokes: [
-      { a: [10, 0], b: [10, 100], w: 'stem', cap: 'cut' },
-      { a: [78, 0], b: [78, 100], w: 'stem', cap: 'cut' },
-      { a: [10, 0], b: [44, 64], w: 'bar', taper: [1.25, 0.8] },
-      { a: [78, 0], b: [44, 64], w: 'bar', taper: [1.25, 0.8] },
+      { a: [10, 0], b: [10, 100], w: 'stem' },
+      { a: [78, 0], b: [78, 100], w: 'stem' },
+      { a: [10, 2], b: [44, 58], w: 'bar', taper: [1.2, 0.85] },
+      { a: [78, 2], b: [44, 58], w: 'bar', taper: [1.2, 0.85] },
     ],
   },
   E: {
     adv: 60,
     strokes: [
-      { a: [10, 0], b: [10, 100], w: 'stem', cap: 'cut' },
-      { a: [10, 7], b: [58, 7], w: 'bar', capB: 'cut' },
-      { a: [10, 46], b: [46, 46], w: 'bar', capB: 'point' },
-      { a: [10, 93], b: [58, 93], w: 'bar', capB: 'cut' },
+      { a: [10, 0], b: [10, 100], w: 'stem' },
+      { a: [10, 5], b: [58, 5], w: 'bar' },
+      { a: [10, 48], b: [48, 48], w: 'bar' },
+      { a: [10, 95], b: [58, 95], w: 'bar' },
     ],
   },
-  // Full stop: a small lozenge, not a square. A square dot between capitals
-  // reads as a decimal point in a number.
+  // A small lozenge rather than a square: a square dot between capitals reads
+  // as a decimal point in a number.
   '.': {
     adv: 24,
-    strokes: [{ a: [12, 84], b: [12, 94], w: 'bar', cap: 'point' }],
+    strokes: [{ a: [12, 86], b: [12, 94], w: 'bar', cap: 'point' }],
   },
-  // Shoulder is three chords rather than an arc, matching R's bowl.
+  // Hard-cornered two: flat top, mitred shoulders, straight diagonal, flat base.
+  // No arc anywhere — this is the glyph that most separates the geometric
+  // alphabet from the drawn one it replaced.
   '2': {
     adv: 68,
     strokes: [
-      { a: [7, 25], b: [61, 27], w: 'bar', c: [34, -8], cap: 'cut', taper: [0.7, 1.2, 0.95] },
-      { a: [61, 27], b: [9, 92], w: 'stem', c: [50, 60], taper: [1.15, 0.8] },
-      { a: [8, 93], b: [62, 93], w: 'bar', cap: 'cut' },
+      { a: [10, 17], b: [21, 5], w: 'bar' },
+      { a: [21, 5], b: [51, 5], w: 'bar' },
+      { a: [51, 5], b: [62, 17], w: 'bar' },
+      { a: [62, 17], b: [62, 31], w: 'stem' },
+      { a: [62, 31], b: [11, 92], w: 'stem', taper: [1.1, 0.9] },
+      { a: [8, 95], b: [64, 95], w: 'bar' },
     ],
   },
   // Open-topped four. The counter is a real triangle, so it survives being
@@ -150,18 +157,25 @@ const GLYPHS: Record<string, Glyph> = {
   '4': {
     adv: 72,
     strokes: [
-      { a: [46, 0], b: [6, 68], w: 'bar', cap: 'cut' },
-      { a: [6, 68], b: [68, 68], w: 'bar', cap: 'cut' },
-      { a: [46, 0], b: [46, 100], w: 'stem', cap: 'cut' },
+      { a: [48, 4], b: [8, 66], w: 'bar' },
+      { a: [8, 66], b: [68, 66], w: 'bar' },
+      { a: [48, 4], b: [48, 100], w: 'stem' },
     ],
   },
-  // Hexagonal zero: two verticals and four diagonals. Distinct from O by
-  // construction rather than by a slash through it.
+  // Elongated octagon: flat top, bottom and sides with mitred corners. Distinct
+  // from an O by construction rather than by a slash through it, and it holds
+  // its shape at any weight because nothing about it is an arc.
   '0': {
     adv: 76,
     strokes: [
-      { a: [38, 4], b: [38, 96], w: 'stem', c: [-14, 50], taper: [0.42, 1.25, 0.42] },
-      { a: [38, 4], b: [38, 96], w: 'stem', c: [90, 50], taper: [0.42, 1.25, 0.42] },
+      { a: [10, 22], b: [10, 78], w: 'stem' },
+      { a: [66, 22], b: [66, 78], w: 'stem' },
+      { a: [22, 5], b: [54, 5], w: 'bar' },
+      { a: [22, 95], b: [54, 95], w: 'bar' },
+      { a: [10, 22], b: [22, 5], w: 'bar' },
+      { a: [54, 5], b: [66, 22], w: 'bar' },
+      { a: [10, 78], b: [22, 95], w: 'bar' },
+      { a: [54, 95], b: [66, 78], w: 'bar' },
     ],
   },
   ' ': { adv: 34, strokes: [] },
