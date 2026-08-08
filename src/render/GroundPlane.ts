@@ -25,8 +25,19 @@ export class GroundPlane {
   private readonly deck: Phaser.GameObjects.Graphics;
   private readonly shadows: Phaser.GameObjects.Graphics;
 
-  /** Height of the drawn slab below the contact line. */
-  private static readonly SLAB = ARENA_H - DECK_Y + 220;
+  /**
+   * Height of the drawn slab below the contact line.
+   *
+   * **Was 220 past the arena floor and that was not enough.** Driven to the
+   * bottom of the arena with both machines low and far apart — the camera zooms
+   * out to frame them — the view reaches 354 world pixels below the deck, so
+   * the fill ran out and the parallax backdrop showed through underneath it.
+   * That is the exact leak this slab exists to prevent, displaced lower down.
+   *
+   * Generous on purpose: it is a flat fill with no per-frame cost, and the
+   * failure mode of being too short is sky under the floor.
+   */
+  private static readonly SLAB = ARENA_H - DECK_Y + 560;
   /** Above this height a machine casts no visible shadow. */
   private static readonly SHADOW_FADE = 420;
 
@@ -58,16 +69,30 @@ export class GroundPlane {
     const slab = GroundPlane.SLAB;
     g.clear();
 
-    g.fillStyle(0x14161f, 1);
-    g.fillRect(-400, y, ARENA_W + 800, slab);
-
-    // A darkening gradient with depth, so the deck falls away rather than
-    // reading as one flat colour behind the machines.
-    const rows = 7;
+    // **This was a visible flat grey block.** `arena_near`'s deck art runs out
+    // 172 world pixels below the contact line — its last opaque row is 920 of
+    // 1024 — while this slab extends 250, so the bottom ~78px had nothing drawn
+    // over them and showed the bare fill. Widening the art is the other fix and
+    // needs a new asset; grading the fill is the one that also happens to be
+    // correct, because what is under the deck is two kilometres of darkening
+    // air, not a floor.
+    //
+    // The old ramp was seven bands at 0.06 alpha — about a third of a stop in
+    // total, which is why it read as one colour. This runs the whole way from
+    // the deck's own value down to near-black, in enough steps that the
+    // banding falls below one 8-bit level.
+    const rows = 48;
+    const top = Phaser.Display.Color.ValueToColor(0x14161f);
+    const bottom = Phaser.Display.Color.ValueToColor(0x04050a);
     for (let i = 0; i < rows; i++) {
-      const t = i / rows;
-      g.fillStyle(0x000000, 0.06);
-      g.fillRect(-400, y + t * slab, ARENA_W + 800, slab / rows + 1);
+      const c = Phaser.Display.Color.Interpolate.ColorWithColor(
+        top,
+        bottom,
+        rows - 1,
+        i,
+      );
+      g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1);
+      g.fillRect(-400, y + (i * slab) / rows, ARENA_W + 800, slab / rows + 1);
     }
   }
 
