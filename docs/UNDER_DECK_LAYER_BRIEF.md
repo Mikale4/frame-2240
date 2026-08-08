@@ -10,9 +10,11 @@ Everything else in the stage already exists.
 
 ## 0. The prompt to paste
 
-**Attach `arena_near.png` — the existing deck layer — alongside this prompt.**
-It is the authority: the new layer has to look like the same drawing continued
-downward, by the same hand, in the same palette.
+**Attach two things alongside this prompt:** `arena_near.png`, the existing deck
+layer, and `docs/CATHEDRAL_YARD_CONTEXT.md`, which carries the game, the world
+and the stage's own lore. The image is the authority on how it must look — the
+new layer has to be the same drawing continued downward, by the same hand, in
+the same palette. The context pack is the authority on what the place *is*.
 
 ```
 I am attaching one layer from a 2D game stage: the deck of an industrial
