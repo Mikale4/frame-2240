@@ -69,13 +69,13 @@ interface GearSpec {
  * can see.
  */
 const TRAIN: GearSpec[] = [
-  { r: 88, teeth: 26, x: 44, y: -4, dir: 1, alpha: 0.24, web: 'kidney' },
-  { r: 58, teeth: 17, x: 174, y: -58, dir: -1, alpha: 0.2, web: 'spokes' },
-  { r: 40, teeth: 12, x: -92, y: 62, dir: 1, alpha: 0.18, web: 'holes' },
-  { r: 32, teeth: 9, x: -214, y: 30, dir: -1, alpha: 0.15, web: 'solid' },
+  { r: 88, teeth: 48, x: 44, y: -4, dir: 1, alpha: 0.26, web: 'kidney' },
+  { r: 58, teeth: 34, x: 174, y: -58, dir: -1, alpha: 0.22, web: 'spokes' },
+  { r: 40, teeth: 24, x: -92, y: 62, dir: 1, alpha: 0.2, web: 'holes' },
+  { r: 32, teeth: 19, x: -214, y: 30, dir: -1, alpha: 0.17, web: 'solid' },
 ];
 
-/** Degrees per second for a 26-tooth gear; everything else scales off it. */
+/** Degrees per second for a 48-tooth gear; everything else scales off it. */
 const BASE_RPM = 5.5;
 
 /**
@@ -253,13 +253,18 @@ function gearTexture(
   const ctx = tex.getContext();
   const cx = size / 2;
   const cy = size / 2;
-  const line = Math.max(1.2, r * 0.02);
+  // **Matched to the yard, not chosen for the gear.** The Stillwake mark is a
+  // dense intricate contour drawn in hairlines; wheels built from thick strokes
+  // and large empty areas sat beside it as a different drawing system, which is
+  // what made the composition read as two unrelated pieces of art. Finer pitch
+  // and a thinner line put them in the same register.
+  const line = Math.max(0.9, r * 0.011);
 
-  const rootR = r * 0.88;
-  const tipR = r * 1.06;
+  const rootR = r * 0.9;
+  const tipR = r * 1.04;
   const step = (Math.PI * 2) / teeth;
-  const tHalfRoot = step * 0.27;
-  const tHalfTip = step * 0.17;
+  const tHalfRoot = step * 0.28;
+  const tHalfTip = step * 0.18;
   const px = (a: number, rad: number): number => cx + Math.cos(a) * rad;
   const py = (a: number, rad: number): number => cy + Math.sin(a) * rad;
 
@@ -298,9 +303,24 @@ function gearTexture(
   ctx.stroke();
 
   // ---- rim band ------------------------------------------------------------
-  for (const rr of [r * 0.74, r * 0.63]) {
+  for (const rr of [r * 0.78, r * 0.7, r * 0.63]) {
     ctx.beginPath();
     ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Index dial: fine ticks around the rim, every fourth one longer. This is
+  // most of what closes the density gap with the yard — a lot of small marks
+  // rather than a few large ones.
+  ctx.lineWidth = Math.max(0.7, r * 0.007);
+  ctx.strokeStyle = INK_FAINT;
+  const ticks = teeth * 2;
+  for (let i = 0; i < ticks; i++) {
+    const a = (i / ticks) * Math.PI * 2;
+    const inner = r * (i % 4 === 0 ? 0.7 : 0.735);
+    ctx.beginPath();
+    ctx.moveTo(px(a, inner), py(a, inner));
+    ctx.lineTo(px(a, r * 0.78), py(a, r * 0.78));
     ctx.stroke();
   }
 
@@ -366,6 +386,19 @@ function gearTexture(
   // Small, and the single most machine-specific mark on the whole part.
   const kw = Math.max(1.6, r * 0.05);
   ctx.strokeRect(cx - kw / 2, cy - boreR - kw * 0.9, kw, kw * 1.2);
+
+  // Fine radial hatching across the web, which reads as machined surface at a
+  // glance and as structure up close.
+  ctx.lineWidth = Math.max(0.6, r * 0.005);
+  ctx.strokeStyle = 'rgba(146,176,220,0.26)';
+  const hatch = Math.round(teeth * 1.5);
+  for (let i = 0; i < hatch; i++) {
+    const a = (i / hatch) * Math.PI * 2 + step * 0.25;
+    ctx.beginPath();
+    ctx.moveTo(px(a, hubR * 1.1), py(a, hubR * 1.1));
+    ctx.lineTo(px(a, r * 0.6), py(a, r * 0.6));
+    ctx.stroke();
+  }
 
   // Bolt circle, on the wheels big enough to carry one legibly.
   if (r > 45) {
@@ -445,7 +478,7 @@ export class TitleMark {
       scene.textures.get(gk).setFilter(Phaser.Textures.FilterMode.LINEAR);
       this.container.add(img);
       // Real ratio: angular speed is inversely proportional to tooth count.
-      this.gears.push({ img, rate: ((BASE_RPM * 26) / g.teeth) * g.dir });
+      this.gears.push({ img, rate: ((BASE_RPM * 48) / g.teeth) * g.dir });
     }
 
     // The lettering, and how its two halves lock together, is the candidate.
