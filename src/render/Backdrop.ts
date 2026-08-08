@@ -75,6 +75,7 @@ export class Backdrop {
   private readonly haze: Phaser.GameObjects.TileSprite;
   private readonly mid: Phaser.GameObjects.TileSprite;
   private readonly near: Phaser.GameObjects.TileSprite;
+  private readonly under: Phaser.GameObjects.TileSprite;
   /**
    * The fast foreground: girder columns passing in front of the machines.
    *
@@ -103,7 +104,20 @@ export class Backdrop {
 
   /** All backdrop objects, so the scene can assign them to the right camera. */
   get objects(): Phaser.GameObjects.GameObject[] {
-    return [this.sky, this.skyArt, this.stars, this.far, this.haze, this.mid, this.near, this.fore, this.dust];
+    // Every world-space object must be in here, or the UI camera draws its own
+    // second copy slightly offset — `under` included.
+    return [
+      this.sky,
+      this.skyArt,
+      this.stars,
+      this.far,
+      this.haze,
+      this.mid,
+      this.near,
+      this.under,
+      this.fore,
+      this.dust,
+    ];
   }
 
   constructor(scene: Phaser.Scene) {
@@ -217,6 +231,25 @@ export class Backdrop {
     // Muted: at full saturation the hazard diamonds along the lip pulled the eye
     // harder than the machines did.
     this.near.setTint(0x8d97bb);
+
+    // ---- under-deck ------------------------------------------------------
+    //
+    // `arena_near` carries the deck's underside for 172 world pixels and then
+    // simply stops, while the camera — driven to the arena floor with both
+    // machines low and apart — reaches 354. What showed through the gap was
+    // `GroundPlane`'s flat fill, which reads as an undrawn rectangle whatever
+    // colour it is. This layer is that structure continued.
+    //
+    // **Same width and same position as `near`, deliberately.** It is
+    // physically the same object seen further down, so any difference in
+    // parallax or extent between them would tear the deck in half.
+    this.under = scene.add.tileSprite(0, 0, ARENA_W + 3400, 1024, 'arena_under');
+    // Behind `near` (11) and in front of `GroundPlane`'s fill (10), so `near`
+    // wins wherever it has art and this only shows below where it runs out.
+    this.under.setOrigin(0, 0).setDepth(depthSortAt(DECK_Y, 10.5));
+    // Matched to `near`'s tint, or the deck and its underside read as two
+    // structures in different light.
+    this.under.setTint(0x8d97bb);
 
     // ---- foreground ------------------------------------------------------
     // Drawn in front of everything the fight contains. The art is deliberately
@@ -423,6 +456,12 @@ export class Backdrop {
     // Starts far enough left that the widened strip brackets the whole reachable
     // view: −1700..3900 against a worst case of −1508..3908.
     this.near.setPosition(-1700, DECK_Y - NEAR_LIP_ROW);
+    // Top edge on the deck line. The art carries 25 transparent rows above its
+    // own structure, which land under `near`'s understructure and so are never
+    // seen; what emerges below 172 is this layer's dense band, fading out by
+    // its row 576.
+    this.under.setScale(1);
+    this.under.setPosition(-1700, DECK_Y);
 
     const span = VIEW_W + 40;
     for (const m of this.motes) {
