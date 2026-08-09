@@ -519,12 +519,30 @@ _IMG_CACHE = {}
 
 
 def _texture_dir():
-    """Textures live beside the .blend, in `assets/blender/textures`."""
+    """Textures live beside the .blend, in `assets/blender/textures`.
+
+    **Do not rely on `bpy.data.filepath` alone.** A headless build started as
+    `blender --background --factory-startup --python run_build.py` has no open
+    file, so that path is empty for the entire run - `build_all` only saves the
+    .blend at the very end. Every `_load_image` then returned None, every
+    material took the procedural-only fallback, and a full eight-mech rebuild
+    produced 112 sprites with **no wear, rust or roughness maps at all**. It
+    raised no error, because the fallback is deliberate; the only symptom was
+    the machines coming out ~18 levels brighter and cleaner.
+
+    So fall back to this file's own location, which is a fixed distance from the
+    textures: `tools/blender/build_mechs.py` -> `assets/blender/textures`.
+    """
     if _TEXTURE_DIR_OVERRIDE:
         return _TEXTURE_DIR_OVERRIDE
     if bpy.data.filepath:
-        return os.path.join(os.path.dirname(bpy.data.filepath), "textures")
-    return None
+        d = os.path.join(os.path.dirname(bpy.data.filepath), "textures")
+        if os.path.isdir(d):
+            return d
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(os.path.dirname(here))          # tools/blender -> project
+    d = os.path.join(root, "assets", "blender", "textures")
+    return d if os.path.isdir(d) else None
 
 
 def _load_image(filename, non_color=False):
@@ -592,7 +610,56 @@ CAVITY_DARK = 0.30
 # Surface relief, driven from the wear map's luminance. A normal map is not
 # usable here: the meshes carry no UVs, so there is no tangent basis for a
 # NormalMap node to work in. Bump needs none.
+#
+# **Measured, and it is a dead lever.** Swept 0.0 / 0.4 / 1.0 / 2.0 / 3.5 against
+# a flat-map baseline: the texture's contribution at on-screen size went 5.00 /
+# 5.05 / 5.08 / 5.22 / 5.58. An 8.75x lever bought 12 %, and bump-off versus the
+# shipped value differ by 1 %. The rig is four soft area lights (sizes 1.4-5.0)
+# on large flat faces, and soft light barely responds to a perturbed normal.
+# Left at 0.4 because it costs nothing; do not reach for it expecting anything.
 BUMP_STRENGTH = 0.40
+
+# How far each mask's contrast is expanded about its own mean before use.
+#
+# **This is the lever bump is not.** The maps ship at SD 42.6 (wear) and 47.9
+# (grime), and at that contrast the whole texture stack moved a rendered part by
+# a mean of 5.0/255 at the size it is actually displayed - present, and
+# invisible. Swept 1.0 / 1.6 / 2.5 / 4.0 on an isolated part, rendered the way
+# `render_part` renders it:
+#
+#     gain   map SD   mean|d| vs flat   body pixels changed >8 levels
+#     1.0      42.6              5.05                            18.5 %
+#     1.6      62.3              7.27                            34.6 %
+#     2.5      79.4              9.26                            46.6 %
+#     4.0      95.2             11.10                            55.6 %
+#
+# Near-linear in map SD, and confirmed on CIRRUS (silver) as well as TERRAMOTH
+# (ochre), so it is not a property of one palette. 4.0 chosen by the owner off
+# the rendered sweep.
+#
+# **It is applied in the shader, not baked into the PNGs.** The sources stay
+# pristine and regenerable, and the value stays a dial. The cost is that at 4.0
+# the shipped maps clip - they already span 0-255, so expanding about the mean
+# crushes the tails. Purpose-authored maps at this SD would not; see
+# `docs/PROMPT_MECH_TEXTURES.md`.
+TEX_CONTRAST = 4.0
+
+# Each mask's mean, needed to expand contrast about it rather than about mid-grey
+# (which would shift the average and change how much wear the surface carries).
+# Measured values; see `assets/blender/textures/README.md`.
+TEX_MEAN = {
+    "plate_wear.png": 88.0 / 255.0,
+    "rust_mask.png": 106.2 / 255.0,
+}
+
+# A thin clear coat over the armour. Painted steel has one and bare Principled
+# diffuse does not, which is a real part of the "untextured Blender model" read:
+# without it the only highlight is the broad diffuse roll-off. Worth a modest
+# 1.17 mean|d| on its own - small next to the contrast, but it is the difference
+# between paint and plaster, and it costs one node.
+# Not applied to emissive or detail-free materials.
+COAT_WEIGHT = 0.25
+COAT_ROUGHNESS = 0.16
 
 # ---------------------------------------------------------------- cel shading
 #
@@ -734,6 +801,36 @@ def _tex(nt, coord, filename, scale=None, non_color=False):
     return tex
 
 
+def _signal(nt, tex, filename, contrast=None):
+    """The output socket to read a mask from, with its contrast expanded.
+
+    Expands about the map's *own* mean so the average amount of wear on the
+    surface is unchanged and only its spread grows - expanding about mid-grey
+    would quietly darken or lighten every machine as a side effect.
+
+    Returns the raw Color socket when there is nothing to do, so a caller can
+    use this unconditionally.
+    """
+    c = TEX_CONTRAST if contrast is None else contrast
+    mean = TEX_MEAN.get(filename)
+    if tex is None:
+        return None
+    if mean is None or c is None or abs(c - 1.0) < 1e-6:
+        return tex.outputs["Color"]
+    mr = nt.nodes.new("ShaderNodeMapRange")
+    mr.label = "BSR_CONTRAST"
+    mr.clamp = True
+    # out = (v - from_min) / (from_max - from_min), chosen so slope == c and
+    # the mean maps to itself.
+    fmin = mean * (1.0 - 1.0 / c)
+    mr.inputs["From Min"].default_value = fmin
+    mr.inputs["From Max"].default_value = fmin + 1.0 / c
+    mr.inputs["To Min"].default_value = 0.0
+    mr.inputs["To Max"].default_value = 1.0
+    nt.links.new(tex.outputs["Color"], mr.inputs["Value"])
+    return mr.outputs["Result"]
+
+
 def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail=True,
                   surface=None):
     """
@@ -787,6 +884,14 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
     if not detail or emission > 0.0:
         bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
         return mat
+
+    # Painted steel carries a thin clear coat; bare Principled diffuse does not,
+    # and its absence is part of why the armour reads as unpainted plaster.
+    # Guarded because `Coat Weight` is 4.x naming and this script still runs on
+    # older Blender.
+    for key, val in (("Coat Weight", COAT_WEIGHT), ("Coat Roughness", COAT_ROUGHNESS)):
+        if key in bsdf.inputs:
+            bsdf.inputs[key].default_value = val
 
     # Per-faction finish, falling back to the module defaults for anything the
     # faction does not override (and for the drone/effect materials, which pass
@@ -866,18 +971,20 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
         # not.
         broad_tex = _tex(nt, coord, "rust_mask.png", scale=TEX_SCALE_BROAD, non_color=True)
         if broad_tex is not None:
+            broad_sig = _signal(nt, broad_tex, "rust_mask.png")
             broad_f = nt.nodes.new("ShaderNodeMath")
             broad_f.operation = "MULTIPLY"
             broad_f.inputs[1].default_value = s_broad
-            nt.links.new(broad_tex.outputs["Color"], broad_f.inputs[0])
+            nt.links.new(broad_sig, broad_f.inputs[0])
             _nb, surf = _mix(nt, broad_f.outputs[0], surf, _scale_rgb(rgb, BROAD_DARK))
 
         wear_tex = _tex(nt, coord, "plate_wear.png", non_color=True)
+        wear_sig = _signal(nt, wear_tex, "plate_wear.png")
         if wear_tex is not None:
             wear_fac = nt.nodes.new("ShaderNodeMath")
             wear_fac.operation = "MULTIPLY"
             wear_fac.inputs[1].default_value = s_wear
-            nt.links.new(wear_tex.outputs["Color"], wear_fac.inputs[0])
+            nt.links.new(wear_sig, wear_fac.inputs[0])
             _nw, surf = _mix(nt, wear_fac.outputs[0], surf, _scale_rgb(rgb, WEAR_DARK))
 
         rust_tex = _tex(nt, coord, "rust_mask.png", non_color=True)
@@ -887,7 +994,7 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
             rust_ramp = nt.nodes.new("ShaderNodeValToRGB")
             rust_ramp.color_ramp.elements[0].position = s_rust_gate
             rust_ramp.color_ramp.elements[1].position = min(1.0, s_rust_gate + 0.30)
-            nt.links.new(rust_tex.outputs["Color"], rust_ramp.inputs["Fac"])
+            nt.links.new(_signal(nt, rust_tex, "rust_mask.png"), rust_ramp.inputs["Fac"])
             rust_fac = nt.nodes.new("ShaderNodeMath")
             rust_fac.operation = "MULTIPLY"
             rust_fac.inputs[1].default_value = s_rust
@@ -951,7 +1058,7 @@ def make_material(name, rgb, emission=0.0, roughness=0.45, metallic=0.25, detail
         if wear_tex is not None:
             bump = nt.nodes.new("ShaderNodeBump")
             bump.inputs["Strength"].default_value = BUMP_STRENGTH
-            nt.links.new(wear_tex.outputs["Color"], bump.inputs["Height"])
+            nt.links.new(wear_sig, bump.inputs["Height"])
             nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
 
         # --- quantise the lighting into flat bands --------------------------
@@ -3058,21 +3165,51 @@ def setup_world_and_lights():
     # real part of why the sprites read as untextured boxes.
     #
     # Both spellings are attempted so the script still works on 3.x/4.0.
+    #
+    # **The same silent failure happened twice more in this very list.**
+    # `fast_gi_method` was `"AMBIENT_OCCLUSION"`, which is not a valid
+    # identifier - Blender 5.1 spells it `AMBIENT_OCCLUSION_ONLY` - so the
+    # assignment raised, was swallowed here, and fast GI has been running in
+    # GLOBAL_ILLUMINATION mode (bouncing light, i.e. *lifting* the crevices this
+    # was meant to darken) for its entire existence. Verified against
+    # `scene.eevee.bl_rna.properties['fast_gi_method'].enum_items`.
+    #
+    # **Check the value stuck.** A try/except around a setattr will hide a typo
+    # in an enum forever, and this list has now done exactly that twice.
     for opt, val in (
-        ("taa_render_samples", 64),
+        ("taa_render_samples", 128),     # 64 -> 128: cleaner AA at sprite size
         ("use_gtao", True),              # <=4.1 only
         ("gtao_distance", 0.35),         # <=4.1 only
         ("use_raytracing", True),        # 4.2+ EEVEE Next
         ("use_fast_gi", True),
-        ("fast_gi_method", "AMBIENT_OCCLUSION"),
-        ("fast_gi_distance", 0.5),
-        ("fast_gi_ray_count", 4),
-        ("fast_gi_step_count", 12),
+        ("fast_gi_method", "AMBIENT_OCCLUSION_ONLY"),
+        # 0.5 BU was shorter than the parts themselves (0.5-1.5 BU), so the
+        # occlusion had nothing to reach across.
+        ("fast_gi_distance", 1.6),
+        ("fast_gi_quality", 0.5),
+        ("fast_gi_resolution", "1"),
+        ("fast_gi_ray_count", 6),
+        ("fast_gi_step_count", 16),
+        # Both were at the floor. Parts are rendered one at a time, so this only
+        # buys self-shadowing - but measured 3.84 mean|d| on an isolated part.
+        ("shadow_ray_count", 4),
+        ("shadow_step_count", 16),
     ):
         try:
             setattr(scene.eevee, opt, val)
         except (AttributeError, TypeError):
-            pass
+            continue
+        got = getattr(scene.eevee, opt, None)
+        if isinstance(val, str) and got != val:
+            print(f"  ! eevee.{opt} = {val!r} did not stick (is {got!r})")
+
+    rt = getattr(scene.eevee, "ray_tracing_options", None)
+    if rt is not None:
+        for opt, val in (("resolution_scale", "1"), ("screen_trace_quality", 0.75)):
+            try:
+                setattr(rt, opt, val)
+            except (AttributeError, TypeError):
+                pass
 
     lights = ensure_collection("BSR_LIGHTS")
     clear_collection("BSR_LIGHTS")
@@ -3306,6 +3443,20 @@ def build_all(project_root, only=None):
     setup_world_and_lights()
     outlines = setup_outlines()
     setup_camera()
+
+    # Say so, loudly, before spending twelve minutes rendering. The surface maps
+    # are an optional dependency by design, and that silence once shipped a
+    # complete roster with no weathering on it.
+    _missing = [f for f in ("plate_wear.png", "rust_mask.png", "plate_rough.png")
+                if _load_image(f, non_color=True) is None]
+    if _missing:
+        print("=" * 70)
+        print(f"  WARNING: surface textures NOT found: {', '.join(_missing)}")
+        print(f"  looked in: {_texture_dir()!r}")
+        print("  The build will run, but every mech will be procedural-only.")
+        print("=" * 70)
+    else:
+        print(f"  surface textures OK, from {_texture_dir()!r}")
 
     sprites = os.path.join(project_root, "assets", "sprites", "mechs")
     debug = os.path.join(project_root, "renders", "debug")

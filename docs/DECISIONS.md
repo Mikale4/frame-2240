@@ -7715,3 +7715,79 @@ to 0.94, eased with smoothstep.
 definite line and covers everything past it by the same amount, which is what the
 eye reads as a rectangle. The lamps are on the deck and the structure below runs
 out of light; the fill is now that.
+
+## D169 — the surface textures were never visible, and the lever was contrast
+
+A play report: the mechs "still looked like they just got created in blender
+without any textures". Correct, and the code half-knew it — `TEX_SCALE`'s comment
+already recorded the maps modulating a part "by at most ~25 of 255".
+
+Ablated properly, by swapping each map for a flat image of identical mean so only
+*spatial* detail is removed. On an isolated part, rendered the way `render_part`
+renders it, the entire texture stack was worth a mean of **5.05 of 255** at
+on-screen size (41 px: 0.5 display scale x 0.44 camera zoom).
+
+### The intuitive lever measured worst, for the third time
+
+`BUMP_STRENGTH` was the obvious suspect: bump perturbs *lighting*, which spans the
+full range, where albedo modulation on a dark surface does not. Swept 0.0 / 0.4 /
+1.0 / 2.0 / 3.5 -> **5.00 / 5.05 / 5.08 / 5.22 / 5.58**. An 8.75x lever bought
+12 %, and bump-*off* differs from the shipped value by 1 %. Four soft area lights
+(sizes 1.4-5.0) on large flat faces give a perturbed normal almost nothing to
+bite on. After `breaker` (D143) and `groundIq` (D148), that is three.
+
+### Source-map contrast is the lever, and it is near-linear
+
+Expanding each mask's contrast about its own mean, so the average amount of wear
+is unchanged and only its spread grows:
+
+| gain | map SD | mean\|d\| vs flat | body pixels >8 levels |
+| --- | --- | --- | --- |
+| 1.0 | 42.6 | 5.05 | 18.5 % |
+| 1.6 | 62.3 | 7.27 | 34.6 % |
+| 2.5 | 79.4 | 9.26 | 46.6 % |
+| 4.0 | 95.2 | 11.10 | 55.6 % |
+
+Confirmed on CIRRUS (silver) as well as TERRAMOTH (ochre), so it is not a property
+of one palette. **4.0 chosen by the owner off the rendered sweep.** Applied as a
+shader parameter, `TEX_CONTRAST`, rather than baked into the PNGs: the sources
+stay pristine and regenerable and the value stays a dial. The cost is that at 4.0
+the shipped maps clip, because they already span 0-255 — purpose-authored maps at
+that SD would not, which is the standing argument for the texture commission in
+`docs/PROMPT_MECH_TEXTURES.md`.
+
+Also added: a clear coat on painted armour (worth 1.17 on its own, and the
+difference between paint and plaster), and the render settings below.
+
+### Two silent setattr failures in one list
+
+`setup_world_and_lights()` carried a long comment about `use_gtao` having done
+nothing since Blender 4.2, its AttributeError swallowed by the surrounding
+try/except. **Two lines below it, `fast_gi_method = "AMBIENT_OCCLUSION"` was doing
+exactly the same thing** — the identifier is `AMBIENT_OCCLUSION_ONLY` in 5.1, so
+fast GI had run in GLOBAL_ILLUMINATION mode, *bouncing light into* the crevices
+the setting existed to darken. `fast_gi_distance` was also 0.5 BU against parts
+0.5-1.5 BU across, and both shadow counts sat at the floor.
+
+The list now verifies each value stuck and prints when one does not.
+
+### And the build silently shipped a roster with no textures at all
+
+`_texture_dir()` derived its path from `bpy.data.filepath`. A headless
+`blender --background --factory-startup --python run_build.py` has no open file,
+and `build_all` only saves the .blend at the very end — so that was empty for the
+whole run, every `_load_image` returned None, and **112 sprites were rendered with
+no wear, rust or roughness maps**. No error: the fallback is deliberate. The only
+symptom was the machines coming out ~18 levels brighter and cleaner, which is the
+*opposite* of the change being made and was caught only by looking at them.
+
+`_texture_dir()` now falls back to a path derived from `__file__`, and `build_all`
+warns loudly before spending twelve minutes.
+
+### Rebuild order is not optional
+
+`meleeEnergy` and `meleeArc` are owned by `tools/energy_blade.py` and
+`tools/electric_baton.py`, which merge their own manifest rows *after* Blender.
+Running `build_mechs.py` alone stripped those rows from five machines and broke
+six assertions in `roster.test.ts`. The order is **build_mechs -> energy_blade ->
+electric_baton -> pack_atlases**, and `energy_blade.py`'s own docstring says so.
