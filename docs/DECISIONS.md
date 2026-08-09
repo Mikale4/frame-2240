@@ -7604,3 +7604,114 @@ lights on and nobody home. Stillwake is its opposite.
 
 Asset renamed `title_yard.png` → `title_stillwake.png`, key to match, so nothing
 in the tree still implies the stage. `TITLE_MEDALLION_ART` stays `false`.
+
+---
+
+## D162 — the title is drawn from an original alphabet
+
+`src/ui/Logotype.ts` draws the title from **stroke skeletons**, not a font: each
+glyph is strokes between points on a 100-unit cap box, and the renderer supplies
+weight, terminal, chamfer, slant, curvature, taper and horizontal scale. A
+*style* is a parameter set, so a change to `R` is a change to every style's `R`.
+
+Two things the system got wrong and had to learn:
+
+* **`curves: false` discarded the control point rather than flattening it.** Both
+  of `0`'s opposing arcs collapsed onto the same chord — one bar instead of a
+  ring — and `2`'s shoulder became a diagonal, so every engineering style
+  rendered the number as `zz41`. It shipped that way and was found by rendering a
+  comparison sheet, not by a test: `logotype.test.ts` asserted each glyph
+  encloses ink, and a bar encloses ink perfectly well.
+* **`xScale` is the largest lever on a wordmark's identity** and the shared
+  skeleton had no access to it until D163. 0.46 and 1.0 are the same letters and
+  read as different games.
+
+The alphabet was then **redrawn geometric** to match the chosen sketch: chords
+and mitred corners, an elongated-octagon zero, a flat-topped two. Verticals and
+diagonals stay `stem` and horizontals stay `bar`, so the skeleton still carries
+thick/thin for any style that wants it.
+
+## D163 — INSTRUMENT, chosen on the screen rather than on a sheet
+
+Four candidate lockups were built and compared **live** — `TitleDesigns.ts`. The
+owner picked the hairline ruled one, and picked the backdrop to suit it: a mark
+this light only works on a dark field, which is the same lesson the Stillwake art
+taught from the other direction.
+
+Both lines are **justified to one width** so their outer edges align and the rule
+between them spans exactly that. Solved rather than tuned — the ratio of the two
+natural widths is the `xScale` that equalises them. Measured at 324 and 320 px.
+
+`PLATE`, `COLUMN` and `BLOCK` remain in the file and are unused.
+
+## D164 — the attract demo
+
+Ten seconds of no input on the title starts a **real `aiVsAi` match** with two
+random machines, runs it for twenty with the interface hidden, and fades back.
+Not a scripted set piece: same simulation, same AI, same arena, both sides
+EXTREME. The whole interface lives on one camera, so hiding it is one call and
+anything added later is hidden by construction.
+
+Two things the fades forced:
+
+* **`session.demo` is set on the far side of the fade.** Setting it early shows a
+  frame of the title with the flag live, and an error mid-fade would strand it set
+  — which strips the HUD off the next real match.
+* **`endDemo` latches.** The clock expiring and the match ending are independent
+  and can fire in the same frame.
+
+The simulation keeps running underneath the exit fade, so the last thing seen is
+a fight rather than a freeze frame.
+
+## D165 — the gear train shakes because the game rounds pixels
+
+The wheels are line art about a pixel and a half wide and the game runs
+`roundPixels`, so every stroke crawled across a pixel boundary as the wheel
+turned. Rasterising at 2x and displaying at half with linear filtering cut hard
+pixel flips **81 → 25** across eight consecutive frames.
+
+**3x measured worse — 65.** Linear filtering averages a 2x2 texel neighbourhood
+and nothing larger, so 2x is exactly what it can resolve and 3x undersamples
+again. Raising the factor without generating mipmaps reintroduces the fault.
+
+## D166 — Stillwake drifts
+
+The mark now fails, slightly, to hold its altitude: two lists at incommensurate
+rates, a sink on its own clock, and a damped shudder every thirteen seconds. A
+clean sine reads as serene bobbing; the shudder is the ingredient that turns
+drifting into struggling. Peak frame step is **21.5x** the median.
+
+Kept small — 1.2 degrees and 8.75 px — because a yard visibly falling would leak
+the `2240` reveal.
+
+## D167 — three art faults that were all processing, not drawing
+
+* **The title glow drew a rectangle.** Canvas `shadowBlur` ignores the transform
+  matrix and is always device space; dividing it by the glyph scale to
+  "compensate" inflated a nominal 22 into a real 33 against 26 px of padding.
+  Padding is now derived from the blur.
+* **`arena_haze` ended in a cliff** — alpha 254 to zero in twelve rows of 1024,
+  drawing a ruled line across the stage. Feathered at load. The ramp can only
+  fade *into* the art's own extent: starting at 440 destroyed the layer, its
+  dense rows falling from 254 to a peak of 48.
+* **`preFX` cannot be used on the title backdrop layers.** Once an object is on
+  the FX pipeline Phaser keeps it there, `preFX.clear()` does not take it off,
+  and the extra pass misaligns `setDisplaySize`-scaled layers enough to expose a
+  band of sky. Tint only.
+
+## D168 — under the deck is a light falloff, not a fill
+
+`arena_near`'s art stops 172 world pixels below the contact line; the camera,
+driven to the arena floor with both machines low and apart, reaches **354**.
+`arena_under` now draws that structure properly.
+
+The fill behind it went through four states before landing: flat mid-grey, graded
+to black, deleted outright when it measured as contributing **at most 1 of 255**,
+then restored at 0.82 alpha, and finally rebuilt as what it should always have
+been — one near-black colour whose **alpha** ramps from zero at the contact line
+to 0.94, eased with smoothstep.
+
+**A constant alpha can only ever be a sheet.** However transparent, it begins at a
+definite line and covers everything past it by the same amount, which is what the
+eye reads as a rectangle. The lamps are on the deck and the structure below runs
+out of light; the fill is now that.
