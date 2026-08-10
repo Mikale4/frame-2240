@@ -17,22 +17,30 @@ into a muted navy. v2 corrects both and adds the missing `meleeWeapon`.
 
 No outstanding issues.
 
-## TERRAMOTH — `terramoth_design_v1.png`
+## TERRAMOTH — `terramoth_design_v2.png`
 
-**The stated height is wrong. Ignore it.**
+Use **v2** for the machine and its numbers. v1 stated 7.1 m, which would have
+made the largest machine in the game the *shortest* — `hull` is
+`(0.88, 0.54, 0.44)` against HALCYON's `(0.62, 0.34, 0.30)`, about 1.4x in every
+dimension. v2 corrects it to **11.6 m / 128.3 t**, fixes the garbled
+"LOAD LIMIT 21.4.7 t", and preserves every marking and the conversion story
+verbatim.
 
-The sheet says 7.1 m, which would make it the *shortest* of the roster. It is the
-**largest machine in the game** — `hull` is `(0.88, 0.54, 0.44)` in
-`build_mechs.py` against HALCYON's `(0.62, 0.34, 0.30)`, about 1.4x in every
-dimension. Correct height is **~11.6 m**.
+Critically, **v2 kept the squat proportion**. The risk in asking for "bigger" was
+that it would come back stretched into a tall walker, which would have destroyed
+the one silhouette that is unmistakable at 41 px. It did not — the shoulder
+blocks, the wide stance and the arch between the legs all survived.
 
-The stated mass of 214.7 t is also implausible against HALCYON's 12.4 t, and
-"LOAD LIMIT 21.4.7 t" on the sheet is a garbled render of 214.7.
+**But v2's exploded diagram lost the legs.** It labels `subWeapon` twice and
+omits `legNear` and `legFar` entirely; v1's diagram has all thirteen correct.
+**Take the leg parts from `terramoth_design_v1.png`** and everything else from
+v2. Not worth a third generation to fix two labels.
 
-**Model it to the `hull` values, not to the sheet's stat block.** The drawing
-itself is correct — it reads as the heaviest machine — only the numbers are wrong.
-
-A v2 was requested to fix this and has not been delivered yet.
+A measurement warning for anyone re-running the silhouette comparisons: **v2's
+sheet has a dark navy background where every other sheet is grey.** Thresholding
+on darkness to isolate the silhouette will capture the background instead and
+return a meaningless bounding box. It produced a confident, wrong "the silhouette
+is broken" reading here before being caught by looking at the panels directly.
 
 ## CIRRUS — `cirrus_design_v1.png`
 
