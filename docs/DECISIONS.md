@@ -7851,3 +7851,78 @@ Recorded because both failure modes will recur:
 
 Both were redone with a **fresh `open_mainfile` per sample** and no node churn.
 When a sweep has to mutate a node graph, reload rather than undo.
+
+## D171 — markings become possible, and light armour takes the mass
+
+Two changes, both from the design commission in `docs/PROMPT_MECH_DESIGN.md`.
+
+### A decal is a quad, because there is nowhere else to put it
+
+The eight design sheets are covered in serials, unit numbers, hazard chevrons and
+stencilled warnings, and **none of it could be applied.** The meshes carry no UV
+maps — every material is box-projected in object space — so there is no way to
+put `CS-39` on a specific panel; box projection has no idea where a panel is and
+would repeat the mark on all six faces.
+
+So a marking is not painted on the armour. It is a separate plane floating
+`DECAL_LIFT` above it, and a primitive plane arrives from Blender with its own
+UV map, so nothing needs unwrapping. `tools/make_decals.py` renders the images
+white-on-transparent with PIL; `add_decal()` tints them per use, so one
+`num_07` serves any machine in any colour.
+
+Three things the pipeline had to be taught:
+
+* **Freestyle must not outline them.** A quad on a surface has border edges and
+  the line pass would ring every marking in black. Decals are linked into
+  `BSR_NOLINE`, the collection the lineset already excludes for projected
+  energy — a lineset names exactly one collection, so reusing it was the only
+  option. Face marks are not available: `MeshPolygon.use_freestyle_mark` does
+  not exist in 5.1, and `setup_outlines` already records that the line pass
+  ignored them when they were tried.
+* **They are parented, not joined**, so they follow the part to the render
+  origin and keep the collection identity the exclusion depends on.
+* **`render_one_part` must unhide a part's decal children**, or the markings
+  render on nothing.
+
+### The palette architecture is inverted
+
+The rule beside `PALETTES` said the identity colour must dominate "or the mech
+reads as a white robot with coloured bits". Measured against the 2005 reference,
+that is backwards — a reference sprite is about a third light neutral, a third
+saturated and a sixth near-black, and ours were **13.9 % light against 58.7 %
+chromatic**. A reference *is* a white robot with coloured bits. So is a Gundam.
+Machines stay tellable apart by silhouette, accent and markings.
+
+`palette_roles()` now maps `hull` to the light neutral and `sub` to the identity
+hue. The swap is there rather than at the 68 `mat=` call sites because hull (26
+placements) and sub (42) both carried the identity colour against trim's 14;
+swapping gives 40 light against 42 coloured. **`PALETTES` is untouched** — those
+values are canon and every design sheet quotes them.
+
+Roster mean, against the reference's 32.8 / 31.9 / 16.2 / 19.1:
+
+| | light | chroma | dark | mid |
+| --- | --- | --- | --- | --- |
+| before | 24.7 % | 37.1 % | 20.3 % | 17.9 % |
+| after | **31.4 %** | **29.7 %** | 18.7 % | 20.2 % |
+
+**NULLTIDE is exempt.** Its identity is near-black slate and its `trim` is
+near-white, so the inversion turned the darkest machine on the roster pale —
+25.1 % light became 44.3 %. It and CIRRUS are the closest silhouette pair in the
+game and they separate by *value*; that gap collapsed from 25 points to 9. A
+machine whose identity colour is already the neutral has nothing to invert.
+
+### The first attempt was correct and changed nothing
+
+The edit was right, the build was clean, and the render came out **byte-identical
+at 102,129,146**. `_drone_materials` builds materials with the *same names* as
+the chassis — deliberately, so an escort shares its parent's finish — and
+`build_all` runs `build_drone` **before** `render_parts`. `make_material` fetches
+by name and rebuilds in place, so the drone pass repainted the machine moments
+before it was rendered. Its docstring warned about exactly this. Both factories
+now call `palette_roles` so they cannot diverge.
+
+Worth recording separately: checking `Base Color.default_value` said `0.8,0.8,0.8`
+on every material and proved nothing, because the colour is driven by the mix
+chain. **Walk the unlinked RGBA inputs** to find what a material is actually
+painted.

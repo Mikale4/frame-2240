@@ -768,6 +768,68 @@ FACTION_GRIME_RGB = {
 }
 
 
+# Machines whose identity colour IS the neutral, and which therefore keep the
+# classic mapping. Inverting these does not make them read as designed — it
+# destroys the thing that identifies them.
+#
+# **NULLTIDE.** Its identity is near-black slate `#243B4A` and its `trim` is
+# near-white `#CCDBE6`, so the inversion turned the darkest machine on the
+# roster into a pale one: 25.1 % light became 44.3 %. It and CIRRUS are the
+# closest silhouette pair in the game and they are separated by *value*, not by
+# outline — that gap collapsed from 25 points to 9. Its own design sheet says
+# "this is the DARKEST machine on the roster, use the light armour sparingly",
+# and `assets/blender/concepts/NOTES.md` says do not lighten it.
+PALETTE_INVERT_EXEMPT = {"nulltide"}
+
+
+def palette_roles(pal, mech_id=None):
+    """Which palette entry each armour material actually paints.
+
+    **Inverted at the owner's direction after the design commission.** The old
+    rule lived beside `PALETTES` — "the identity colour has to dominate the
+    surface area or the mech reads as a white robot with coloured bits" — and
+    measuring the 2005 reference says it is backwards. A reference sprite is
+    roughly a third light neutral, a third saturated colour and a sixth
+    near-black. Ours were **13.9 % light against 58.7 % chromatic**, which is
+    most of why they read as monochrome toys rather than machines. A reference
+    *is* a white robot with coloured bits; so is a Gundam. They stay tellable
+    apart by silhouette, accent and markings, not by flooding the body.
+
+    The swap happens here rather than at the 68 `mat=` call sites: `hull` (26
+    placements) and `sub` (42) both carried the identity hue against `trim`'s
+    14. Making hull the light armour and sub the identity colour gives 40 light
+    against 42 coloured, which is the reference's balance.
+
+    **`PALETTES` itself is untouched** — those values are canon and all eight
+    design sheets in `assets/blender/concepts/` quote them.
+
+    **Both material factories must call this.** `_drone_materials` builds
+    materials with the *same names* as the chassis (`{mech_id}_hull` and
+    friends, deliberately, so they are shared), and `build_all` runs
+    `build_drone` *before* `render_parts`. `make_material` fetches by name and
+    rebuilds in place, so a second factory using different colours silently
+    wins and the sprites render with them. That is exactly what happened on the
+    first attempt at this change: the edit was correct, the build was clean, and
+    the render was byte-identical because the drone pass overwrote it.
+    """
+    if mech_id in PALETTE_INVERT_EXEMPT:
+        return {
+            "armour": pal["primary"],
+            "panel": pal["secondary"],
+            "hilite": pal["trim"],
+            "armour_far": pal["far"],
+        }
+    return {
+        "armour": pal["trim"],                 # light neutral now carries the mass
+        "panel": pal["primary"],               # the identity hue, as deliberate panels
+        "hilite": _scale_rgb(pal["trim"], 0.45, toward=(1.0, 1.0, 1.0)),
+        # The far side must be a darker version of *what the part actually is*.
+        # Far-side parts are light armour now, so `pal["far"]` — a dark shade of
+        # the identity hue — would paint a light limb navy. Derive from armour.
+        "armour_far": _scale_rgb(pal["trim"], 0.52),
+    }
+
+
 def faction_surface(mech_id):
     """Surface finish for a chassis, or None to use the module defaults."""
     fac = FACTIONS.get(mech_id)
@@ -1118,6 +1180,155 @@ def _relink(obj, coll):
     for c in list(obj.users_collection):
         c.objects.unlink(obj)
     coll.objects.link(obj)
+
+
+# ------------------------------------------------------------------ decals
+#
+# Markings — serials, unit numbers, stencilled warnings, hazard chevrons,
+# insignia. `docs/PROMPT_MECH_DESIGN.md` commissioned eight design sheets whose
+# markings are a large part of why the machines read as manufactured objects,
+# and none of them could be applied before this.
+#
+# **They cannot be painted on the armour.** The meshes carry no UV maps, which
+# is why every material here is box-projected in object space; box projection
+# has no idea where "the left shoulder" is and would repeat a serial on all six
+# faces. So a marking is a **separate quad** floating a hair above the surface.
+# A primitive plane arrives with its own UV map, so the image lands correctly
+# and nothing needs unwrapping.
+#
+# Three consequences the rest of the pipeline has to respect:
+#
+# 1. **Decals are not joined into their part.** They stay separate objects
+#    *parented* to it, so they follow it when `render_one_part` moves it to the
+#    origin, and so they keep a collection identity (see 2).
+# 2. **Freestyle must not outline them.** A quad lying on a surface has border
+#    edges, and the outline pass would ring every marking in black. Decals are
+#    therefore linked into `BSR_NOLINE`, the collection the lineset already
+#    excludes for projected energy. A lineset can only name one collection, so
+#    reusing it is not a convenience — it is the only option. (Face marks are
+#    not available either: `MeshPolygon.use_freestyle_mark` does not exist in
+#    5.1, and `setup_outlines` records that the line pass ignored them anyway.)
+# 3. **`render_one_part` must unhide the part's decal children**, or the
+#    markings render on nothing.
+
+DECAL_COLL = "BSR_DECALS"
+# How far a decal floats above the surface it sits on, in Blender units. Large
+# enough to beat z-fighting at this scale, small enough to be invisible at the
+# 35-100 px a part occupies.
+DECAL_LIFT = 0.004
+_DECAL_CACHE = {}
+
+
+def _decal_dir():
+    """Decals live beside the .blend, in `assets/blender/decals`.
+
+    Same `__file__` fallback as `_texture_dir` and for the same reason: a
+    headless build has no `bpy.data.filepath` until it saves at the very end.
+    """
+    if bpy.data.filepath:
+        d = os.path.join(os.path.dirname(bpy.data.filepath), "decals")
+        if os.path.isdir(d):
+            return d
+    here = os.path.dirname(os.path.abspath(__file__))
+    d = os.path.join(os.path.dirname(os.path.dirname(here)), "assets", "blender", "decals")
+    return d if os.path.isdir(d) else None
+
+
+def _decal_image(name):
+    """Loads `<name>.png` from the decal directory, with its alpha intact."""
+    if name in _DECAL_CACHE:
+        return _DECAL_CACHE[name]
+    d = _decal_dir()
+    path = os.path.join(d, name + ".png") if d else None
+    img = None
+    if path and os.path.exists(path):
+        try:
+            img = bpy.data.images.get(name + ".png") or bpy.data.images.load(path)
+        except (RuntimeError, OSError):
+            img = None
+    _DECAL_CACHE[name] = img
+    return img
+
+
+def _decal_material(name, image, rgb, roughness=0.5):
+    """Flat tinted colour, with the image's alpha cutting the quad to shape."""
+    key = f"decal_{name}_{int(rgb[0]*255):02x}{int(rgb[1]*255):02x}{int(rgb[2]*255):02x}"
+    mat = bpy.data.materials.get(key)
+    if mat is not None:
+        return mat
+    mat = bpy.data.materials.new(key)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
+    bsdf.inputs["Roughness"].default_value = roughness
+    bsdf.inputs["Metallic"].default_value = 0.0
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = image
+    tex.extension = "CLIP"          # never tile a marking
+    tex.interpolation = "Cubic"
+    nt.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
+    nt.links.new(bsdf.outputs[0], out.inputs[0])
+    # EEVEE Next: `blend_method` is legacy, `surface_render_method` is the live
+    # control and BLENDED is what gives smooth alpha rather than a dither.
+    for attr, val in (("surface_render_method", "BLENDED"), ("blend_method", "BLEND")):
+        try:
+            setattr(mat, attr, val)
+        except (AttributeError, TypeError):
+            pass
+    mat.use_backface_culling = True
+    try:
+        mat.use_transparent_shadow = True
+    except AttributeError:
+        pass
+    return mat
+
+
+def add_decal(name, image_name, parent, loc, rot=(0, 0, 0), width=0.2, height=None,
+              rgb=(0.05, 0.05, 0.06), roughness=0.5):
+    """One marking quad, parented to `parent` and excluded from the outline pass.
+
+    `loc`/`rot` are in the parent's local space. `width` is in Blender units and
+    the height follows the image's aspect unless given. Returns None when the
+    decal image is missing, so a checkout without them still builds.
+    """
+    img = _decal_image(image_name)
+    if img is None:
+        return None
+    coll = ensure_collection(DECAL_COLL)
+    w, h = img.size
+    if height is None:
+        height = width * (h / float(w)) if w else width
+
+    bpy.ops.mesh.primitive_plane_add(size=1.0, location=(0, 0, 0))
+    obj = active()
+    obj.name = f"{name}_decal"
+    obj.scale = (width, height, 1.0)
+    with override(obj, [obj]):
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    # A plane is born in XY facing +Z; the caller's rotation aims it at the
+    # surface, and DECAL_LIFT pushes it off along its own normal afterwards.
+    #
+    # `loc` is parent-local, which is the only frame a caller can reason about —
+    # a part's origin is its rig pivot. Parenting happens after positioning and
+    # preserves the world transform, so the world position has to be resolved
+    # through the parent here rather than assigned directly.
+    obj.rotation_euler = rot
+    obj.location = (parent.matrix_world @ Vector(loc)) if parent is not None else Vector(loc)
+    _relink(obj, coll)
+    # Also into BSR_NOLINE, which is the collection the outline pass excludes.
+    noline = ensure_collection(NOLINE_COLLECTION)
+    if obj.name not in noline.objects:
+        noline.objects.link(obj)
+    obj.data.materials.append(_decal_material(name, img, rgb, roughness))
+    bpy.context.view_layer.update()
+    obj.location = obj.location + (obj.matrix_world.to_3x3() @ Vector((0, 0, DECAL_LIFT)))
+    if parent is not None:
+        obj.parent = parent
+        obj.matrix_parent_inverse = parent.matrix_world.inverted()
+    return obj
 
 
 def add_box(name, size, loc, rot=(0, 0, 0), bevel=0.005, coll=None, mat=None, bevel_seg=1):
@@ -1491,12 +1702,17 @@ def _drone_materials(mech_id, pal):
     second silently rebuilds the other's nodes.
     """
     _sf = faction_surface(mech_id)
+    _roles = palette_roles(pal, mech_id)
     return {
         # Per-faction finish; see FACTION_SURFACE.
-        "hull": make_material(f"{mech_id}_hull", pal["primary"], roughness=0.44, surface=_sf),
-        "far": make_material(f"{mech_id}_far", pal["far"], roughness=0.5, surface=_sf),
-        "sub": make_material(f"{mech_id}_sub", pal["secondary"], roughness=0.5, surface=_sf),
-        "trim": make_material(f"{mech_id}_trim", pal["trim"], roughness=0.40, surface=_sf),
+        # Same role mapping as the chassis - see `palette_roles`. These
+        # materials share the chassis's names *by design*, and `build_drone`
+        # runs before `render_parts`, so any divergence here repaints the whole
+        # machine moments before it is rendered.
+        "hull": make_material(f"{mech_id}_hull", _roles["armour"], roughness=0.44, surface=_sf),
+        "far": make_material(f"{mech_id}_far", _roles["armour_far"], roughness=0.5, surface=_sf),
+        "sub": make_material(f"{mech_id}_sub", _roles["panel"], roughness=0.5, surface=_sf),
+        "trim": make_material(f"{mech_id}_trim", _roles["hilite"], roughness=0.40, surface=_sf),
         "frame": make_material(f"{mech_id}_frame", pal["frame"], roughness=0.62, metallic=0.7, surface=_sf),
         "acc": make_material(f"{mech_id}_accent", pal["accent"], emission=1.1, roughness=0.35),
         "glow": make_material(f"{mech_id}_glow", pal["glow"], emission=2.1, roughness=0.2, metallic=0.0),
@@ -2125,10 +2341,11 @@ def build_mech(mech_id, palette_key=None):
     coll = ensure_collection(coll_name)
 
     _sf = faction_surface(mech_id)
-    M_HULL = make_material(f"{mech_id}_hull", pal["primary"], roughness=0.44, surface=_sf)
-    M_FAR = make_material(f"{mech_id}_far", pal["far"], roughness=0.5, surface=_sf)
-    M_SUB = make_material(f"{mech_id}_sub", pal["secondary"], roughness=0.5, surface=_sf)
-    M_TRIM = make_material(f"{mech_id}_trim", pal["trim"], roughness=0.40, surface=_sf)
+    roles = palette_roles(pal, mech_id)
+    M_HULL = make_material(f"{mech_id}_hull", roles["armour"], roughness=0.44, surface=_sf)
+    M_FAR = make_material(f"{mech_id}_far", roles["armour_far"], roughness=0.5, surface=_sf)
+    M_SUB = make_material(f"{mech_id}_sub", roles["panel"], roughness=0.5, surface=_sf)
+    M_TRIM = make_material(f"{mech_id}_trim", roles["hilite"], roughness=0.40, surface=_sf)
     M_FRAME = make_material(f"{mech_id}_frame", pal["frame"], roughness=0.62, metallic=0.7, surface=_sf)
     M_ACC = make_material(f"{mech_id}_accent", pal["accent"], emission=1.1, roughness=0.35)
     M_GLOW = make_material(f"{mech_id}_glow", pal["glow"], emission=2.1, roughness=0.2, metallic=0.0)
@@ -3355,6 +3572,12 @@ def render_one_part(obj, out_dir, mech_id, part, manifest):
     saved_loc = tuple(obj.location)
     obj.location = (0.0, 0.0, 0.0)
     obj.hide_render = False
+    # Decals are separate objects parented to the part, so the caller's
+    # hide-everything-else pass hides them too and the markings would render on
+    # nothing. They follow the move to the origin for free, being children.
+    decals = [c for c in obj.children if c.name.endswith("_decal")]
+    for dcl in decals:
+        dcl.hide_render = False
 
     # Frame this part on its own, keeping PX_PER_BU fixed.
     tile = required_tile(obj, cam)
@@ -3367,6 +3590,8 @@ def render_one_part(obj, out_dir, mech_id, part, manifest):
     bpy.ops.render.render(write_still=True)
 
     obj.hide_render = True
+    for dcl in decals:
+        dcl.hide_render = True
     obj.location = saved_loc
 
     dims = tuple(round(v, 4) for v in obj.dimensions)
