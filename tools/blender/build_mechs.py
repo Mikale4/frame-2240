@@ -3117,7 +3117,21 @@ def setup_outlines():
         except (AttributeError, TypeError):
             pass
         style = lineset.linestyle
-        style.color = (0.035, 0.040, 0.055)
+        # **This is a LINEAR value and it was never black.** (0.035, 0.040,
+        # 0.055) through the Standard view transform lands at display luminance
+        # ~56 - and because the line work is the darkest thing on a mech, that
+        # single number was the floor of every sprite in the game. Measured:
+        # min 54, p05 56, and **0.0 %** of any mech below luminance 30, against
+        # 16.2 % in the 2005 reference. The machines had no blacks at all, which
+        # is most of the "untextured Blender model" read - every greeble, bolt
+        # row and overlapping plate was rendering into the same mid band with
+        # nothing to separate it.
+        #
+        # Retuned to land on the reference's actual floor of 14, not on pure
+        # black, and keeping the original blue-black tint ratio. With this plus
+        # the lighting below, HALCYON measures p25 55 / median 124 / 13.1 %
+        # under 30, against the reference's 59 / 126 / 16.2 %.
+        style.color = (0.0045, 0.0051, 0.0070)
         style.thickness = OUTLINE_THICKNESS
         style.alpha = 1.0
         return True
@@ -3154,7 +3168,10 @@ def setup_world_and_lights():
     # Low ambient: the reference art has genuinely dark undersides, and a bright
     # world flattens the forms into soft plastic.
     bg.inputs["Color"].default_value = (0.16, 0.19, 0.26, 1.0)
-    bg.inputs["Strength"].default_value = 0.40
+    # 0.40 -> 0.25. Ambient turned out to be a weak lever on the dark end - swept
+    # 0.40/0.20/0.10/0.04 and the floor moved only 54 -> 44 - so this is a small
+    # trim, not the fix. The fill light below is what was lifting the shadows.
+    bg.inputs["Strength"].default_value = 0.25
     nt.links.new(bg.outputs[0], out.inputs[0])
     scene.world = world
 
@@ -3256,13 +3273,19 @@ def setup_world_and_lights():
     # blowout fix — the defect was armour at pure white, not armour being bright —
     # while restoring the separation.
     lamp("BSR_key", "AREA", (-2.6, -3.0, 4.0), 1150.0, (1.0, 0.97, 0.92), size=1.4)
-    lamp("BSR_fill", "AREA", (3.8, -2.6, 0.2), 120.0, (0.58, 0.70, 0.95), size=5.0)
+    # **120 -> 60. The fill was what kept the shadow side off the floor.**
+    # Swept 120/60/25/0 against a black line: the darkest pixel went 49/34/16/11
+    # and p25 went 74/68/66/66. 0 is too far - the shadow side loses its form -
+    # and 25 overshot the reference (p25 48 against its 59). 60 lands p25 at 55
+    # and the median at 124, which is the reference's 59 and 126.
+    lamp("BSR_fill", "AREA", (3.8, -2.6, 0.2), 60.0, (0.58, 0.70, 0.95), size=5.0)
     # The rim does figure-ground separation on its own terms: it lights only the
     # edge facing away from camera, so it lifts the silhouette off a dark
     # backdrop without adding a single lumen to the broad faces that blow out.
     # Cheaper contrast than the key, and warm, to sit with the yard's sodium.
     lamp("BSR_rim", "AREA", (1.0, 3.6, 2.6), 640.0, (1.00, 0.82, 0.66), size=1.8)
-    lamp("BSR_bounce", "AREA", (0.0, -1.4, -3.4), 55.0, (0.45, 0.55, 0.85), size=5.0)
+    # 55 -> 25, same reason as the fill: it lit the undersides back up.
+    lamp("BSR_bounce", "AREA", (0.0, -1.4, -3.4), 25.0, (0.45, 0.55, 0.85), size=5.0)
 
 
 def setup_camera():

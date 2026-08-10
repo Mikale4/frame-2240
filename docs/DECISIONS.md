@@ -7791,3 +7791,63 @@ warns loudly before spending twelve minutes.
 Running `build_mechs.py` alone stripped those rows from five machines and broke
 six assertions in `roster.test.ts`. The order is **build_mechs -> energy_blade ->
 electric_baton -> pack_atlases**, and `energy_blade.py`'s own docstring says so.
+
+## D170 — the mechs had no blacks, and it was one linear colour value
+
+A play report: the machines still looked like untextured Blender models. Measured
+against the 2005 reference, the tonal floor was the whole story.
+
+| | min | p05 | p25 | median | <= 30 |
+| --- | --- | --- | --- | --- | --- |
+| Reference sprite | 14 | 14 | 59 | 126 | **16.2 %** |
+| Shipped mech | 54 | 56 | 78 | 131 | **0.0 %** |
+
+**Nothing on any machine was below luminance 55.** The reference spends a sixth of
+its area at 14. We were using 55-255 where it uses 14-255, and the missing fifth
+is the end that does the work.
+
+### The cause was `style.color = (0.035, 0.040, 0.055)`
+
+Freestyle's line colour, and it is a **linear** value: through the Standard view
+transform it lands at display **~56**. Because the line work is the darkest thing
+on a mech, that one number was the floor of every sprite in the game — which is
+exactly the `min 54-56` measured on all eight.
+
+**The models were never bare.** `core` alone already carries a wedge hull, deck,
+nose, belly, collar, two vents, three panel strips, three overlapping side plates,
+a bolt row, a hydraulic ram, and `scatter_greebles` placing fourteen more. All of
+it was rendering into one mid band with nothing to separate it. The fix added no
+geometry.
+
+Retuned to land on the reference's actual floor of 14 rather than pure black,
+keeping the original blue-black tint ratio.
+
+### Ablated, because the intuitive answers were wrong again
+
+* **Ambient is a weak lever.** 0.40 / 0.20 / 0.10 / 0.04 moved the floor only
+  54 -> 44. Trimmed to 0.25 anyway; it is not the fix.
+* **The fill light was holding the shadows up.** 120 / 60 / 25 / 0 gave floors of
+  49 / 34 / 16 / 11 and p25 of 74 / 68 / 66 / 66. **0 is too far** — the shadow
+  side loses its form — and 25 overshot the reference (p25 48 against 59). **60**
+  lands p25 at 55 and the median at 124, against the reference's 59 and 126.
+* **Line thickness is not the lever either.** At pure black, 2.1 / 2.5 / 2.9 px
+  gave 20.3 / 25.7 / 29.5 % under luminance 30 — all *past* the reference's
+  16.2 % — while the median collapsed 114 -> 103 -> 92. Thickness stays at 2.1.
+
+Result across the roster: **every machine now bottoms out at exactly 14**, p05
+16-19, and 10.9-15.6 % under 30 against the reference's 16.2 %.
+
+### Two of my own measurements were invalid before they were right
+
+Recorded because both failure modes will recur:
+
+* A sweep that darkened `*_frame` materials measured **exactly flat** across four
+  values. The guard was `if not bc.is_linked` — and those materials *are* linked,
+  so every one was skipped. A no-op that looks like a null result.
+* A second sweep removed the previously-inserted node between runs. **Removing a
+  node also deletes the links it carried**, leaving `Base Color` unlinked, so each
+  run rendered a progressively more broken material. The tell was a non-monotonic
+  median (117 / 133 / 122) — noise where there should have been a trend.
+
+Both were redone with a **fresh `open_mainfile` per sample** and no node churn.
+When a sweep has to mutate a node graph, reload rather than undo.
