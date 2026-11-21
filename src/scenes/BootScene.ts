@@ -6,6 +6,8 @@ import { sfx } from '../audio/Sfx';
 import { loadAudioSettings } from '../audio/AudioSettings';
 import { applyAudioSettings } from '../ui/AudioOptions';
 import { session } from '../core/Session';
+import { registerVoxelMech, type VoxelMechJson } from '../voxel/VoxelMechData';
+import { installPilotBusts } from '../ui/PilotBustBank';
 
 /**
  * Loads mech part sprites, arena layers and the sound bank, builds the
@@ -108,27 +110,23 @@ export class BootScene extends Phaser.Scene {
         `sprites/mechs/${def.id}.atlas.png`,
         `sprites/mechs/${def.id}.atlas.json`,
       );
+      // The voxel chassis, sampled from the same Blender file by
+      // tools/blender/voxelize_mechs.py. This is what the fight draws now.
+      this.load.json(`vox_${def.id}`, `voxels/${def.id}.json`);
     }
 
-    // Title medallion: the faded semi-silhouette of Stillwake Yard behind the
-    // title mark.
-    //
-    // **Hand-gated, and it must stay that way.** The dev server answers a
-    // missing path with `index.html` and a 200, so a `load.image` for a file
-    // that is not there hands the decoder an HTML document instead of failing —
-    // the loader then waits on it forever and the game never boots. Flip this
-    // to `true` in the same commit that adds the file, never before.
-    // `TitleMark` draws its own placeholder while this is off.
-    // Brief: `docs/TITLE_MEDALLION_BRIEF.md`.
-    const TITLE_MEDALLION_ART = true;
-    if (TITLE_MEDALLION_ART) this.load.image('title_stillwake', 'ui/title_stillwake.png');
+    // (The Stillwake Yard medallion art, `ui/title_stillwake.png`, is no longer
+    // loaded: the title's yard and gear train were removed, D181.)
 
     // Title screen backdrop: a mountain summit above the cloud sea.
     //
     // The title used to borrow CATHEDRAL YARD's arena layers, which spent the
     // game's only stage before the player had seen it and made a dockyard
     // interior the first impression of a game about flight. It has its own vista
-    // now. Same hand-gating rule as the medallion above, for the same reason.
+    // now. **Hand-gated:** the dev server answers a missing path with
+    // `index.html` and a 200, so a `load.image` for a file that is not there
+    // hands the decoder an HTML document and the loader waits forever. Flip this
+    // to `true` in the same commit that adds the file, never before.
     // Brief: `docs/TITLE_STAGE_ART_BRIEF.md`.
     const TITLE_STAGE_ART = false;
     if (TITLE_STAGE_ART) {
@@ -293,6 +291,12 @@ export class BootScene extends Phaser.Scene {
     createEffectTextures(this);
     createPixel(this);
 
+    for (const id of MODELLED) {
+      const json = this.cache.json.get(`vox_${id}`) as VoxelMechJson | undefined;
+      if (json && json.parts) registerVoxelMech(json);
+      else this.failed.push(`voxels/${id}.json`);
+    }
+
     // **The ramp has to fade into the art's own extent.** There is no haze
     // painted below row 751, so a longer ramp cannot add reach — it can only
     // eat density from the band that exists. Starting at 440 measured as
@@ -321,6 +325,11 @@ export class BootScene extends Phaser.Scene {
       this.placeholderPortrait(`pilot_${def.id}`, 256, def);
       this.placeholderPortrait(`pilot_${def.id}_thumb`, 96, def);
     }
+
+    // **The portraits are voxel busts now**, live and animated, drawn into the
+    // same texture keys. The painted pixel art above stays loaded only as the
+    // fallback for a machine that cannot give the busts a WebGL context.
+    installPilotBusts(this);
 
     if (this.failed.length > 0) {
       console.warn(

@@ -18,9 +18,23 @@ const DRONE_MODE_NAMES = ['STOWED', 'DEPLOYING', 'ACTIVE', 'RECALLING', 'DESTROY
  * Hitbox colours: green = hurtbox, red = live hit, yellow = startup (not yet
  * live), cyan = barrier bubble, magenta = projectile.
  */
+/**
+ * Where the hitboxes are drawn: Phaser's `Graphics`, or anything with the same
+ * few calls — the battle passes a `Gfx3D` so the boxes sit in the voxel yard,
+ * in the fight plane, exactly where the simulation tests them.
+ */
+export interface HitboxCanvas {
+  clear(): unknown;
+  lineStyle(width: number, color: number, alpha?: number): unknown;
+  strokeCircle(x: number, y: number, r: number): unknown;
+  lineBetween(x1: number, y1: number, x2: number, y2: number): unknown;
+  setDepth(d: number): unknown;
+  destroy(): unknown;
+}
+
 export class DebugOverlay {
   private readonly text: Phaser.GameObjects.Text;
-  private readonly gfx: Phaser.GameObjects.Graphics;
+  private readonly gfx: HitboxCanvas;
   showText = false;
   showHitboxes = false;
 
@@ -30,8 +44,9 @@ export class DebugOverlay {
     scene: Phaser.Scene,
     private readonly sim: MatchSim,
     private readonly ai: RivalAI,
+    canvas?: HitboxCanvas,
   ) {
-    this.gfx = scene.add.graphics();
+    this.gfx = canvas ?? scene.add.graphics();
     this.gfx.setDepth(900);
 
     this.text = scene.add
@@ -55,7 +70,7 @@ export class DebugOverlay {
 
   /** World-space objects, for the main camera. */
   get worldObjects(): Phaser.GameObjects.GameObject[] {
-    return [this.gfx];
+    return this.gfx instanceof Phaser.GameObjects.Graphics ? [this.gfx] : [];
   }
 
   toggleText(): void {

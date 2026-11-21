@@ -6,13 +6,15 @@ import {
   DIFFICULTY_NAMES,
   MODE_LABELS,
   session,
+  matchScene,
 } from '../core/Session';
 import { InputManager } from '../input/InputManager';
 import { bigTitle, smallText } from '../ui/Menu';
 import { ROSTER } from '../data/mechs';
 import { TAG_PAIRS } from '../data/tags';
 import { ROLE_BRIEF } from '../data/droneRoles';
-import { MechDemo } from '../ui/MechDemo';
+import { VoxelMechDemo } from '../voxel/VoxelMechDemo';
+import { voxelStage } from '../voxel/VoxelStage';
 import { sfx } from '../audio/Sfx';
 import { HOLO_FILL, holoLevel, holoRuling, type HoloRuling } from '../ui/HoloPanel';
 import { music } from '../audio/Music';
@@ -59,21 +61,8 @@ const PORTRAIT_Y = GRID_TOP + PORTRAIT_SIZE / 2;
  * *visual* mass to the middle; the scale keeps a 2490-hull siege walker inside
  * a 232px box without cropping its shoulders.
  */
-/**
- * Sized so the **largest** machine fits whole, not so the average one looks big.
- *
- * Measured against the 226 px panel, visible parts only: TERRAMOTH is 377 px
- * wide and PYRE 358 x 358 at scale 1, so at the old 1.06 the two biggest
- * chassis were nearly twice the box and were being saved only by the mask.
- * Cropping the machine you are asking someone to choose is the wrong trade —
- * one scale that fits everything keeps the *relative* sizes honest, which is
- * the information the panel exists to convey. A siege walker should look like
- * one next to a skirmisher.
- *
- * 0.48 puts TERRAMOTH at 181 px and CIRRUS at 98, inside 226 either way, and
- * leaves the margin the exhaust needs to be visible at all.
- */
-const DEMO_SCALE = 0.48;
+// The demo's framing — one camera distance for every chassis, so relative size
+// stays honest — now lives in `src/voxel/VoxelMechDemo.ts`.
 
 /**
  * Roster select: pick your machine, then your rival.
@@ -124,10 +113,9 @@ export class MechSelectScene extends Phaser.Scene {
 
   private cells: Phaser.GameObjects.Container[] = [];
   private cursor!: Phaser.GameObjects.Rectangle;
-  private demo: MechDemo | null = null;
+  private demo: VoxelMechDemo | null = null;
   private demoId = '';
   /** Invisible rect keeping the panel's geometry readable at a glance. */
-  private demoMask!: Phaser.GameObjects.Rectangle;
   private heading!: Phaser.GameObjects.Text;
   private nameText!: Phaser.GameObjects.Text;
   private pilotText!: Phaser.GameObjects.Text;
@@ -147,6 +135,12 @@ export class MechSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      const stage = voxelStage();
+      if (this.demo && stage.active === this.demo) stage.setView(null);
+      this.demo?.dispose();
+      this.demo = null;
+    });
     this.input$ = new InputManager(this);
     this.input$.reset();
     this.t = 0;
@@ -160,7 +154,14 @@ export class MechSelectScene extends Phaser.Scene {
     music.play('select');
 
     // ---- background ------------------------------------------------------
+    // Opaque everywhere **except a window over the machine panel**: the voxel
+    // layer draws the machine underneath this canvas, and a background filled
+    // across that rectangle buried it completely.
     const g = this.add.graphics();
+    const holeL = PORTRAIT_X - PORTRAIT_SIZE / 2;
+    const holeR = PORTRAIT_X + PORTRAIT_SIZE / 2;
+    const holeT = PORTRAIT_Y - PORTRAIT_SIZE / 2;
+    const holeB = PORTRAIT_Y + PORTRAIT_SIZE / 2;
     for (let i = 0; i < 40; i++) {
       const t = i / 39;
       const c = Phaser.Display.Color.Interpolate.ColorWithColor(
@@ -170,7 +171,16 @@ export class MechSelectScene extends Phaser.Scene {
         Math.round(t * 100),
       );
       g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1);
-      g.fillRect(0, (i * VIEW_H) / 40, VIEW_W, VIEW_H / 40 + 1);
+      const y0 = (i * VIEW_H) / 40;
+      const y1 = y0 + VIEW_H / 40 + 1;
+      if (y1 <= holeT || y0 >= holeB) {
+        g.fillRect(0, y0, VIEW_W, y1 - y0);
+        continue;
+      }
+      g.fillRect(0, y0, holeL, y1 - y0);
+      g.fillRect(holeR, y0, VIEW_W - holeR, y1 - y0);
+      if (y0 < holeT) g.fillRect(holeL, y0, holeR - holeL, holeT - y0);
+      if (y1 > holeB) g.fillRect(holeL, holeB, holeR - holeL, y1 - holeB);
     }
 
     this.heading = bigTitle(this, 'SELECT YOUR MECH', 44, 26, '#eaf2ff');
@@ -181,9 +191,13 @@ export class MechSelectScene extends Phaser.Scene {
     // equal air either side of it.
     const px = PORTRAIT_X;
     const py = PORTRAIT_Y;
+    // Border only: the machine is drawn by the voxel layer *underneath* this
+    // canvas, so anything filled here would cover it.
     this.add
-      .rectangle(px, py, PORTRAIT_SIZE, PORTRAIT_SIZE, 0x0a0e18, 0.85)
-      .setStrokeStyle(2, 0x2b3550);
+      .rectangle(px, py, PORTRAIT_SIZE, PORTRAIT_SIZE)
+      .setFillStyle(0, 0)
+      .setStrokeStyle(2, 0x2b3550)
+      .setDepth(130);
     // **The machine, not the pilot's face.**
     //
     // This panel used to show a static portrait. A player choosing between
@@ -195,39 +209,9 @@ export class MechSelectScene extends Phaser.Scene {
     //
     // The pilot is still here — name, faction and blurb sit under the panel,
     // and the thumbnails still carry the face during battle banter.
-    // **The yard, behind the machine.** A mech hanging in an empty box reads as
-    // a spec-sheet render; the same mech against CATHEDRAL YARD's girders reads
-    // as a machine that lives somewhere. Reuses the arena layers already loaded
-    // for the battle, framed on the structure rather than the sky above it —
-    // the same fault the title screen had, see `TitleScene`.
-    //
-    // Heavily dimmed and desaturated: this is a backing plate, and the mech has
-    // to stay the brightest thing in the box.
-    const yardFar = this.add
-      .image(px - PORTRAIT_SIZE / 2 - 380, py - PORTRAIT_SIZE / 2 - 250, 'arena_far')
-      .setOrigin(0, 0)
-      .setScale(0.55)
-      .setTint(0x2a3550)
-      .setAlpha(0.55);
-    const yardMid = this.add
-      .image(px - PORTRAIT_SIZE / 2 - 330, py - PORTRAIT_SIZE / 2 - 300, 'arena_mid')
-      .setOrigin(0, 0)
-      .setScale(0.62)
-      .setTint(0x44506e)
-      .setAlpha(0.5);
-
-    // Clipped to the panel. TERRAMOTH's pile driver and PYRE's scythe both
-    // reach past the plate mid-swing, and a weapon crossing the border reads as
-    // a layering bug rather than as energy. Masking rather than shrinking keeps
-    // the machines as large as the box allows.
-    this.demoMask = this.add
-      .rectangle(px, py, PORTRAIT_SIZE - 6, PORTRAIT_SIZE - 6, 0xffffff, 0)
-      .setOrigin(0.5)
-      .setVisible(false);
-    for (const layer of [yardFar, yardMid]) {
-      layer.setDepth(100);
-      layer.setMask(this.demoMask.createGeometryMask());
-    }
+    // **The machine hangs in the yard itself**: the voxel CATHEDRAL YARD,
+    // seen through a camera clipped to this panel (see VoxelMechDemo). The 2D
+    // backing plate of arena art this used to need is gone.
     this.rebuildDemo();
 
     this.nameText = this.add
@@ -398,10 +382,14 @@ export class MechSelectScene extends Phaser.Scene {
       const cy = GRID_Y + Math.floor(i / COLS) * CELL_H;
       const cell = this.add.container(cx, cy);
 
-      const plate = this.add
-        .rectangle(0, 0, PLATE_W, PLATE_H, def.tint.secondary, 0.55)
-        .setStrokeStyle(2, def.tint.primary);
-      const thumb = this.add.image(0, -4, `pilot_${def.id}_thumb`).setDisplaySize(60, 60);
+      const plate = this.add.rectangle(0, 0, PLATE_W, PLATE_H, def.tint.secondary, 0.55);
+      // The pilot's live voxel bust fills the whole plate, edge to edge; the
+      // plate's frame is drawn over it so the edge stays crisp.
+      const thumb = this.add.image(0, 0, `pilot_${def.id}_card`).setDisplaySize(PLATE_W, PLATE_H);
+      const frame = this.add
+        .rectangle(0, 0, PLATE_W, PLATE_H)
+        .setStrokeStyle(2, def.tint.primary)
+        .setFillStyle(0, 0);
       // Clear of the selection box, which frames the 76px plate at +/-40. At 44
       // the label's own stroked height ran back up under the box's bottom edge.
       const label = this.add
@@ -409,7 +397,7 @@ export class MechSelectScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setStroke('#070b12', 4);
 
-      cell.add([plate, thumb, label]);
+      cell.add([plate, thumb, frame, label]);
       cell.setData('pos', { x: cx, y: cy });
       this.cells.push(cell);
     });
@@ -593,17 +581,16 @@ export class MechSelectScene extends Phaser.Scene {
    */
   private rebuildDemo(): void {
     const def = ROSTER[this.index] ?? ROSTER[0];
-    this.demo?.destroy();
+    this.demo?.dispose();
     this.demoId = def.id;
-    // Dead centre: `MechDemo` measures its own silhouette and centres itself
-    // on this point, so no per-chassis fudge is needed here.
-    this.demo = new MechDemo(this, def, PORTRAIT_X, PORTRAIT_Y, DEMO_SCALE);
-    // Above the panel plate, below the skill modal and the headings.
-    this.demo.root.setDepth(120);
-    // A fresh mask each rebuild: the old holder is destroyed with it. The
-    // effects pool is a child of the same holder, so the plumes are clipped
-    // by this too.
-    this.demo.root.setMask(this.demoMask.createGeometryMask());
+    const inner = PORTRAIT_SIZE - 4;
+    this.demo = new VoxelMechDemo(def, {
+      x: PORTRAIT_X - inner / 2,
+      y: PORTRAIT_Y - inner / 2,
+      w: inner,
+      h: inner,
+    });
+    voxelStage().setView(this.demo);
   }
 
   /** True while a TAG/ASSIST partner is being chosen for either side. */
@@ -802,7 +789,7 @@ export class MechSelectScene extends Phaser.Scene {
   private start(): void {
     sfx.unlock();
     session.matchIndex++;
-    this.scene.start('Battle');
+    this.scene.start(matchScene(session.mode));
   }
 
   private back(): void {
@@ -873,6 +860,7 @@ export class MechSelectScene extends Phaser.Scene {
     this.cursor.setAlpha(0.65 + 0.35 * Math.sin(this.t * 5));
 
     this.demo?.update(delta / 1000);
+    if (this.demo && voxelStage().active === this.demo) voxelStage().render();
 
     // The skill panel flickers like the projected hardware everywhere else in
     // this game does. `flickerLevel` is the same stepped table the energy

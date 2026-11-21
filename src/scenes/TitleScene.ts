@@ -6,8 +6,8 @@ import { TitleMark } from '../ui/TitleMark';
 import type { TitleDesignId } from '../ui/TitleDesigns';
 import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
-import { Difficulty, session } from '../core/Session';
-import { ROSTER } from '../data/mechs';
+import { session } from '../core/Session';
+import { randomBackdrop } from './BackdropFight';
 
 /**
  * Which candidate wordmark is on screen.
@@ -18,14 +18,6 @@ import { ROSTER } from '../data/mechs';
  */
 const TITLE_DESIGN: TitleDesignId = 'instrument';
 
-/**
- * Seconds of no input before the attract demo starts.
- *
- * Long enough that a player who arrived deliberately gets to look at the title
- * and press start, short enough that an abandoned screen does not sit still.
- * Counted from scene entry, so it restarts every time the demo hands back.
- */
-const IDLE_BEFORE_DEMO_S = 10;
 
 /**
  * Fade length either side of the attract demo, in milliseconds.
@@ -37,7 +29,14 @@ const IDLE_BEFORE_DEMO_S = 10;
 export const DEMO_FADE_MS = 700;
 
 /**
- * Attract screen: a vista, the title, and nothing to decide.
+ * Attract screen: a fight, the title, and nothing to decide.
+ *
+ * **The fight runs behind the title the whole time.** It used to be a separate
+ * attract demo the title cut away to after ten idle seconds; it is now the
+ * title's own backdrop — `BattleScene` launched underneath in backdrop mode, a
+ * silent EXTREME CPU-vs-CPU fight between two random machines on the orbiting
+ * demo camera, recycling to a new matchup after each knockout. Nothing about
+ * it touches the session, so the machines a player last picked are untouched.
  *
  * Every option used to live here, which made the first thing a player saw a
  * settings form. The options now live in `MenuScene`; this screen exists to be
@@ -52,7 +51,6 @@ export const DEMO_FADE_MS = 700;
 export class TitleScene extends Phaser.Scene {
   private input$!: InputManager;
   private t = 0;
-  private mark!: TitleMark;
   private prompt!: Phaser.GameObjects.Text;
   /** Latches once the demo fade begins, so `update` cannot start it twice. */
   private leaving = false;
@@ -92,6 +90,14 @@ export class TitleScene extends Phaser.Scene {
     //
     // A flat fill would band on a gradient this dark, so it is drawn as strips
     // fine enough that the steps fall below one 8-bit level.
+    // The fight behind the title. Launched once and left running: coming back
+    // from the menu finds it still going rather than restarting it.
+    if (!this.scene.isActive('Battle')) this.scene.launch('Battle', { backdrop: randomBackdrop() });
+    // Under this scene, so its fades between matchups never cover the title.
+    this.scene.sendToBack('Battle');
+
+    // A vignette rather than a sky: dark behind the wordmark and the prompt so
+    // both read, thin across the middle so the fight is the backdrop.
     const g = this.add.graphics();
     for (let i = 0; i < 64; i++) {
       const t = i / 63;
@@ -101,15 +107,13 @@ export class TitleScene extends Phaser.Scene {
         100,
         Math.round(t * 100),
       );
-      g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1);
+      const top = 0.6 * Math.pow(Math.max(0, 1 - t / 0.5), 1.3);
+      const bottom = 0.62 * Math.max(0, (t - 0.6) / 0.4);
+      g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), Math.min(0.9, 0.22 + top + bottom));
       g.fillRect(0, (i * VIEW_H) / 64, VIEW_W, VIEW_H / 64 + 1);
     }
 
-    // ---- titles ----------------------------------------------------------
-    // **The initialism is not spelled out here, deliberately.** In the world
-    // nobody expands it, so a title screen that does would be the one place the
-    // game speaks out of character. It is in the README for anyone who wants it.
-    this.mark = new TitleMark(this, VIEW_W / 2, 150, TITLE_DESIGN);
+    new TitleMark(this, VIEW_W / 2, 150, TITLE_DESIGN);
 
     // ---- press start -----------------------------------------------------
     this.prompt = this.add
@@ -130,7 +134,6 @@ export class TitleScene extends Phaser.Scene {
 
   override update(_time: number, delta: number): void {
     this.t += delta / 1000;
-    this.mark.update(this.t);
 
     // Slow pulse rather than a hard blink: readable, and it never disappears at
     // the moment someone looks at it.
@@ -141,45 +144,9 @@ export class TitleScene extends Phaser.Scene {
     if (ui.confirm) {
       sfx.unlock();
       sfx.uiConfirm();
+      this.leaving = true;
+      this.scene.stop('Battle');
       this.scene.start('Menu');
-      return;
     }
-    if (this.t >= IDLE_BEFORE_DEMO_S) this.startDemo();
-  }
-
-  /**
-   * Starts an attract demo: two random machines, both CPU, no interface.
-   *
-   * **A real match**, not a scripted set piece — same simulation, same AI, same
-   * arena. `EXTREME` on both sides because it is the tier that plays
-   * differently rather than merely better, and because it produces the longest
-   * fights, so fifteen seconds lands mid-exchange instead of on a knockout.
-   *
-   * `matchIndex` is bumped here because nothing else will: the demo skips
-   * `MechSelect`, which is normally what advances the seed, so without this
-   * every demo of the same pairing would replay the identical fight.
-   */
-  private startDemo(): void {
-    this.leaving = true;
-    const ids = ROSTER.map((m) => m.id);
-    const a = Math.floor(Math.random() * ids.length);
-    // Offset rather than re-rolled, so the two are distinct without a loop that
-    // can in principle spin.
-    const b = (a + 1 + Math.floor(Math.random() * (ids.length - 1))) % ids.length;
-    session.playerMech = ids[a];
-    session.enemyMech = ids[b];
-    session.mode = 'aiVsAi';
-    session.playerDifficulty = Difficulty.Extreme;
-    session.enemyDifficulty = Difficulty.Extreme;
-    session.matchIndex++;
-    // **Set on the far side of the fade, not before it.** Flipping `demo` here
-    // and starting the scene immediately would show a frame of the title with
-    // the flag already live; worse, an error during the fade would leave it set
-    // with no demo running.
-    this.cameras.main.fadeOut(DEMO_FADE_MS, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      session.demo = true;
-      this.scene.start('Battle');
-    });
   }
 }

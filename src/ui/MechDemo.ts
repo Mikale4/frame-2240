@@ -65,64 +65,21 @@ const DURATION: Record<Beat, number> = {
   saturate: 1.7,
 };
 
-export class MechDemo {
-  private readonly renderer: MechRenderer;
-  private readonly holder: Phaser.GameObjects.Container;
-  /**
-   * The demo's own particle system.
-   *
-   * Thruster plumes are emitted by `BattleScene`, not by `MechRenderer`, so a
-   * rig drawn anywhere else has working thruster *parts* — they splay and
-   * gimbal under load — and no exhaust at all. The panel gets a small pool of
-   * its own, parented into the holder so the plumes move and clip with the
-   * machine rather than floating across the menu behind it.
-   */
-  private readonly effects: Effects;
-  private readonly tint: number;
-  /** Chassis scale, so a big machine gets a big plume. */
-  private readonly size: number;
-  /** How this machine's builder burns. See `ThrusterProfiles`. */
-  private readonly fx: ThrusterFx;
-  /** Scratch for world -> holder-local conversion. */
-  private readonly scratch = new Phaser.Math.Vector2();
-  private readonly pose: MechPoseSource;
+/**
+ * The demo's choreography on its own: the beat rotation and the synthetic pose
+ * it produces, with no renderer attached. Shared by the sprite demo and the
+ * voxel one (`src/voxel/VoxelMechDemo.ts`), so the two cannot drift apart.
+ */
+export class DemoPoser {
+  readonly pose: MechPoseSource;
   private beat = 0;
   private beatT = 0;
-  /** Free-running clock, for the hover bob and aim sway. */
   private t = 0;
-  private readonly x: number;
-  private readonly y: number;
 
-  constructor(scene: Phaser.Scene, def: MechDef, x: number, y: number, scale = 1) {
-    // **Local origin, because `sync` owns the renderer's transform.**
-    //
-    // `MechRenderer.sync` sets the root's position, scale *and* depth every
-    // frame — the scale from `depthScaleAt(pose.y)`, which is the arena's
-    // pseudo-3D and not something a UI panel wants a say in. So the renderer is
-    // parented to a holder that this class owns, and driven at the holder's
-    // origin. Setting the root's scale directly would be silently reverted on
-    // the next frame, which is exactly what happened first.
-    this.x = 0;
-    this.y = 0;
-    this.holder = scene.add.container(x, y);
-    this.holder.setScale(scale);
-    this.renderer = new MechRenderer(scene, def, def.id);
-    this.holder.add(this.renderer.root);
-    // Small pool: two nozzles on one machine, not a battlefield.
-    this.effects = new Effects(scene, 0, 200);
-    // **Under the rig**, so the plume emerges from behind the nozzle rather
-    // than being painted across the chassis. Same reasoning as the battle
-    // scene's separate exhaust layer.
-    this.holder.addAt(this.effects.root, 0);
-    this.tint = def.tint.thruster;
-    this.size = def.rig.scale;
-    this.fx = thrusterFxFor(def.faction);
-
+  constructor(def: MechDef) {
     this.pose = {
       alive: true,
       act: ActState.Free,
-      // Mid-arena: `depthScaleAt` is a ramp over arena height, so this parks
-      // the pseudo-3D at its midpoint and leaves `scale` the only dial.
       y: ARENA_H / 2,
       facing: 1,
       aim: 0,
@@ -143,74 +100,13 @@ export class MechDemo {
       legSwing: [0, 0],
       status: {} as MechPoseSource['status'],
     };
-
-    // **Centred on its own silhouette, per chassis.**
-    //
-    // The rig's origin is `core`, which is nowhere near the middle of what you
-    // actually see — the weapon arm reaches out one side, the legs hang below,
-    // and every chassis is a different shape. Placing the origin at the panel
-    // centre therefore leaves each machine offset by a different amount, and
-    // PYRE — the tallest silhouette on the roster — hung out of the box
-    // entirely. A hand-tuned nudge fixes exactly one of the eight.
-    //
-    // So: pose it once, measure what is visible, and shift the holder by
-    // whatever it takes to put that centre on the point we were given.
-    this.update(0);
-    const b = this.visibleBounds();
-    if (b) {
-      this.holder.x += x - (b.L + b.R) / 2;
-      this.holder.y += y - (b.T + b.B) / 2;
-    }
-
-    // Stagger the rotation per chassis so a screen of these is not in lockstep.
-    // A cheap string hash rather than the rng, because this must be identical
-    // every time the screen opens — a demo that starts somewhere new each visit
-    // reads as a glitch, not as variety.
+    // Seed the entry point per chassis so panels are not marching in step.
     let h = 0;
     for (let i = 0; i < def.id.length; i++) h = (h * 31 + def.id.charCodeAt(i)) | 0;
     this.beat = Math.abs(h) % ROTATION.length;
   }
 
-  /**
-   * World-space bounds of everything currently drawn, ignoring hidden parts.
-   *
-   * `Container.getBounds` counts invisible children, and the rig keeps the
-   * melee weapon and its energy layer hidden for the whole demo — on some
-   * chassis that is the single widest thing in the tree, so the built-in
-   * measurement is badly wrong here.
-   */
-  private visibleBounds(): { L: number; R: number; T: number; B: number } | null {
-    let L = Infinity;
-    let R = -Infinity;
-    let T = Infinity;
-    let B = -Infinity;
-    const walk = (c: Phaser.GameObjects.Container): void => {
-      for (const ch of c.list) {
-        const asC = ch as Phaser.GameObjects.Container;
-        if (Array.isArray(asC.list)) {
-          walk(asC);
-          continue;
-        }
-        const img = ch as Phaser.GameObjects.Image;
-        if (!img.visible || typeof img.getBounds !== 'function') continue;
-        const r = img.getBounds();
-        if (r.width < 1) continue;
-        L = Math.min(L, r.x);
-        R = Math.max(R, r.right);
-        T = Math.min(T, r.y);
-        B = Math.max(B, r.bottom);
-      }
-    };
-    walk(this.renderer.root);
-    return L === Infinity ? null : { L, R, T, B };
-  }
-
-  /** The holder, for depth and placement. Not the renderer's own root. */
-  get root(): Phaser.GameObjects.Container {
-    return this.holder;
-  }
-
-  update(dt: number): void {
+  update(dt: number): MechPoseSource {
     this.t += dt;
     this.beatT += dt;
     const beat = ROTATION[this.beat];
@@ -287,6 +183,127 @@ export class MechDemo {
         break;
     }
 
+    return p;
+  }
+}
+
+export class MechDemo {
+  private readonly renderer: MechRenderer;
+  private readonly holder: Phaser.GameObjects.Container;
+  /**
+   * The demo's own particle system.
+   *
+   * Thruster plumes are emitted by `BattleScene`, not by `MechRenderer`, so a
+   * rig drawn anywhere else has working thruster *parts* — they splay and
+   * gimbal under load — and no exhaust at all. The panel gets a small pool of
+   * its own, parented into the holder so the plumes move and clip with the
+   * machine rather than floating across the menu behind it.
+   */
+  private readonly effects: Effects;
+  private readonly tint: number;
+  /** Chassis scale, so a big machine gets a big plume. */
+  private readonly size: number;
+  /** How this machine's builder burns. See `ThrusterProfiles`. */
+  private readonly fx: ThrusterFx;
+  /** Scratch for world -> holder-local conversion. */
+  private readonly scratch = new Phaser.Math.Vector2();
+  /** The choreography, shared with the voxel demo. */
+  private readonly poser: DemoPoser;
+  private readonly x: number;
+  private readonly y: number;
+
+  constructor(scene: Phaser.Scene, def: MechDef, x: number, y: number, scale = 1) {
+    // **Local origin, because `sync` owns the renderer's transform.**
+    //
+    // `MechRenderer.sync` sets the root's position, scale *and* depth every
+    // frame — the scale from `depthScaleAt(pose.y)`, which is the arena's
+    // pseudo-3D and not something a UI panel wants a say in. So the renderer is
+    // parented to a holder that this class owns, and driven at the holder's
+    // origin. Setting the root's scale directly would be silently reverted on
+    // the next frame, which is exactly what happened first.
+    this.x = 0;
+    this.y = 0;
+    this.holder = scene.add.container(x, y);
+    this.holder.setScale(scale);
+    this.renderer = new MechRenderer(scene, def, def.id);
+    this.holder.add(this.renderer.root);
+    // Small pool: two nozzles on one machine, not a battlefield.
+    this.effects = new Effects(scene, 0, 200);
+    // **Under the rig**, so the plume emerges from behind the nozzle rather
+    // than being painted across the chassis. Same reasoning as the battle
+    // scene's separate exhaust layer.
+    this.holder.addAt(this.effects.root, 0);
+    this.tint = def.tint.thruster;
+    this.size = def.rig.scale;
+    this.fx = thrusterFxFor(def.faction);
+
+    this.poser = new DemoPoser(def);
+
+    // **Centred on its own silhouette, per chassis.**
+    //
+    // The rig's origin is `core`, which is nowhere near the middle of what you
+    // actually see — the weapon arm reaches out one side, the legs hang below,
+    // and every chassis is a different shape. Placing the origin at the panel
+    // centre therefore leaves each machine offset by a different amount, and
+    // PYRE — the tallest silhouette on the roster — hung out of the box
+    // entirely. A hand-tuned nudge fixes exactly one of the eight.
+    //
+    // So: pose it once, measure what is visible, and shift the holder by
+    // whatever it takes to put that centre on the point we were given.
+    this.update(0);
+    const b = this.visibleBounds();
+    if (b) {
+      this.holder.x += x - (b.L + b.R) / 2;
+      this.holder.y += y - (b.T + b.B) / 2;
+    }
+
+    // Stagger the rotation per chassis so a screen of these is not in lockstep.
+    // A cheap string hash rather than the rng, because this must be identical
+    // every time the screen opens — a demo that starts somewhere new each visit
+    // reads as a glitch, not as variety.
+  }
+
+  /**
+   * World-space bounds of everything currently drawn, ignoring hidden parts.
+   *
+   * `Container.getBounds` counts invisible children, and the rig keeps the
+   * melee weapon and its energy layer hidden for the whole demo — on some
+   * chassis that is the single widest thing in the tree, so the built-in
+   * measurement is badly wrong here.
+   */
+  private visibleBounds(): { L: number; R: number; T: number; B: number } | null {
+    let L = Infinity;
+    let R = -Infinity;
+    let T = Infinity;
+    let B = -Infinity;
+    const walk = (c: Phaser.GameObjects.Container): void => {
+      for (const ch of c.list) {
+        const asC = ch as Phaser.GameObjects.Container;
+        if (Array.isArray(asC.list)) {
+          walk(asC);
+          continue;
+        }
+        const img = ch as Phaser.GameObjects.Image;
+        if (!img.visible || typeof img.getBounds !== 'function') continue;
+        const r = img.getBounds();
+        if (r.width < 1) continue;
+        L = Math.min(L, r.x);
+        R = Math.max(R, r.right);
+        T = Math.min(T, r.y);
+        B = Math.max(B, r.bottom);
+      }
+    };
+    walk(this.renderer.root);
+    return L === Infinity ? null : { L, R, T, B };
+  }
+
+  /** The holder, for depth and placement. Not the renderer's own root. */
+  get root(): Phaser.GameObjects.Container {
+    return this.holder;
+  }
+
+  update(dt: number): void {
+    const p = this.poser.update(dt);
     this.renderer.sync(p, this.x, this.y, dt);
 
     // Exhaust, from the nozzles themselves. `partWorld` is in world space and

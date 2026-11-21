@@ -7926,3 +7926,333 @@ Worth recording separately: checking `Base Color.default_value` said `0.8,0.8,0.
 on every material and proved nothing, because the colour is driven by the mix
 chain. **Walk the unlinked RGBA inputs** to find what a material is actually
 painted.
+
+## D172 — the game goes voxel; the fight stays two-dimensional
+
+The owner asked for the game to become a voxel game "like all of the other voxel
+games we have made together", seen from a perspective like KNOCK//BACK's, with
+the mechanics unchanged.
+
+**Nothing in the simulation moved.** `MatchSim`, `Combatant`, the AI and every
+timing still run in their own x/y plane; all 713 existing tests pass untouched.
+What changed is how that plane is shown: it is now a vertical slice standing in a
+three-dimensional yard (`src/voxel/World.ts` is the one mapping — 40 sim px per
+world unit, the deck at y = 0, the arena centred on x = 0, the fight plane at
+z = 0).
+
+**Two canvases, one picture.** Phaser's canvas is now transparent and keeps the
+entire interface — HUD, banter, menus, the saturation cut-in. A Three.js canvas
+sits exactly underneath it (`VoxelStage`), pixel-matched to Phaser's letterboxed
+rectangle, and draws the world. Rebuilding every screen in Three.js would have
+replaced thousands of lines of working interface to change how the *fight*
+looks.
+
+**Camera:** KNOCK//BACK's — a 40° perspective lens above and in front of the
+plane, pitched down (0.36 rad), following the midpoint and pulling back as the
+fighters separate. The 2D camera's rules survive: the distance is *solved* so
+both machines fit with the old margins on each axis, the HUD band stays clear,
+and the velocity lead is clamped so it never costs a pilot the frame.
+
+Machines turn 0.42 rad toward the lens (`FACE_YAW`) so the chest, near shoulder
+and weapon face read; facing is a mirror on the rig root, so the near arm stays
+the near arm, as in the sprite renderer.
+
+## D173 — the mechs are voxelized from mechs.blend, not re-authored
+
+The roster was always 3D — boxes, wedges and cylinders in `mechs.blend` — and the
+sprite pass flattened it. `tools/blender/voxelize_mechs.py` samples that geometry
+directly (read-only; the .blend is never saved) into `assets/voxels/<id>.json`:
+
+* each part object is split back into its loose primitives and each is
+  inside-tested on its own — a joined mesh cannot be, because two overlapping
+  boxes make a parity test call the overlap *outside*;
+* shells thinner than ~1.2 voxels are supersampled so trim and fins survive;
+* where shells overlap, the **smallest** wins the colour (a trim plate on a
+  panel is the paint you see);
+* colours are traced up each material's wear-mix chain to the painted base
+  (`Base Color` is linked, so its default is meaningless — SESSION_HANDOFF §5);
+  emissive materials become unlit glow voxels;
+* each part's pivot *depth* is exported too. The rig carries none, and it is the
+  only record of the near arm being in front of the hull.
+
+3 logical px per voxel: HALCYON is ~35 voxels tall, 4–9k voxels per machine,
+284 KB for the roster. Painted energy (beam blades, NULLTIDE's baton) has no
+geometry; its PNGs are voxelized as thin glowing slabs on the same pivot.
+
+`VoxelMech` rebuilds `MechDef.rig` as Three.js groups and drives them with the
+same `partLocalRotation` / `partReachOffset` the sprite renderer uses, so aim,
+bank, stride, dangle, thruster gimbal and swing arcs are unchanged. Flash,
+affliction tint, saturation, LAST STAND and OVERDRIVE moved from alpha to
+emissive light — voxels are solid, and a half-transparent machine reads as a
+rendering fault. `voxel.test.ts` pins every rig part to its Blender pivot.
+
+## D174 — CATHEDRAL YARD in voxels, wide rather than boxed
+
+KNOCK//BACK's stages are rooms. The owner asked for this one to be larger and
+more widespread, so the yard runs far past both ends of the fight and far back
+behind it: a 150 × 58 unit plated deck over the storm layer, a gantry frame
+around the playable span, nave columns receding into fog, two empty drydock
+cradles, a gantry crane, containers, sodium lamps, other yards hanging in the
+haze. Brief: `docs/CATHEDRAL_YARD_CONTEXT.md`, followed.
+
+**The playable rectangle is unchanged** (2400 × 1200 sim px) — the owner also
+said the game plays the same, and the AI and balance are tuned to it. The gantry
+pylons stand just outside each end, behind the plane, joined by a crossbeam above
+the ceiling, so the bounds are visible without anything covering a machine.
+
+The first nave build was 360k of the scene's 615k triangles and held the game
+at ~38 fps; rebuilt at a 1.2-unit voxel (it sits 40–90 units back in fog) the
+scene is ~344k and the fight holds 60.
+
+## D175 — effects and overlays keep their APIs
+
+`VoxelFx` answers the same calls as `Effects` (`impactFor`, `muzzleFor`,
+`barrier`, `explode`…) in the same sim coordinates, so the event plumbing in
+`BattleScene` did not change shape. Its vocabulary is KNOCK//BACK's `fx.js` —
+instanced voxel cubes, star sparks, rings — plus pooled flame cones for
+thrusters and wireframe shells for a held barrier.
+
+The tuned `Graphics` overlays (AEGIS's dome, the tethers, paint, sniper line,
+auras, drone bars, debug hitboxes) were *not* rewritten: `Gfx3D` takes the same
+`lineStyle` / `strokeCircle` / `arc` calls and emits triangles in the fight
+plane, so every number that was looked at and kept is still the number drawn.
+
+## D176 — pilot portraits become live voxel busts
+
+At the owner's direction, the painted pixel portraits are replaced by voxel
+busts in the manner of Post Parade's racers: chest up, three-quarters on,
+breathing, glancing, blinking. They take over the existing texture keys
+(`pilot_<id>`, `pilot_<id>_thumb`, plus a new `pilot_<id>_card` shaped to the
+select plate), so banter, the cut-in, the select grid and the Archive needed no
+change. The PNGs stay loaded as the fallback if the bust renderer cannot get a
+WebGL context.
+
+The first cut failed review, and the reasons are the brief for any revision:
+
+* **Sex must read at a glance** (four women, four men). Post Parade's head — 8
+  wide, 2×2 eyes, no nose, two-voxel mouth — with its cues: a lash and a flick
+  past the corner for her, a crease and heavy brows for him; blush and lip
+  colour for her; a square jaw a row deeper, stubble where it fits, for him; her
+  hair framing her face; and the bust framed to mid-chest so shoulders, neck and
+  figure carry it too.
+* **Faces must be readable**: CIRRUS's white hair on pale skin with tufts across
+  the eyes was unreadable — her hair is silver with real shadow and her forehead
+  is clear.
+* **No open-mouthed grins** (PYRE). Closed smiles and smirks only.
+* **HALDEN must look serious**: brows drawn down to the nose, mouth pulled down.
+* **KESTREL's monocle stays as first built** — the owner liked it.
+* **Busts fill the select plate edge to edge.**
+
+## D177 — the menus stand in the yard too
+
+The main menu and results screens drop their painted arena layers for the voxel
+yard on a slow camera drift under their scrims (`YardBackdrop`), and the select
+screen's machine preview hangs a `VoxelMech` in the same yard, seen through a
+camera clipped to the panel (`VoxelMechDemo`, choreography shared with the
+sprite demo through `DemoPoser`). The yard is built once per session and
+reused; the battle, the select preview and the backdrops never exist at once.
+
+## D178 — a hands-on tutorial, played for real
+
+The owner asked for a full hands-on tutorial covering every movement, mechanic
+and control, lesson by lesson. `TUTORIAL` is now the first live mode on the main
+menu, built on KNOCK//BACK's pattern: a real fight against a dummy where nothing
+happens until you do it, one lesson card at a time, the next opening once the
+thing is done.
+
+**22 lessons** — two cards to read, then movement (flight, air brake, boost,
+dash, flight mode), weapons (main gun, heavy, sword, chain), command motions
+(scatter, lance), the drone (the escort, salvo, switching target), defence
+(guard, burst, repel), Saturation (modes, spending it) and a spar against EASY.
+
+* **The director is pure TypeScript** (`src/tutorial/Tutorial.ts`). It reads the
+  simulation's own events and state and writes only the dummy's `InputFrame` and
+  gauge top-ups. `MatchSim` runs with `dummy: true`, so a knockout revives;
+  before the spar both machines are kept on their feet anyway.
+* **Cards name the player's real bindings**, read live, with the pad button
+  alongside when a pad is connected.
+* **Every lesson is proven finishable.** `tutorial.test.ts` plays the whole
+  course through the real simulation with scripted button presses.
+* **Skip is always allowed**; only lessons actually done count on the last card.
+* Always HALCYON against NOCTURNE: the baseline machine with one of everything.
+
+Writing the course turned up three things the README had stopped being true
+about, now corrected there: the drone is **autonomous** (the old recall toggle is
+gone — `Btn.Sub` is the TAG/ASSIST call, which is switched off — and a downed
+drone rebuilds and relaunches itself); **the ordered salvo costs two charges**
+and needs the drone ready, so the lesson places the dummy beyond the escort's
+own firing range where it holds its fire; and the default keys are `Z X C S`,
+`Space`, `D`, `Left Shift`, `Q`, `A`, `E`, not the `J K L U` table it carried.
+
+The HUD's Saturation hint was a hard-coded `[Q]` — the *activate* key by
+default, not the mode-cycle one it labels. It now reads the live binding, because
+the tutorial teaches the real key and the two disagreed on screen.
+
+## D179 — the title screen has the fight behind it
+
+At the owner's request the title shows gameplay in its background, the way the
+attract demo did. The demo is now the title's own backdrop rather than a screen
+it cut away to after ten idle seconds.
+
+* **`BattleScene` runs underneath the title in backdrop mode**, launched with a
+  `BackdropSpec` (`src/scenes/BackdropFight.ts`): a CPU-vs-CPU fight between two
+  random different machines on EXTREME, the demo's casting, on the demo's
+  orbiting camera. It has no HUD, banter or Saturation cut-ins, and **no sound** —
+  the title owns the soundtrack. It never reaches the results table: a knockout
+  is held for 2.6 s and then fades to a new matchup, and so does any fight
+  that runs past 45 s.
+* **It never touches `session`.** The demo used to overwrite the player's last
+  machines, mode and tiers; the spec travels as scene data instead.
+* **Phaser keeps a scene's last start data** and hands it to a later `start`
+  that passes none, so the first real match after the title inherited the
+  backdrop: no HUD, two CPUs. `create` now consumes the data. Found by starting
+  the tutorial from the menu in the browser, not by a test.
+* The title's opaque gradient became a vignette, dark behind the wordmark and the
+  prompt and thin across the middle. The backdrop camera stands further back
+  than a match's (`minDist` 18) and keeps the PRESS START band clear.
+* The battle scene is sent to the back of Phaser's scene list, so its fades
+  between matchups draw under the title, never over it.
+
+`session.demo` and its branches in `BattleScene` are no longer entered by
+anything; they are left in place rather than removed in the same change.
+
+## D180 — the title's cogs and Stillwake Yard are voxels
+
+At the owner's request the gear train and the listing city-plate behind the
+wordmark are voxel models now, not painted art (`src/voxel/TitleOrnaments.ts`).
+
+* **Same layout, same motion.** The four wheels keep their radii, positions,
+  tooth counts and webs (kidney slots, spokes, lightening holes, solid), and turn
+  at the real gear ratio. The yard lists, sinks and shudders on the same curves.
+  The layout and both motion functions moved into `src/ui/TitleMotion.ts`,
+  which has no Phaser in it, so the painted fallback and the voxel models read
+  one definition and the voxel side can be tested in Node.
+* **The yard is rebuilt from its painting**: a plated deck crowded with lit
+  blocks, three lattice towers (two carrying cranes), a gantry and two stacks,
+  sodium lamps along its edge, and eleven tapering spars hanging beneath it,
+  cables slung between them.
+* **Drawn as a voxel overlay pass** (`VoxelStage.addOverlay`): after the
+  background fight, depth cleared, through an orthographic camera laid exactly
+  over the 960x540 logical screen, so `TitleMark`'s coordinates carry over
+  unchanged and the Phaser wordmark still lands on top. Each model is turned a
+  little off the screen plane so its depth shows.
+* **The cogs are a darker steel than the yard.** Solid wheels at the yard's
+  brightness fought the white wordmark for the eye; the painted ones had been
+  17–26 % line work. They now sit at about the brightness that ink read at.
+* **Matchup changes fade the fight alone.** A Phaser camera fade blacks out the
+  whole voxel canvas, ornaments included, so the background fight now fades on
+  a black curtain riding its own camera (`BattleView3D.fade`). Overlays also
+  keep the voxel canvas up when no view is set, so the cogs never blink out
+  between matchups.
+
+`titleOrnaments.test.ts` pins exact tooth counts, meshing, the yard's footprint
+and that its listing never becomes a fall.
+
+## D181 — the cogs and the city are gone from the title
+
+The owner had the gear train and Stillwake Yard removed from the title screen
+altogether, one turn after they were made voxel (D180). The title is now the
+wordmark, PRESS START and the live fight behind them.
+
+Removed with them, so nothing is left half-wired: the voxel models
+(`src/voxel/TitleOrnaments.ts`) and their test, the shared layout module
+(`src/ui/TitleMotion.ts`), the painted gear and medallion code in `TitleMark`
+(now lettering only), the stage's overlay pass (built for them, no other user),
+and the boot-time load of `ui/title_stillwake.png`. **The art file itself is
+kept on disk**, as is `docs/TITLE_MEDALLION_BRIEF.md`; both are a re-enable away
+via git history if the yard ever comes back.
+
+Kept: the background fight's own fade curtain (`BattleView3D.fade`) — it is
+still the right way to fade the fight between matchups.
+
+## D182 — FREE ORBIT: a third-person 3D mode, and every machine transforms
+
+The owner asked for a new game mode with a 3D arena-fighter / mecha-fighter
+perspective instead of the side-on one, and — partway through — for every
+machine to have a **mobile form it transforms into**, Gundam / Transformers
+style. Built as one mode: **FREE ORBIT**, on the main menu beside VERSUS CPU.
+
+**A new simulation, not the side-on one with a camera bolted on.** The side-on
+`MatchSim` is a plane all the way down — collision, aim, the AI's range reads,
+the drone's orbit — and its replay is pinned bit-for-bit by `match.test.ts`.
+Bending it into a volume would have rewritten the tuned game to add a mode. So
+`src/orbit/OrbitSim.ts` is its own pure, deterministic simulation (no Phaser, no
+Three, no `Math.random`) and `src/orbit/OrbitAI.ts` its own rival. **The
+machines are the same machines**: speeds, boost, dash, gauges, every weapon's
+damage / speed / homing / cost, the `meleeLock` sword sequence, guard, burst,
+repel and Saturation are read straight from `MechDef`, converted from side-on
+px/tick to world units by `PX = 1/40` — the voxel layer's own scale. Nothing is
+tuned per chassis.
+
+**How it plays.** Permanent lock-on, the 3D-mecha-fighter standard: forward
+closes on the rival, left/right circle it, boost with no direction climbs, a
+machine not thrusting sinks slowly to the deck; tap boost + a direction to dash.
+Heavy while backing off is the lance; sub is the salvo; one press of the sword
+runs the machine's whole authored chain. The CATHEDRAL YARD's gantry pylons,
+crossbeam and drydock cradles are solid (`OBSTACLES`) — cover that blocks shots
+and machines.
+
+**The transformation.** `TRANSFORM` (the flight-toggle binding, `A`) folds the
+machine into its **mobile form** over 20 ticks:
+
+* *Handling*: cruise at 1.3× the machine's boost speed **without spending
+  boost**, afterburner on boost at 0.95× its dash speed (drains boost); steers
+  like an aircraft — left/right turn the nose, up/down pitch it.
+* *Weapons*: the main gun only, firing down the nose with a narrow 0.22 rad aim
+  assist. Pressing the sword or the heavy transforms back.
+* *Costs*: no guard, a turning circle, and **any hit knocks it back into a mech**.
+* *Look*: not a second model — the machine's own voxel parts re-posed
+  (`VoxelMech.pose3`): the frame lies prone so the head leads, the legs trail and
+  splay into a V tail, both arms swing forward so **the main weapon becomes the
+  nose**, the head drops into the shoulders, the backpack folds onto the spine
+  and the engines slide aft and out to the flanks. It folds through a barrel
+  roll with the frame lit from inside. Generic over the rig's part roles, which
+  is why all eight machines transform without per-chassis data.
+
+**Two rules the side-on game never needed, both measured into existence:**
+
+* **The down value.** Before it, one EXTREME rival held another in hitstun for up
+  to **62 consecutive rounds** and fights ended in six seconds — a plane lets
+  knockback carry a victim off the line of fire; a volume does not. Each ranged
+  hit now adds `1 + hitstun/20` to a down value; past `DOWN_LIMIT` (5) the
+  victim is knocked down — thrown clear, untouchable for the 48-tick tumble and
+  24 ticks after — and each further hit in one combo is prorated down to 50 %.
+  A sword sequence adds nothing: it is authored, and its length is the
+  machine's identity. Fights went to 30–55 s.
+* **Lock-on lead.** Unled shots in a volume land only on a machine that has
+  stopped: three seconds of fire against EXTREME took off nothing.
+  `OrbitSim.lead` aims at 80 % of a first-order intercept. Mobile form gets it
+  only inside the nose cone.
+
+**The rival.** Four tiers that play differently, the main game's principle.
+EXTREME alone punishes real recovery windows, bursts the opening blow of a
+sword sequence to repel it, holds fire it cannot land through the gantry, and
+picks its Saturation mode from its own machine. All tiers transform: across a
+long gap for an attack run, and off a knockdown or now and then at close range
+to break away and come back. **EXTREME's reaction is 11 ticks, the same as
+HARD's** — at 6 it dashed at shots that were never going to land and had nothing
+left for the ones that were: 13 of 32 against HARD at 6, 45 of 64 at 11. The
+main game learned the same about its own EXTREME.
+
+Measured (`orbit.test.ts`, mirror matches, 16 duels per pairing): EXTREME beats
+EASY 15/16, EXTREME beats HARD 13/16, HARD beats NORMAL 15/16, NORMAL beats
+EASY 11/16. EXTREME-vs-EXTREME fights run 40–77 s (the side-on game's are
+21–45 s); machines spend 2–18 % of a fight in mobile form and transform 7–17
+times a match.
+
+**Presentation.** `OrbitScene` reuses everything it can: the shared yard
+(`yard()`), the voxel machines, the effect and shot pools (with world-space
+`plume3` / `muzzle3` / `impact3` / `slash3` / `shell3` and `draw3` added beside
+the side-on API), the sounds, the music picker, the menus. `OrbitView3D` is a
+58° lock-on camera over the pilot's shoulder that swings to a chase camera
+behind the nose as the machine transforms, pulls in (and up) in front of any
+structure behind the pilot, and restores the side-on 40° lens when the mode
+hands the yard back. `OrbitHud` keeps the side-on HUD's bars and corners and
+adds a lock reticle, an off-screen arrow, range in metres with a sword-range
+cue, and a form readout. Routing is `matchScene(mode)` in `Session.ts`, used by
+mech select and the results screen's rematch.
+
+**Not done, deliberately:** the side-on game does not transform. Adding it there
+changes the tuned 2D balance, so it waits for the owner to ask. FREE ORBIT is
+player-vs-CPU only (no CPU-vs-CPU or training variant yet), and the salvo fires
+from where the escort drone would be without drawing one.

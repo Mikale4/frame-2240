@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
+import { attachYardBackdrop } from '../voxel/YardBackdrop';
 import { VIEW_H, VIEW_W } from '../core/GameConfig';
-import { DIFFICULTY_NAMES, MODE_LABELS, session } from '../core/Session';
+import { DIFFICULTY_NAMES, MODE_LABELS, matchScene, session } from '../core/Session';
 import { InputManager } from '../input/InputManager';
 import { Menu, bigTitle, makeScrim, smallText } from '../ui/Menu';
 import { MECHS } from '../data/mechs';
@@ -19,13 +20,8 @@ export class ResultsScene extends Phaser.Scene {
     this.input$ = new InputManager(this);
     this.input$.reset();
 
-    // Reuse the arena art as a static, dimmed backing plate. Framed on the
-    // structure rather than on the sky above it — see the note in
-    // `TitleScene`, which had the same fault and the same cause.
-    const far = this.add.image((VIEW_W - 3072) / 2, 150, 'arena_far').setOrigin(0, 0);
-    far.setTint(0x2b3550).setAlpha(0.8);
-    const mid = this.add.image((VIEW_W - 1536) / 2, -200, 'arena_mid').setOrigin(0, 0);
-    mid.setTint(0x39435f).setAlpha(0.55);
+    // The voxel yard the fight was in, drifting behind a scrim.
+    attachYardBackdrop(this, 40);
     makeScrim(this, 0.6, 5);
 
     const p = MECHS[session.playerMech];
@@ -94,7 +90,7 @@ export class ResultsScene extends Phaser.Scene {
 
   private rematch(): void {
     session.matchIndex++;
-    this.scene.start('Battle');
+    this.scene.start(matchScene(session.mode));
   }
 
   override update(): void {

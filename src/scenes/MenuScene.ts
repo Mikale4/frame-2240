@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { attachYardBackdrop } from '../voxel/YardBackdrop';
 import { GAME_TITLE, VIEW_H, VIEW_W } from '../core/GameConfig';
 import { MODE_LABELS, session, type MatchMode } from '../core/Session';
 import { InputManager } from '../input/InputManager';
@@ -52,11 +53,12 @@ export class MenuScene extends Phaser.Scene {
         100,
         Math.round(t * 100),
       );
-      g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1);
+      // Translucent now: the voxel yard drifts underneath (see below), and
+      // this gradient is its scrim rather than the whole background.
+      g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 0.86 - t * 0.2);
       g.fillRect(0, (i * VIEW_H) / 40, VIEW_W, VIEW_H / 40 + 1);
     }
-    const far = this.add.image(0, VIEW_H - 300, 'arena_far').setOrigin(0, 0);
-    far.setTint(0x39445e).setAlpha(0.4);
+    attachYardBackdrop(this);
 
     bigTitle(this, GAME_TITLE, 62, 34, '#eaf2ff');
     this.subtitle = smallText(this, 'MAIN MENU', VIEW_W / 2, 96, 13, '#7d8ea8');
@@ -79,7 +81,13 @@ export class MenuScene extends Phaser.Scene {
           disabledNote: 'COMING SOON',
           onSelect: () => {},
         },
+        // First of the live modes, because it is where a new pilot should go.
+        // Straight into the course: it always teaches on the same machine, so
+        // there is nothing to choose on the roster screen.
+        { label: MODE_LABELS.tutorial, onSelect: () => this.startTutorial() },
         { label: MODE_LABELS.vsCpu, onSelect: () => this.pick('vsCpu') },
+        // The three-dimensional mode, beside the match it is a version of.
+        { label: MODE_LABELS.orbit, onSelect: () => this.pick('orbit') },
         { label: MODE_LABELS.aiVsAi, onSelect: () => this.pick('aiVsAi') },
         { label: MODE_LABELS.training, onSelect: () => this.pick('training') },
         /**
@@ -206,6 +214,14 @@ export class MenuScene extends Phaser.Scene {
   private toggleAssists(): void {
     session.assists = !session.assists;
     sfx.uiMove();
+  }
+
+  private startTutorial(): void {
+    sfx.unlock();
+    session.mode = 'tutorial';
+    session.demo = false;
+    session.matchIndex++;
+    this.scene.start('Battle');
   }
 
   /** Choosing a mode goes straight to the roster, as a fighting game would. */

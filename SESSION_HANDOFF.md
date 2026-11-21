@@ -5,6 +5,101 @@
 
 ---
 
+## 0. THE GAME IS VOXEL NOW (2026-11-09) — read this first
+
+The owner asked for the game to become a voxel game like their other ones, seen
+from a KNOCK//BACK-style perspective, playing exactly the same. Done:
+**D172–D177** in `docs/DECISIONS.md` are the record. In one paragraph: the
+simulation is untouched (still a 2D plane); Phaser's canvas is transparent and
+keeps all interface; a Three.js canvas underneath (`src/voxel/VoxelStage.ts`)
+draws the world. Mechs are voxelized from `mechs.blend` by
+`tools/blender/voxelize_mechs.py`; the arena is a wide voxel CATHEDRAL YARD;
+pilot portraits are live voxel busts (Post Parade style); menu, results and the
+select preview stand in the same yard.
+
+State: **725 tests (33 files)**, typecheck and build clean, three@0.170 added.
+**Nothing is committed** — the owner did not ask for a commit this session.
+
+### The tutorial (D178)
+
+`TUTORIAL` on the main menu: 22 hands-on lessons, director in
+`src/tutorial/Tutorial.ts` (no Phaser), card in `src/ui/TutorialPanel.ts`.
+**731 tests (34 files)**; `tutorial.test.ts` plays every lesson through the real
+sim. To add a lesson: add it to `LESSONS` *and* a driver to that test's
+`DRIVERS`, or the play-through test fails. The drone is autonomous now —
+there is no recall button; don't write a lesson that needs one.
+
+### The title's background fight (D179)
+
+The title launches `BattleScene` underneath itself with `{ backdrop: BackdropSpec }`
+— silent, HUD-less, recycling after each KO. The old idle cut-away to the attract
+demo is gone; `session.demo` is now dead code in `BattleScene`. **Trap:** Phaser
+reuses a scene's last start data when `start` passes none; `BattleScene.create`
+clears it, and anything else given scene data needs the same care.
+
+### The title's cogs and city: removed (D181)
+
+Made voxel (D180), then removed at the owner's request one turn later — the title
+is the wordmark over the live fight. Don't put them back unasked. The art file
+`assets/ui/title_stillwake.png` is kept but no longer loaded.
+
+### Owner feedback on the busts — binding for any revision
+
+Sex must read at a glance (four women, four men); busts framed to mid-chest so
+the figure shows; CIRRUS's face must be readable; **no open-mouthed grins**;
+HALDEN must look serious; **KESTREL's big green monocle stays**; busts fill the
+select plate edge to edge. D176 lists how each is met.
+
+### Voxel-layer traps, all paid for
+
+* **Opaque full-screen Phaser fills hide the 3D layer.** Menu, results and
+  select each had one. Use a scrim, or cut a window (select does).
+* **Rendering a scene with a background colour leaves it as the clear colour.**
+  `VoxelStage.render` re-asserts `setClearColor` every frame for that reason.
+* **The pane throttles rAF while a script awaits** — 0.3 fps measured. Drive the
+  game by hand: `g.loop.raf.stop()` then `g.loop.step(t += 16.667)` in a loop.
+* **Screenshots:** step once, then in the same task draw `__BSR_VOXEL__.canvas`
+  and `__BSR__.canvas` into a 2D canvas and POST it to the dev server's
+  `/__shot` sink (writes `renders/debug/<name>.png`). No downloads.
+* `__BSR_VOXEL__` is the stage (`.active` is the view, `.renderer`);
+  `__BSR_SESSION__` is the session, for starting a chosen matchup.
+* **Lights are physically scaled in three r170.** KNOCK//BACK-style legacy
+  numbers are written times π; the first pass forgot and the yard was blown out.
+* **Scenery triangle budget:** the nave at a fine voxel was 360k triangles and
+  cost 20 fps. Coarse voxels for anything in the fog.
+* The yard, its effect pools and projectile pools are built **once per session**
+  (`yard()` in `BattleView3D`); building them per match leaked on rematch.
+
+### FREE ORBIT — the 3D mode, with transformation (D182)
+
+`FREE ORBIT` on the main menu: a third-person lock-on mecha fighter in the yard,
+and every machine transforms into a mobile form (`A`). Its own pure simulation
+`src/orbit/OrbitSim.ts` and rival `src/orbit/OrbitAI.ts`; scene
+`src/scenes/OrbitScene.ts`, camera `src/voxel/OrbitView3D.ts`, HUD
+`src/ui/OrbitHud.ts`; the mobile-form re-pose is `VoxelMech.pose3`. Routing goes
+through `matchScene(mode)` in `Session.ts`. **755 tests (36 files)**;
+`orbit.test.ts` holds the difficulty ladder and the transformation rules.
+
+* **Traps:** Phaser reuses the scene instance, so `OrbitScene` field initialisers
+  do not reset on restart — `create()` resets them. The shared yard camera's FOV
+  is 58 in the mode and must go back to 40 on dispose (`OrbitView3D.dispose`).
+* Debug: `window.__BSR_ORBIT__` is the live scene; `camMode = 'inspect'` plus
+  `inspect = {yaw, dist, lift}` is a turntable round the player, and
+  `rivalIdle = true` stands the rival still for poses.
+* The side-on game does **not** transform yet — offered to the owner, not done.
+
+### Open from this session
+
+* PYRE reads golden while its Saturation is lit — the emissive glow is added on
+  top of an already-warm hull. Worth a look.
+* The voxel palette is the .blend's materials; the sprites' extra light/dark came
+  from Freestyle lines and specular, which voxels do not have. If the owner
+  wants more light armour on screen, that is a material change in the .blend
+  followed by a re-voxelize, not a renderer change.
+* The title screen is still the painted wordmark backdrop.
+
+---
+
 ## 1. Do these before working
 
 1. **Read `docs/TESTING_PROTOCOL.md`.** Durable home for these rules; this file

@@ -5,6 +5,7 @@ import { SAT_MODE_NAMES, SatMode, WEAPON_SLOT_COUNT, WEAPON_SLOT_NAMES } from '.
 import { TICK_HZ, VIEW_W } from '../core/GameConfig';
 import { clamp01 } from '../core/MathUtil';
 import { session } from '../core/Session';
+import { getBindings, keyLabel } from '../input/Bindings';
 import { TAG_USES, TagState } from '../combat/TagPartner';
 
 interface Bar {
@@ -362,9 +363,13 @@ export class Hud {
     for (let side = 0; side < 2; side++) {
       const c = side === 0 ? p : e;
       const modeName = SAT_MODE_NAMES[c.satMode];
-      // The `[Q]` hint is the player's key and belongs only on the player's
-      // side; naming it over a CPU would imply a control that does nothing.
-      const hint = side === 0 && session.mode !== 'aiVsAi' ? '  [Q]' : '';
+      // The hint is the player's mode-cycle key and belongs only on the
+      // player's side; naming it over a CPU would imply a control that does
+      // nothing. Read from the live bindings: it was a hard-coded `[Q]`, which
+      // is the *activate* key by default, and the tutorial teaches the real one.
+      const cycleKey = getBindings().modeCycle.keys[0];
+      const hint =
+        side === 0 && session.mode !== 'aiVsAi' && cycleKey ? `  [${keyLabel(cycleKey)}]` : '';
       this.satModeTexts[side].setText(
         c.satActive ? `SAT ACTIVE: ${modeName}` : `SAT MODE: ${modeName}${hint}`,
       );

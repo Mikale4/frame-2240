@@ -147,7 +147,8 @@ export function pickBattleCue(
   rand: () => number,
   available: (cue: string) => boolean = musicAvailable,
 ): string | null {
-  if (q.mode === 'training') return available('training') ? 'training' : null;
+  // The tutorial is practice too, and gets practice's low-fatigue track.
+  if (q.mode === 'training' || q.mode === 'tutorial') return available('training') ? 'training' : null;
 
   const live = battleCandidates(q).filter(available);
   if (live.length > 0) return live[Math.min(live.length - 1, Math.floor(rand() * live.length))];

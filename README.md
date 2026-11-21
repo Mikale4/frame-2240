@@ -3,13 +3,18 @@
 **Field-Rated Aerial Manoeuvre Element.** Nobody says the five words any more.
 Developed under the working title *Babel Sword: Reignition*.
 
-An original 2D free-flight mecha combat game — momentum flight, soft-lock
-gunnery, a hit-confirmed sword chain, a barrier that banks damage into your
-super meter, and a three-mode **Saturation** overdrive.
+An original free-flight mecha combat game in **voxels** — momentum flight,
+soft-lock gunnery, a hit-confirmed sword chain, a barrier that banks damage into
+your super meter, and a three-mode **Saturation** overdrive.
 
-Built with TypeScript · Phaser 3 · Vite · Vitest. All art is generated in
-Blender from the scripts in `tools/blender/`; all sound is synthesised at
-runtime. Nothing from the reference material is redistributed.
+The fight is a side-on plane, exactly as it always played, standing in a wide
+three-dimensional voxel drydock and seen from above and in front, the way
+KNOCK//BACK frames its stage. The machines are voxelized from their Blender
+models; the pilots are live voxel busts.
+
+Built with TypeScript · Phaser 3 (interface) · Three.js (the voxel world) ·
+Vite · Vitest. All art is generated from the scripts in `tools/`; all sound is
+synthesised at runtime. Nothing from the reference material is redistributed.
 
 ---
 
@@ -55,16 +60,19 @@ web server.
 
 ## Controls
 
-**Every control is remappable.** Pick `CONTROLS` on the title screen: arrows to
-choose an action, `ENTER` then press the key or pad button you want, `BACKSPACE`
-to unbind, `R` to restore defaults, `ESC` to close. Bindings save automatically
-and persist between sessions.
+**New to it? Pick `TUTORIAL` on the main menu** — a hands-on course, played for
+real against a practice dummy, that walks through every control below one lesson
+at a time, in your own key bindings. See [Tutorial](#tutorial).
+
+**Every control is remappable.** `SETTINGS` → `CONTROLS` on the main menu: arrows
+to choose an action, `ENTER` then press the key or pad button you want,
+`BACKSPACE` to unbind, `R` to restore defaults, `ESC` to close. Bindings save
+automatically and persist between sessions.
 
 Keys are stored by *physical position*, so a binding made on QWERTY stays on the
 same physical key on AZERTY/QWERTZ. Assigning a key that already belongs to
 another action moves it, so nothing is ever double-bound. Each action holds up to
-two keys and two pad buttons — which is how the defaults give you both WASD and
-the arrow keys.
+two keys and two pad buttons.
 
 The defaults below are what you start with; any gamepad works and can be plugged
 or unplugged mid-match.
@@ -73,75 +81,61 @@ or unplugged mid-match.
 
 | Action | Keyboard | Gamepad |
 | --- | --- | --- |
-| Move (8-direction free flight) | `W A S D` or arrows | Left stick / D-pad |
-| **Boost** — hold *with* a direction | `Shift` or `Space` | `RB` / `RT` |
-| **Dash** — tap *with* a direction | `Shift` or `Space` | `RB` / `RT` |
-| **Air brake** — hold with *no* direction | `Shift` or `Space` | `RB` / `RT` |
+| Move (8-direction free flight) | Arrow keys | D-pad / left stick |
+| **Boost** — hold *with* a direction | `Space` | `RB` / `RT` |
+| **Dash** — tap *with* a direction | `Space` | `RB` / `RT` |
+| **Air brake** — hold with *no* direction | `Space` | `RB` / `RT` |
+| Flight mode on/off | `A` | R-stick click |
 
 > One button, three jobs. Dashing spends a chunk of boost, moves you fast, and
 > **cannot guard** — it is a commitment.
+
+**Flight mode.** You start airborne. Toggling flight off drops you to the deck,
+where you walk instead of fly, brace better against damage and refuel boost
+faster; on the deck the boost button jumps. Taking off kicks you upward, and a
+heavy shot takes off automatically.
 
 ### Weapons
 
 | Action | Keyboard | Gamepad |
 | --- | --- | --- |
-| Main gun | `J` | `A` |
-| **Sword / melee** | `U` | `Y` |
-| Heavy shot | `K` | `X` |
-| **Drone — deploy / recall** | `L` | `B` |
-| Flight mode on/off | `C` | R-stick click |
-| Scatter shot | `↓`, `→` + `J` | same motion |
-| Lance beam | `↓`, `←` + `K` | same motion |
-| Drone salvo | `↓`, `→` + `L` | same motion |
+| Main gun (hold to auto-fire) | `Z` | `A` |
+| Heavy shot | `X` | `X` |
+| **Sword / melee** | `C` | `Y` |
+| Scatter shot | `↓` `↘` `→` + `Z` | same motion |
+| Lance beam | `↓` `↙` `←` + `X` | same motion |
+| Drone salvo | `↓` `↘` `→` + `S` | same motion |
+| Switch target (pilot ↔ its drone) | `E` | — |
+| Hold the sword drawn (cosmetic) | `V` | — |
 
-Hold the main gun button to auto-fire. **Melee has its own button** — a swing is
-always a deliberate commitment, and it lunges forward, so it stays useful from
-outside contact range rather than only firing when you happen to be close.
-
-**Flight mode.** You start airborne. Toggling flight off drops you to the deck,
-where you walk instead of fly, brace better against damage, and refuel boost
-faster — but you give up free movement. Taking off kicks you upward, and a heavy
-shot takes off automatically.
+Motions read **forward as toward the rival**, whichever way you face. Weapons
+lock on by themselves; firing anchors you, slowing your flight while you shoot.
+**Melee has its own button** — every swing lunges forward, and a chain continues
+only while each swing connects.
 
 **Your supporter drone.** You do not carry the sub-weapon — a small drone flying
-in formation does, and every machine has its own. HALCYON is escorted by
-**ARBITER**, NOCTURNE by **WARDEN**; all eight are different designs with
-different hit points, different reach and their own passive.
-
-The drone button is a **toggle**, not a fire command. You start with the drone
-deployed. While it is on station it does two things for you: it picks its own
-moments to fire its volley at whatever you are fighting, and its passive is live
-— ARBITER speeds your energy regeneration, WARDEN refills your barrier twice as
-fast, SIGHTLINE makes everything you fire hit harder, and so on. The select
-screen lists each one.
-
-The catch is that a deployed drone can be **shot down, permanently**. It has its
-own small hit-point bar, it takes far fewer hits than a mech, and once it is
-destroyed it is gone for the rest of the match — no passive, no volleys, and the
-button answers with a refusal tone. Recalling it folds it back into your chassis,
-where it is untouchable and slowly repairs, but you give up the passive and the
-free damage while it is away. Both bars are drawn on the drone itself: hit points
-on top, volley readiness below.
-
-The quarter-circle salvo motion still works while the drone is on station, for
-when you want the heavy volley *now* rather than when the drone decides.
+with you does, and every machine has its own (HALCYON's is **ARBITER**,
+NOCTURNE's **WARDEN**; all eight differ in hit points, reach and passive). It
+fights on its own: when its volley charge fills it fires at whatever you are
+fighting, if it is in range, and its passive is live while it is out. It can be
+shot down; it then **rebuilds itself and relaunches**, but its bonus is gone
+until it does. Both bars are drawn on the drone: hit points on top, volley charge
+below. The salvo motion orders a volley *now* — even out of the drone's own
+range — for two missile charges, the pips under your gauges.
 
 ### Defence and meter
 
 | Action | Keyboard | Gamepad |
 | --- | --- | --- |
-| Barrier burst / hold to guard | `F` | `LB` / `LT` |
-| **Activate Saturation** | `E` | R-stick click |
-| Cycle Saturation mode | `Q` or `Tab` | `Select` |
-| Manual aim | — | Right stick |
+| Barrier burst (tap) / guard (hold) | `D` | `LB` / `LT` |
+| Cycle Saturation mode | `Left Shift` | `Select` |
+| **Activate Saturation** | `Q` | L-stick click |
 
 ### System
 
 | Action | Keyboard | Gamepad |
 | --- | --- | --- |
-| Pause | `Esc` or `P` | `Start` |
-| Menus | Arrows / `W` `S`, `Enter` or `J` | D-pad, `A` |
-| Remap controls | Title → `CONTROLS` | — |
+| Pause (the lesson menu, in the tutorial) | `Esc` or `Enter` | `Start` |
 | Debug readout | `F1` | — |
 | Hitbox / hurtbox view | `F2` | — |
 
@@ -217,10 +211,91 @@ the clock expires.
 
 ## Modes
 
+The **title screen** runs a live, silent CPU-vs-CPU fight in the yard behind
+the wordmark — two random machines on EXTREME, a new matchup after every
+knockout. It never touches your last picks.
+
 * **Versus CPU** — you against the rival frame.
+* **Free Orbit** — the fight in three dimensions, from over your shoulder, and
+  every machine transforms; see below.
 * **CPU vs CPU** — both sides driven by the AI; useful for watching balance.
+* **Tutorial** — the hands-on course; see below.
 * **Training** — the rival stays passive until you land the first hit, and the
   clock is effectively disabled.
+
+### Tutorial
+
+`TUTORIAL`, first of the modes on the main menu, is a **hands-on course played
+for real**: a live fight in CATHEDRAL YARD on HALCYON against NOCTURNE as a
+practice dummy. A card along the bottom gives one lesson at a time **in your own
+key bindings** (and pad buttons, with a pad connected), with a bar for the goal;
+the next lesson opens by itself once you have done it. The dummy only acts when a
+lesson needs it — holding still to be shot, firing so you can guard, rushing in
+so you can repel — and nobody can be knocked out until the last lesson, where it
+fights back on EASY.
+
+| # | Section | Lesson | You do |
+| --- | --- | --- | --- |
+| 1–2 | Welcome | The tutorial, reading the gauges | Read; press the main gun |
+| 3 | Movement | Free flight | Fly into three beacons |
+| 4 | Movement | Air brake | Get moving, stop dead with boost and no direction ×3 |
+| 5 | Movement | Boost | Boost for two seconds |
+| 6 | Movement | Dash | Dash four times |
+| 7 | Movement | Flight mode | Land on the deck, take off again |
+| 8 | Weapons | Lock-on and the main gun | Six main-gun hits |
+| 9 | Weapons | Heavy shot | Two heavy hits |
+| 10 | Weapons | The sword | A sword hit |
+| 11 | Weapons | Sword chain | A three-hit chain |
+| 12 | Command motions | Scatter shot | ↓ ↘ → + main gun |
+| 13 | Command motions | Lance beam | ↓ ↙ ← + heavy |
+| 14 | Your drone | The escort | Let your drone fire a volley |
+| 15 | Your drone | Drone salvo | ↓ ↘ → + sub |
+| 16 | Your drone | Switching target | Lock the rival's drone, then the pilot |
+| 17 | Defence | Guard | Guard five shots |
+| 18 | Defence | Barrier burst | Absorb three shots |
+| 19 | Defence | Repel | Burst a sword rush's opening blow |
+| 20 | Saturation | Saturation modes | Cycle the mode three times |
+| 21 | Saturation | Spend it | Activate, then four hits while it lasts |
+| 22 | Final lesson | Spar | Knock the rival down once |
+
+`Esc` opens the lesson menu: skip a lesson, go back, restart it, start over, or
+quit. Only lessons actually done count toward the tally on the last card.
+`src/tests/tutorial.test.ts` plays the whole course through the real simulation
+with scripted button presses, so no lesson can ship that a player cannot finish.
+
+### Free Orbit
+
+`FREE ORBIT` is a **third-person 3D mecha fighter**: the whole CATHEDRAL YARD —
+the deck, the gantry and the air over it — fought from a lock-on camera over
+your pilot's shoulder. Same roster, same weapons, same gauges and the same
+sword sequences as the side-on game, in a volume instead of on a plane. Pick
+your machine, the rival and its skill as for VERSUS CPU.
+
+**Every machine transforms.** Press **TRANSFORM** and it folds into its
+**mobile form** — the frame lies prone, the legs trail into a V tail, the arms
+swing forward so the rifle becomes the nose, and the engines slide aft — and
+flies like an aircraft:
+
+| | Mech form | Mobile form |
+| --- | --- | --- |
+| Movement | ↑ close on the rival · ↓ back off · ← → circle it | ← → turn · ↑ ↓ pitch the nose |
+| Boost | hold with no direction: climb · tap with a direction: dash · hold with a direction: boost | afterburner |
+| Speed | the machine's own | faster cruise that costs no boost |
+| Weapons | everything | the nose gun only (`Sword` or `Heavy` transforms back) |
+| Defence | guard, burst | none — and any hit knocks it back into a mech |
+
+Default keys: arrows move, `Space` boost / dash / climb, `A` transform, `Z`
+fire, `X` heavy (`↓`+`X` while backing off fires the lance), `C` sword — one
+press runs the machine's whole sequence — `S` salvo, `D` guard (tap: burst),
+`Q` Saturation, `Left Shift` Saturation mode, `Esc` pause. Rebinding the
+side-on controls rebinds these too.
+
+Two rules exist only here: a **lock-on lead** on your shots (most of the way to
+where the rival is going), and a **down value** — a long string of gunfire
+knocks the victim down, briefly untouchable, so a stream of fire cannot hold a
+machine forever. The CPU transforms too, to cross long gaps and to break away.
+
+### Rival skill
 
 **Rival skill 1–8** (ROOKIE → LEGEND) changes reaction delay, aggression,
 preferred range and how readily the CPU barriers incoming fire. It never gets
@@ -251,15 +326,19 @@ src/
   mechs/        rig and stat type definitions
   data/         mech definitions (mechs are data, not code)
   ai/           rival CPU — emits the same InputFrame you do
+  orbit/        FREE ORBIT: the 3D simulation and its rival (no Phaser here)
   input/        keyboard + gamepad → InputFrame
-  render/       mech rig renderer, effects, parallax backdrop, textures
+  voxel/        the 3D world: voxel kit, stage, voxel mechs, the yard,
+                effects, projectiles, overlays, pilot busts
+  render/       rig maths and the older sprite renderers
   ui/           HUD and menus
   audio/        procedural Web Audio SFX
   debug/        F1 text readout, F2 hitbox view
-  scenes/       Boot → Title → Battle → Results
+  scenes/       Boot → Title → Battle / Orbit → Results
   tests/        Vitest suites (70 tests)
 assets/
-  sprites/mechs/   20 part PNGs, pivot-centred
+  voxels/          one voxelized chassis per machine (from mechs.blend)
+  sprites/mechs/   part PNGs, pivot-centred (energy blades are voxelized from these)
   arenas/          3 parallax layers
   blender/         editable .blend sources
 tools/blender/     the scripts that generate all art
@@ -276,7 +355,7 @@ the same code path.
 ## Development
 
 ```bash
-npm test           # 70 deterministic combat tests
+npm test           # 732 tests: combat, AI, data, the voxel layer, and the tutorial played through
 npm run test:watch
 npm run typecheck
 npm run dev
@@ -306,6 +385,32 @@ projected bounding box rather than fixed: most parts fit 320px, the beam sabers
 need 448px. `px_per_bu` is identical at every tile size, so a larger tile only
 adds transparent margin and the game still draws every part at origin 0.5,0.5.
 
+### Regenerating the voxel machines
+
+The fight draws `assets/voxels/<mech>.json`, sampled from the Blender models.
+After changing a machine in `mechs.blend`, re-run (headless, read-only — the
+.blend is never saved; under a minute for the roster):
+
+```bash
+"C:/Program Files/Blender Foundation/Blender 5.1/blender.exe" -b assets/blender/mechs.blend   --python tools/blender/voxelize_mechs.py -- --vox 3.0
+```
+
+`--only halcyon,cirrus` limits it to some machines. `--vox` is logical px per
+voxel. `npm test` checks every rig part has voxels and sits on its Blender pivot.
+
+### How the voxel layer fits together
+
+Phaser still draws every screen's interface, on a **transparent** canvas.
+`src/voxel/VoxelStage.ts` owns a Three.js canvas laid exactly underneath it and
+draws whatever 3D view is active: the fight (`BattleView3D`), the select
+screen's machine preview (`VoxelMechDemo`), or the drifting yard behind the menu
+and results screens (`YardBackdrop`). Anything a Phaser scene fills opaque over
+the whole screen hides the 3D layer — use a scrim, or leave a window (the select
+screen cuts one in its background for the preview).
+
+The simulation does not know any of this exists. `src/voxel/World.ts` is the one
+mapping from the fight's plane into the yard.
+
 ### Capturing what the game actually drew
 
 The dev server exposes a screenshot sink. From the browser console:
@@ -323,10 +428,15 @@ game instance, handy for poking at `getScene('Battle').sim`.
 
 ## Known limitations
 
-* At extreme separation the camera hits its zoom-out clamp (0.74) and a pilot can
-  leave the frame; off-screen indicators are planned.
-* Two mechs and one arena — this is the vertical slice, not the full roster.
+* The title screen keeps its painted wordmark and backdrop; every other screen
+  with a world in it is voxel.
+* The voxel layer needs WebGL twice over (Phaser and Three.js each hold a
+  context, plus a small one for the pilot busts). Without it the busts fall
+  back to the painted portraits; the fight itself requires WebGL.
+* One arena, by design.
 * Sound is synthesised and functional rather than characterful.
+* FREE ORBIT is player-vs-CPU only, and the side-on game's machines do not
+  transform (that would change its tuned balance).
 * Mission, arcade and local-versus modes are designed but not yet built; see
   [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
 

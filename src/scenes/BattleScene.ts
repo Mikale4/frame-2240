@@ -4,21 +4,27 @@ import { Difficulty, session } from '../core/Session';
 import { DEMO_FADE_MS } from './TitleScene';
 import { ARC_TETHER_WIDTH, MatchSim, segmentHitsCircle } from '../combat/MatchSim';
 import { MECHS } from '../data/mechs';
+import { randomBackdrop, type BackdropSpec } from './BackdropFight';
 import { TAG_PAIRS, pickTagArrival, pickTagLate } from '../data/tags';
 import { TAG_OPEN_HOLD, TAG_REPLY_GAP, TAG_REPLY_HOLD, TagState } from '../combat/TagPartner';
 import type { MechDef } from '../mechs/MechDef';
 import { RivalAI } from '../ai/RivalAI';
 import { Rng } from '../core/Rng';
 import { InputManager } from '../input/InputManager';
-import { MechRenderer, PART_SCALE, type MechPoseSource } from '../render/MechRenderer';
+import type { MechPoseSource } from '../render/MechRenderer';
 import { thrusterFxFor } from '../render/ThrusterProfiles';
-import { partTexture } from '../render/PartTexture';
-import { Effects } from '../render/Effects';
-import { Backdrop } from '../render/Backdrop';
-import { GroundPlane } from '../render/GroundPlane';
 import { TEX } from '../render/Textures';
-import { ProjectileLayer } from '../render/ProjectileLayer';
-import { createProjectileTextures } from '../render/ProjTextures';
+import * as THREE from 'three';
+import { BattleView3D } from '../voxel/BattleView3D';
+import { VoxelMech } from '../voxel/VoxelMech';
+import { VoxelFx } from '../voxel/VoxelFx';
+import { VoxelProjectiles } from '../voxel/VoxelProjectiles';
+import { Gfx3D } from '../voxel/Gfx3D';
+import { Bloom3D, VoxelDrone } from '../voxel/VoxelProps';
+import { voxelStage } from '../voxel/VoxelStage';
+import { TutorialDirector, keyNames } from '../tutorial/Tutorial';
+import { TutorialPanel } from '../ui/TutorialPanel';
+import { getBindings } from '../input/Bindings';
 import { Hud } from '../ui/Hud';
 import { BanterBox, type Speaker } from '../ui/BanterBox';
 import { SatCutscene } from '../ui/SatCutscene';
@@ -32,39 +38,19 @@ import { DebugOverlay } from '../debug/DebugOverlay';
 import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
 import { DANGER_LIFE_FRACTION, pickBattleCue } from '../audio/MusicBank';
-import { MatchPhase, ProjKind, SAT_MODE_NAMES, SatMode, type InputFrame } from '../combat/types';
+import { Btn, MatchPhase, ProjKind, SAT_MODE_NAMES, SatMode, isPressed, type InputFrame } from '../combat/types';
 import { ELEMENTS, type Element } from '../combat/Status';
 import { DOME_MAX, DroneMode, DECOY_COUNT } from '../combat/Supporter';
 import type { Combatant } from '../combat/Combatant';
-import { clamp, wrapAngle } from '../core/MathUtil';
-import { depthScaleAt, depthSortAt } from '../core/Depth';
+import { clamp } from '../core/MathUtil';
 
 
 /**
- * Camera framing.
- *
- * `CAM_ZOOM_MIN` is low enough to fit the **whole arena** — 2400x1200 against a
- * 960x540 viewport needs 0.34 horizontally and 0.36 vertically once the margins
- * are counted — so there is no separation at which a pilot can be pushed off
- * screen. That was the bug: the old floor of 0.74 could frame about half the
- * arena's width and simply lost whoever was furthest out.
+ * Camera framing now lives in `src/voxel/BattleView3D.ts`, which keeps this
+ * scene's old rules — both pilots fit with a margin on each axis, the HUD band
+ * stays clear, the velocity lead never costs a pilot the frame — and solves a
+ * camera distance instead of a zoom.
  */
-const CAM_ZOOM_MIN = 0.34;
-const CAM_ZOOM_MAX = 1.34;
-/** Clearance kept around each pilot when solving the zoom, in world px. */
-const CAM_MARGIN_X = 190;
-const CAM_MARGIN_Y = 150;
-/** Clearance kept around each pilot when clamping the focus point. */
-const CAM_EDGE = 96;
-/**
- * Screen height across the top that the HUD occupies.
- *
- * Framing solves against the band *below* this rather than the whole viewport,
- * and the view is then pushed down by half of it. Without that, a pilot at the
- * top of the arena is technically on screen and practically invisible behind
- * their own life bar — which is the other half of "barely being seen".
- */
-const CAM_HUD_BAND = 168;
 
 /**
  * Beam-saber bloom geometry, in logical pixels along the blade from the
@@ -89,6 +75,20 @@ const BLADE_GLOW_THICK = 13;
  */
 const DEMO_SECONDS = 20;
 
+/** A sound engine that does nothing, for the silent background fight. */
+const SILENT_SFX = new Proxy({}, { get: () => () => undefined }) as typeof sfx;
+
+/**
+ * How long a background fight runs before the title cuts to a fresh matchup,
+ * and how long a knockout is held first, in seconds.
+ */
+const BACKDROP_SECONDS = 45;
+const BACKDROP_KO_HOLD_S = 2.6;
+
+/** The tutorial's machines: HALCYON to learn on, NOCTURNE as the dummy. */
+const TUTORIAL_PLAYER = 'halcyon';
+const TUTORIAL_FOE = 'nocturne';
+
 /**
  * The playable match.
  *
@@ -103,11 +103,16 @@ export class BattleScene extends Phaser.Scene {
   private input$!: InputManager;
   private hud!: Hud;
   private debug!: DebugOverlay;
-  private effects!: Effects;
-  private thrusterFx!: Effects;
-  private backdrop!: Backdrop;
-  private ground!: GroundPlane;
-  private renderers: MechRenderer[] = [];
+  /**
+   * The voxel yard this match is drawn in. Every world-space thing below lives
+   * in it; Phaser keeps only the interface. See `src/voxel/VoxelStage.ts`.
+   */
+  private view!: BattleView3D;
+  private effects!: VoxelFx;
+  private thrusterFx!: VoxelFx;
+  private renderers: VoxelMech[] = [];
+  /** Every overlay surface this match made, so shutdown can free them all. */
+  private gfx3d: Gfx3D[] = [];
   /**
    * Rigs for the two TAG/ASSIST partners, or null where a side has none.
    *
@@ -116,10 +121,10 @@ export class BattleScene extends Phaser.Scene {
    * index would follow the wrong body the moment one side's partner left while
    * the other's was still out.
    */
-  private tagRenderers: (MechRenderer | null)[] = [null, null];
-  private projLayer!: ProjectileLayer;
-  /** One beam-sword sprite per combatant, shown only while swinging. */
-  private blades: Phaser.GameObjects.Image[] = [];
+  private tagRenderers: (VoxelMech | null)[] = [null, null];
+  private projLayer!: VoxelProjectiles;
+  /** One beam-sword bloom per combatant, shown only while swinging. */
+  private blades: Bloom3D[] = [];
   /**
    * Per side: hold the melee weapon drawn, on purpose, indefinitely.
    *
@@ -129,8 +134,8 @@ export class BattleScene extends Phaser.Scene {
    */
   private weaponHeld: boolean[] = [false, false];
   /** One supporter drone sprite per combatant, plus its readiness ring. */
-  private drones: Phaser.GameObjects.Image[] = [];
-  private droneRings: Phaser.GameObjects.Graphics[] = [];
+  private drones: VoxelDrone[] = [];
+  private droneRings: Gfx3D[] = [];
   /**
    * The `arcTether` wire, one per side.
    *
@@ -139,7 +144,7 @@ export class BattleScene extends Phaser.Scene {
    * completely invisible: a live cable that deals 34 a hit and whose entire skill
    * is where you stand, with no line to stand relative to.
    */
-  private droneTethers: Phaser.GameObjects.Graphics[] = [];
+  private droneTethers: Gfx3D[] = [];
   /**
    * AEGIS's dome, one per side.
    *
@@ -150,7 +155,7 @@ export class BattleScene extends Phaser.Scene {
    * is drawn crisply and at exactly that radius. A player has to be able to see
    * where the wall stops.
    */
-  private droneDomes: Phaser.GameObjects.Graphics[] = [];
+  private droneDomes: Gfx3D[] = [];
   /**
    * Verlet rope points for WARDEN's feed cable, one array per side.
    *
@@ -179,7 +184,7 @@ export class BattleScene extends Phaser.Scene {
    * carrying it is the one that needs to know. The line home is drawn too — a
    * debuff with no visible author teaches nobody to shoot the drone.
    */
-  private paintMarks: Phaser.GameObjects.Graphics[] = [];
+  private paintMarks: Gfx3D[] = [];
   /**
    * The sniper stance's sight line, one per side.
    *
@@ -187,13 +192,13 @@ export class BattleScene extends Phaser.Scene {
    * same trade the dome and the paint reticle already make, and cheaper than
    * branching the render path on a chassis.
    */
-  private sniperMarks: Phaser.GameObjects.Graphics[] = [];
+  private sniperMarks: Gfx3D[] = [];
   /** LAST STAND aura, one per side. Empty on the seven that never trigger it. */
-  private lastStandAuras: Phaser.GameObjects.Graphics[] = [];
+  private lastStandAuras: Gfx3D[] = [];
   /** OVERDRIVE aura, one per side. Also draws the post-burnout blade flare. */
-  private overdriveAuras: Phaser.GameObjects.Graphics[] = [];
+  private overdriveAuras: Gfx3D[] = [];
   /** One per side; only a `decoy` drone ever shows its own. */
-  private decoyGhosts: MechRenderer[] = [];
+  private decoyGhosts: VoxelMech[] = [];
   /** Animation state per projection, keyed by `combatantId * DECOY_COUNT + slot`. */
   private decoyAnim: Record<number, { bobPhase: number; bank: number }> = {};
 
@@ -249,12 +254,35 @@ export class BattleScene extends Phaser.Scene {
   /** Latched once the demo's exit fade has started. */
   private demoEnding = false;
   private worldObjects: Phaser.GameObjects.GameObject[] = [];
+  /**
+   * Set when this match is the silent fight behind the title screen: no HUD,
+   * no sound, no banter, no cut-ins, and it recycles itself into a new
+   * matchup instead of reaching the results table.
+   */
+  private backdrop: BackdropSpec | null = null;
+  private backdropElapsed = 0;
+  private backdropLeaving = false;
+  /** The tutorial's course and its card, in `tutorial` mode only. */
+  private tutorial: TutorialDirector | null = null;
+  private tutorialPanel: TutorialPanel | null = null;
+  /** Scratch vectors for part positions read out of the voxel rigs. */
+  private readonly nozzle = new THREE.Vector3();
+  private readonly bladeA = new THREE.Vector3();
+  private readonly bladeB = new THREE.Vector3();
 
   constructor() {
     super('Battle');
   }
 
-  create(): void {
+  create(data?: { backdrop?: BackdropSpec }): void {
+    this.backdrop = data?.backdrop ?? null;
+    // **Consume the start data.** Phaser keeps a scene's last data and hands it
+    // back to a later `start` that passes none — so without this, the first
+    // real match after the title inherited the title's background fight: no
+    // HUD, two random CPUs, no player.
+    this.sys.settings.data = {};
+    this.backdropElapsed = 0;
+    this.backdropLeaving = false;
     this.finished = false;
     this.paused = false;
     this.accumulator = 0;
@@ -285,8 +313,13 @@ export class BattleScene extends Phaser.Scene {
     this.renderers = [];
     this.weaponHeld = [false, false];
 
-    const playerDef = MECHS[session.playerMech];
-    const enemyDef = MECHS[session.enemyMech];
+    // The tutorial always teaches on HALCYON — the neutral baseline, built to
+    // have one of everything — against NOCTURNE as the practice dummy, whatever
+    // was picked last on the select screen.
+    const bd = this.backdrop;
+    const tut = !bd && session.mode === 'tutorial';
+    const playerDef = MECHS[bd ? bd.player : tut ? TUTORIAL_PLAYER : session.playerMech];
+    const enemyDef = MECHS[bd ? bd.enemy : tut ? TUTORIAL_FOE : session.enemyMech];
 
     /**
      * TAG/ASSIST partners.
@@ -303,7 +336,7 @@ export class BattleScene extends Phaser.Scene {
       // Switched off on the main menu, or training. Either way no def reaches
       // `MatchSim`, which is what actually disables the mechanic — the clock
       // never runs and no body is ever built.
-      if (!session.assists || session.mode === 'training') return null;
+      if (!session.assists || session.mode === 'training' || tut || bd) return null;
       const pair = TAG_PAIRS[mechId];
       if (!pair) return null;
       return MECHS[pair.includes(chosen) ? chosen : pair[0]] ?? null;
@@ -318,17 +351,21 @@ export class BattleScene extends Phaser.Scene {
       enemyTagDef,
       playerTagSkill: session.playerDifficulty,
       enemyTagSkill: session.enemyDifficulty,
-      seed: session.seed(),
+      // A background fight is a different fight every time; a real match keeps
+      // the session's seed so it replays bit-identically.
+      seed: bd ? (Math.random() * 0x7fffffff) | 0 : session.seed(),
       introTicks: 96,
-      roundTicks: session.mode === 'training' ? 99 * 60 * 10 : undefined,
-      dummy: session.mode === 'training',
+      roundTicks: !bd && (session.mode === 'training' || tut) ? 99 * 60 * 10 : undefined,
+      dummy: !bd && (session.mode === 'training' || tut),
     });
 
     // Training's switches survive a restart, so a rig set up once stays set up
     // across rematches. Health is re-asserted here rather than only on selection
     // because a fresh match starts everyone at full.
     this.applyTraining();
-    if (session.mode === 'training') this.setTrainingHealth(session.training.health);
+    if (!bd && session.mode === 'training') this.setTrainingHealth(session.training.health);
+    this.tutorial = tut ? new TutorialDirector(this.sim, session.seed() ^ 0x7a7a) : null;
+    this.tutorialPanel = null;
 
     // Each side runs its own tier. In `aiVsAi` that is the whole point of the
     // mode — an EXTREME rival taking apart an EASY one is a different thing to
@@ -337,16 +374,18 @@ export class BattleScene extends Phaser.Scene {
     const aiSeed = session.seed() ^ 0x9e3779b9;
     this.ai = new RivalAI(
       {
-        difficulty:
-          session.mode === 'training'
+        difficulty: bd
+          ? bd.tier
+          : session.mode === 'training'
             ? (session.training.p2Difficulty as Difficulty)
             : session.enemyDifficulty,
       },
       new Rng(aiSeed),
     );
-    if (session.mode === 'aiVsAi') {
+    this.playerAi = undefined;
+    if (bd || session.mode === 'aiVsAi') {
       this.playerAi = new RivalAI(
-        { difficulty: session.playerDifficulty },
+        { difficulty: bd ? bd.tier : session.playerDifficulty },
         new Rng(aiSeed ^ 0x2545f491),
       );
     }
@@ -360,7 +399,7 @@ export class BattleScene extends Phaser.Scene {
     // number out of that stream to choose music would change the fight itself.
     this.danger = false;
     this.musicDucked = false;
-    music.duck(false);
+    if (!bd) music.duck(false);
     this.battleCue = pickBattleCue(
       {
         mode: session.mode,
@@ -371,119 +410,105 @@ export class BattleScene extends Phaser.Scene {
       Math.random,
     );
     // Idempotent, so a rematch that re-rolls the same track never restarts it.
-    music.play(this.battleCue);
+    // The title owns the soundtrack while its background fight runs.
+    if (!bd) music.play(this.battleCue);
 
     this.input$ = new InputManager(this);
     this.input$.reset();
 
-    this.backdrop = new Backdrop(this);
-    this.ground = new GroundPlane(this);
-    this.effects = new Effects(this, 50);
-    // **Exhaust belongs behind the machine.** One shared layer at depth 50 put
-    // plumes over the chassis, so they read as painted on rather than as coming
-    // out of a nozzle. Impacts and explosions still want to be in front, so
-    // this is a second pool underneath the mechs (20/21) rather than a move.
-    // Three jets per nozzle at full burn, two nozzles, two machines.
-    this.thrusterFx = new Effects(this, 15, 420);
+    // ---- the voxel yard ---------------------------------------------------
+    // Everything world-space is drawn in 3D now; see `src/voxel/`. Phaser keeps
+    // the interface, on a transparent canvas laid exactly over this one.
+    this.gfx3d = [];
+    this.view = new BattleView3D();
+    this.view.orbit = session.demo || !!bd;
+    if (bd) {
+      // Behind the title the fight is a vista, not a match: framed wide, and
+      // clear of the PRESS START band along the bottom.
+      this.view.minDist = 18;
+      this.view.reserveBottom = 110;
+    }
+    const stage = voxelStage();
+    stage.setView(this.view);
+    this.effects = this.view.fx;
+    // One pool for exhaust and impacts: depth is real now, so a plume sits
+    // behind the machine because the nozzle is behind it, not because of a layer.
+    this.thrusterFx = this.view.fx;
+    const gfx = (opts: { z?: number; overlay?: boolean }, add = false): Gfx3D => {
+      const g = new Gfx3D(this.view.overlays, opts);
+      if (add) g.setBlendMode('ADD');
+      this.gfx3d.push(g);
+      return g;
+    };
 
-    this.renderers = [
-      new MechRenderer(this, playerDef, playerDef.id),
-      new MechRenderer(this, enemyDef, enemyDef.id),
-    ];
-    this.renderers[0].setDepth(20);
-    this.renderers[1].setDepth(21);
+    this.renderers = [new VoxelMech(playerDef), new VoxelMech(enemyDef)];
+    for (const r of this.renderers) this.view.mechs.add(r.root);
 
     /**
      * A rig for each TAG/ASSIST partner, built now and hidden until they arrive.
      *
-     * **Built up front rather than on arrival.** `MechRenderer` loads part
-     * textures, and doing that on the frame a partner enters would stall the
-     * one moment the mechanic is trying to sell. They cost two hidden rigs for
-     * the whole match instead, which is the same thing the two pilots already
-     * cost.
-     *
-     * Drawn *behind* both pilots (depth 19): the partner is the guest, and it
-     * must never be the thing obscuring the machine you are steering.
+     * **Built up front rather than on arrival**, so the frame a partner enters
+     * does not also pay for meshing a chassis. They cost two hidden rigs for the
+     * whole match instead, which is the same thing the two pilots already cost.
      */
     this.tagRenderers = [null, null];
     for (let i = 0; i < 2; i++) {
       const def = i === 0 ? playerTagDef : enemyTagDef;
       if (!def) continue;
-      const r = new MechRenderer(this, def, def.id);
-      r.setDepth(19);
-      r.root.setVisible(false);
+      const r = new VoxelMech(def);
+      r.setVisible(false);
+      this.view.mechs.add(r.root);
       this.tagRenderers[i] = r;
     }
 
-    // Projectiles. Three additive layers per shot — see ProjectileLayer.
-    createProjectileTextures(this);
-    this.projLayer = new ProjectileLayer(this);
+    // Projectiles: shell, core and halo per shot — see VoxelProjectiles.
+    this.projLayer = this.view.projectiles;
 
-    for (let i = 0; i < 2; i++) {
-      const blade = this.add.image(0, 0, TEX.streak);
-      blade.setBlendMode(Phaser.BlendModes.ADD);
-      blade.setOrigin(0.5, 0.5);
-      blade.setVisible(false);
-      this.blades.push(blade);
-    }
+    for (let i = 0; i < 2; i++) this.blades.push(new Bloom3D(this.view.overlays));
 
-    // Supporter drones. Drawn one layer under the mechs so a machine never
-    // disappears behind its own escort.
+    // Supporter drones, voxelized from the same Blender objects as the sprites.
     for (const def of [playerDef, enemyDef]) {
-      const dt = partTexture(this, def.id, 'drone');
-      const drone = this.add.image(0, 0, dt.key, dt.frame);
-      drone.setOrigin(0.5, 0.5);
-      drone.setScale(PART_SCALE);
-      this.drones.push(drone);
-      // Under the drone and the mechs: a wire is behind the things it joins.
-      this.droneTethers.push(this.add.graphics());
+      this.drones.push(new VoxelDrone(this.view.mechs, def.id));
+      // Behind the plane a touch: a wire is behind the things it joins.
+      this.droneTethers.push(gfx({ z: -0.05 }, true));
       // Built for every mech and left empty on the six that raise no dome and
       // paint nobody, which is cheaper than branching the render path on a role
       // — the same trade the decoy ghost below already makes.
       //
-      // **Additive**, like the blades, the projectile layer and every effect in
-      // `Effects`. Drawn in NORMAL blend these read as circles someone drew on
-      // the screen; drawn additively they read as light, which is what every
-      // other energy effect in this game already is. It is the single largest
-      // difference between the two, far more than any alpha.
-      const dome = this.add.graphics();
-      dome.setBlendMode(Phaser.BlendModes.ADD);
-      this.droneDomes.push(dome);
+      // **Additive**, like the blades, the projectile layer and every effect:
+      // drawn in NORMAL blend these read as circles someone drew on the screen;
+      // drawn additively they read as light.
+      this.droneDomes.push(gfx({ z: -0.1 }, true));
       this.domeHits.push([]);
       this.tetherRope.push([]);
-      const paint = this.add.graphics();
-      paint.setBlendMode(Phaser.BlendModes.ADD);
-      this.paintMarks.push(paint);
-      const sniper = this.add.graphics();
-      sniper.setBlendMode(Phaser.BlendModes.ADD);
-      this.sniperMarks.push(sniper);
-      const stand = this.add.graphics();
-      stand.setBlendMode(Phaser.BlendModes.ADD);
-      this.lastStandAuras.push(stand);
-      const over = this.add.graphics();
-      over.setBlendMode(Phaser.BlendModes.ADD);
-      this.overdriveAuras.push(over);
-      this.droneRings.push(this.add.graphics());
+      // Reticles and auras are drawn over the machine they mark.
+      this.paintMarks.push(gfx({ z: 0.6, overlay: true }, true));
+      this.sniperMarks.push(gfx({ z: 0.6, overlay: true }, true));
+      this.lastStandAuras.push(gfx({ z: 0.6, overlay: true }, true));
+      this.overdriveAuras.push(gfx({ z: 0.6, overlay: true }, true));
+      this.droneRings.push(gfx({ z: 0.7, overlay: true }));
 
       /**
-       * The decoy silhouette, for a `decoy` drone.
-       *
-       * A ghost of the **whole chassis**, assembled from the same rig the real
-       * machine is drawn from — the first cut used the `core` part alone and was
-       * a floating torso, which fools nobody and looks like a missing asset. It
-       * has to be recognisably NULLTIDE at a glance or the deception has nothing
-       * to trade on.
-       *
-       * Built for every mech and left invisible on the seven that never project
-       * one, which is cheaper than branching the render path on a role.
+       * The decoy silhouette, for a `decoy` drone: a ghost of the **whole
+       * chassis**, built from the same rig the real machine is drawn from. It has
+       * to be recognisably NULLTIDE at a glance or the deception has nothing to
+       * trade on. Built for every mech and left invisible on the seven that never
+       * project one.
        */
-      // One per projection, since NULLTIDE now puts two on the field at once.
-      // Flattened per side into a fixed-stride array: side `i` owns
-      // `[i * DECOY_COUNT, i * DECOY_COUNT + DECOY_COUNT)`.
       for (let k = 0; k < DECOY_COUNT; k++) this.decoyGhosts.push(this.buildDecoyRenderer(def));
     }
 
     this.hud = new Hud(this, this.sim);
+    if (this.tutorial) {
+      const pad = !!this.input.gamepad && this.input.gamepad.total > 0;
+      this.tutorialPanel = new TutorialPanel(
+        this,
+        this.tutorial,
+        keyNames(getBindings(), pad),
+        gfx({ z: 0.4, overlay: true }, true),
+      );
+      this.view.reserveBottom = this.tutorialPanel.height + 8;
+    }
 
     // Pilot banter. The boxes sit in the bottom corners, on the same side as
     // their owner's gauges, so who is speaking is legible without reading.
@@ -496,7 +521,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.cutscene = new SatCutscene(this, TEX.streak);
 
-    this.debug = new DebugOverlay(this, this.sim, this.ai);
+    this.debug = new DebugOverlay(this, this.sim, this.ai, gfx({ z: 0.8, overlay: true }));
 
     // **No bounds.** Phaser clamps scroll to the camera bounds, and once the
     // zoom drops below ~0.45 the view is taller and wider than the arena — so
@@ -516,61 +541,56 @@ export class BattleScene extends Phaser.Scene {
     this.uiCam.setName('ui');
     this.uiCam.setScroll(0, 0);
 
-    this.worldObjects = [
-      ...this.backdrop.objects,
-      ...this.ground.objects,
-      ...this.renderers.map((r) => r.root),
-      // Partners are world-space rigs like any other. Left out of this list the
-      // UI camera draws a second copy of each in screen space — §8c.
-      ...this.tagRenderers.flatMap((r) => (r ? [r.root] : [])),
-      ...this.projLayer.objects,
-      ...this.blades,
-      ...this.droneTethers,
-      ...this.droneDomes,
-      ...this.drones,
-      ...this.droneRings,
-      ...this.paintMarks,
-      // **Required, not optional.** Anything drawn in world space that is not in
-      // this list is rendered by the UI camera as well — at zoom 1 and unscrolled
-      // — so it appears a second time, larger and somewhere else entirely. The
-      // sniper brackets shipped without it and read as a stray empty target box
-      // floating in the middle of the arena. `docs/TESTING_PROTOCOL.md` §4.7
-      // records this trap; it caught the next person anyway.
-      ...this.sniperMarks,
-      // Same rule as every other world-space Graphics: in this list or the UI
-      // camera draws a second copy of it somewhere else. See D107.
-      ...this.lastStandAuras,
-      ...this.overdriveAuras,
-      ...this.decoyGhosts.map((r) => r.root),
-      this.effects.container,
-      this.thrusterFx.container,
-      ...this.debug.worldObjects,
-    ];
+    // Nothing in the fight is a Phaser object any more except the debug
+    // fallback; the list stays so the UI camera never draws a world copy.
+    this.worldObjects = [...this.debug.worldObjects];
     const uiObjects = [
       this.hud.container,
       ...this.banter.flatMap((b) => b.objects),
       ...this.cutscene.objects,
       ...this.debug.uiObjects,
+      ...(this.tutorialPanel ? this.tutorialPanel.objects : []),
     ];
     this.cameras.main.ignore(uiObjects);
     this.uiCam.ignore(this.worldObjects);
     // **The whole interface lives on this camera**, so an attract demo hides it
     // in one call rather than by tracking every HUD object individually — and
     // anything added later is hidden by construction instead of by remembering.
-    if (session.demo) {
+    this.view.fade = 0;
+    if (bd) {
+      // Behind the title: the fight, and nothing that belongs to a player.
+      this.uiCam.setVisible(false);
+      // Faded on the voxel view itself (`BattleView3D.fade`).
+      this.view.fade = 1;
+      this.tweens.add({ targets: this.view, fade: 0, duration: DEMO_FADE_MS });
+    } else if (session.demo) {
       this.uiCam.setVisible(false);
       this.cameras.main.fadeIn(DEMO_FADE_MS, 0, 0, 0);
     }
 
     this.hud.banner('READY', 60);
-    sfx.matchReady();
+    this.sfx.matchReady();
 
     // Losing focus should not bank up a huge catch-up burst. See `onBlur` for
     // why only one mode also pauses.
     this.game.events.on(Phaser.Core.Events.BLUR, this.onBlur, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.game.events.off(Phaser.Core.Events.BLUR, this.onBlur, this);
+      this.disposeVoxels();
     });
+  }
+
+  /** Frees everything this match put into the voxel yard. The yard itself stays. */
+  private disposeVoxels(): void {
+    for (const r of [...this.renderers, ...this.decoyGhosts]) r.destroy();
+    for (const r of this.tagRenderers) r?.destroy();
+    for (const d of this.drones) d.destroy();
+    for (const b of this.blades) b.destroy();
+    for (const g of this.gfx3d) g.destroy();
+    this.gfx3d = [];
+    this.view.dispose();
+    const stage = voxelStage();
+    if (stage.active === this.view) stage.setView(null);
   }
 
   /**
@@ -590,7 +610,7 @@ export class BattleScene extends Phaser.Scene {
    */
   private onBlur(): void {
     this.accumulator = 0;
-    if (session.mode !== 'vsCpu') return;
+    if (this.backdrop || session.mode !== 'vsCpu') return;
     if (!this.paused && !this.finished) this.openPause();
   }
 
@@ -598,6 +618,10 @@ export class BattleScene extends Phaser.Scene {
 
   private openPause(): void {
     if (this.paused) return;
+    if (this.tutorial) {
+      this.openLessonMenu(this.tutorial);
+      return;
+    }
     this.paused = true;
     const training = session.mode === 'training';
     const scrim = makeScrim(this);
@@ -637,6 +661,49 @@ export class BattleScene extends Phaser.Scene {
     this.pauseUi = { scrim, menu, extra: [title, hint] };
   }
 
+  /**
+   * The tutorial's pause menu: move between lessons or leave.
+   *
+   * Skipping is always allowed — someone who already knows how to dash should
+   * not be held hostage by the dash lesson — but only lessons actually done
+   * count toward the tally on the last card.
+   */
+  private openLessonMenu(t: TutorialDirector): void {
+    this.paused = true;
+    // The card would sit under the menu's footer; the menu says where you are.
+    this.tutorialPanel?.container.setVisible(false);
+    const scrim = makeScrim(this);
+    const title = bigTitle(this, 'TUTORIAL', 120, 40, '#eaf2ff');
+    const where = t.done
+      ? 'COURSE COMPLETE'
+      : `LESSON ${t.index + 1} OF ${t.count} · ${t.lesson.title}`;
+    const sub = smallText(this, where, VIEW_W / 2, 160, 13, '#8fe9ff');
+    const hint = smallText(this, 'ESC resumes', VIEW_W / 2, VIEW_H - 40, 12, '#63748c');
+    const go = (fn: () => void): (() => void) => () => {
+      fn();
+      this.closePause();
+    };
+    const rows: MenuItem[] = [
+      { label: 'RESUME', onSelect: () => this.closePause() },
+      {
+        label: 'SKIP THIS LESSON',
+        disabled: t.done,
+        onSelect: go(() => t.next()),
+      },
+      {
+        label: 'PREVIOUS LESSON',
+        disabled: t.index === 0 && !t.done,
+        onSelect: go(() => (t.done ? t.open(t.count - 1) : t.back())),
+      },
+      { label: 'RESTART LESSON', disabled: t.done, onSelect: go(() => t.restart()) },
+      { label: 'START OVER', onSelect: go(() => t.open(0)) },
+      { label: 'QUIT TUTORIAL', onSelect: () => this.scene.start('Menu') },
+    ];
+    const menu = new Menu(this, rows, VIEW_W / 2, 210, { size: 22, gap: 34, maxVisible: 7 });
+    this.cameras.main.ignore([scrim, title, sub, hint, menu.container]);
+    this.pauseUi = { scrim, menu, extra: [title, sub, hint] };
+  }
+
   // ---------------------------------------------------------------- training
 
   /**
@@ -648,7 +715,7 @@ export class BattleScene extends Phaser.Scene {
    * every hit the player had taken since, which is the opposite of a drill.
    */
   private applyTraining(): void {
-    if (session.mode !== 'training') return;
+    if (this.backdrop || session.mode !== 'training') return;
     this.sim.dronesEnabled = session.training.drones;
     for (const c of this.sim.combatants) c.satFree = session.training.infiniteSat;
   }
@@ -753,6 +820,7 @@ export class BattleScene extends Phaser.Scene {
   private closePause(): void {
     this.closeCommands();
     this.paused = false;
+    this.tutorialPanel?.container.setVisible(true);
     if (this.pauseUi) {
       this.pauseUi.scrim.destroy();
       this.pauseUi.menu.destroy();
@@ -807,7 +875,22 @@ export class BattleScene extends Phaser.Scene {
   // -------------------------------------------------------------------- loop
 
   override update(_time: number, delta: number): void {
+    this.updateFrame(delta);
+    // The yard is drawn after everything has been posed, every frame — paused
+    // or not, so a pause menu sits over the fight rather than over black.
+    const stage = voxelStage();
+    if (stage.active === this.view) {
+      this.view.prepare();
+      stage.render();
+    }
+  }
+
+  private updateFrame(delta: number): void {
     const dt = Math.min(delta, 100) / 1000;
+    if (this.backdrop) {
+      this.updateBackdrop(delta, dt);
+      return;
+    }
     const ui = this.input$.readUi();
 
     // The soundtrack steps aside for anything that wants to be heard over it:
@@ -881,6 +964,53 @@ export class BattleScene extends Phaser.Scene {
   }
 
   /**
+   * The title's background fight: no input, no pause, no clock but its own.
+   *
+   * Steps the simulation and draws, and after `BACKDROP_SECONDS` — or a
+   * knockout — fades out and hands over to a fresh matchup. The title stops
+   * this scene when the player presses start.
+   */
+  private updateBackdrop(delta: number, dt: number): void {
+    this.backdropElapsed += delta / 1000;
+    this.accumulator += Math.min(delta, 100);
+    let steps = 0;
+    while (this.accumulator >= TICK_MS && steps < 6) {
+      this.accumulator -= TICK_MS;
+      steps++;
+      this.stepSim();
+    }
+    if (this.accumulator > TICK_MS * 6) this.accumulator = 0;
+    if (this.backdropElapsed >= BACKDROP_SECONDS && !this.finished) {
+      this.finished = true;
+      this.nextBackdrop();
+    }
+    this.render(dt);
+  }
+
+  /** Fades the background fight out and starts the next one. */
+  private nextBackdrop(): void {
+    if (this.backdropLeaving || !this.backdrop) return;
+    this.backdropLeaving = true;
+    this.tweens.add({
+      targets: this.view,
+      fade: 1,
+      duration: DEMO_FADE_MS,
+      onComplete: () => this.scene.restart({ backdrop: randomBackdrop() }),
+    });
+  }
+
+  /** The sound engine — or a silent one, behind the title. */
+  private get sfx(): typeof sfx {
+    return this.backdrop ? SILENT_SFX : sfx;
+  }
+
+  /** The saturation cut-in stops the fight; behind the title it never plays. */
+  private playCutscene(opts: Parameters<SatCutscene['play']>[0]): void {
+    if (this.backdrop) return;
+    this.cutscene.play(opts);
+  }
+
+  /**
    * Hands the soundtrack over to `battle_danger` when either pilot drops under a
    * quarter life.
    *
@@ -893,7 +1023,7 @@ export class BattleScene extends Phaser.Scene {
    * practice track for a last-stand one because you shot a target is nonsense.
    */
   private checkDanger(): void {
-    if (this.danger || this.battleCue === null || session.mode === 'training') return;
+    if (this.danger || this.battleCue === null || session.mode === 'training' || this.tutorial || this.backdrop) return;
     const s = this.sim;
     const low = (c: Combatant): boolean =>
       c.life / c.def.gauges.maxLife < DANGER_LIFE_FRACTION && c.life > 0;
@@ -906,7 +1036,7 @@ export class BattleScene extends Phaser.Scene {
     const s = this.sim;
 
     let playerInput: InputFrame;
-    if (session.mode === 'aiVsAi' && this.playerAi) {
+    if ((this.backdrop || session.mode === 'aiVsAi') && this.playerAi) {
       playerInput = this.playerAi.think(s.player, s.enemy, s.activeProjectiles(), ARENA_W, ARENA_H);
     } else {
       playerInput = this.input$.read();
@@ -916,7 +1046,10 @@ export class BattleScene extends Phaser.Scene {
     // once, which is not a training mode. It is a dummy running whatever script
     // the pause menu set, unless the slot has been handed to a real CPU.
     let enemyInput: InputFrame;
-    if (session.mode === 'training') {
+    if (this.tutorial) {
+      // The lesson decides what the dummy does: nothing, shoot, rush, or fight.
+      enemyInput = this.tutorial.foeInput();
+    } else if (!this.backdrop && session.mode === 'training') {
       enemyInput =
         session.training.p2 === 'cpu'
           ? this.ai.think(s.enemy, s.player, s.activeProjectiles(), ARENA_W, ARENA_H)
@@ -929,17 +1062,27 @@ export class BattleScene extends Phaser.Scene {
     const wasDowns = s.playerDowns;
     s.step(playerInput, enemyInput);
 
+    if (this.tutorial) {
+      this.tutorial.afterStep(playerInput);
+      // The course is over and the card says how to leave.
+      if (this.tutorial.done && isPressed(playerInput, Btn.Main) && !this.finished) {
+        this.finished = true;
+        this.scene.start('Menu');
+        return;
+      }
+    }
+
     // A revive hands back a full bar, which would quietly undo a rig set to 25 %
     // — and 25 % is chosen precisely to sit inside desperation, so silently
     // restoring it turns the drill into a different one. Re-assert it on the way
     // back up, not every tick: doing it continuously would erase every hit taken.
-    if (session.mode === 'training' && s.playerDowns > wasDowns) {
+    if (!this.backdrop && session.mode === 'training' && s.playerDowns > wasDowns) {
       this.setTrainingHealth(session.training.health);
     }
 
     if (wasPhase === MatchPhase.Intro && s.phase === MatchPhase.Fight) {
       this.hud.banner('FIGHT', 70);
-      sfx.matchFight();
+      this.sfx.matchFight();
       this.openConversation();
     }
 
@@ -948,6 +1091,12 @@ export class BattleScene extends Phaser.Scene {
     this.drainBanterQueue();
     this.tickTagReplies();
 
+    if (s.phase === MatchPhase.Over && !this.finished && this.backdrop) {
+      // Behind the title a knockout is held for a beat — the explosion is the
+      // best shot the fight has — and then the title cuts to a new matchup.
+      this.finished = true;
+      this.time.delayedCall(BACKDROP_KO_HOLD_S * 1000, () => this.nextBackdrop());
+    }
     if (s.phase === MatchPhase.Over && !this.finished) {
       this.finished = true;
       session.lastOutcome = s.outcome;
@@ -971,6 +1120,7 @@ export class BattleScene extends Phaser.Scene {
    * same dialogue.
    */
   private speak(id: number, trigger: BanterTrigger, once = false): void {
+    if (this.tutorial || this.backdrop) return;
     const box = this.banter[id];
     if (!box) return;
     const key = `${id}:${trigger}`;
@@ -992,6 +1142,7 @@ export class BattleScene extends Phaser.Scene {
    * round while its 36 new matchups are being written.
    */
   private openConversation(): void {
+    if (this.tutorial || this.backdrop) return;
     const s = this.sim;
     const convo = pickConversation(s.player.def.id, s.enemy.def.id, this.banterRng.next());
     if (!convo) {
@@ -1043,7 +1194,7 @@ export class BattleScene extends Phaser.Scene {
     const partnerId = this.partnerIdFor(ownerId);
     const partner = partnerId ? MECHS[partnerId] : null;
     if (!owner || !partner) return;
-    this.cutscene.play({
+    this.playCutscene({
       portraitKey: `pilot_${partner.id}_thumb`,
       pilot: partner.pilot,
       mode: SatMode.Speed,
@@ -1141,6 +1292,9 @@ export class BattleScene extends Phaser.Scene {
 
   /** Queues a pilot's own generic line for a trigger. */
   private queueLine(id: number, trigger: BanterTrigger): void {
+    // The tutorial's card is the only voice in the room; behind the title there
+    // is no room at all.
+    if (this.tutorial || this.backdrop) return;
     const c = this.byId(id);
     if (!c) return;
     const line = pickBanter(c.def.id, trigger, this.banterRng.next());
@@ -1195,10 +1349,10 @@ export class BattleScene extends Phaser.Scene {
           const tint = owner?.def.tint.thruster ?? 0xffffff;
           if (ev.family) this.effects.muzzleFor(ev.x, ev.y, ev.angle, ev.family, tint);
           else this.effects.muzzle(ev.x, ev.y, ev.angle, ev.kind, tint);
-          if (ev.kind === ProjKind.Beam) sfx.beam();
-          else if (ev.kind === ProjKind.Heavy) sfx.shootHeavy();
-          else if (ev.kind === ProjKind.Missile) sfx.missile();
-          else if (ev.kind !== ProjKind.Melee) sfx.shootLight(owner?.def.id);
+          if (ev.kind === ProjKind.Beam) this.sfx.beam();
+          else if (ev.kind === ProjKind.Heavy) this.sfx.shootHeavy();
+          else if (ev.kind === ProjKind.Missile) this.sfx.missile();
+          else if (ev.kind !== ProjKind.Melee) this.sfx.shootLight(owner?.def.id);
           this.shake = Math.max(this.shake, ev.kind === ProjKind.Beam ? 3.2 : ev.kind === ProjKind.Heavy ? 1.8 : 0.5);
           break;
         }
@@ -1213,8 +1367,8 @@ export class BattleScene extends Phaser.Scene {
             this.effects.hit(ev.x, ev.y, ev.kind, tint);
           }
           const heavy = ev.kind === ProjKind.Melee || ev.kind === ProjKind.Beam || ev.kind === ProjKind.Heavy;
-          if (heavy) sfx.heavyHit();
-          else sfx.hit();
+          if (heavy) this.sfx.heavyHit();
+          else this.sfx.hit();
           this.speak(ev.ownerId, 'firstHit', true);
           this.shake = Math.max(this.shake, heavy ? 6.5 : 2.4);
           const idx = ev.victimId === s.player.id ? 0 : 1;
@@ -1223,12 +1377,12 @@ export class BattleScene extends Phaser.Scene {
         }
         case 'guard':
           this.effects.guard(ev.x, ev.y, 0xc08cff);
-          sfx.guard();
+          this.sfx.guard();
           this.shake = Math.max(this.shake, 1.6);
           break;
         case 'absorb': {
           this.effects.absorb(ev.x, ev.y, 0x7ce7ff);
-          sfx.absorb();
+          this.sfx.absorb();
           // Flare the dome's rim where the round actually met it. `absorb` is
           // also raised by the interceptor and by a barrier, so this is gated on
           // the role rather than on the event: only a dome has a rim to light.
@@ -1252,7 +1406,7 @@ export class BattleScene extends Phaser.Scene {
           this.effects.guardBreak(ev.x, ev.y);
           this.effects.explode(ev.x, ev.y, false, tint);
           this.shake = Math.max(this.shake, 5);
-          sfx.guardBreak();
+          this.sfx.guardBreak();
           if (c) this.hud.banner(`${c.def.supporter.name} DOWN`, 34);
           break;
         }
@@ -1271,21 +1425,21 @@ export class BattleScene extends Phaser.Scene {
           this.effects.barrier(ev.x, ev.y, 120, 0xffffff);
           this.effects.guardBreak(ev.x, ev.y);
           this.shake = Math.max(this.shake, 5.5);
-          sfx.guardBreak();
+          this.sfx.guardBreak();
           if (c) this.hud.banner('BREAKER', 30);
           break;
         }
         case 'barrier': {
           const c = this.byId(ev.id);
           this.effects.barrier(ev.x, ev.y, c?.def.barrier.radius ?? 46, 0x8fe6ff);
-          sfx.barrier();
+          this.sfx.barrier();
           break;
         }
         case 'meleeRepel': {
           const d = this.byId(ev.id);
           this.effects.barrier(ev.x, ev.y, d?.def.barrier.radius ?? 46, 0x9fe6ff);
           this.effects.guardBreak(ev.x, ev.y);
-          sfx.guardBreak();
+          this.sfx.guardBreak();
           this.shake = Math.max(this.shake, 12);
           if (ev.id === s.player.id) this.hud.banner('REPEL', 50);
           break;
@@ -1293,19 +1447,19 @@ export class BattleScene extends Phaser.Scene {
         case 'guardBreak':
           this.speak(ev.id, 'guardBroken');
           this.effects.guardBreak(ev.x, ev.y);
-          sfx.guardBreak();
+          this.sfx.guardBreak();
           this.shake = Math.max(this.shake, 8);
           break;
         case 'dash': {
           const c = this.byId(ev.id);
           this.effects.dash(ev.x, ev.y, ev.angle, c?.def.tint.thruster ?? 0x74d6ff, c?.def.rig.scale ?? 1);
-          sfx.dash();
+          this.sfx.dash();
           break;
         }
         case 'melee': {
           const c = this.byId(ev.id);
           this.effects.melee(ev.x, ev.y, ev.angle, ev.stage, c?.def.tint.accent ?? 0xffffff);
-          sfx.melee(ev.stage, c?.def.meleeCue ?? 'blade');
+          this.sfx.melee(ev.stage, c?.def.meleeCue ?? 'blade');
           break;
         }
         case 'assist': {
@@ -1317,9 +1471,9 @@ export class BattleScene extends Phaser.Scene {
           // it gets the quiet cue and no banner. Only a salvo the pilot demanded
           // is worth interrupting the screen for.
           if (ev.auto) {
-            sfx.assistFire();
+            this.sfx.assistFire();
           } else {
-            sfx.assist();
+            this.sfx.assist();
             if (ev.ownerId === s.player.id) this.hud.banner(c?.def.supporter.name ?? 'ASSIST', 34);
           }
           break;
@@ -1327,7 +1481,7 @@ export class BattleScene extends Phaser.Scene {
         case 'droneDeploy': {
           const c = this.byId(ev.ownerId);
           this.effects.dash(ev.x, ev.y, 0, c?.def.tint.thruster ?? 0x74d6ff, c?.def.rig.scale ?? 1);
-          sfx.assist();
+          this.sfx.assist();
           if (ev.ownerId === s.player.id) {
             this.hud.banner(`${c?.def.supporter.name ?? 'DRONE'} DEPLOY`, 36);
           }
@@ -1336,7 +1490,7 @@ export class BattleScene extends Phaser.Scene {
         case 'droneRecall': {
           const c = this.byId(ev.ownerId);
           this.effects.guard(ev.x, ev.y, c?.def.tint.accent ?? 0x8494ad);
-          sfx.droneRecall();
+          this.sfx.droneRecall();
           if (ev.ownerId === s.player.id) {
             this.hud.banner(`${c?.def.supporter.name ?? 'DRONE'} RECALL`, 36);
           }
@@ -1345,7 +1499,7 @@ export class BattleScene extends Phaser.Scene {
         case 'droneHit': {
           const c = this.byId(ev.ownerId);
           this.effects.hit(ev.x, ev.y, ProjKind.Bullet, c?.def.tint.glow ?? 0xffd166);
-          sfx.hit();
+          this.sfx.hit();
           break;
         }
         case 'overdrive': {
@@ -1358,15 +1512,15 @@ export class BattleScene extends Phaser.Scene {
            */
           const c = this.byId(ev.id);
           this.shake = Math.max(this.shake, 10);
-          sfx.saturation();
-          sfx.beam();
+          this.sfx.saturation();
+          this.sfx.beam();
           if (c) {
             // One burst per mode, fanned in time, so it reads as three things
             // firing at once rather than one bigger flash.
             for (const mode of [SatMode.Shield, SatMode.Shoot, SatMode.Speed]) {
               this.effects.saturationBurst(c.x, c.y, mode, c.def.tint.accent, c.facing);
             }
-            this.cutscene.play({
+            this.playCutscene({
               portraitKey: `pilot_${c.def.id}_thumb`,
               pilot: c.def.pilot,
               mode: SatMode.Speed,
@@ -1394,14 +1548,14 @@ export class BattleScene extends Phaser.Scene {
            */
           const c = this.byId(ev.id);
           this.shake = Math.max(this.shake, 14);
-          sfx.satBurnout();
-          sfx.guardBreak();
+          this.sfx.satBurnout();
+          this.sfx.guardBreak();
           if (c) {
             this.effects.guardBreak(c.x, c.y);
             this.effects.explode(c.x, c.y, true, c.def.tint.accent);
             // The blade lights: the energy goes somewhere, and it goes there.
             this.effects.melee(c.x, c.y, c.aim, 2, c.def.tint.glow);
-            this.cutscene.play({
+            this.playCutscene({
               portraitKey: `pilot_${c.def.id}_thumb`,
               pilot: c.def.pilot,
               mode: SatMode.Speed,
@@ -1429,12 +1583,12 @@ export class BattleScene extends Phaser.Scene {
            */
           const c = this.byId(ev.id);
           this.shake = Math.max(this.shake, 9);
-          sfx.guardBreak();
-          sfx.saturation();
+          this.sfx.guardBreak();
+          this.sfx.saturation();
           if (c) {
             this.effects.saturationBurst(c.x, c.y, SatMode.Shield, c.def.tint.accent, c.facing);
             this.effects.guardBreak(c.x, c.y);
-            this.cutscene.play({
+            this.playCutscene({
               portraitKey: `pilot_${c.def.id}_thumb`,
               pilot: c.def.pilot,
               mode: SatMode.Shield,
@@ -1454,7 +1608,7 @@ export class BattleScene extends Phaser.Scene {
           // mattering again, so it gets its own beat rather than silently
           // lapsing.
           this.hud.banner('EXPOSED', 70);
-          sfx.satBurnout();
+          this.sfx.satBurnout();
           break;
         }
 
@@ -1468,7 +1622,7 @@ export class BattleScene extends Phaser.Scene {
            * teaches nothing. The burst is already queued by the sim as a small
            * `explode`; this adds the sound and a brief flash at the same point.
            */
-          sfx.absorb();
+          this.sfx.absorb();
           const owner = this.byId(ev.ownerId);
           this.effects.absorb(ev.x, ev.y, owner?.def.tint.glow ?? 0x9be7ff);
           this.shake = Math.max(this.shake, 1.2);
@@ -1493,7 +1647,7 @@ export class BattleScene extends Phaser.Scene {
           if (d) {
             this.effects.saturation(ev.x, ev.y, d.tint);
             // Each element has its own cue; the name doubles as the cue suffix.
-            sfx.status(d.name.toLowerCase());
+            this.sfx.status(d.name.toLowerCase());
             if (ev.victimId === s.enemy.id) this.hud.banner(d.name, 34);
           }
           break;
@@ -1501,7 +1655,7 @@ export class BattleScene extends Phaser.Scene {
         case 'assistDenied': {
           // Refusals have to be audible, or a dead button feels like a bug.
           this.effects.guard(ev.x, ev.y, 0x8494ad);
-          sfx.assistDenied();
+          this.sfx.assistDenied();
           break;
         }
         case 'tagCall': {
@@ -1530,11 +1684,11 @@ export class BattleScene extends Phaser.Scene {
                   : c.def.tint.thruster;
             this.effects.saturationBurst(c.x, c.y, ev.mode, tint, c.facing);
           }
-          sfx.saturation();
+          this.sfx.saturation();
           // The line goes in the cutscene, which has room for it, rather than
           // into the corner box where it would be buried under the flash.
           if (c) {
-            this.cutscene.play({
+            this.playCutscene({
               portraitKey: `pilot_${c.def.id}_thumb`,
               pilot: c.def.pilot,
               mode: ev.mode,
@@ -1559,7 +1713,7 @@ export class BattleScene extends Phaser.Scene {
         case 'satBurnout': {
           this.speak(ev.id, 'burnout');
           this.effects.satBurnout(ev.x, ev.y);
-          sfx.satBurnout();
+          this.sfx.satBurnout();
           // An overheat is a real punish, not a stumble: it hits harder on
           // screen so the player connects the damage to the gamble.
           this.shake = Math.max(this.shake, ev.overheat ? 13 : 5);
@@ -1570,17 +1724,17 @@ export class BattleScene extends Phaser.Scene {
           break;
         }
         case 'modeCycle':
-          sfx.modeCycle();
+          this.sfx.modeCycle();
           break;
         case 'explode':
           this.effects.explode(ev.x, ev.y, ev.big, 0xffa24a);
-          sfx.explode(ev.big);
+          this.sfx.explode(ev.big);
           this.shake = Math.max(this.shake, ev.big ? 16 : 5);
           break;
         case 'takeoff': {
           const c = this.byId(ev.id);
           this.effects.dash(ev.x, ev.y + 24, Math.PI / 2, c?.def.tint.thruster ?? 0x74d6ff);
-          sfx.takeoff();
+          this.sfx.takeoff();
           break;
         }
         case 'land': {
@@ -1590,12 +1744,12 @@ export class BattleScene extends Phaser.Scene {
             this.effects.thruster(ev.x, ev.y + 20, dir, 0.8, c?.def.tint.accent ?? 0xffd166);
           }
           this.effects.guard(ev.x, ev.y + 22, 0xbfa88a);
-          sfx.land();
+          this.sfx.land();
           this.shake = Math.max(this.shake, 2.4);
           break;
         }
         case 'ko': {
-          sfx.ko();
+          this.sfx.ko();
           this.hud.banner('K.O.', 110);
           this.speak(ev.id, 'lose');
           const victor = s.combatants.find((x) => x.id !== ev.id);
@@ -1630,9 +1784,10 @@ export class BattleScene extends Phaser.Scene {
    * synthesised state means the projection animates by construction and cannot
    * drift out of step when the real rig gains a behaviour.
    */
-  private buildDecoyRenderer(def: (typeof MECHS)[string]): MechRenderer {
-    const r = new MechRenderer(this, def, def.id);
-    r.setDepth(17);
+  private buildDecoyRenderer(def: (typeof MECHS)[string]): VoxelMech {
+    const r = new VoxelMech(def);
+    r.setVisible(false);
+    this.view.mechs.add(r.root);
     return r;
   }
 
@@ -2054,15 +2209,12 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    const dz = depthScaleAt(s.y);
+    // The bars below are sized in sim px; the yard's perspective does the rest.
+    const dz = 1;
     sprite.setVisible(true);
-    sprite.setPosition(s.x, s.y);
     // Modelled nose-along +x; mirror rather than spin past vertical so the
     // drone never flies upside down.
-    sprite.setScale(PART_SCALE * dz * s.facing, PART_SCALE * dz);
-    sprite.setRotation(s.facing > 0 ? s.aim : wrapAngle(Math.PI - s.aim));
-    // A layer under the mechs, so an escort never hides its own machine.
-    sprite.setDepth(depthSortAt(s.y, 18));
+    sprite.setPose(s.x, s.y, s.facing, s.aim, dt);
 
     // **No plume on the escort.** It used to trail one whenever it was working
     // to keep up, which was fine while the effect was a small dim puff and is
@@ -2097,7 +2249,6 @@ export class BattleScene extends Phaser.Scene {
     const by = hpY + h + 2 * dz;
 
     ring.setVisible(true);
-    ring.setDepth(depthSortAt(s.y, 19));
     ring.clear();
 
     // Hit points.
@@ -2399,18 +2550,12 @@ export class BattleScene extends Phaser.Scene {
     // ---- camera ----------------------------------------------------------
     const p = s.player;
     const e = s.enemy;
-    const cam = this.cameras.main;
 
-    // ---- zoom: solve for the framing rather than guess at it ---------------
+    // ---- framing: solved, not guessed ---------------------------------------
     //
-    // This used to be `1.34 - dist / 2400` clamped at 0.74, which is a curve
-    // fitted to a feeling rather than to the viewport. It framed the common case
-    // and lost pilots at the edges: separation was measured as a single hypot,
-    // so a purely vertical split barely zoomed out at all, and the 0.74 floor
-    // could not fit the arena's width however far apart the two got.
-    //
-    // Now it computes the zoom that actually fits both machines plus a margin,
-    // on each axis independently, and takes the tighter of the two.
+    // The 2D camera once used a zoom curve fitted to a feeling and lost pilots
+    // at the edges; it was replaced by a zoom solved on each axis independently.
+    // The voxel camera keeps that rule and solves a *distance* instead.
     /**
      * Everything the frame has to contain.
      *
@@ -2450,71 +2595,15 @@ export class BattleScene extends Phaser.Scene {
     for (const t of s.tags) {
       if (t.body && t.state === TagState.Present) pts.push({ x: t.body.x, y: t.body.y });
     }
-    const minX = Math.min(...pts.map((q) => q.x));
-    const maxX = Math.max(...pts.map((q) => q.x));
-    const minY = Math.min(...pts.map((q) => q.y));
-    const maxY = Math.max(...pts.map((q) => q.y));
-
-    const midX = (minX + maxX) / 2;
-    const midY = (minY + maxY) / 2;
-
-    const spanX = maxX - minX + CAM_MARGIN_X * 2;
-    const spanY = maxY - minY + CAM_MARGIN_Y * 2;
-    // Solved against the clear band under the HUD, not the whole viewport.
-    const usableH = VIEW_H - CAM_HUD_BAND;
-    const fit = Math.min(VIEW_W / spanX, usableH / spanY);
-    const targetZoom = clamp(fit, CAM_ZOOM_MIN, CAM_ZOOM_MAX);
-    cam.setZoom(Phaser.Math.Linear(cam.zoom, targetZoom, 0.06));
-
-    // ---- focus: lead the action, but never at the cost of framing ---------
-    //
-    // The velocity lead is what makes the camera feel like it is following a
-    // fight rather than tracking a midpoint, but on its own it could shove a
-    // pilot out of frame — a fast mech pulled the view off its own opponent.
-    // So the lead is applied first and then clamped to the window in which both
-    // machines are still visible.
-    const half = (v: number) => v / (2 * cam.zoom);
-    const halfW = half(VIEW_W);
-    const halfH = half(usableH);
-
-    const bound = (lo: number, hi: number, want: number, mid: number, halfSpan: number): number => {
-      // Furthest the centre may sit and still keep both inside, per side.
-      const min = hi - halfSpan;
-      const max = lo + halfSpan;
-      // When they cannot both fit — only reachable at the zoom floor — hold the
-      // midpoint, so the pair stays centred and neither is favoured.
-      if (min > max) return mid;
-      return clamp(want, min, max);
-    };
-
-    // The camera centre sits *above* the focus by half the reserved band, which
-    // pushes the world down into the clear area. The smoothing has to run in
-    // un-shifted space: `cam.midPoint.y` already carries last frame's shift, so
-    // lerping against it and shifting again compounds every frame and walks the
-    // view off the bottom of the arena. Undo it, lerp, re-apply.
-    const hudShift = CAM_HUD_BAND / (2 * cam.zoom);
-    const wantX = midX + (p.vx + e.vx) * 4;
-    const wantY = midY + (p.vy + e.vy) * 3;
-    const focusX = Phaser.Math.Linear(
-      cam.midPoint.x,
-      bound(minX - CAM_EDGE, maxX + CAM_EDGE, wantX, midX, halfW),
-      0.11,
-    );
-    const focusY = Phaser.Math.Linear(
-      cam.midPoint.y + hudShift,
-      bound(minY - CAM_EDGE, maxY + CAM_EDGE, wantY, midY, halfH),
-      0.11,
-    );
-    cam.centerOn(focusX, focusY - hudShift);
-
-    if (this.shake > 0.05) {
-      cam.shake(90, this.shake * 0.0007, true);
-      this.shake *= 0.72;
-    }
-
-    // ---- backdrop --------------------------------------------------------
-    this.backdrop.update(cam, dt);
-    this.ground.update(s.combatants);
+    // A tutorial beacon has to be on screen, or the lesson asks for something
+    // the player cannot see.
+    if (this.tutorial) for (const m of this.tutorial.markers()) pts.push({ x: m.x, y: m.y });
+    // The voxel camera solves the same framing — both machines plus a margin on
+    // each axis, the HUD band kept clear, a velocity lead clamped so it never
+    // costs a pilot the frame — through a perspective lens. See BattleView3D.
+    this.view.fx.beginFrame();
+    this.view.frame(pts, p.vx + e.vx, p.vy + e.vy, this.shake, dt);
+    if (this.shake > 0.05) this.shake *= 0.72;
 
     // ---- mechs -----------------------------------------------------------
     //
@@ -2522,7 +2611,7 @@ export class BattleScene extends Phaser.Scene {
     // list, so one that has left is not left standing on the deck.
     for (let i = 0; i < this.tagRenderers.length; i++) {
       const r = this.tagRenderers[i];
-      if (r) r.root.setVisible(s.tags[i].body !== null);
+      if (r) r.setVisible(s.tags[i].body !== null);
     }
     for (let i = 0; i < s.combatants.length; i++) {
       const c = s.combatants[i];
@@ -2535,14 +2624,16 @@ export class BattleScene extends Phaser.Scene {
       // Thruster plumes trail behind the chassis, opposite the travel direction.
       if (c.alive && c.thrust > 0.08) {
         for (const name of ['leftThruster', 'rightThruster']) {
-          const w = r.partWorld(name);
+          // The nozzle's real position in the yard, depth included, so the near
+          // engine's plume is in front of the hull and the far one behind it.
+          const w = r.partWorld3(name, this.nozzle);
           if (!w) continue;
           const speed = Math.hypot(c.vx, c.vy);
           const ang = speed > 0.2 ? Math.atan2(c.vy, c.vx) + Math.PI : c.aim + Math.PI;
           // `rig.scale` spans 0.82 (CIRRUS) to 1.29 (TERRAMOTH); without it a
           // fixed plume looks 57 % smaller against the biggest machine.
-          this.thrusterFx.thruster(
-            w.x, w.y, ang, c.thrust, c.def.tint.thruster, c.def.rig.scale,
+          this.thrusterFx.thruster3(
+            w, -ang, c.thrust, c.def.tint.thruster, c.def.rig.scale,
             thrusterFxFor(c.def.faction),
           );
         }
@@ -2611,24 +2702,22 @@ export class BattleScene extends Phaser.Scene {
         // reading it back means the glow cannot drift off the blade again.
         const hand = r.partWorld('meleeWeapon');
         const ax = hand ? hand.angle : c.aim;
-        const dz = hand ? hand.scale : depthScaleAt(c.y);
-        const hx = hand ? hand.x : c.x;
-        const hy = hand ? hand.y : c.y;
-
-        const mid = BLADE_MID * dz;
+        const dz = hand ? hand.scale : 1;
+        // Laid along the modelled blade in 3D — its two ends read straight off
+        // the weapon node — so the light sits on the voxels it is blooming,
+        // turned toward the camera with the machine.
+        const a3 = r.partWorld3('meleeWeapon', this.bladeA, [BLADE_MID - BLADE_GLOW_LEN / 2, 0]);
+        const b3 = r.partWorld3('meleeWeapon', this.bladeB, [BLADE_MID + BLADE_GLOW_LEN / 2, 0]);
         bloom.setVisible(true);
-        bloom.setPosition(hx + Math.cos(ax) * mid, hy + Math.sin(ax) * mid);
-        bloom.setRotation(ax);
-        // fx_streak is 128x24; scale it to the lit section of the blade.
-        bloom.setScale((BLADE_GLOW_LEN / 128) * dz, (BLADE_GLOW_THICK / 24) * dz);
+        if (a3 && b3) bloom.setSpan(a3, b3, BLADE_GLOW_THICK * dz);
         bloom.setTint(c.def.tint.glow);
         bloom.setAlpha(0.75);
-        bloom.setDepth(depthSortAt(c.y, 31));
-        if (Math.random() < 0.5) {
+        if (Math.random() < 0.5 && hand) {
+          const mid = BLADE_MID * dz;
           const tpos = (Math.random() - 0.5) * BLADE_GLOW_LEN * dz;
           this.effects.thruster(
-            bloom.x + Math.cos(ax) * tpos,
-            bloom.y + Math.sin(ax) * tpos,
+            hand.x + Math.cos(ax) * (mid + tpos),
+            hand.y + Math.sin(ax) * (mid + tpos),
             ax + Math.PI / 2,
             0.3,
             c.def.tint.glow,
@@ -2706,6 +2795,10 @@ export class BattleScene extends Phaser.Scene {
     this.effects.update(dt);
     this.thrusterFx.update(dt);
     this.hud.update(dt);
+    if (this.tutorialPanel) {
+      this.tutorialPanel.update(dt);
+      this.view.reserveBottom = this.tutorialPanel.height + 8;
+    }
     for (const b of this.banter) b.update(dt);
     this.debug.update(dt * 1000, (x, y) => ({ x, y }));
   }

@@ -2,13 +2,25 @@ import type { MatchOutcome } from '../combat/MatchSim';
 import { defaultAudioSettings } from '../audio/AudioSettings';
 import { defaultTrainingSettings } from './TrainingSettings';
 
-export type MatchMode = 'vsCpu' | 'aiVsAi' | 'training';
+/**
+ * `orbit` is FREE ORBIT, the three-dimensional mode: its own scene
+ * (`OrbitScene`) and simulation (`orbit/OrbitSim.ts`), reached through the same
+ * roster and results screens as a versus match.
+ */
+export type MatchMode = 'vsCpu' | 'aiVsAi' | 'training' | 'tutorial' | 'orbit';
 
 export const MODE_LABELS: Record<MatchMode, string> = {
   vsCpu: 'VERSUS CPU',
   aiVsAi: 'CPU VS CPU',
   training: 'TRAINING',
+  tutorial: 'TUTORIAL',
+  orbit: 'FREE ORBIT',
 };
+
+/** The scene a mode's matches run in. */
+export function matchScene(mode: MatchMode): 'Battle' | 'Orbit' {
+  return mode === 'orbit' ? 'Orbit' : 'Battle';
+}
 
 /**
  * Rival competence, four tiers.
