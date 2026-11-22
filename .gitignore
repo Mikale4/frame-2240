@@ -26,3 +26,8 @@ assets/sprites/pilots/_raw/
 # Progress file written by tools/blender/rebuild_drones.py so a caller can poll
 # past the MCP request timeout. Transient build state, recreated every run.
 renders/debug/_drone_build_status.json
+
+# Screenshots and sprites from the original Babel Sword 2005, used only as
+# private study material (see docs/REFERENCE_ART_STUDY.md). They are another
+# creator's art and must never be published, so they stay on this machine.
+docs/reference/
