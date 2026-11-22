@@ -117,9 +117,39 @@ A sanctioned flight sleeps the campaign, runs Battle/Orbit with
   owner's approval — listed in `docs/CAMPAIGN_PLAN.md`.
 * Chapter 1 exists for all eight pilots (each unlocks the pilot flown against
   in it; together they earn all eight). After it the world stays open.
-* Known gaps: no fast travel or frame flight between regions yet; the battle
-  pause menu's quit options leave the campaign scene asleep; the Stillwake
-  descent is deliberately unbuilt pending the owner.
+* Known gaps: no frame flight between regions yet (trams run the spans); the
+  battle pause menu's quit options leave the campaign scene asleep; the
+  Stillwake descent is deliberately unbuilt pending the owner.
+
+### A legitimate world, prologues, FREE ORBIT as a mode (D186–D189)
+
+* **FREE ORBIT is its own mode** (owner correction): its menu page offers
+  VERSUS CPU, CPU VS CPU and TRAINING; `session.freeOrbit` says which side.
+  Do not fold it back into a view toggle.
+* **The Reach is lived in**: `src/campaign/Crowd.ts` (pure, tested) and
+  `src/world/WorldLife.ts` — crowds who talk, carts and crawlers, trams on an
+  overhead rail along every span (Z at a stop sign rides), shuttles and patrol
+  frames. Cathedral Yard stays empty, by canon.
+* **Every building has a door and a room** (`src/world/Interiors.ts`): built on
+  entry at y −600, the view hides the world (`CampaignView.enterRoom`), fixed
+  cutaway camera. Cathedral Yard's towers are sealed.
+* **Cutscene kit** on `StoryApi`: letterbox, titleCard, narrate, nextTime,
+  cam/pan, gesture/sit/place, music by mood, sound, shake, alarm, boom, flash,
+  launch/showFrame (sorties), young (time-skips). Chapter fields `young`,
+  `noFrame`, `frames`, `music`.
+* **Eight prologues, chapter 0**, one per pilot (`<pilot>0.ts`), written in the
+  main session (the owner does not want subagents used). New campaigns start
+  on the prologue; a finished chapter restarts the scene into the next;
+  REPLAY PROLOGUE in the campaign menu plays it again without touching
+  progress or position.
+* **Traps paid for**: Vite did not pick up new chapter files until
+  `chapters/index.ts` was touched (restart or touch after adding a chapter);
+  a script `walk` can be blocked by a crowd or a cart, so `stepActor` steps an
+  actor to its mark after 1.5 s without progress or past a time budget; the
+  confirm that closes a line must not also open the door in front of you; an
+  exception in the shadow pass once left a render target bound and the 3D view
+  blank — not reproduced, watch for it.
+* **Canon from the owner this session**: the planet is Earth.
 
 ### Open from this session
 

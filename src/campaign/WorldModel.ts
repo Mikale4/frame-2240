@@ -83,6 +83,11 @@ export class WalkModel {
   ramps: Ramp[] = [];
   walls: Wall[] = [];
   posts: Post[] = [];
+  /**
+   * Things that move and still block: vehicles, people standing still. The
+   * world rewrites this list every frame; it never goes into a saved model.
+   */
+  moving: Post[] = [];
 
   add(m: { decks?: Deck[]; ramps?: Ramp[]; walls?: Wall[]; posts?: Post[] }): this {
     if (m.decks) this.decks.push(...m.decks);
@@ -159,7 +164,7 @@ export class WalkModel {
         }
         moved = true;
       }
-      for (const p of this.posts) {
+      for (const p of this.posts.length && this.moving.length ? [...this.posts, ...this.moving] : this.moving.length ? this.moving : this.posts) {
         let dx = x - p.x;
         let dz = z - p.z;
         const d = Math.hypot(dx, dz);

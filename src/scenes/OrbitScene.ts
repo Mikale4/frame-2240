@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import * as THREE from 'three';
 import { TICK_MS, VIEW_H, VIEW_W } from '../core/GameConfig';
-import { session } from '../core/Session';
+import { DIFFICULTY_COUNT, DIFFICULTY_NAMES, Difficulty, modeLabel, session, type MatchMode } from '../core/Session';
+import { HEALTH_STEPS } from '../core/TrainingSettings';
 import { MECHS } from '../data/mechs';
 import { InputManager } from '../input/InputManager';
 import {
@@ -75,6 +76,10 @@ export class OrbitScene extends Phaser.Scene {
   inspect = { yaw: 1.2, dist: 6, lift: 1.2 };
   /** Debug: the rival stands still, for inspecting poses. */
   rivalIdle = false;
+  /** The mode being fought: the session's, or VERSUS for a campaign flight. */
+  private mode: MatchMode = 'vsCpu';
+  /** CPU vs CPU only: the brain flying the player's slot. */
+  private playerAi: OrbitAI | null = null;
 
   constructor() {
     super('Orbit');
@@ -84,8 +89,19 @@ export class OrbitScene extends Phaser.Scene {
     const playerDef = MECHS[session.playerMech] ?? MECHS.halcyon;
     const enemyDef = MECHS[session.enemyMech] ?? MECHS.nocturne;
     const seed = session.seed();
-    this.sim = new OrbitSim({ playerDef, enemyDef, seed });
-    this.ai = new OrbitAI(1, session.enemyDifficulty, this.sim.enemy, seed ^ 0x5a5a);
+    // A campaign flight is always a straight versus fight.
+    this.mode = session.campaignFight ? 'vsCpu' : session.mode;
+    const training = this.mode === 'training';
+    this.sim = new OrbitSim({ playerDef, enemyDef, seed, endless: training });
+    this.ai = new OrbitAI(
+      1,
+      training ? (session.training.p2Difficulty as Difficulty) : session.enemyDifficulty,
+      this.sim.enemy,
+      seed ^ 0x5a5a,
+    );
+    // CPU vs CPU: the player's slot is flown by its own rival brain.
+    this.playerAi = this.mode === 'aiVsAi' ? new OrbitAI(0, session.playerDifficulty, this.sim.player, seed ^ 0x2545) : null;
+    if (training) this.sim.player.life = this.sim.player.def.gauges.maxLife * session.training.health;
     this.blend = [0, 0];
     this.accumulator = 0;
     this.shake = 0;
@@ -95,7 +111,8 @@ export class OrbitScene extends Phaser.Scene {
     this.pauseUi = undefined;
     // Phaser keeps one instance per scene key and only re-runs `create`, so
     // field initialisers do not reset a restarted match.
-    this.camMode = 'chase';
+    // CPU vs CPU is watched, not flown: a broadcast angle on both machines.
+    this.camMode = this.mode === 'aiVsAi' ? 'spectate' : 'chase';
     this.rivalIdle = false;
 
     this.input$ = new InputManager(this);
@@ -111,6 +128,8 @@ export class OrbitScene extends Phaser.Scene {
     for (const m of this.mechs) this.view.mechs.add(m.root);
 
     this.hud = new OrbitHud(this, this.sim);
+    this.hud.setTag(modeLabel(this.mode, true));
+    if (this.playerAi) this.hud.spectating();
     this.hud.showBanner('READY', 1.4, '#9fe0ff');
     sfx.matchReady();
 
@@ -177,10 +196,12 @@ export class OrbitScene extends Phaser.Scene {
 
   private tick(): void {
     const s = this.sim;
-    const p0 = this.finished ? NONE : this.input$.read();
-    const p1 = this.rivalIdle ? NONE : this.ai.think(s);
+    const p0 = this.finished ? NONE : this.playerAi ? this.playerAi.think(s) : this.input$.read();
+    const dummy = this.mode === 'training' && session.training.p2 === 'dummy';
+    const p1 = this.rivalIdle || dummy ? NONE : this.ai.think(s);
     const before = s.phase;
     s.step(p0, p1);
+    if (this.mode === 'training') this.trainingRules();
     if (before === 'intro' && s.phase === 'fight' && !this.fought) {
       this.fought = true;
       this.hud.showBanner('FIGHT', 0.9, '#ffd166');
@@ -206,6 +227,29 @@ export class OrbitScene extends Phaser.Scene {
         });
       } else this.time.delayedCall(2600, () => this.scene.start('Results'));
     }
+  }
+
+  /**
+   * Training's rules, after every tick: nobody is knocked out (a machine at
+   * zero is refilled), and Saturation stays charged if the switch says so.
+   */
+  private trainingRules(): void {
+    for (const f of this.sim.fighters) {
+      if (f.life <= 0) {
+        f.life = f.def.gauges.maxLife;
+        this.hud.showBanner(f.id === 0 ? 'RESET' : 'DOWN · RESET', 0.8, '#9fe0ff');
+      }
+    }
+    if (session.training.infiniteSat) {
+      const p = this.sim.player;
+      if (!p.satActive) p.sat = p.def.gauges.maxSaturation;
+    }
+  }
+
+  /** Training: both machines back to their marks, full gauges. */
+  private resetPositions(): void {
+    session.matchIndex++;
+    this.scene.restart();
   }
 
   // --------------------------------------------------------------- events
@@ -539,12 +583,56 @@ export class OrbitScene extends Phaser.Scene {
     music.duck(true);
     this.hud.hideHint();
     const scrim = makeScrim(this);
-    const title = bigTitle(this, 'PAUSED', 120, 40, '#eaf2ff');
-    const sub = smallText(this, 'FREE ORBIT', VIEW_W / 2, 160, 13, '#8fe9ff');
+    const training = this.mode === 'training';
+    const title = bigTitle(this, training ? 'TRAINING' : 'PAUSED', 120, 40, '#eaf2ff');
+    const sub = smallText(this, modeLabel(this.mode, true), VIEW_W / 2, 160, 13, '#8fe9ff');
     const keys = smallText(this, OrbitHud.controlsLine(), VIEW_W / 2, VIEW_H - 74, 11, '#a9bad6');
     const hint = smallText(this, 'ESC resumes · LEFT / RIGHT adjust volume', VIEW_W / 2, VIEW_H - 30, 12, '#63748c');
+    const T = session.training;
+    const trainingRows: MenuItem[] = [
+      {
+        label: 'RIVAL',
+        value: () => (T.p2 === 'dummy' ? 'DUMMY' : 'CPU'),
+        onSelect: () => (T.p2 = T.p2 === 'dummy' ? 'cpu' : 'dummy'),
+        onAdjust: () => (T.p2 = T.p2 === 'dummy' ? 'cpu' : 'dummy'),
+      },
+      {
+        label: 'RIVAL SKILL',
+        value: () => DIFFICULTY_NAMES[T.p2Difficulty],
+        onAdjust: (d: number) => {
+          T.p2Difficulty = (T.p2Difficulty + (d > 0 ? 1 : DIFFICULTY_COUNT - 1)) % DIFFICULTY_COUNT;
+          this.ai = new OrbitAI(1, T.p2Difficulty as Difficulty, this.sim.enemy, session.seed() ^ 0x5a5a);
+        },
+        onSelect: () => {
+          T.p2Difficulty = (T.p2Difficulty + 1) % DIFFICULTY_COUNT;
+          this.ai = new OrbitAI(1, T.p2Difficulty as Difficulty, this.sim.enemy, session.seed() ^ 0x5a5a);
+        },
+      },
+      {
+        label: 'INFINITE SATURATION',
+        value: () => (T.infiniteSat ? 'ON' : 'OFF'),
+        onSelect: () => (T.infiniteSat = !T.infiniteSat),
+        onAdjust: () => (T.infiniteSat = !T.infiniteSat),
+      },
+      {
+        label: 'YOUR HEALTH',
+        value: () => `${Math.round(T.health * 100)}%`,
+        onAdjust: (d: number) => {
+          const i = HEALTH_STEPS.indexOf(T.health);
+          T.health = HEALTH_STEPS[(Math.max(0, i) + (d > 0 ? 1 : HEALTH_STEPS.length - 1)) % HEALTH_STEPS.length];
+          this.sim.player.life = this.sim.player.def.gauges.maxLife * T.health;
+        },
+        onSelect: () => {
+          const i = HEALTH_STEPS.indexOf(T.health);
+          T.health = HEALTH_STEPS[(Math.max(0, i) + 1) % HEALTH_STEPS.length];
+          this.sim.player.life = this.sim.player.def.gauges.maxLife * T.health;
+        },
+      },
+      { label: 'RESET POSITIONS', onSelect: () => this.resetPositions() },
+    ];
     const rows: MenuItem[] = [
       { label: 'RESUME', onSelect: () => this.closePause() },
+      ...(training ? trainingRows : []),
       ...audioMenuItems(),
       {
         label: 'RESTART MATCH',
@@ -556,7 +644,7 @@ export class OrbitScene extends Phaser.Scene {
       { label: 'MECH SELECT', onSelect: () => this.scene.start('MechSelect') },
       { label: 'QUIT TO TITLE', onSelect: () => this.scene.start('Title') },
     ];
-    const menu = new Menu(this, rows, VIEW_W / 2, 210, { size: 22, gap: 34, maxVisible: 8 });
+    const menu = new Menu(this, rows, VIEW_W / 2, training ? 196 : 210, { size: 22, gap: training ? 30 : 34, maxVisible: 8 });
     this.pauseUi = { scrim, menu, extra: [title, sub, keys, hint] };
   }
 

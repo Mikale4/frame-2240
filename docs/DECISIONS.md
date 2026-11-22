@@ -8340,3 +8340,101 @@ models-base.js` and `anim.js`), never run.
   not slide, knees bent 0.85θ / 0.6–1.6θ, elbows forward, run lean, hip bob,
   breathing and Post Parade's look-about at rest, per-joint easing (legs 60/s
   while walking).
+
+
+## D186 — FREE ORBIT is its own mode, with VERSUS CPU, CPU VS CPU and TRAINING inside it
+
+Briefly turned into a FIGHT VIEW toggle over the side-on modes; the owner
+corrected that: FREE ORBIT has functions of its own (the 3D scene,
+transformation, the down value, lock-on lead) and is the mode the campaign
+will use most, so it stays a mode. The main menu has a FREE ORBIT row that
+opens its own page with VERSUS CPU, CPU VS CPU and TRAINING; the main menu's
+rows of those names remain the side-on game.
+
+* `session.freeOrbit` (was `orbitView`) says which; the main menu's rows clear
+  it, the FREE ORBIT page sets it. `matchScene` and `modeLabel` read it
+  (`FREE ORBIT · TRAINING`), so mech select, rematch and results follow.
+* **Training in FREE ORBIT**: `OrbitConfig.endless` (no clock, no knockout;
+  the scene refills a machine at zero with a RESET banner), the pause menu's
+  rival / skill / infinite Saturation / health / reset rows.
+* **CPU vs CPU in FREE ORBIT**: a second `OrbitAI` flies the player's slot and
+  the spectate camera watches.
+* Campaign wins only count toward unlocks in VERSUS CPU (either mode).
+
+## D187 — the Reach is lived in: crowds, traffic, trams, sky
+
+"The cities seem empty." Every yard now has people of its own going about
+their day, deck traffic, trams on the spans, and craft in the sky.
+
+* **Crowds** (`src/campaign/Crowd.ts`, pure and tested): a seeded population
+  per yard style (none on Cathedral Yard), roles by power (cadets, traders,
+  seam cutters, watch crew, recruits, crews…), each with a face of its own.
+  They walk between doors, stalls and the lane, pair off to talk, stand at
+  benches and work; they keep a step from each other and from you, and
+  re-route when stuck. Anyone can be spoken to: they stop, turn, and say a
+  line from their yard and role (canon-safe, no names, no exclamation marks).
+* **Drawing them** (`src/world/WorldLife.ts`): figures within 75 m (meshes
+  shared by look), shadows within 26 m, posed every frame within 40 m and
+  every third frame beyond; yards whose centre is more than 175 m away hold
+  still.
+* **Traffic**: crawlers and carts on clear straight runs, stopping for you.
+  **Trams** hang from an overhead rail along every span — above the catwalk,
+  so nobody walking is ever under a moving car — with a stop sign at each end;
+  a ride is a short cutscene alongside the car (Z skips). **Sky**: shuttles and
+  three patrol frames in mobile form.
+
+## D188 — every building has a door, and a room behind it
+
+"The buildings seem to just be props." Every building draws a lit door where
+the walk model puts its stand spot; Z at the door goes in (`src/world/Interiors.ts`).
+
+* A room is built on entry and dropped on leaving, at y −600 in its own walk
+  model; the view hides the sky, the cloud deck, the yards and everything
+  moving in them and closes the fog to the room's dark, so it is a lit stage
+  in the dark — the FF7 game's rooms, in voxels. The camera is fixed over the
+  cut-down front wall and slides with you; up walks away from it.
+* Kinds by building and power: frame bays (a frame on the gantry), messes,
+  offices, quarters, control rooms (a window band onto the night traffic),
+  shops. Each has people of the yard's own roles, seated or working, who talk:
+  the room's own lines by turns with the yard's. Cathedral Yard's towers are
+  sealed under the standing rules.
+* Indoors the save is the door you went in by; rooms are not kept.
+
+## D189 — the cutscene kit, and a prologue for every pilot
+
+"Each pilot's campaign starts off differently… like a typical Gundam anime."
+The story API gained an episode's presentation, and every campaign now opens
+on a chapter 0 prologue.
+
+* **Kit** (`StoryApi`): letterbox bars; the episode title card; the narrator;
+  the NEXT TIME card; camera cuts and timed pans in region-local metres;
+  gestures, sitting and placing actors; music by mood (`calm`, `tension`,
+  `danger`, `sorrow`, `hope`, `theme`…); sounds; camera shake; the alarm (a red
+  pulse and a klaxon); explosions (VoxelFx in the walking world); a white
+  flash; a frame's sortie off its pad (lift, transform, fly away, camera
+  low on the pad); chapter frames standing in bays and on pads; and drawing an
+  actor as a child, for a time-skip.
+* **Chapter fields**: `young` (the pilot as a child), `noFrame` (before they
+  had one), `frames`, `music`. A finished chapter with another after it
+  restarts the scene into that one from its own opening.
+* **Prologues** set before each pilot became who they are, from the Archive's
+  own facts; roles only, nothing about the number, Stillwake neither named nor
+  depicted, Senna without an interior voice. New campaigns start on the
+  prologue; a campaign that had not got under way is moved onto it; one
+  already past it can replay it from the campaign menu without touching
+  progress.
+* A confirm that closes a line or a card, or ends a script, is spent: it no
+  longer also opens the door or conversation in front of you on the same
+  frame.
+* **Prologue dates follow the Archive's arithmetic**: Okonkwo's walkers are
+  armed in 28 CE, inside the Seven Yards War, because every current frame was
+  built to the war's requirements and Ironwake's first armed frames were the
+  walkers; Tengku's first contested docking (about 23 CE) is therefore held on
+  foot, and his GD-09 comes after a time-skip. Rook never comments on the
+  trial; Stillwake is neither named nor shown in any prologue.
+* A script `walk` that a crowd or a cart blocks steps the actor to its mark
+  after 1.5 s without progress, or past a time budget, so no cutscene hangs.
+* A replay persists nothing: the real campaign keeps its chapter, flags and
+  place.
+* The prologues were written in the main session, one at a time; the owner
+  does not want subagents used on this project.

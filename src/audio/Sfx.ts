@@ -416,6 +416,20 @@ export class Sfx {
     if (big) this.burst({ dur: 0.7, gain: 0.2, freq: 300, sweepTo: 40, q: 0.5, delay: 0.12 });
   }
 
+  /** A two-tone klaxon, for a cutscene's alarm. */
+  klaxon(): void {
+    if (this.play('klaxon')) return;
+    this.tone({ type: 'square', from: 640, to: 620, dur: 0.38, gain: 0.12 });
+    this.tone({ type: 'square', from: 470, to: 455, dur: 0.38, gain: 0.12, delay: 0.42 });
+  }
+
+  /** A frame lifting off its pad: the roar building under it. */
+  sortie(): void {
+    if (this.play('sortie')) return;
+    this.burst({ dur: 1.6, gain: 0.3, freq: 220, sweepTo: 1400, q: 0.5 });
+    this.tone({ type: 'sawtooth', from: 60, to: 240, dur: 1.5, gain: 0.18 });
+  }
+
   uiMove(): void {
     if (this.play('ui_move')) return;
     this.tone({ type: 'square', from: 700, to: 900, dur: 0.04, gain: 0.08 });

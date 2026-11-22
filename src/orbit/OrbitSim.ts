@@ -283,6 +283,8 @@ export interface OrbitConfig {
   seed?: number;
   introTicks?: number;
   roundTicks?: number;
+  /** Training: no clock and no knockout; the scene refills life instead. */
+  endless?: boolean;
 }
 
 /** How much of a target's motion the lock-on leads, and how far ahead at most. */
@@ -359,11 +361,14 @@ export class OrbitSim {
   outcome: OrbitOutcome = 'none';
   timeLeft: number;
   private readonly introTicks: number;
+  /** See `OrbitConfig.endless`. */
+  readonly endless: boolean;
   private readonly rng: Rng;
 
   constructor(cfg: OrbitConfig) {
     this.rng = new Rng(cfg.seed ?? 0x0b17);
     this.introTicks = cfg.introTicks ?? INTRO_TICKS;
+    this.endless = !!cfg.endless;
     this.timeLeft = cfg.roundTicks ?? ORBIT_ROUND_TICKS;
     this.fighters = [
       makeFighter(0, cfg.playerDef, v3(-16, 7, -2), 0),
@@ -429,7 +434,8 @@ export class OrbitSim {
     if (this.phase === 'fight') {
       this.timeLeft--;
       const [a, b] = this.fighters;
-      if (a.life <= 0 || b.life <= 0 || this.timeLeft <= 0) this.finish();
+      if (this.endless) this.timeLeft = ORBIT_ROUND_TICKS;
+      else if (a.life <= 0 || b.life <= 0 || this.timeLeft <= 0) this.finish();
     }
   }
 

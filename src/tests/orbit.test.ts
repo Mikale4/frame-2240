@@ -14,7 +14,7 @@ import {
 import { OrbitAI, lineOfSight } from '../orbit/OrbitAI';
 import { HALCYON, NOCTURNE, ROSTER } from '../data/mechs';
 import { Btn, type InputFrame } from '../combat/types';
-import { Difficulty, MODE_LABELS, matchScene } from '../core/Session';
+import { Difficulty, MODE_LABELS, matchScene, modeLabel } from '../core/Session';
 
 /**
  * FREE ORBIT, the three-dimensional mode.
@@ -78,10 +78,29 @@ function duel(a: number, b: number, da: Difficulty, db: Difficulty, seed: number
 
 describe('FREE ORBIT: the mode', () => {
   it('is a match mode with its own scene', () => {
-    expect(MODE_LABELS.orbit).toBe('FREE ORBIT');
-    expect(matchScene('orbit')).toBe('Orbit');
-    expect(matchScene('vsCpu')).toBe('Battle');
-    expect(matchScene('tutorial')).toBe('Battle');
+    // FREE ORBIT is its own mode, offering VERSUS CPU, CPU VS CPU and TRAINING inside it; the tutorial stays side-on.
+    for (const m of ['vsCpu', 'aiVsAi', 'training'] as const) {
+      expect(matchScene(m, true)).toBe('Orbit');
+      expect(matchScene(m, false)).toBe('Battle');
+      expect(modeLabel(m, true)).toBe(`FREE ORBIT · ${MODE_LABELS[m]}`);
+      expect(modeLabel(m, false)).toBe(MODE_LABELS[m]);
+    }
+    expect(matchScene('tutorial', true)).toBe('Battle');
+  });
+});
+
+describe('FREE ORBIT: training', () => {
+  it('an endless fight never ends, however long and however hard', () => {
+    const sim = new OrbitSim({ playerDef: HALCYON, enemyDef: NOCTURNE, seed: 3, introTicks: 1, endless: true });
+    const a = new OrbitAI(0, Difficulty.Extreme, sim.player, 3);
+    const b = new OrbitAI(1, Difficulty.Extreme, sim.enemy, 4);
+    for (let i = 0; i < 60 * 240; i++) {
+      sim.step(a.think(sim), b.think(sim));
+      // The scene refills a machine at zero; do the same here.
+      for (const f of sim.fighters) if (f.life <= 0) f.life = f.def.gauges.maxLife;
+    }
+    expect(sim.phase).toBe('fight');
+    expect(sim.outcome).toBe('none');
   });
 });
 

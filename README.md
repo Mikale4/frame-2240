@@ -238,8 +238,9 @@ knockout. It never touches your last picks.
   world; see below. Left/right on the row picks which unlocked pilot's
   campaign to play.
 * **Versus CPU** — you against the rival frame.
-* **Free Orbit** — the fight in three dimensions, from over your shoulder, and
-  every machine transforms; see below.
+* **Free Orbit** — its own mode: the fight in three dimensions, from over your
+  shoulder, and every machine transforms. Its page offers **Versus CPU**,
+  **CPU vs CPU** and **Training** inside it; see below.
 * **CPU vs CPU** — both sides driven by the AI; useful for watching balance.
 * **Tutorial** — the hands-on course; see below.
 * **Training** — the rival stays passive until you land the first hit, and the
@@ -296,19 +297,44 @@ You walk on foot (arrows; SPACE runs), talk to people (Z or ENTER), and turn
 the camera with Q / E or by dragging. Chapters play out in conversations and
 cutscenes, and when a dispute goes to the standing rules you board your frame
 and fly it — on the plate or in FREE ORBIT — then come back to the yard with
-the result. ESC opens the campaign menu (SAVE AND QUIT). Progress is saved to
-your account as you go.
+the result. ESC opens the campaign menu (SAVE AND QUIT, and REPLAY PROLOGUE
+once you have played it). Progress is saved to your account as you go.
 
-Chapter 1 is written for every pilot; later chapters are in progress. Plan and
-the new place names: [`docs/CAMPAIGN_PLAN.md`](docs/CAMPAIGN_PLAN.md).
+**The Reach is lived in.** Every yard but Cathedral Yard has its own people
+going about their day — walking between doors and stalls, stopping to talk to
+each other, working at benches — and anyone you walk up to will say something
+(Z). Cargo crawlers and carts run the decks and stop for you; trams run on an
+overhead rail along every span (walk to a stop sign and press Z to ride one,
+Z again to skip to the far end); shuttles and patrolling frames cross the sky.
+
+**Every building has a door.** Walk up to one and press Z to go in: frame
+bays with a machine on the gantry, messes, offices, quarters, control rooms
+and shops, each with people of the yard's own at work, seen from a fixed
+camera over the cut-away front wall. Walk back out through the door to leave.
+Cathedral Yard's towers stay sealed under the standing rules.
+
+**Each campaign opens on a prologue** — the pilot before they were who they are
+now, told like the first episode of a mecha anime: a cold open, the title card,
+slice of life on the yard, a crisis, a sortie, and a NEXT TIME card for
+Chapter 1. Chapter 1 follows straight on; later chapters are in progress. Plan
+and the new place names: [`docs/CAMPAIGN_PLAN.md`](docs/CAMPAIGN_PLAN.md).
 
 ### Free Orbit
 
-`FREE ORBIT` is a **third-person 3D mecha fighter**: the whole CATHEDRAL YARD —
-the deck, the gantry and the air over it — fought from a lock-on camera over
-your pilot's shoulder. Same roster, same weapons, same gauges and the same
-sword sequences as the side-on game, in a volume instead of on a plane. Pick
-your machine, the rival and its skill as for VERSUS CPU.
+`FREE ORBIT` is a **third-person 3D mecha fighter** and a mode of its own:
+the whole CATHEDRAL YARD — the deck, the gantry and the air over it — fought
+from a lock-on camera over your pilot's shoulder. Same roster, same weapons,
+same gauges and the same sword sequences as the side-on game, in a volume
+instead of on a plane, with rules of its own (below). It is the mode the
+campaign flies most.
+
+Its page offers three ways to fly it:
+
+* **Versus CPU** — you against the rival; pick machines and skill as usual.
+* **CPU vs CPU** — two AI pilots, watched from a broadcast camera.
+* **Training** — no clock and no knockout (a machine at zero is refilled);
+  the pause menu sets the rival (DUMMY or CPU), its skill, infinite
+  Saturation, your health, and resets positions.
 
 **Every machine transforms.** Press **TRANSFORM** and it folds into its
 **mobile form** — the frame lies prone, the legs trail into a V tail, the arms

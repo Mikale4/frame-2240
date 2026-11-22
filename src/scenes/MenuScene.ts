@@ -21,10 +21,11 @@ export class MenuScene extends Phaser.Scene {
   private input$!: InputManager;
   private menu!: Menu;
   private settingsMenu!: Menu;
+  private orbitMenu!: Menu;
   private subtitle!: Phaser.GameObjects.Text;
   private hint!: Phaser.GameObjects.Text;
   /** Which list is on screen. Settings is a page, not a popup. */
-  private page: 'main' | 'settings' = 'main';
+  private page: 'main' | 'settings' | 'orbit' = 'main';
   private bindingsPanel?: BindingsPanel;
   private t = 0;
   private armAt = 0;
@@ -105,10 +106,14 @@ export class MenuScene extends Phaser.Scene {
         // there is nothing to choose on the roster screen.
         { label: MODE_LABELS.tutorial, onSelect: () => this.startTutorial() },
         { label: MODE_LABELS.vsCpu, onSelect: () => this.pick('vsCpu') },
-        // The three-dimensional mode, beside the match it is a version of.
-        { label: MODE_LABELS.orbit, onSelect: () => this.pick('orbit') },
         { label: MODE_LABELS.aiVsAi, onSelect: () => this.pick('aiVsAi') },
         { label: MODE_LABELS.training, onSelect: () => this.pick('training') },
+        /**
+         * FREE ORBIT is a mode of its own — the 3D fight with its own rules,
+         * and the one the campaign flies most — with its own page offering
+         * VERSUS CPU, CPU VS CPU and TRAINING inside it.
+         */
+        { label: 'FREE ORBIT', onSelect: () => this.openOrbit() },
         /**
          * A match rule, so it sits with the modes rather than under SETTINGS.
          *
@@ -160,6 +165,20 @@ export class MenuScene extends Phaser.Scene {
     );
     this.settingsMenu.setVisible(false);
 
+    this.orbitMenu = new Menu(
+      this,
+      [
+        { label: MODE_LABELS.vsCpu, onSelect: () => this.pick('vsCpu', true) },
+        { label: MODE_LABELS.aiVsAi, onSelect: () => this.pick('aiVsAi', true) },
+        { label: MODE_LABELS.training, onSelect: () => this.pick('training', true) },
+        { label: 'BACK', onSelect: () => this.closeSettings() },
+      ],
+      VIEW_W / 2,
+      VIEW_H / 2 - 34,
+      { size: 22, gap: 40, maxVisible: 4 },
+    );
+    this.orbitMenu.setVisible(false);
+
     this.hint = smallText(
       this,
       '',
@@ -175,11 +194,17 @@ export class MenuScene extends Phaser.Scene {
 
   /** Which list is live. Kept explicit so `update` has one place to branch. */
   private get active(): Menu {
-    return this.page === 'settings' ? this.settingsMenu : this.menu;
+    return this.page === 'settings' ? this.settingsMenu : this.page === 'orbit' ? this.orbitMenu : this.menu;
   }
 
   private openArchive(): void {
     this.scene.start('Archive');
+  }
+
+  private openOrbit(): void {
+    sfx.uiMove();
+    this.page = 'orbit';
+    this.refreshChrome();
   }
 
   private openSettings(): void {
@@ -196,9 +221,11 @@ export class MenuScene extends Phaser.Scene {
   /** Title, hint line and which list is on screen, for the current page. */
   private refreshChrome(): void {
     const settings = this.page === 'settings';
-    this.subtitle.setText(settings ? 'SETTINGS' : 'MAIN MENU');
-    this.menu.setVisible(!settings);
+    const orbit = this.page === 'orbit';
+    this.subtitle.setText(settings ? 'SETTINGS' : orbit ? 'FREE ORBIT · THE FIGHT IN THREE DIMENSIONS' : 'MAIN MENU');
+    this.menu.setVisible(this.page === 'main');
     this.settingsMenu.setVisible(settings);
+    this.orbitMenu.setVisible(orbit);
     this.hint.setText(
       settings
         ? 'ARROWS / W S  select      LEFT RIGHT  adjust      ENTER  confirm      ESC  back'
@@ -258,15 +285,17 @@ export class MenuScene extends Phaser.Scene {
   private startTutorial(): void {
     sfx.unlock();
     session.mode = 'tutorial';
+    session.freeOrbit = false;
     session.demo = false;
     session.matchIndex++;
     this.scene.start('Battle');
   }
 
   /** Choosing a mode goes straight to the roster, as a fighting game would. */
-  private pick(mode: MatchMode): void {
+  private pick(mode: MatchMode, freeOrbit = false): void {
     sfx.unlock();
     session.mode = mode;
+    session.freeOrbit = freeOrbit;
     this.scene.start('MechSelect');
   }
 
@@ -304,7 +333,7 @@ export class MenuScene extends Phaser.Scene {
     if (ui.confirm) menu.confirm();
     // Cancel backs out one level rather than always leaving the scene.
     if (ui.cancel) {
-      if (this.page === 'settings') {
+      if (this.page !== 'main') {
         sfx.uiBack();
         this.closeSettings();
       } else {

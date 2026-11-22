@@ -62,15 +62,45 @@ export interface PilotFigure {
   /** Gait phase, radians; advanced by distance walked. */
   phase: number;
   seed: number;
+  /** A gesture being performed, overriding arms and head while it lasts. */
+  action: { kind: Gesture; t: number; dur: number } | null;
+  /** Seated (on a bench, at a console): legs folded, hips lowered. */
+  sitting: boolean;
+  /** Every mesh, for switching shadows off at a distance. */
+  meshes: THREE.Mesh[];
 }
+
+/**
+ * Body language, for cutscenes and for people going about their day. Each is a
+ * pose the arms and head ease into and out of over its duration; the legs keep
+ * walking or standing underneath.
+ */
+export type Gesture = 'nod' | 'shake' | 'point' | 'wave' | 'salute' | 'shrug' | 'cross' | 'work' | 'talk' | 'look' | 'slump' | 'fist';
+
+/** How long each gesture runs, seconds, unless a caller says otherwise. */
+export const GESTURE_TIME: Record<Gesture, number> = {
+  nod: 0.9, shake: 1.0, point: 1.6, wave: 1.6, salute: 1.8, shrug: 1.3, cross: 3.0,
+  work: 4.0, talk: 2.4, look: 1.6, slump: 2.2, fist: 1.4,
+};
 
 const MAT = new THREE.MeshLambertMaterial({ vertexColors: true });
 const GLOW_M = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
 
+/**
+ * Meshed parts, shared between figures with the same look: a yard's crowd is
+ * a few dozen people in a handful of outfits, and meshing every one of them
+ * afresh is most of what building a crowd costs.
+ */
+const PART_CACHE = new Map<string, ReturnType<typeof meshGrid>>();
+
 /** One part's mesh, Post Parade's corner convention (row r fills r..r+1). */
-function meshOf(g: Grid): THREE.Group {
+function meshOf(g: Grid | (() => Grid), key?: string): THREE.Group {
   const out = new THREE.Group();
-  const m = meshGrid(g, 1, { offset: [0.5, 0.5, 0.5], jitter: 0 });
+  let m = key ? PART_CACHE.get(key) : undefined;
+  if (!m) {
+    m = meshGrid(typeof g === 'function' ? g() : g, 1, { offset: [0.5, 0.5, 0.5], jitter: 0 });
+    if (key) PART_CACHE.set(key, m);
+  }
   if (m.lit) {
     const mesh = new THREE.Mesh(m.lit, MAT);
     mesh.castShadow = true;
@@ -90,8 +120,8 @@ function joint(parent: THREE.Object3D, pivot: [number, number, number], parentPi
 }
 
 /** Hangs a part's mesh (built in absolute rows) off its joint. */
-function hang(j: THREE.Group, g: Grid, pivot: [number, number, number], shiftX = 0): void {
-  const m = meshOf(g);
+function hang(j: THREE.Group, g: () => Grid, pivot: [number, number, number], shiftX = 0, key?: string): void {
+  const m = meshOf(g, key);
   m.position.set(-pivot[0] + shiftX, -pivot[1], -pivot[2]);
   j.add(m);
 }
@@ -279,6 +309,7 @@ export function extraLook(sex: 'f' | 'm', seed: number, suit?: number, trim?: nu
 export function pilotFigure(id: string, scale = FIGURE_VOXEL, override?: Partial<Look>): PilotFigure {
   const base = PILOT_LOOKS[id] ?? PILOT_LOOKS.halcyon;
   const L: Look = { ...base, ...(override ?? {}) };
+  const K = JSON.stringify(L);
   const root = new THREE.Group();
   const rig = new THREE.Group();
   rig.scale.setScalar(scale);
@@ -287,41 +318,49 @@ export function pilotFigure(id: string, scale = FIGURE_VOXEL, override?: Partial
 
   const hipsP: [number, number, number] = [0, HIP, 0];
   const hips = joint(rig, hipsP, O);
-  hang(hips, pelvis(L), hipsP);
+  hang(hips, () => pelvis(L), hipsP, 0, `${K}:pelvis`);
 
   const thP = (s: 1 | -1): [number, number, number] => [s * 1.05, HIP, 0];
   const shP = (s: 1 | -1): [number, number, number] => [s * 1.05, KNEE, 0];
   const thighL = joint(hips, thP(1), hipsP);
   const thighR = joint(hips, thP(-1), hipsP);
-  hang(thighL, thigh(L, 1), thP(1), 0.05);
-  hang(thighR, thigh(L, -1), thP(-1), -0.05);
+  hang(thighL, () => thigh(L, 1), thP(1), 0.05, `${K}:thighL`);
+  hang(thighR, () => thigh(L, -1), thP(-1), -0.05, `${K}:thighR`);
   const shinL = joint(thighL, shP(1), thP(1));
   const shinR = joint(thighR, shP(-1), thP(-1));
-  hang(shinL, shin(L, 1), shP(1), 0.05);
-  hang(shinR, shin(L, -1), shP(-1), -0.05);
+  hang(shinL, () => shin(L, 1), shP(1), 0.05, `${K}:shinL`);
+  hang(shinR, () => shin(L, -1), shP(-1), -0.05, `${K}:shinR`);
 
   const toP: [number, number, number] = [0, WAIST, 0];
   const torsoJ = joint(hips, toP, hipsP);
-  hang(torsoJ, torso(L), toP);
+  hang(torsoJ, () => torso(L), toP, 0, `${K}:torso`);
 
   // The bust's own head: chin row 0 sits on the neck pivot.
   const hdP: [number, number, number] = [0, NECK, 0];
   const headJ = joint(torsoJ, hdP, toP);
-  const hg = head(L);
-  hair(hg, L);
-  hg.jit = 0;
-  headJ.add(meshOf(hg));
+  headJ.add(
+    meshOf(() => {
+      const hg = head(L);
+      hair(hg, L);
+      hg.jit = 0;
+      return hg;
+    }, `${K}:head`),
+  );
 
   const shoP = (s: 1 | -1): [number, number, number] => [s * 4, SHOULDER, 0];
   const elbP = (s: 1 | -1): [number, number, number] => [s * 4, ELBOW, 0];
   const armL = joint(torsoJ, shoP(1), toP);
   const armR = joint(torsoJ, shoP(-1), toP);
-  hang(armL, upperArm(L, 1), shoP(1));
-  hang(armR, upperArm(L, -1), shoP(-1));
+  hang(armL, () => upperArm(L, 1), shoP(1), 0, `${K}:armL`);
+  hang(armR, () => upperArm(L, -1), shoP(-1), 0, `${K}:armR`);
   const foreL = joint(armL, elbP(1), shoP(1));
   const foreR = joint(armR, elbP(-1), shoP(-1));
-  hang(foreL, foreArm(L, 1), elbP(1));
-  hang(foreR, foreArm(L, -1), elbP(-1));
+  hang(foreL, () => foreArm(L, 1), elbP(1), 0, `${K}:foreL`);
+  hang(foreR, () => foreArm(L, -1), elbP(-1), 0, `${K}:foreR`);
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
+  });
 
   return {
     root,
@@ -341,7 +380,20 @@ export function pilotFigure(id: string, scale = FIGURE_VOXEL, override?: Partial
     look: L,
     phase: 0,
     seed: (id.length * 1.7 + (L.skin % 97)) % 6.28,
+    action: null,
+    sitting: false,
+    meshes,
   };
+}
+
+/** Starts a gesture; it eases in, holds, and eases back out on its own. */
+export function gesture(f: PilotFigure, kind: Gesture, dur = GESTURE_TIME[kind]): void {
+  f.action = { kind, t: 0, dur };
+}
+
+/** Shadows only near the camera: a crowd's shadow pass is most of its cost. */
+export function setFigureShadows(f: PilotFigure, on: boolean): void {
+  for (const m of f.meshes) m.castShadow = on;
 }
 
 // --------------------------------------------------------------- animation
@@ -419,4 +471,96 @@ export function animateFigure(f: PilotFigure, speed: number, dt: number, t: numb
   // Hips bob over each step; a breath's rise at rest. Metres, so in rig units.
   const bob = moving ? Math.abs(Math.cos(f.phase)) * (0.025 + 0.035 * run) : breathe * 0.012;
   f.hips.position.y = HIP + bob / FIGURE_VOXEL;
+
+  if (f.sitting) {
+    // Seated on something 0.45 m high: the hips drop, thighs come level, shins hang.
+    ease(f.thighL, -1.45, 0, 0.08, kLeg);
+    ease(f.thighR, -1.45, 0, -0.08, kLeg);
+    ease(f.shinL, 1.45, 0, 0, kLeg);
+    ease(f.shinR, 1.45, 0, 0, kLeg);
+    f.hips.position.y = HIP - 0.12 / FIGURE_VOXEL;
+  }
+  if (f.action) poseGesture(f, f.action, dt, t);
+}
+
+/** Arms and head for a gesture, eased in and out over its life. */
+function poseGesture(f: PilotFigure, a: { kind: Gesture; t: number; dur: number }, dt: number, t: number): void {
+  a.t += dt;
+  if (a.t >= a.dur) {
+    f.action = null;
+    return;
+  }
+  // In over 0.2 s, out over the last 0.3 s.
+  const w = Math.min(1, a.t / 0.2, (a.dur - a.t) / 0.3);
+  // Blended over the pose the body already has this frame, by the envelope:
+  // fully the gesture at its peak, fully the walk or idle at either end.
+  const mix = (o: THREE.Object3D, x: number, y: number, z: number): void => {
+    o.rotation.x += (x - o.rotation.x) * w;
+    o.rotation.y += (y - o.rotation.y) * w;
+    o.rotation.z += (z - o.rotation.z) * w;
+  };
+  const s = Math.sin(a.t * 9);
+  switch (a.kind) {
+    case 'nod':
+      mix(f.head, 0.25 + Math.sin(a.t * 12) * 0.2, 0, 0);
+      break;
+    case 'shake':
+      mix(f.head, 0, Math.sin(a.t * 13) * 0.35, 0);
+      break;
+    case 'point':
+      mix(f.armR, -1.45, 0.15, 0.1);
+      mix(f.foreR, -0.1, 0, 0);
+      mix(f.head, -0.05, -0.15, 0);
+      break;
+    case 'wave':
+      mix(f.armR, -0.3, 0, -2.5);
+      mix(f.foreR, -0.6 - s * 0.35, 0, 0);
+      break;
+    case 'salute':
+      mix(f.armR, -2.0, 0.3, 0.55);
+      mix(f.foreR, -1.9, 0, 0);
+      mix(f.torso, -0.04, 0, 0);
+      break;
+    case 'shrug':
+      mix(f.armL, -0.35, 0, 0.55);
+      mix(f.armR, -0.35, 0, -0.55);
+      mix(f.foreL, -1.2, 0, 0);
+      mix(f.foreR, -1.2, 0, 0);
+      mix(f.head, 0, 0, 0.15);
+      break;
+    case 'cross':
+      mix(f.armL, -0.55, 0, -0.35);
+      mix(f.armR, -0.55, 0, 0.35);
+      mix(f.foreL, -2.0, 0, 0);
+      mix(f.foreR, -2.0, 0, 0);
+      break;
+    case 'work':
+      // Hands at a bench: hammering, turning, lifting, in a loop.
+      mix(f.armL, -1.0 + Math.sin(t * 6) * 0.15, 0, 0.1);
+      mix(f.armR, -1.1 + Math.max(0, s) * 0.5, 0, -0.1);
+      mix(f.foreL, -0.8, 0, 0);
+      mix(f.foreR, -0.6 - Math.max(0, s) * 0.6, 0, 0);
+      mix(f.torso, 0.18, 0, 0);
+      mix(f.head, 0.25, 0, 0);
+      break;
+    case 'talk':
+      mix(f.armR, -0.55 + Math.sin(t * 4) * 0.2, 0, -0.15);
+      mix(f.foreR, -1.0 + Math.sin(t * 5.3) * 0.25, 0, 0);
+      mix(f.head, Math.sin(t * 3.1) * 0.06, Math.sin(t * 1.7) * 0.12, 0);
+      break;
+    case 'look':
+      mix(f.head, -0.05, Math.sin(a.t * 2.2) * 0.6, 0);
+      break;
+    case 'slump':
+      mix(f.torso, 0.3, 0, 0);
+      mix(f.head, 0.35, 0, 0);
+      mix(f.armL, 0.1, 0, 0.05);
+      mix(f.armR, 0.1, 0, -0.05);
+      break;
+    case 'fist':
+      mix(f.armR, -1.1, 0, -0.1);
+      mix(f.foreR, -1.9, 0, 0);
+      mix(f.head, -0.1, 0, 0);
+      break;
+  }
 }

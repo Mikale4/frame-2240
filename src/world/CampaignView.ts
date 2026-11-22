@@ -104,8 +104,58 @@ export class CampaignView implements VoxelView {
     return m;
   }
 
+  /** What was showing before a room took the stage, to put back on leaving. */
+  private stash: { o: THREE.Object3D; v: boolean }[] | null = null;
+  private outdoors = { bg: 0, fog: 0, near: 0, far: 0 };
+
+  /** The next frame cuts straight to where the camera wants to be. */
+  snap(): void {
+    this.init = false;
+  }
+
+  /** Is a room on the stage? */
+  get inRoom(): boolean {
+    return this.stash !== null;
+  }
+
+  /**
+   * A room takes the stage: the sky, the cloud deck, the yards and everything
+   * moving in them are hidden, and the fog closes in to the room's own dark.
+   * The lights and the actors stay; people outside are far past the fog.
+   */
+  enterRoom(room: THREE.Object3D): void {
+    if (this.stash) this.leaveRoom();
+    const s = this.scene;
+    this.stash = s.children
+      .filter((o) => o !== this.actors && o !== this.sun && o !== this.sun.target && !(o as THREE.Light).isLight)
+      .map((o) => ({ o, v: o.visible }));
+    for (const e of this.stash) e.o.visible = false;
+    const fog = s.fog as THREE.Fog;
+    this.outdoors = { bg: (s.background as THREE.Color).getHex(), fog: fog.color.getHex(), near: fog.near, far: fog.far };
+    (s.background as THREE.Color).setHex(0x05070b);
+    fog.color.setHex(0x05070b);
+    fog.near = 40;
+    fog.far = 90;
+    s.add(room);
+  }
+
+  /** Back outside: everything as it was. */
+  leaveRoom(room?: THREE.Object3D): void {
+    room?.removeFromParent();
+    if (!this.stash) return;
+    for (const e of this.stash) e.o.visible = e.v;
+    this.stash = null;
+    const s = this.scene;
+    const fog = s.fog as THREE.Fog;
+    (s.background as THREE.Color).setHex(this.outdoors.bg);
+    fog.color.setHex(this.outdoors.fog);
+    fog.near = this.outdoors.near;
+    fog.far = this.outdoors.far;
+  }
+
   /** Builds at most one nearby region per call, and hides far ones. */
   stream(x: number, z: number, force = false): void {
+    if (this.stash) return;
     let best: RegionSpec | null = null;
     let bestD = Infinity;
     for (const r of REGIONS) {

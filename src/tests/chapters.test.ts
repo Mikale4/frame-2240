@@ -23,16 +23,21 @@ interface Run {
   unlocked: string[];
   battles: string[];
   errors: unknown[];
+  /** Narration and cards, for the canon checks. */
+  lines: string[];
+  /** Frames launched or shown. */
+  frames: Set<string>;
 }
 
 function play(ch: ChapterDef): Run {
   const flags = new Set<string>();
-  const run: Run = { completed: false, speakers: new Set(), objectives: [ch.objective], unlocked: [], battles: [], errors: [] };
+  const run: Run = { completed: false, speakers: new Set(), objectives: [ch.objective], unlocked: [], battles: [], errors: [], lines: [], frames: new Set() };
   let fights = 0;
   const api: StoryApi = {
     me: ch.pilot,
     say: (who, text) => {
       run.speakers.add(who);
+      run.lines.push(text);
       expect(text.length, `${ch.id}: empty line`).toBeGreaterThan(0);
       return done();
     },
@@ -69,6 +74,48 @@ function play(ch: ChapterDef): Run {
     },
     complete: () => {
       run.completed = true;
+    },
+    letterbox: () => {},
+    titleCard: (episode, title) => {
+      expect(episode.length && title.length, `${ch.id}: empty title card`).toBeTruthy();
+      return done();
+    },
+    narrate: (text) => {
+      expect(text.length, `${ch.id}: empty narration`).toBeGreaterThan(0);
+      run.lines.push(text);
+      return done();
+    },
+    nextTime: (lines, title) => {
+      expect(lines.length && title.length, `${ch.id}: empty next-time card`).toBeTruthy();
+      run.lines.push(...lines, title);
+      return done();
+    },
+    cam: () => {},
+    pan: () => done(),
+    gesture: (who) => {
+      run.speakers.add(who);
+    },
+    sit: (who) => {
+      run.speakers.add(who);
+    },
+    place: (who) => {
+      run.speakers.add(who);
+    },
+    music: () => {},
+    sound: () => {},
+    shake: () => {},
+    alarm: () => {},
+    boom: () => {},
+    flash: () => {},
+    launch: (id = 'frame') => {
+      run.frames.add(id);
+      return done();
+    },
+    showFrame: (id) => {
+      run.frames.add(id);
+    },
+    young: (who) => {
+      run.speakers.add(who);
     },
   };
   const exec = (gen: Script): void => {
@@ -115,6 +162,36 @@ describe('campaign chapters', () => {
       for (const p of [...(ch.features ?? []), ...r.unlocked, ...r.battles]) expect(isPilotId(p), `${ch.id}: ${p}`).toBe(true);
       expect(PILOT_IDS).toContain(ch.pilot);
       expect(r.battles.includes(ch.pilot), `${ch.id}: a pilot cannot fight themselves`).toBe(false);
+    }
+  });
+
+  it('nothing anyone says explains the number, or names it', () => {
+    for (const ch of CHAPTERS) {
+      for (const line of play(ch).lines) expect(line, ch.id).not.toMatch(/2240|2,240/);
+    }
+  });
+
+  it('a frame that launches is one the chapter has', () => {
+    for (const ch of CHAPTERS) {
+      const ids = new Set([...(ch.noFrame ? [] : ['frame']), ...(ch.frames ?? []).map((f) => f.id)]);
+      for (const f of play(ch).frames) expect(ids.has(f), `${ch.id}: no frame ${f}`).toBe(true);
+      for (const f of ch.frames ?? []) expect(isPilotId(f.mech), `${ch.id}: ${f.id}`).toBe(true);
+    }
+  });
+
+  it('a prologue unlocks nobody: the pilots are earned from Chapter 1 on', () => {
+    for (const ch of CHAPTERS.filter((c) => c.number === 0)) {
+      const r = play(ch);
+      expect([...(ch.features ?? []), ...r.unlocked], ch.id).toEqual([]);
+    }
+  });
+
+  it('every pilot has a prologue, chapter 0, and it hands on to Chapter 1', () => {
+    for (const id of PILOT_IDS) {
+      const pro = CHAPTERS.find((c) => c.pilot === id && c.number === 0);
+      expect(pro, id).toBeTruthy();
+      const r = play(pro!);
+      expect(r.lines.some((l) => l.startsWith('CHAPTER 1 · ')), `${id}: the NEXT TIME card names Chapter 1`).toBe(true);
     }
   });
 

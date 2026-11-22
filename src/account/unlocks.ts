@@ -53,7 +53,7 @@ export function recordFight(store: AccountStore, opponent: string, difficulty: D
 }
 
 /**
- * Records a finished match if it counts — VERSUS CPU and FREE ORBIT, with
+ * Records a finished match if it counts — VERSUS CPU in either view, with
  * someone signed in — and returns what it earned, for the results screen.
  */
 export function recordMatch(
@@ -63,7 +63,7 @@ export function recordMatch(
   difficulty: Difficulty,
   outcome: 'none' | 'playerWin' | 'enemyWin' | 'draw',
 ): { unlocked: string[]; xp: number; ranks: number; rank: number; commissions: number } | null {
-  if (!store.user || (mode !== 'vsCpu' && mode !== 'orbit') || outcome === 'none') return null;
+  if (!store.user || mode !== 'vsCpu' || outcome === 'none') return null;
   const r = recordFight(store, enemyMech, difficulty, outcome === 'playerWin');
   return { unlocked: r.unlocked, xp: r.xp, ranks: r.ranks, rank: store.rank, commissions: store.user.commissions };
 }

@@ -85,7 +85,8 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 const fail = <T>(error: string): Result<T> => ({ ok: false, error });
 
 export function freshCampaign(): CampaignSave {
-  return { chapter: 1, done: [], flags: {}, vars: {}, region: '', x: 0, z: 0, facing: 0, updated: 0, objective: '' };
+  // Every campaign opens on its prologue, chapter 0.
+  return { chapter: 0, done: [], flags: {}, vars: {}, region: '', x: 0, z: 0, facing: 0, updated: 0, objective: '' };
 }
 
 /** Rank from experience: every 300 XP is a rank, starting at 1. */

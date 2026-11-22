@@ -38,6 +38,9 @@ export class OrbitHud {
   private readonly hint: Phaser.GameObjects.Text;
   private readonly combo: Phaser.GameObjects.Text;
   private bannerTime = 0;
+  private readonly tag: Phaser.GameObjects.Text;
+  /** A watched match has nobody to show the controls to. */
+  private hintOff = false;
   private hintTime = 0;
   private spin = 0;
 
@@ -96,10 +99,10 @@ export class OrbitHud {
       .text(VIEW_W / 2, 20, '180', { fontFamily: FONT, fontSize: '40px', color: '#eaf2ff', fontStyle: 'bold' })
       .setOrigin(0.5, 0)
       .setStroke('#0a0e18', 6);
-    const tag = scene.add
+    const tag = (this.tag = scene.add
       .text(VIEW_W / 2, 66, 'FREE ORBIT', { fontFamily: FONT, fontSize: '11px', color: '#8fe9ff' })
       .setOrigin(0.5, 0)
-      .setStroke('#0a0e18', 4);
+      .setStroke('#0a0e18', 4));
     this.combo = scene.add
       .text(VIEW_W / 2, 84, '', { fontFamily: FONT, fontSize: '20px', color: '#ffd166', fontStyle: 'bold' })
       .setOrigin(0.5, 0)
@@ -186,7 +189,7 @@ export class OrbitHud {
       this.forms[side].setText(OrbitHud.formLabel(f)).setColor(f.form === 'mobile' ? '#ffd166' : '#9fe0ff');
       this.modes[side].setText(f.satActive ? `SATURATION: ${SAT_MODE_NAMES[f.satMode]}` : `SAT MODE: ${SAT_MODE_NAMES[f.satMode]}`);
     }
-    this.timer.setText(String(sim.secondsLeft));
+    this.timer.setText(sim.endless ? '∞' : String(sim.secondsLeft));
     this.timer.setColor(sim.secondsLeft <= 10 ? '#ff6a7a' : '#eaf2ff');
     const foe = sim.fighters[1];
     this.combo.setText(foe.combo >= 2 ? `${foe.combo} HIT` : sim.player.combo >= 2 ? `${sim.player.combo} HIT` : '');
@@ -259,11 +262,22 @@ export class OrbitHud {
   /** Brings the control line back, e.g. after unpausing. */
   showHint(): void {
     this.hintTime = 0;
-    this.hint.setVisible(true);
+    this.hint.setVisible(!this.hintOff);
   }
 
   /** Hides it, e.g. under the pause menu, which prints its own. */
   hideHint(): void {
+    this.hint.setVisible(false);
+  }
+
+  /** The line under the clock: the mode being fought. */
+  setTag(text: string): void {
+    this.tag.setText(text);
+  }
+
+  /** For CPU vs CPU: no control line at all. */
+  spectating(): void {
+    this.hintOff = true;
     this.hint.setVisible(false);
   }
 

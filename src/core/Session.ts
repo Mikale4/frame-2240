@@ -2,24 +2,29 @@ import type { MatchOutcome } from '../combat/MatchSim';
 import { defaultAudioSettings } from '../audio/AudioSettings';
 import { defaultTrainingSettings } from './TrainingSettings';
 
-/**
- * `orbit` is FREE ORBIT, the three-dimensional mode: its own scene
- * (`OrbitScene`) and simulation (`orbit/OrbitSim.ts`), reached through the same
- * roster and results screens as a versus match.
- */
-export type MatchMode = 'vsCpu' | 'aiVsAi' | 'training' | 'tutorial' | 'orbit';
+export type MatchMode = 'vsCpu' | 'aiVsAi' | 'training' | 'tutorial';
 
 export const MODE_LABELS: Record<MatchMode, string> = {
   vsCpu: 'VERSUS CPU',
   aiVsAi: 'CPU VS CPU',
   training: 'TRAINING',
   tutorial: 'TUTORIAL',
-  orbit: 'FREE ORBIT',
 };
 
-/** The scene a mode's matches run in. */
-export function matchScene(mode: MatchMode): 'Battle' | 'Orbit' {
-  return mode === 'orbit' ? 'Orbit' : 'Battle';
+/** What FREE ORBIT offers inside it. The tutorial is side-on only. */
+export const ORBIT_MODES: readonly MatchMode[] = ['vsCpu', 'aiVsAi', 'training'];
+
+/**
+ * The scene a mode's matches run in: side-on `Battle`, or `Orbit` inside FREE
+ * ORBIT. `freeOrbit` defaults to the session's.
+ */
+export function matchScene(mode: MatchMode, freeOrbit = session.freeOrbit): 'Battle' | 'Orbit' {
+  return freeOrbit && ORBIT_MODES.includes(mode) ? 'Orbit' : 'Battle';
+}
+
+/** The mode's name as screens print it: FREE ORBIT first when it is in it. */
+export function modeLabel(mode: MatchMode, freeOrbit = session.freeOrbit): string {
+  return freeOrbit && ORBIT_MODES.includes(mode) ? `FREE ORBIT · ${MODE_LABELS[mode]}` : MODE_LABELS[mode];
 }
 
 /**
@@ -53,6 +58,13 @@ export const DIFFICULTY_COLOURS: readonly string[] = ['#7fe0a0', '#8fd0ff', '#ff
  */
 export const session = {
   mode: 'vsCpu' as MatchMode,
+  /**
+   * In FREE ORBIT: its own mode on the menu, with its own rules (the 3D
+   * scene, transforming mobile forms, the campaign's open-air flights), and
+   * VERSUS CPU, CPU VS CPU and TRAINING offered inside it (D186). The main
+   * menu's own rows of those names are the side-on game and clear this.
+   */
+  freeOrbit: false,
   /**
    * Difficulty per *side*, not per match.
    *

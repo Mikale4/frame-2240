@@ -85,11 +85,28 @@ the pilot out into the Reach.
 | **Naia Vesk** | Meridian | *Instructor's Hours* — she certifies a cadet's frame, then is posted to the standing-rules board and flies her first sanctioned case at Cathedral Yard. | Earning Archive access; why Concord never pursued EW-14; the deferred finding that killed her mother. |
 | **Halden Rook** | Emberrest | *Impossible to Impress* — recruits on the range; the claims office wants him to fly for one of the thirteen. | Escorts; the Seven Yards War's unfinished paper; "one day we talk about it". |
 | **Kestrel Doyne** | the Spans | *Four Positions* — a survey post, a convoy lane, and a duel he wins before anyone finds him. | The 40 AV-12 hulls; the close-quarters test nobody has set him. |
-| **Brunn Okonkwo** | Coldseam | *Seam Shift* — a shift on the platforms; a convoy loss; a walker armed again. | Who seized the convoys before 34 CE; Ironwake's blank position on the Descent. |
+| **Brunn Okonkwo** | Coldseam | *Seam Shift* — a shift on the platforms; a convoy loss; a walker armed again. | Who seized the convoys in the war years; Ironwake's blank position on the Descent. |
 | **Mira Holloway** | Brightwake | *Three Wrecks and a Reactor* — the berths, the hull-loss account, a challenge on the market deck. | The dagger revision; Free Latitude's status at every border. |
 | **Saar Tengku** | Gatewatch | *The Route Stays Closed* — the watch at Kettle Gate; a contested docking he does not pursue. | A twelfth braid. |
 | **Rasa Volkov** | Cinder Berth | *Within Terms* — two contracts that cannot both be honoured. | The two burned yards. |
 | **Io Senna** | Brightwake | *Data Point* — told from outside: dock records, other people's lines, and what she does. **No interior voice**, per canon. | NULLTIDE's provisional rating; the conversation with Rook. |
+
+### Prologues (chapter 0) — written
+
+Each campaign opens on the pilot before they were who they are now, told as
+the first episode of a mecha anime (cold open, title card, slice of life, a
+crisis, a sortie, NEXT TIME). Facts are the Archive's; everyone new is a role.
+
+| Pilot | Prologue | When | What happens |
+| --- | --- | --- | --- |
+| Naia Vesk | *The Following Mark* | 20 CE → 30 CE | Nine years old, she reads the fault board; her mother's AV-04 is lost on the morning circuit to the deferred spar-root fault; eleven grounded that week. Ten years on, she goes through AV-07's open items before she will sign. |
+| Halden Rook | *The Manual* | 33 CE | He crosses to Emberline with his flight manual; it is copied overnight; he talks a recruit's rebuilt AV-13 down over the channel and takes the intake. He never speaks of the trial. |
+| Kestrel Doyne | *Sightline* | 36 CE | The AV-12 certification class: the surveyor reads four firing positions off the yard, flies a recorded AV-07 profile, and is certified one of nine. |
+| Brunn Okonkwo | *Four Seconds* | 28 CE | A seam collapse counted out on the channel; a third convoy seized; the Pattern 3s get guns, and the crew stays "seam crew". |
+| Mira Holloway | *Seventeen* | 38 CE | Three wrecks, a reactor taken at night (a yard kid drops a bucket), and a poor first flight. |
+| Saar Tengku | *The Opening* | 23 CE → later | On foot, Colliery security, his first contested docking held with the gate guns and no pursuit — the first braid. Years later, the GD-09. |
+| Rasa Volkov | *Written Off* | 38 CE | Signing on with Ashfall; the first IN-05 comes home burning; hull written off, contract complete, a cleaning requisition for kit that is still clean. |
+| Io Senna | *Salvage* | 33 CE | A frame sets down at Brightwake in the night; the dock crew decide what it is; a false alarm; "Data point."; entered as salvage. No interior voice. |
 
 **Archive tie-in.** Entries start redacted and unlock as campaigns reach
 them, in the canon order (EW-14, then Senna, then Rook). Nothing player-facing

@@ -1,6 +1,22 @@
 import type { PilotId } from '../account/Accounts';
 import type { Difficulty } from '../core/Session';
+import type { Gesture } from '../voxel/PilotFigure';
 import type { Script, Waitable } from './Script';
+
+/** A point in the chapter's region: region-local metres, `y` up from its deck. */
+export interface Spot3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
+ * Music by what the moment is, not by file: the scene picks the track.
+ * `theme` is the pilot's own.
+ */
+export type Mood = 'calm' | 'tension' | 'danger' | 'sorrow' | 'hope' | 'theme' | 'yard' | 'training' | 'title';
+
+export type Sound = 'alarm' | 'boom' | 'bigboom' | 'hit' | 'launch' | 'land' | 'step' | 'beep' | 'door';
 
 /**
  * What a chapter script can do. The campaign scene implements it for real;
@@ -46,6 +62,69 @@ export interface StoryApi {
   unlock(pilot: PilotId): void;
   /** Finishes the chapter: saves, pays experience, opens the next. */
   complete(): void;
+
+  // ---- the cutscene kit: an episode's presentation ----------------------
+
+  /** Cinema bars in (true) or out. Scripts take them in for drama and out for play. */
+  letterbox(on: boolean): void;
+  /**
+   * The episode's title card, as the show opens: the episode number and its
+   * title over the picture. Holds for `seconds`.
+   */
+  titleCard(episode: string, title: string, seconds?: number): Waitable;
+  /** The narrator: a line centred over the picture, no speaker; waits for the player. */
+  narrate(text: string): Waitable;
+  /**
+   * The "next time" card at an episode's end: a few lines of what is coming,
+   * and the next episode's title. Waits for the player.
+   */
+  nextTime(lines: string[], title: string): Waitable;
+  /** The camera: from `eye` at `at`. `cut` jumps there; otherwise it eases. */
+  cam(eye: Spot3, at: Spot3, cut?: boolean): void;
+  /** A camera move from one framing to another over `seconds`. */
+  pan(from: [Spot3, Spot3], to: [Spot3, Spot3], seconds: number): Waitable;
+  /** Body language: a nod, a salute, arms crossed, hands at work. */
+  gesture(actor: string, kind: Gesture, seconds?: number): void;
+  /** Sits an actor down where they stand (on a bench, a crate, a step), or stands them up. */
+  sit(actor: string, on: boolean): void;
+  /** Puts an actor somewhere at once, region-local. */
+  place(actor: string, x: number, z: number, facing?: number): void;
+  /** Music by mood; `null` is silence. */
+  music(mood: Mood | null): void;
+  sound(name: Sound): void;
+  /** Shakes the camera: `strength` in metres, easing out over `seconds`. */
+  shake(strength: number, seconds: number): void;
+  /** The alarm: red light pulsing over everything, and the klaxon. */
+  alarm(on: boolean): void;
+  /** An explosion at a region-local spot, `y` metres up; `size` 1 is a frame's worth. */
+  boom(x: number, z: number, y?: number, size?: number): void;
+  /** A white flash over the picture. */
+  flash(): void;
+  /**
+   * A sortie: a frame lifts off its pad and flies, the camera with it. `'frame'`
+   * is the pilot's own on their home pad; any other id is one of the chapter's
+   * `frames`. Resolves when it is away; it stays gone until shown.
+   */
+  launch(frame?: string): Waitable;
+  /** Shows or hides one of the chapter's frames (or `'frame'`, the pilot's own). */
+  showFrame(frame: string, visible: boolean): void;
+  /**
+   * Draws an actor as a child, or grown: for a prologue's time-skip. `'me'`
+   * grown gets the pilot's portrait back in the dialogue box.
+   */
+  young(actor: string, on: boolean): void;
+}
+
+/** A frame standing in the chapter's region: in a bay, on a pad, a wreck. */
+export interface FrameDef {
+  id: string;
+  /** Whose machine it is drawn as. */
+  mech: PilotId;
+  x: number;
+  z: number;
+  /** Which way it faces, radians (0 is +z). */
+  facing?: number;
+  hidden?: boolean;
 }
 
 export interface ActorDef {
@@ -68,6 +147,10 @@ export interface ActorDef {
   facing?: number;
   /** Hidden until a script shows them. */
   hidden?: boolean;
+  /** A child: drawn smaller. */
+  young?: boolean;
+  /** Seated where they stand when the chapter opens. */
+  sitting?: boolean;
 }
 
 export interface AreaDef {
@@ -103,4 +186,12 @@ export interface ChapterDef {
   areas?: AreaDef[];
   /** Pilots featured here, unlocked when the chapter is finished. */
   features?: PilotId[];
+  /** The pilot as a child, for a prologue set in their childhood. */
+  young?: boolean;
+  /** No frame on the home pad: before they had one. */
+  noFrame?: boolean;
+  /** Frames standing in this chapter's region. */
+  frames?: FrameDef[];
+  /** The chapter's music when nothing else is asked for. */
+  music?: Mood;
 }

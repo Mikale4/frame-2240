@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Grid, glow, hash3, mixHex, shade, voxelObject } from '../voxel/VoxelKit';
-import { REGIONS, SPANS, regionWalk, spanGeometry, type Building, type RegionSpec, type RegionStyle } from '../campaign/Regions';
+import { REGIONS, SPANS, doorOf, regionWalk, spanGeometry, type Building, type RegionSpec, type RegionStyle } from '../campaign/Regions';
 import type { Ramp } from '../campaign/WorldModel';
 
 /**
@@ -18,7 +18,7 @@ import type { Ramp } from '../campaign/WorldModel';
  * is what you can stand on.
  */
 
-interface Palette {
+export interface Palette {
   deckA: number;
   deckB: number;
   seam: number;
@@ -222,6 +222,21 @@ function building(g: Grid, b: Building, P: Palette, style: RegionStyle): void {
     g.box(x0 + 1, 1, z1, x1 - 1, h - 3, z1, (_x, y) => (y === 1 ? P.wallDark : glow(mixHex(P.window, 0xffffff, 0.2))));
     g.box(x0 - 1, h - 1, z0, x1 + 1, h - 1, z1 + 2, (x) => ((x - x0) % 2 ? P.accent : shade(P.accent, 0.7)));
     g.box(x0 + 1, h, z1, x1 - 1, h + 1, z1, glow(style === 'free' ? 0xff5a8a : P.lamp));
+  }
+  // The door, where the walk model puts its stand spot: dark, under a lit
+  // lintel. Cathedral Yard's are sealed, and say so in red.
+  const d = doorOf(b);
+  const lintel = glow(style === 'cathedral' ? 0xff3a2a : P.lamp);
+  if (d.face === 'w' || d.face === 'e') {
+    const x = d.face === 'w' ? x0 : x1;
+    const z = Math.round(d.z);
+    g.box(x, 0, z - 1, x, 2, z, 0x14181e);
+    g.box(x, 3, z - 1, x, 3, z, lintel);
+  } else {
+    const z = d.face === 'n' ? z0 : z1;
+    const x = Math.round(d.x);
+    g.box(x - 1, 0, z, x, 2, z, 0x14181e);
+    g.box(x - 1, 3, z, x, 3, z, lintel);
   }
 }
 

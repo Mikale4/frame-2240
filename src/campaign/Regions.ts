@@ -213,6 +213,35 @@ export function homeOf(pilot: PilotId): RegionSpec {
 /** A region-local spot in world metres. */
 export const worldOf = (r: RegionSpec, s: Spot): { x: number; y: number; z: number } => ({ x: r.cx + s.x, y: r.y, z: r.cz + s.z });
 
+/**
+ * A building's door, region-local: the middle of whichever face looks most
+ * toward the deck's centre, with the spot just outside it where you stand to
+ * go in. `face` is the outward direction of that wall.
+ */
+export interface Door {
+  /** On the wall. */
+  x: number;
+  z: number;
+  /** Where you stand to use it, a metre and a half out. */
+  sx: number;
+  sz: number;
+  face: 'n' | 's' | 'e' | 'w';
+}
+
+export function doorOf(b: Building): Door {
+  const mx = (b.x0 + b.x1) / 2;
+  const mz = (b.z0 + b.z1) / 2;
+  // Toward the region centre (0, 0), along whichever axis it is further.
+  if (Math.abs(mx) > Math.abs(mz)) {
+    const face = mx > 0 ? 'w' : 'e';
+    const x = face === 'w' ? b.x0 : b.x1;
+    return { x, z: mz, sx: x + (face === 'w' ? -1.6 : 1.6), sz: mz, face };
+  }
+  const face = mz > 0 ? 'n' : 's';
+  const z = face === 'n' ? b.z0 : b.z1;
+  return { x: mx, z, sx: mx, sz: z + (face === 'n' ? -1.6 : 1.6), face };
+}
+
 export interface SpanSpec {
   from: string;
   to: string;

@@ -4,9 +4,9 @@ import {
   DIFFICULTY_COLOURS,
   DIFFICULTY_COUNT,
   DIFFICULTY_NAMES,
-  MODE_LABELS,
   session,
   matchScene,
+  modeLabel,
 } from '../core/Session';
 import { InputManager } from '../input/InputManager';
 import { accounts, isPilotId } from '../account/Accounts';
@@ -601,7 +601,7 @@ export class MechSelectScene extends Phaser.Scene {
             : this.picking === 'enemy'
               ? `${duel ? `CPU 1:  ${mine}  [${mineTier}]` : `YOUR MECH:  ${mine}`}`
               : this.picking === 'enemySkill'
-                ? `${mine}${duel ? ` [${mineTier}]` : ''}   vs   ${theirs}      ${MODE_LABELS[session.mode]}`
+                ? `${mine}${duel ? ` [${mineTier}]` : ''}   vs   ${theirs}      ${modeLabel(session.mode)}`
                 : '',
     );
 
