@@ -131,6 +131,18 @@ export const session = {
   lastPlayerLife: 0,
   lastEnemyLife: 0,
   /**
+   * What the last match earned the signed-in account — experience, ranks, and
+   * any pilot it unlocked — for the results screen. Null when nothing was
+   * recorded (training, CPU vs CPU, the tutorial, nobody signed in).
+   */
+  /**
+   * Set while a campaign's sanctioned flight is running. The fight scene writes
+   * the result here and wakes the campaign instead of opening the results
+   * screen; the campaign reads it and clears it.
+   */
+  campaignFight: null as { result: 'win' | 'lose' | null } | null,
+  lastAward: null as { unlocked: string[]; xp: number; ranks: number; rank: number; commissions: number } | null,
+  /**
    * Music and effect levels, in steps. Loaded from storage during boot and
    * written back whenever the player moves one, so a mix survives a restart —
    * a balance you have to set again every launch is not a setting.

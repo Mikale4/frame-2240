@@ -66,6 +66,18 @@ export class ResultsScene extends Phaser.Scene {
       smallText(this, v, VIEW_W / 2 + 210, y, 14, '#ffd9a0', [1, 0.5]);
     });
 
+    // What the fight earned the account: experience, rank, and any pilot.
+    const award = session.lastAward;
+    if (award) {
+      const parts = [`+${award.xp} XP`, award.ranks > 0 ? `RANK UP — RANK ${award.rank}` : `RANK ${award.rank}`];
+      if (award.commissions > 0) parts.push(`${award.commissions} COMMISSION${award.commissions > 1 ? 'S' : ''} TO SPEND`);
+      smallText(this, parts.join('   ·   '), VIEW_W / 2, 318, 13, '#9fe0ff');
+      if (award.unlocked.length) {
+        const names = award.unlocked.map((id) => MECHS[id]?.pilot ?? id).join(', ');
+        smallText(this, `NEW PILOT UNLOCKED: ${names}`, VIEW_W / 2, 340, 16, '#ffd166').setFontStyle('bold');
+      }
+    }
+
     this.menu = new Menu(
       this,
       [

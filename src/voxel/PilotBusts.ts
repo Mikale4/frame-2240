@@ -32,7 +32,7 @@ type HairStyle = 'bob' | 'cropped' | 'tied' | 'shaved' | 'shaggy' | 'braids' | '
 type Mouth = 'smile' | 'smirk' | 'stern' | 'flat';
 type Collar = 'open' | 'armour' | 'flight' | 'work' | 'scav' | 'circuit';
 
-interface Look {
+export interface Look {
   sex: 'f' | 'm';
   skin: number;
   hair: number;
@@ -133,7 +133,7 @@ function hairShade(H: number): (x: number, y: number, z: number) => number {
 
 // ------------------------------------------------------------------- heads
 
-function head(L: Look): Grid {
+export function head(L: Look): Grid {
   const g = new Grid();
   g.jit = 0.025;
   const S = L.skin;
@@ -251,7 +251,7 @@ function head(L: Look): Grid {
 }
 
 /** Hair, painted into the head grid so AO ties it to the skull. */
-function hair(g: Grid, L: Look): void {
+export function hair(g: Grid, L: Look): void {
   const hs = hairShade(L.hair);
   const base = (): void => {
     g.box(-4, 7, -4, 3, 7, 3, hs);
@@ -382,7 +382,7 @@ function hair(g: Grid, L: Look): void {
 
 // ------------------------------------------------------------------ bodies
 
-function body(L: Look): Grid {
+export function body(L: Look): Grid {
   const g = new Grid();
   g.jit = 0.035;
   const f = L.sex === 'f';

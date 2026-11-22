@@ -9,6 +9,8 @@ import { TAG_PAIRS, pickTagArrival, pickTagLate } from '../data/tags';
 import { TAG_OPEN_HOLD, TAG_REPLY_GAP, TAG_REPLY_HOLD, TagState } from '../combat/TagPartner';
 import type { MechDef } from '../mechs/MechDef';
 import { RivalAI } from '../ai/RivalAI';
+import { accounts } from '../account/Accounts';
+import { recordMatch } from '../account/unlocks';
 import { Rng } from '../core/Rng';
 import { InputManager } from '../input/InputManager';
 import type { MechPoseSource } from '../render/MechRenderer';
@@ -1100,6 +1102,10 @@ export class BattleScene extends Phaser.Scene {
     if (s.phase === MatchPhase.Over && !this.finished) {
       this.finished = true;
       session.lastOutcome = s.outcome;
+      // Counted toward unlocks and rank; a demo is nobody's fight.
+      session.lastAward = session.demo
+        ? null
+        : recordMatch(accounts(), session.mode, session.enemyMech, session.enemyDifficulty, s.outcome);
       session.lastTimeLeft = s.secondsLeft;
       session.lastPlayerLife = s.player.life;
       session.lastEnemyLife = s.enemy.life;
@@ -1107,7 +1113,15 @@ export class BattleScene extends Phaser.Scene {
       // asked it who won. A knockout inside the demo window is unlikely but
       // entirely possible, so this is a real branch rather than a precaution.
       if (session.demo) this.endDemo();
-      else this.time.delayedCall(280, () => this.scene.start('Results'));
+      else if (session.campaignFight) {
+        // A campaign's sanctioned flight: back to the walking world, where the
+        // chapter's script is waiting on this result.
+        session.campaignFight.result = s.outcome === 'playerWin' ? 'win' : 'lose';
+        this.time.delayedCall(1600, () => {
+          this.scene.wake('Campaign');
+          this.scene.stop();
+        });
+      } else this.time.delayedCall(280, () => this.scene.start('Results'));
     }
   }
 

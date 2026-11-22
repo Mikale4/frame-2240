@@ -8256,3 +8256,87 @@ mech select and the results screen's rematch.
 changes the tuned 2D balance, so it waits for the owner to ask. FREE ORBIT is
 player-vs-CPU only (no CPU-vs-CPU or training variant yet), and the salvo fires
 from where the escort drone would be without drawing one.
+
+## D183 — accounts: the title is a login, and pilots are earned
+
+The owner asked for the title screen to become "a fully fledged login screen"
+that keeps its title elements, with the player **choosing one pilot at account
+creation** — the only pilot they then have — and the other seven unlocked "by
+various progressive means".
+
+* **Accounts are kept in the browser**, matching the owner's other games
+  (Wordle n' Friends, BLOCKADE, Red Ring Circuit's `net/auth.js`): callsign,
+  password of 6+ characters typed twice, salted SHA-256, remember-me, sign
+  out, several accounts per machine. The panel's small print says a local
+  password is not a security boundary. `src/account/Accounts.ts`, no Phaser.
+* **The title keeps its wordmark, its live fight and PRESS START**; PRESS START
+  opens the sign-in panel (`src/ui/LoginPanel.ts`) and lifts the wordmark out
+  of its way, or goes straight through for a remembered account. Creating an
+  account ends on CHOOSE YOUR PILOT — the eight live busts.
+* **Locking means your side.** A locked pilot cannot be flown in VERSUS CPU,
+  FREE ORBIT, TRAINING, the player slot of CPU vs CPU or the campaign; rivals
+  are never locked. Mech select dims them, says how to earn each, and refuses
+  the pick. The TUTORIAL still teaches on HALCYON.
+* **Three routes, any one enough** (`src/account/unlocks.ts`): finish a
+  campaign chapter that features the pilot; beat their machine 3× at HARD+ or
+  5× at any skill in VERSUS CPU or FREE ORBIT; or spend a **commission**, paid
+  every third rank (300 XP a rank; a win pays 60 + 20 per tier, a loss 20, a
+  chapter 250). Results show XP, rank and any unlock; the menu shows callsign,
+  rank, pilots and commissions, and has SIGN OUT.
+
+## D184 — the campaign: eight stories in one open world
+
+The owner asked for a voxel campaign with cutscenes and places to walk, "like"
+their FF7 and Red Ring Circuit Chao Garden games, in chapters, **one connected
+open world rather than stages**, and then for **each pilot to have their own
+campaign**. Plan and names awaiting review: `docs/CAMPAIGN_PLAN.md`.
+
+* **The Reach** (NEW): one continuous world at human scale (1 unit = 1 m).
+  Cathedral Yard in the middle; seven home regions on a ring at different
+  altitudes (Meridian, Brightwake, Coldseam, Gatewatch, Emberrest, Cinder
+  Berth, Survey Post 4), each joined to the centre by a walkable **span** with
+  ramps where the heights differ. `campaign.test.ts` walks every span both
+  ways through the real collision model — it caught two buildings sitting on
+  span landings.
+* **Engine pieces ported from the owner's games** (read, never run):
+  FF7's coroutine scripts (`campaign/Script.ts`) and dry-run validation
+  (`chapters.test.ts` plays every chapter to the end with a mock API, losing
+  the first flight); the Chao Garden's step/edge/slide walking rules
+  (`campaign/WorldModel.ts`), orbit camera with wall pull-in, and region
+  streaming (`world/CampaignView.ts`).
+* **A sanctioned flight is the real fight**: the campaign scene sleeps, the
+  side-on Battle or FREE ORBIT runs as from the menu, then wakes the campaign
+  and the chapter script resumes with the result.
+* **Each Chapter 1 unlocks the pilot it is flown against**, chosen from canon
+  ties so the eight form one loop (Vesk→Rook→Tengku→Holloway→Senna→Doyne→Vesk;
+  Okonkwo↔Volkov): whoever an account starts with, its first chapter earns a
+  second pilot. People in the world are **unnamed roles** with generated
+  faces (`extraLook`) — never a pilot's — per the canon rule against new named
+  characters.
+
+## D185 — people on foot: Post Parade's build, Zenless Voxel's joints
+
+The first campaign figure was the portrait bust given limbs, at the bust's
+12–16-voxel chest width; the owner rejected it and asked for people built like
+Post Parade's, jointed like Zenless Voxel's. Both read from the owner's own
+projects (`Umamusume Voxel Addition/race/voxel.js`, `Zenless Voxel/js/
+models-base.js` and `anim.js`), never run.
+
+* **Post Parade's build** (`src/voxel/PilotFigure.ts`): 0.067 m voxels, 26 to
+  the crown (1.74 m); an 8-voxel head on a 6×6×4 torso, 10-voxel shoulder
+  span, 2×2 limbs, pelvis rows 8–10, one merged mesh per part, no colour
+  jitter, Post Parade's corner convention (row r fills r..r+1). Sex reads from
+  face, hair and clothes — the bodies are the same, as in Post Parade.
+* **The head is the approved bust head, unchanged** — Post Parade's head is
+  the one the busts were built on, so the faces the owner signed off on are
+  the faces that walk.
+* **Zenless's joints**: hips → thighs → shins, hips → torso → head and upper
+  arms → forearms; limbs cut straight with the joint row centred on its pivot
+  so the inside of a bend closes, hip rows buried in the pelvis. Zenless's own
+  elbows and knees are a Battle Lab test toggle (`jointify`); this is that rig
+  made standard.
+* **Zenless's walk**: `gait`/`legAngle` (stance sweeps back at even ground
+  speed, swing on a smoothstep), phase advanced by distance covered so feet do
+  not slide, knees bent 0.85θ / 0.6–1.6θ, elbows forward, run lean, hip bob,
+  breathing and Post Parade's look-about at rest, per-joint easing (legs 60/s
+  while walking).

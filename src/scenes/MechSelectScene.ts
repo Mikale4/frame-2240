@@ -9,6 +9,8 @@ import {
   matchScene,
 } from '../core/Session';
 import { InputManager } from '../input/InputManager';
+import { accounts, isPilotId } from '../account/Accounts';
+import { unlockHint } from '../account/unlocks';
 import { bigTitle, smallText } from '../ui/Menu';
 import { ROSTER } from '../data/mechs';
 import { TAG_PAIRS } from '../data/tags';
@@ -78,6 +80,11 @@ const PORTRAIT_Y = GRID_TOP + PORTRAIT_SIZE / 2;
 export class MechSelectScene extends Phaser.Scene {
   private input$!: InputManager;
   private index = 0;
+  /** The locked-pilot line, rebuilt with the scene. */
+  private lockText?: Phaser.GameObjects.Text;
+  private lockBack?: Phaser.GameObjects.Rectangle;
+  /** A locked cell the player has pressed once with a commission in hand. */
+  private pendingCommission = -1;
   /**
    * Machine, then that pilot's tier, for each side in turn.
    *
@@ -146,8 +153,14 @@ export class MechSelectScene extends Phaser.Scene {
     this.t = 0;
     this.armAt = 0.18;
     this.picking = 'player';
+    // Your side starts on a pilot you actually have.
+    const store = accounts();
+    if (!store.isUnlocked(session.playerMech) && store.user) session.playerMech = store.user.starter;
     this.index = Math.max(0, ROSTER.findIndex((m) => m.id === session.playerMech));
     this.cells = [];
+    this.pendingCommission = -1;
+    this.lockText = undefined;
+    this.lockBack = undefined;
 
     // Carries all four stages, skill panels included — the anticipation the
     // track is written around does not reset when the heading changes.
@@ -397,14 +410,50 @@ export class MechSelectScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setStroke('#070b12', 4);
 
-      cell.add([plate, thumb, frame, label]);
+      // A locked pilot is shown, dimmed, with a padlock: you can see who there
+      // is to earn, and a rival can still be any of them.
+      const lock = this.add
+        .text(0, -2, 'LOCKED', { fontFamily: FONT, fontSize: '12px', color: '#ffd166', fontStyle: 'bold' })
+        .setOrigin(0.5)
+        .setStroke('#070b12', 5)
+        .setVisible(false);
+      cell.add([plate, thumb, frame, label, lock]);
       cell.setData('pos', { x: cx, y: cy });
+      cell.setData('lock', lock);
       this.cells.push(cell);
     });
   }
 
+  /** Is this cell closed to the stage being picked? Only your own side locks. */
+  private lockedHere(i: number): boolean {
+    const id = ROSTER[i]?.id ?? '';
+    return this.picking === 'player' && isPilotId(id) && !accounts().isUnlocked(id);
+  }
+
   private refresh(): void {
     const def = ROSTER[this.index];
+    this.cells.forEach((cell, i) => {
+      const locked = this.lockedHere(i);
+      cell.setAlpha(locked ? 0.45 : 1);
+      (cell.getData('lock') as Phaser.GameObjects.Text | undefined)?.setVisible(locked);
+    });
+    if (!this.lockText) {
+      // On its own dark strip: it crosses the drone panel's last line.
+      this.lockBack = this.add.rectangle(VIEW_W / 2, HINT_Y - 20, VIEW_W, 20, 0x05080f, 0.92).setDepth(1199);
+      this.lockText = smallText(this, '', VIEW_W / 2, HINT_Y - 20, 11, '#ffd166');
+    }
+    const id = def.id;
+    if (this.lockedHere(this.index) && isPilotId(id)) {
+      const spend = this.pendingCommission === this.index;
+      this.lockText.setText(
+        spend
+          ? `CONFIRM AGAIN TO SPEND A COMMISSION ON ${def.pilot}`
+          : `${def.pilot} IS LOCKED — ${unlockHint(accounts(), id)}`,
+      );
+    } else {
+      this.lockText.setText('');
+    }
+    this.lockBack?.setVisible(this.lockText.text !== '');
     const role = ROLE_BRIEF[def.supporter.role];
     const pos = this.cells[this.index].getData('pos') as { x: number; y: number };
     // Centred on the plate, which is centred on the cell — no offset.
@@ -699,6 +748,28 @@ export class MechSelectScene extends Phaser.Scene {
   }
 
   private confirm(): void {
+    // Your own side cannot fly a pilot you have not earned — unless you spend
+    // a commission on them, which takes a second press to be sure.
+    if (this.lockedHere(this.index)) {
+      const id = ROSTER[this.index].id;
+      const store = accounts();
+      if ((store.user?.commissions ?? 0) > 0 && isPilotId(id)) {
+        if (this.pendingCommission === this.index) {
+          store.commission(id);
+          this.pendingCommission = -1;
+        } else {
+          this.pendingCommission = this.index;
+          sfx.uiMove();
+          this.refresh();
+          return;
+        }
+      } else {
+        sfx.uiBack();
+        this.refresh();
+        return;
+      }
+    }
+    this.pendingCommission = -1;
     sfx.uiConfirm();
 
     if (this.picking === 'player') {

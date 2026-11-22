@@ -88,6 +88,39 @@ through `matchScene(mode)` in `Session.ts`. **755 tests (36 files)**;
   `rivalIdle = true` stands the rival still for poses.
 * The side-on game does **not** transform yet — offered to the owner, not done.
 
+### Accounts, login and unlocks (D183)
+
+The title is a login (`src/ui/LoginPanel.ts` over `TitleScene`); accounts live in
+`localStorage` (`frame2240.accounts`, `frame2240.session`) via
+`src/account/Accounts.ts`. Creating one picks the **only** unlocked pilot; the
+rest are earned (`src/account/unlocks.ts`): campaign chapter, combat record, or
+a commission every third rank. Mech select locks your side only. `Menu` bounces
+to the title when nobody is signed in. `window.__BSR__` plus a cleared
+`frame2240.accounts` gives a fresh machine.
+
+### The campaign (D184) — IN PROGRESS
+
+`CAMPAIGN` on the menu starts `CampaignScene` for the chosen unlocked pilot.
+World data and walking: `src/campaign/Regions.ts`, `WorldModel.ts`; scripts:
+`Script.ts` (coroutines), `Story.ts` (the API chapters use); chapters are files
+in `src/campaign/chapters/` that register themselves by Vite glob; rendering:
+`src/world/RegionBuilder.ts`, `CampaignView.ts`; dialogue: `src/ui/DialogueBox.ts`.
+A sanctioned flight sleeps the campaign, runs Battle/Orbit with
+`session.campaignFight` set, and wakes it with the result.
+
+* **Owner feedback, binding:** people on foot are voxelized **like Post
+  Parade's figures, with joints like Zenless Voxel's** (D185, done in
+  `src/voxel/PilotFigure.ts`). The first figure — the bust head on bust-width
+  limbs — was rejected; do not widen the body back toward the bust.
+* New place names (the Reach, Meridian, Coldseam, Gatewatch with Kettle/Bram/
+  Ossory Gates, Emberrest, Cinder Berth, the Spans, Survey Post 4) await the
+  owner's approval — listed in `docs/CAMPAIGN_PLAN.md`.
+* Chapter 1 exists for all eight pilots (each unlocks the pilot flown against
+  in it; together they earn all eight). After it the world stays open.
+* Known gaps: no fast travel or frame flight between regions yet; the battle
+  pause menu's quit options leave the campaign scene asleep; the Stillwake
+  descent is deliberately unbuilt pending the owner.
+
 ### Open from this session
 
 * PYRE reads golden while its Saturation is lit — the emissive glow is added on

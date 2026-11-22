@@ -8,6 +8,8 @@ import { BindingsPanel } from '../ui/BindingsPanel';
 import { audioMenuItems } from '../ui/AudioOptions';
 import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
+import { PILOT_IDS, accounts, rankOf, type PilotId } from '../account/Accounts';
+import { MECHS } from '../data/mechs';
 
 /**
  * The main menu, reached from the title's Press Start.
@@ -32,6 +34,11 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Everything past the title belongs to a signed-in pilot.
+    if (!accounts().user) {
+      this.scene.start('Title');
+      return;
+    }
     this.input$ = new InputManager(this);
     this.input$.reset();
     this.t = 0;
@@ -62,6 +69,16 @@ export class MenuScene extends Phaser.Scene {
 
     bigTitle(this, GAME_TITLE, 62, 34, '#eaf2ff');
     this.subtitle = smallText(this, 'MAIN MENU', VIEW_W / 2, 96, 13, '#7d8ea8');
+    const u = accounts().user!;
+    smallText(
+      this,
+      `${u.callsign.toUpperCase()}  ·  RANK ${rankOf(u.xp)}  ·  PILOTS ${u.unlocked.length}/${PILOT_IDS.length}` +
+        (u.commissions > 0 ? `  ·  ${u.commissions} COMMISSION${u.commissions > 1 ? 'S' : ''} TO SPEND` : ''),
+      VIEW_W / 2,
+      114,
+      11,
+      '#ffd166',
+    );
 
     // ---- menus -----------------------------------------------------------
     // What to play, and nothing else. Which machines fight and how good the
@@ -75,11 +92,13 @@ export class MenuScene extends Phaser.Scene {
     this.menu = new Menu(
       this,
       [
+        // Your own pilot's story, in the open world. With more than one pilot
+        // unlocked, left/right on the row chooses whose campaign to play.
         {
           label: 'CAMPAIGN',
-          disabled: true,
-          disabledNote: 'COMING SOON',
-          onSelect: () => {},
+          value: () => MECHS[this.campaignPilot()].pilot,
+          onAdjust: (d: number) => this.cycleCampaignPilot(d),
+          onSelect: () => this.startCampaign(),
         },
         // First of the live modes, because it is where a new pilot should go.
         // Straight into the course: it always teaches on the same machine, so
@@ -120,6 +139,7 @@ export class MenuScene extends Phaser.Scene {
         // before the campaign that will use it exists.
         { label: 'ARCHIVE', onSelect: () => this.openArchive() },
         { label: 'SETTINGS', onSelect: () => this.openSettings() },
+        { label: 'SIGN OUT', onSelect: () => this.signOut() },
         { label: 'BACK TO TITLE', onSelect: () => this.back() },
       ],
       VIEW_W / 2,
@@ -216,6 +236,25 @@ export class MenuScene extends Phaser.Scene {
     sfx.uiMove();
   }
 
+  private campaignIndex = 0;
+
+  /** The unlocked pilot the CAMPAIGN row will start, starter first. */
+  private campaignPilot(): PilotId {
+    const u = accounts().user;
+    const list = u ? [u.starter, ...u.unlocked.filter((p) => p !== u.starter)] : (['halcyon'] as PilotId[]);
+    return list[((this.campaignIndex % list.length) + list.length) % list.length];
+  }
+
+  private cycleCampaignPilot(d: number): void {
+    this.campaignIndex += d > 0 ? 1 : -1;
+    sfx.uiMove();
+  }
+
+  private startCampaign(): void {
+    sfx.unlock();
+    this.scene.start('Campaign', { pilot: this.campaignPilot() });
+  }
+
   private startTutorial(): void {
     sfx.unlock();
     session.mode = 'tutorial';
@@ -236,7 +275,15 @@ export class MenuScene extends Phaser.Scene {
     this.scene.start('Title');
   }
 
+  /** Signs out and returns to the title's sign-in. */
+  private signOut(): void {
+    sfx.uiBack();
+    accounts().logout();
+    this.scene.start('Title');
+  }
+
   override update(_time: number, delta: number): void {
+    if (!this.input$) return;
     this.t += delta / 1000;
 
     // While the rebinding panel is open it owns all input: it reads key edges

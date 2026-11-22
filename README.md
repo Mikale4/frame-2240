@@ -209,12 +209,34 @@ the clock expires.
 
 ---
 
+## Accounts
+
+PRESS START on the title signs you in. Accounts are kept in this browser: a
+callsign and a password (six characters or more, typed twice), with *remember
+me* and SIGN OUT on the main menu. Several people can have accounts on one
+machine.
+
+**Creating an account means choosing your pilot** — the only one you have at
+first. The other seven are earned, by any one of:
+
+* **the campaign** — finishing a chapter unlocks the pilot it features (every
+  Chapter 1 unlocks the pilot you fly against in it);
+* **fighting them** — beat a pilot's machine 3 times at HARD or EXTREME, or 5
+  times at any skill, in VERSUS CPU or FREE ORBIT;
+* **rank** — fights and chapters earn experience, and every third rank pays a
+  commission you can spend on any pilot in mech select.
+
+A locked pilot can always be your *opponent*; only your own side is locked.
+
 ## Modes
 
 The **title screen** runs a live, silent CPU-vs-CPU fight in the yard behind
 the wordmark — two random machines on EXTREME, a new matchup after every
 knockout. It never touches your last picks.
 
+* **Campaign** — your pilot's story, on foot and in the air across one open
+  world; see below. Left/right on the row picks which unlocked pilot's
+  campaign to play.
 * **Versus CPU** — you against the rival frame.
 * **Free Orbit** — the fight in three dimensions, from over your shoulder, and
   every machine transforms; see below.
@@ -262,6 +284,23 @@ fights back on EASY.
 quit. Only lessons actually done count toward the tally on the last card.
 `src/tests/tutorial.test.ts` plays the whole course through the real simulation
 with scripted button presses, so no lesson can ship that a player cannot finish.
+
+### Campaign
+
+Every pilot has their own campaign, told in chapters, and all eight happen in
+**the Reach** — one connected world of yards in the air above the cloud deck:
+Cathedral Yard in the middle, each pilot's home yard around it, and the spans
+between them that you can walk the whole way along.
+
+You walk on foot (arrows; SPACE runs), talk to people (Z or ENTER), and turn
+the camera with Q / E or by dragging. Chapters play out in conversations and
+cutscenes, and when a dispute goes to the standing rules you board your frame
+and fly it — on the plate or in FREE ORBIT — then come back to the yard with
+the result. ESC opens the campaign menu (SAVE AND QUIT). Progress is saved to
+your account as you go.
+
+Chapter 1 is written for every pilot; later chapters are in progress. Plan and
+the new place names: [`docs/CAMPAIGN_PLAN.md`](docs/CAMPAIGN_PLAN.md).
 
 ### Free Orbit
 
@@ -327,6 +366,9 @@ src/
   data/         mech definitions (mechs are data, not code)
   ai/           rival CPU — emits the same InputFrame you do
   orbit/        FREE ORBIT: the 3D simulation and its rival (no Phaser here)
+  account/      accounts, unlocks, campaign saves (no Phaser here)
+  campaign/     the Reach as data, walking, story scripts, chapters (no Phaser)
+  world/        the campaign world in voxels: regions, spans, camera
   input/        keyboard + gamepad → InputFrame
   voxel/        the 3D world: voxel kit, stage, voxel mechs, the yard,
                 effects, projectiles, overlays, pilot busts
@@ -334,7 +376,7 @@ src/
   ui/           HUD and menus
   audio/        procedural Web Audio SFX
   debug/        F1 text readout, F2 hitbox view
-  scenes/       Boot → Title → Battle / Orbit → Results
+  scenes/       Boot → Title (login) → Menu → Battle / Orbit / Campaign → Results
   tests/        Vitest suites (70 tests)
 assets/
   voxels/          one voxelized chassis per machine (from mechs.blend)

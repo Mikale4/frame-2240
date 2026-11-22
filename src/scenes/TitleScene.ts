@@ -8,6 +8,8 @@ import { sfx } from '../audio/Sfx';
 import { music } from '../audio/Music';
 import { session } from '../core/Session';
 import { randomBackdrop } from './BackdropFight';
+import { accounts } from '../account/Accounts';
+import { LoginPanel } from '../ui/LoginPanel';
 
 /**
  * Which candidate wordmark is on screen.
@@ -56,6 +58,11 @@ export class TitleScene extends Phaser.Scene {
   private leaving = false;
   /** Blocks input for a beat so the button that returned here cannot re-enter. */
   private armAt = 0;
+  private mark!: TitleMark;
+  private hint!: Phaser.GameObjects.Text;
+  private who!: Phaser.GameObjects.Text;
+  /** The sign-in panel, while it is open. */
+  private login: LoginPanel | null = null;
 
   constructor() {
     super('Title');
@@ -113,7 +120,8 @@ export class TitleScene extends Phaser.Scene {
       g.fillRect(0, (i * VIEW_H) / 64, VIEW_W, VIEW_H / 64 + 1);
     }
 
-    new TitleMark(this, VIEW_W / 2, 150, TITLE_DESIGN);
+    this.mark = new TitleMark(this, VIEW_W / 2, 150, TITLE_DESIGN);
+    this.login = null;
 
     // ---- press start -----------------------------------------------------
     this.prompt = this.add
@@ -128,8 +136,48 @@ export class TitleScene extends Phaser.Scene {
       .setLetterSpacing(4)
       .setDepth(1200);
 
-    smallText(this, 'ENTER  /  J  /  GAMEPAD', VIEW_W / 2, VIEW_H - 78, 12, '#63748c');
+    this.hint = smallText(this, 'ENTER  /  J  /  GAMEPAD', VIEW_W / 2, VIEW_H - 78, 12, '#63748c');
     smallText(this, `v${GAME_VERSION}`, VIEW_W - 12, VIEW_H - 10, 10, '#3f4c5e', [1, 1]);
+
+    // Who is signed in, if anyone: a remembered account signs itself back in.
+    const user = accounts().user ?? accounts().resume();
+    this.who = smallText(this, user ? `SIGNED IN AS ${user.callsign.toUpperCase()}` : '', 12, VIEW_H - 10, 10, '#63748c', [0, 1]);
+  }
+
+  /**
+   * PRESS START signs in. A remembered account goes straight through; anyone
+   * else gets the sign-in panel, which lifts the wordmark out of its way.
+   */
+  private openLogin(): void {
+    this.login = new LoginPanel(
+      this,
+      () => this.enter(),
+      () => this.closeLogin(),
+    );
+    this.prompt.setVisible(false);
+    this.hint.setVisible(false);
+    this.who.setVisible(false);
+    this.tweens.add({ targets: this.mark.container, y: 96, scale: 0.78, duration: 260, ease: 'Sine.easeOut' });
+  }
+
+  private closeLogin(): void {
+    sfx.uiBack();
+    this.login?.destroy();
+    this.login = null;
+    this.prompt.setVisible(true);
+    this.hint.setVisible(true);
+    this.who.setVisible(true);
+    this.tweens.add({ targets: this.mark.container, y: 150, scale: 1, duration: 260, ease: 'Sine.easeOut' });
+    this.armAt = this.t + 0.2;
+    this.input$.reset();
+  }
+
+  private enter(): void {
+    this.leaving = true;
+    this.login?.destroy();
+    this.login = null;
+    this.scene.stop('Battle');
+    this.scene.start('Menu');
   }
 
   override update(_time: number, delta: number): void {
@@ -139,14 +187,19 @@ export class TitleScene extends Phaser.Scene {
     // the moment someone looks at it.
     this.prompt.setAlpha(0.55 + 0.45 * Math.sin(this.t * 3.4));
 
+    if (this.login) {
+      this.login.update(delta / 1000);
+      // Keep the edge tracker current, so closing the panel does not replay a press.
+      this.input$.readUi();
+      return;
+    }
     if (this.t < this.armAt || this.leaving) return;
     const ui = this.input$.readUi();
     if (ui.confirm) {
       sfx.unlock();
       sfx.uiConfirm();
-      this.leaving = true;
-      this.scene.stop('Battle');
-      this.scene.start('Menu');
+      if (accounts().user) this.enter();
+      else this.openLogin();
     }
   }
 }

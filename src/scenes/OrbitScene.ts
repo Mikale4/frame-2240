@@ -15,6 +15,8 @@ import {
   type OrbitFighter,
 } from '../orbit/OrbitSim';
 import { OrbitAI } from '../orbit/OrbitAI';
+import { accounts } from '../account/Accounts';
+import { recordMatch } from '../account/unlocks';
 import { OrbitView3D } from '../voxel/OrbitView3D';
 import { VoxelMech, type SwingPose } from '../voxel/VoxelMech';
 import type { Shot3 } from '../voxel/VoxelProjectiles';
@@ -192,10 +194,17 @@ export class OrbitScene extends Phaser.Scene {
         s.outcome === 'draw' ? 'DRAW' : ko ? 'K.O.' : 'TIME';
       this.hud.showBanner(text, 2.2, s.outcome === 'playerWin' ? '#9fe0ff' : s.outcome === 'enemyWin' ? '#ff6a7a' : '#ffffff');
       session.lastOutcome = s.outcome;
+      session.lastAward = recordMatch(accounts(), session.mode, session.enemyMech, session.enemyDifficulty, s.outcome);
       session.lastTimeLeft = s.secondsLeft;
       session.lastPlayerLife = Math.max(0, s.player.life);
       session.lastEnemyLife = Math.max(0, s.enemy.life);
-      this.time.delayedCall(2600, () => this.scene.start('Results'));
+      if (session.campaignFight) {
+        session.campaignFight.result = s.outcome === 'playerWin' ? 'win' : 'lose';
+        this.time.delayedCall(2600, () => {
+          this.scene.wake('Campaign');
+          this.scene.stop();
+        });
+      } else this.time.delayedCall(2600, () => this.scene.start('Results'));
     }
   }
 
